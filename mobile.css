@@ -32,18 +32,19 @@
         width: 14px;
         height: 100vh;
         z-index: 36;
-        background: linear-gradient(180deg, rgba(122,60,255,0.18), rgba(122,60,255,0.02));
+        background: linear-gradient(180deg, rgba(122,60,255,0.35), rgba(122,60,255,0.08));
         border-left: 1px solid rgba(122,60,255,0.35);
         touch-action: none;
+        pointer-events: auto;
     }
 
     #edgeHandle::after {
         content: "";
         position: absolute;
         top: 40%;
-        right: 2px;
-        width: 6px;
-        height: 60px;
+        right: 1px;
+        width: 8px;
+        height: 70px;
         border-radius: 6px;
         background: rgba(122,60,255,0.6);
         box-shadow: 0 0 12px rgba(122,60,255,0.6);

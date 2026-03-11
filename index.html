@@ -1857,6 +1857,10 @@ function setMobileConfigOpen(isOpen){
         document.body.appendChild(edgeHandle);
     }
 
+    if(edgeHandle){
+        edgeHandle.style.display = "block";
+    }
+
     if(main){
         main.addEventListener("touchstart", onStart, { passive: true });
         main.addEventListener("touchmove", onMove, { passive: true });
