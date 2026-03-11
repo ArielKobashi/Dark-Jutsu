@@ -13,7 +13,7 @@
 </head>
 <body>
 
-<div id="edgeHandle"></div>
+<div id="edgeHandle" style="display:none;"></div>
 <div id="app">
 
 <!-- SPLIT: auth.html (login and cadastro) -->
@@ -575,6 +575,7 @@ function finalizarProgresso(){
 
     setTimeout(()=>{
         document.getElementById("loadingScreen").style.display = "none";
+        appReady = true;
         updateMobileOverlaysState();
 
         // 🔥 MOSTRA O IMÃ APENAS DEPOIS DO LOADING
@@ -1653,6 +1654,8 @@ function isMobileLayout(){
     return window.matchMedia("(max-width: 900px)").matches;
 }
 
+let appReady = false;
+
 window.focusSearchForMobile = function(){
     if(!isMobileLayout()) return;
     const input = document.getElementById("searchInput");
@@ -1668,7 +1671,7 @@ function updateMobileOverlaysState(){
     const loadingOpen = loading && getComputedStyle(loading).display !== "none";
     document.body.classList.toggle("auth-open", !!authOpen);
     document.body.classList.toggle("loading-open", !!loadingOpen);
-    const showHandle = !authOpen && !loadingOpen;
+    const showHandle = appReady && !authOpen && !loadingOpen;
     document.body.classList.toggle("show-handle", !!showHandle);
 }
 
@@ -1986,6 +1989,7 @@ await setPersistence(auth, browserSessionPersistence);
 window.logout = async function() {
     await signOut(auth);
     document.getElementById("authScreen").style.display = "flex";
+    appReady = false;
     updateMobileOverlaysState();
 }
 
@@ -2124,6 +2128,7 @@ onAuthStateChanged(auth, async (user) => {
 
     if (!user) {
         authScreen.style.display = "flex";
+        appReady = false;
         updateMobileOverlaysState();
 
         setTimeout(()=>{
