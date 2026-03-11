@@ -1681,6 +1681,7 @@ function setMobileConfigOpen(isOpen){
     let holdActive = false;
     let holdDone = false;
     let holdInterval = null;
+    let startInTable = false;
 
     function ensureHoldOverlay(){
         let overlay = document.getElementById("holdOverlay");
@@ -1750,6 +1751,13 @@ function setMobileConfigOpen(isOpen){
     function onStart(e){
         if(!isMobileLayout()) return;
         if(e.touches && e.touches.length === 1){
+            startInTable = !!(e.target && e.target.closest && e.target.closest("#tableContainer"));
+            if(startInTable){
+                tracking = false;
+                touchDown = false;
+                pendingOpen = false;
+                return;
+            }
             tracking = true;
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
@@ -1759,7 +1767,7 @@ function setMobileConfigOpen(isOpen){
     }
 
     function onMove(e){
-        if(!tracking || !isMobileLayout()) return;
+        if(!tracking || !isMobileLayout() || startInTable) return;
         if(holdActive) return;
         const t = (e.touches && e.touches[0]) || null;
         if(!t) return;
@@ -1779,7 +1787,7 @@ function setMobileConfigOpen(isOpen){
     }
 
     function onEnd(e){
-        if(!tracking || !isMobileLayout()) return;
+        if(!tracking || !isMobileLayout() || startInTable) return;
         const t = (e.changedTouches && e.changedTouches[0]) || null;
         if(!t){
             tracking = false;
