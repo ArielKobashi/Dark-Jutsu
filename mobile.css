@@ -32,8 +32,8 @@
         width: 24px;
         height: 100vh;
         z-index: 99999;
-        background: rgba(122, 60, 255, 0.18);
-        border-left: 2px solid rgba(255, 255, 255, 0.25);
+        background: rgba(122, 60, 255, 0.08);
+        border-left: 2px solid rgba(255, 255, 255, 0.15);
         touch-action: none;
         pointer-events: auto;
         display: none;
@@ -47,8 +47,8 @@
         width: 10px;
         height: 90px;
         border-radius: 6px;
-        background: rgba(255, 255, 255, 0.9);
-        box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+        background: rgba(255, 255, 255, 0.45);
+        box-shadow: 0 0 8px rgba(255, 255, 255, 0.45);
     }
 
     body.show-handle #edgeHandle {
