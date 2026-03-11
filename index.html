@@ -1664,10 +1664,12 @@ window.focusSearchForMobile = function(){
 function updateMobileOverlaysState(){
     const auth = document.getElementById("authScreen");
     const loading = document.getElementById("loadingScreen");
-    const authOpen = auth && auth.style.display !== "none";
-    const loadingOpen = loading && loading.style.display !== "none";
+    const authOpen = auth && getComputedStyle(auth).display !== "none";
+    const loadingOpen = loading && getComputedStyle(loading).display !== "none";
     document.body.classList.toggle("auth-open", !!authOpen);
     document.body.classList.toggle("loading-open", !!loadingOpen);
+    const showHandle = !authOpen && !loadingOpen;
+    document.body.classList.toggle("show-handle", !!showHandle);
 }
 
 function centerTableForMobileSearch(){

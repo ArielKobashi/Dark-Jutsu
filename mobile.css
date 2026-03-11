@@ -36,6 +36,7 @@
         border-left: 2px solid rgba(255, 255, 255, 0.5);
         touch-action: none;
         pointer-events: auto;
+        display: none;
     }
 
     #edgeHandle::after {
@@ -48,6 +49,10 @@
         border-radius: 6px;
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+    }
+
+    body.show-handle #edgeHandle {
+        display: block;
     }
 
     body.auth-open #edgeHandle,
