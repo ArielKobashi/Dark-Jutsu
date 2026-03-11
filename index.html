@@ -1847,6 +1847,9 @@ function setMobileConfigOpen(isOpen){
             tracking = false;
             return;
         }
+        if(!holdActive){
+            clearHoldOverlay();
+        }
 
         if(absX > absY * 1.2){
             const closeThreshold = 80;
@@ -1921,6 +1924,8 @@ if(searchInput){
         setTimeout(centerTableForMobileSearch, 120);
     });
 }
+
+updateMobileOverlaysState();
 
 </script>
 <!-- /SPLIT: app-core.js -->
