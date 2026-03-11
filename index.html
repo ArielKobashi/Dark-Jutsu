@@ -1658,6 +1658,15 @@ window.focusSearchForMobile = function(){
     }
 };
 
+function centerTableForMobileSearch(){
+    if(!isMobileLayout()) return;
+    const tableContainer = document.getElementById("tableContainer");
+    if(!tableContainer) return;
+    const maxScroll = tableContainer.scrollHeight - tableContainer.clientHeight;
+    if(maxScroll <= 0) return;
+    tableContainer.scrollTop = Math.max(0, Math.floor(maxScroll / 2));
+}
+
 function setMobileConfigOpen(isOpen){
     if(!isMobileLayout()) return;
     document.body.classList.toggle("mobile-config-open", !!isOpen);
@@ -1689,7 +1698,7 @@ function setMobileConfigOpen(isOpen){
         const absX = Math.abs(dx);
         const absY = Math.abs(dy);
 
-        if(absX > 60 && absX > absY * 1.2){
+        if(absX > 80 && absX > absY * 1.2){
             if(dx < 0){
                 setMobileConfigOpen(true);
             }else{
@@ -1727,6 +1736,16 @@ function setMobileConfigOpen(isOpen){
         }
     });
 })();
+
+const searchInput = document.getElementById("searchInput");
+if(searchInput){
+    searchInput.addEventListener("focus", function(){
+        setTimeout(centerTableForMobileSearch, 200);
+    });
+    searchInput.addEventListener("input", function(){
+        setTimeout(centerTableForMobileSearch, 120);
+    });
+}
 
 </script>
 <!-- /SPLIT: app-core.js -->
