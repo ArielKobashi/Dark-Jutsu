@@ -29,11 +29,11 @@
         position: fixed;
         top: 0;
         right: 0;
-        width: 14px;
+        width: 24px;
         height: 100vh;
-        z-index: 36;
-        background: linear-gradient(180deg, rgba(122,60,255,0.35), rgba(122,60,255,0.08));
-        border-left: 1px solid rgba(122,60,255,0.35);
+        z-index: 99999;
+        background: rgba(122, 60, 255, 0.55);
+        border-left: 2px solid rgba(255, 255, 255, 0.7);
         touch-action: none;
         pointer-events: auto;
     }
@@ -41,13 +41,13 @@
     #edgeHandle::after {
         content: "";
         position: absolute;
-        top: 40%;
-        right: 1px;
-        width: 8px;
-        height: 70px;
+        top: 35%;
+        right: 6px;
+        width: 10px;
+        height: 90px;
         border-radius: 6px;
-        background: rgba(122,60,255,0.6);
-        box-shadow: 0 0 12px rgba(122,60,255,0.6);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
     }
 
     #holdOverlay .holdWrap {
@@ -264,6 +264,12 @@
     #loadingScreen h2 {
         font-size: 16px;
         text-align: center;
+    }
+}
+
+@media (max-width: 900px) {
+    #edgeHandle {
+        display: block !important;
     }
 }
 
