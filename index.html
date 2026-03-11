@@ -1688,18 +1688,36 @@ function setMobileConfigOpen(isOpen){
         if(!overlay){
             overlay = document.createElement("div");
             overlay.id = "holdOverlay";
+            const wrap = document.createElement("div");
+            wrap.className = "holdWrap";
             const label = document.createElement("span");
             label.id = "holdCount";
-            overlay.appendChild(label);
+            const hint = document.createElement("div");
+            hint.className = "holdHint";
+            hint.textContent = "Segure para abrir";
+            const bar = document.createElement("div");
+            bar.className = "holdBar";
+            const fill = document.createElement("div");
+            fill.className = "holdBarFill";
+            fill.id = "holdBarFill";
+            bar.appendChild(fill);
+            wrap.appendChild(label);
+            wrap.appendChild(hint);
+            wrap.appendChild(bar);
+            overlay.appendChild(wrap);
             document.body.appendChild(overlay);
         }
         return overlay;
     }
 
-    function setHoldOverlay(count){
+    function setHoldOverlay(count, progress){
         const overlay = ensureHoldOverlay();
         const label = document.getElementById("holdCount");
+        const fill = document.getElementById("holdBarFill");
         if(label) label.textContent = String(count);
+        if(fill && typeof progress === "number"){
+            fill.style.width = Math.max(0, Math.min(100, progress)) + "%";
+        }
         overlay.classList.add("active");
         overlay.classList.add("flash");
         setTimeout(()=> overlay.classList.remove("flash"), 180);
@@ -1711,6 +1729,8 @@ function setMobileConfigOpen(isOpen){
             overlay.classList.remove("active");
             overlay.classList.remove("flash");
         }
+        const fill = document.getElementById("holdBarFill");
+        if(fill) fill.style.width = "0%";
     }
 
     function startHoldCountdown(){
@@ -1718,7 +1738,7 @@ function setMobileConfigOpen(isOpen){
         holdActive = true;
         holdDone = false;
         let count = 3;
-        setHoldOverlay(count);
+        setHoldOverlay(count, 100);
         holdInterval = setInterval(()=>{
             count -= 1;
             if(count <= 0){
@@ -1733,7 +1753,7 @@ function setMobileConfigOpen(isOpen){
                 holdActive = false;
                 return;
             }
-            setHoldOverlay(count);
+            setHoldOverlay(count, 100);
         }, 1000);
     }
 
@@ -1777,11 +1797,15 @@ function setMobileConfigOpen(isOpen){
         const absY = Math.abs(dy);
         if(absX > absY * 1.2){
             const screenW = window.innerWidth || 0;
-            const openThreshold = 110;
-            const openStartX = screenW * 0.6;
-            if(dx < 0 && absX >= openThreshold && startX >= openStartX){
-                pendingOpen = true;
-                startHoldCountdown();
+            const openStartX = screenW * 0.7;
+            const leftEdgeX = screenW * 0.25;
+            if(startX >= openStartX && dx < 0){
+                const progress = Math.min(100, Math.max(0, ((startX - t.clientX) / (startX - leftEdgeX)) * 100));
+                setHoldOverlay(3, progress);
+                if(t.clientX <= leftEdgeX){
+                    pendingOpen = true;
+                    startHoldCountdown();
+                }
             }
         }
     }
@@ -1817,6 +1841,7 @@ function setMobileConfigOpen(isOpen){
 
     const main = document.getElementById("main");
     const config = document.getElementById("config");
+    const tableContainer = document.getElementById("tableContainer");
 
     if(main){
         main.addEventListener("touchstart", onStart, { passive: true });
@@ -1828,6 +1853,12 @@ function setMobileConfigOpen(isOpen){
         config.addEventListener("touchstart", onStart, { passive: true });
         config.addEventListener("touchmove", onMove, { passive: true });
         config.addEventListener("touchend", onEnd, { passive: true });
+    }
+
+    if(tableContainer){
+        tableContainer.addEventListener("touchstart", function(e){ e.stopPropagation(); }, { passive: true });
+        tableContainer.addEventListener("touchmove", function(e){ e.stopPropagation(); }, { passive: true });
+        tableContainer.addEventListener("touchend", function(e){ e.stopPropagation(); }, { passive: true });
     }
 
     document.addEventListener("click", function(e){
