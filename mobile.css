@@ -25,6 +25,30 @@
         text-shadow: 0 0 18px rgba(255, 0, 0, 0.75);
     }
 
+    #edgeHandle {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 14px;
+        height: 100vh;
+        z-index: 36;
+        background: linear-gradient(180deg, rgba(122,60,255,0.18), rgba(122,60,255,0.02));
+        border-left: 1px solid rgba(122,60,255,0.35);
+        touch-action: none;
+    }
+
+    #edgeHandle::after {
+        content: "";
+        position: absolute;
+        top: 40%;
+        right: 2px;
+        width: 6px;
+        height: 60px;
+        border-radius: 6px;
+        background: rgba(122,60,255,0.6);
+        box-shadow: 0 0 12px rgba(122,60,255,0.6);
+    }
+
     #holdOverlay .holdWrap {
         display: flex;
         flex-direction: column;

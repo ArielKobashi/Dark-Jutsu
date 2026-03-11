@@ -1682,6 +1682,7 @@ function setMobileConfigOpen(isOpen){
     let holdDone = false;
     let holdInterval = null;
     let startInTable = false;
+    let startInHandle = false;
 
     function ensureHoldOverlay(){
         let overlay = document.getElementById("holdOverlay");
@@ -1772,7 +1773,14 @@ function setMobileConfigOpen(isOpen){
         if(!isMobileLayout()) return;
         if(e.touches && e.touches.length === 1){
             startInTable = !!(e.target && e.target.closest && e.target.closest("#tableContainer"));
+            startInHandle = !!(e.target && e.target.closest && e.target.closest("#edgeHandle"));
             if(startInTable){
+                tracking = false;
+                touchDown = false;
+                pendingOpen = false;
+                return;
+            }
+            if(!startInHandle){
                 tracking = false;
                 touchDown = false;
                 pendingOpen = false;
@@ -1787,7 +1795,7 @@ function setMobileConfigOpen(isOpen){
     }
 
     function onMove(e){
-        if(!tracking || !isMobileLayout() || startInTable) return;
+        if(!tracking || !isMobileLayout() || startInTable || !startInHandle) return;
         if(holdActive) return;
         const t = (e.touches && e.touches[0]) || null;
         if(!t) return;
@@ -1797,9 +1805,8 @@ function setMobileConfigOpen(isOpen){
         const absY = Math.abs(dy);
         if(absX > absY * 1.2){
             const screenW = window.innerWidth || 0;
-            const openStartX = screenW * 0.7;
             const leftEdgeX = screenW * 0.25;
-            if(startX >= openStartX && dx < 0){
+            if(dx < 0){
                 const progress = Math.min(100, Math.max(0, ((startX - t.clientX) / (startX - leftEdgeX)) * 100));
                 setHoldOverlay(3, progress);
                 if(t.clientX <= leftEdgeX){
@@ -1811,7 +1818,7 @@ function setMobileConfigOpen(isOpen){
     }
 
     function onEnd(e){
-        if(!tracking || !isMobileLayout() || startInTable) return;
+        if(!tracking || !isMobileLayout() || startInTable || !startInHandle) return;
         const t = (e.changedTouches && e.changedTouches[0]) || null;
         if(!t){
             tracking = false;
@@ -1842,6 +1849,13 @@ function setMobileConfigOpen(isOpen){
     const main = document.getElementById("main");
     const config = document.getElementById("config");
     const tableContainer = document.getElementById("tableContainer");
+    let edgeHandle = document.getElementById("edgeHandle");
+
+    if(!edgeHandle){
+        edgeHandle = document.createElement("div");
+        edgeHandle.id = "edgeHandle";
+        document.body.appendChild(edgeHandle);
+    }
 
     if(main){
         main.addEventListener("touchstart", onStart, { passive: true });
@@ -1859,6 +1873,12 @@ function setMobileConfigOpen(isOpen){
         tableContainer.addEventListener("touchstart", function(e){ e.stopPropagation(); }, { passive: true });
         tableContainer.addEventListener("touchmove", function(e){ e.stopPropagation(); }, { passive: true });
         tableContainer.addEventListener("touchend", function(e){ e.stopPropagation(); }, { passive: true });
+    }
+
+    if(edgeHandle){
+        edgeHandle.addEventListener("touchstart", onStart, { passive: true });
+        edgeHandle.addEventListener("touchmove", onMove, { passive: true });
+        edgeHandle.addEventListener("touchend", onEnd, { passive: true });
     }
 
     document.addEventListener("click", function(e){
