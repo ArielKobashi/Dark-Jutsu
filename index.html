@@ -1709,7 +1709,7 @@ function setMobileConfigOpen(isOpen){
             label.id = "holdCount";
             const hint = document.createElement("div");
             hint.className = "holdHint";
-            hint.textContent = "Segure para abrir";
+            hint.textContent = "Deslize e segure para abrir";
             const bar = document.createElement("div");
             bar.className = "holdBar";
             const fill = document.createElement("div");
@@ -1827,7 +1827,11 @@ function setMobileConfigOpen(isOpen){
                     pendingOpen = true;
                     startHoldCountdown();
                 }
+            } else {
+                clearHoldOverlay();
             }
+        } else {
+            clearHoldOverlay();
         }
     }
 
