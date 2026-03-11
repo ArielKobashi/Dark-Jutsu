@@ -1,0 +1,2232 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<!-- SPLIT: head.html (title, meta, css links) -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sistema Estoque Dark</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="mobile.css">
+<!-- /SPLIT: head.html -->
+
+</head>
+<body>
+
+<div id="app">
+
+<!-- SPLIT: auth.html (login and cadastro) -->
+<div id="authScreen">
+    <div id="authBox">
+        <h2>Login</h2>
+        <input type="text" id="authNickname" placeholder="Nickname">
+        <input type="password" id="authSenha" placeholder="Senha">
+        <button onclick="login()">Entrar</button>
+        <button onclick="cadastrar()">Cadastrar</button>
+    </div>
+</div>
+<!-- /SPLIT: auth.html -->
+
+<!-- SPLIT: loading.html (loading overlay) -->
+<div id="loadingScreen">
+    <h2>Carregando Sistema...</h2>
+    <div class="progress-bar">
+        <div class="progress" id="progress"></div>
+    </div>
+
+
+</div>
+<!-- /SPLIT: loading.html -->
+
+<!-- SPLIT: main.html (estoque table + magnet + relatorio) -->
+<div id="main">
+
+    <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descrição">
+
+    <div id="tableContainer">
+        <table>
+            <colgroup>
+                <col style="width:18px">
+                <col>
+                <col>
+                <col>
+                <col>
+                <col>
+                <col style="width:75px">
+            </colgroup>
+
+            <thead>
+                <tr>
+                    <th>
+                        <input type="checkbox" id="selectAllHeader">
+                    </th>
+
+                    <th data-col="protheus">
+                        <div class="headerContent">
+                            <span class="titulo">Protheus</span>
+                            <span class="setas">
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
+                            </span>
+                        </div>
+                    </th>
+
+                    <th data-col="cooperat">
+                        <div class="headerContent">
+                            <span class="titulo">Cooperat</span>
+                            <span class="setas">
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
+                            </span>
+                        </div>
+                    </th>
+
+                    <th data-col="armazem">
+                        <div class="headerContent">
+                            <span class="titulo">Armazém</span>
+                            <span class="setas">
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
+                            </span>
+                        </div>
+                    </th>
+
+                    <th data-col="descricao">
+                        <div class="headerContent">
+                            <span class="titulo">Descrição</span>
+                            <span class="setas">
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
+                            </span>
+                        </div>
+                    </th>
+
+                    <th data-col="endereco">
+                        <div class="headerContent">
+                            <span class="titulo">Endereço</span>
+                            <span class="setas">
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
+                            </span>
+                        </div>
+                    </th>
+
+                    <th data-col="saldo">
+                        <div class="headerContent">
+                            <span class="titulo">Saldo</span>
+                            <span class="setas">
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
+                            </span>
+                        </div>
+                    </th>
+                </tr>
+            </thead>
+
+            <tbody id="tableBody"></tbody>
+
+</table>
+</div>
+
+<!-- MAGNET + RELATORIO ABAIXO DA TABELA -->
+
+<div id="magnetIcon" title="Modo Ímã">
+
+<svg 
+viewBox="0 0 640 640"
+width="90"
+height="90"
+xmlns="http://www.w3.org/2000/svg">
+<path d="M250.317 320c-.004 26.33-.053 52.159-.002 77.989.074 37.719 24.674 67.139 62.01 72.264 36.056 4.95 68.469-18.847 77.25-53.005 1.538-5.983 2.171-12.056 2.156-18.273-.105-44.493-.077-88.986-.07-133.479.002-12.528 5.724-18.57 18.315-18.388 24.977.361 49.958-.739 74.932.372 11.404.54 16.882 6.402 16.902 17.862.038 21.83.01 43.66.007 65.49-.004 26.33.004 52.66-.018 78.989-.076 91.679-65.006 171.438-154.832 190.209-90.486 18.909-182.49-29.559-218.286-114.902-10.315-24.592-15.395-50.186-15.406-76.814-.021-47.493-.016-94.986-.018-142.48-.001-12.47 5.835-18.493 18.304-18.464 19.491.045 38.981.366 58.472.423 11.946.04 17.823 6.032 17.837 17.854.022 18.163.015 36.327.02 55zM481.615 100.097c.155 3.225 2.377 2.666 4.075 2.704 5.994.133 11.99.158 17.986.204 6.802.053 12.527 2.229 15.65 8.688 3.232 6.683 1.321 12.556-3.367 17.9-19.321 22.029-38.602 44.094-57.894 66.148-4.384 5.012-8.723 10.063-13.141 15.044-5.59 6.302-11.884 7.806-18.745 4.575-6.517-3.068-9.545-9.569-8.19-17.58 2.189-12.943 4.42-25.878 6.519-38.835.308-1.905.905-3.906-.211-6.789-6.616 0-13.553.014-20.491-.006-3.692-.011-7.348-.332-10.589-2.329-7.918-4.878-9.762-15.792-3.499-22.977 24.182-27.742 48.473-55.39 72.82-82.988 5.01-5.679 11.994-7.026 18.107-4.079 6.093 2.937 9.511 9.605 8.346 16.645-2.39 14.435-4.869 28.855-7.374 43.673zM217.285 168.253c-11.167 12.831-22.109 25.387-33.072 37.924-1.754 2.006-3.528 4.005-5.423 5.875-5.471 5.397-11.865 6.39-18.239 2.936-5.819-3.153-8.674-9.492-7.509-16.584 2.346-14.271 4.678-28.545 7-42.82.129-.792.123-1.606.251-3.422-7.863 0-15.451.101-23.036-.026-8.826-.148-14.771-5.191-15.928-13.487-.657-4.713.91-8.83 4.033-12.393 21.302-24.307 42.595-48.622 63.892-72.934 2.744-3.133 5.419-6.33 8.251-9.381 5.47-5.892 12.038-7.295 18.486-4.087 6.088 3.029 9.265 9.332 8.088 16.774-1.975 12.487-4.154 24.941-6.226 37.413-.431 2.594-.767 5.204-1.216 8.28 5.124.947 9.926.379 14.676.542 6.474.359 11.584 3.052 14.361 9.155 2.909 6.394 1.125 12.043-3.253 17.068-7.441 8.54-14.962 17.01-22.432 25.525-3.844 4.382-7.652 8.796-11.694 13.477z"/>
+</svg>
+
+<span id="magnetBadge">0</span>
+
+</div>
+
+<button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relatório</button>
+
+</div> <!-- FECHA #main -->
+<!-- /SPLIT: main.html -->
+
+<!-- SPLIT: config-panel.html (right sidebar) -->
+<div id="config">
+
+<div id="configHeader">
+
+<span>Atualizar Dados</span>
+
+<div id="adminBtn" title="Administrador">
+<span id="adminBadge">0</span>
+<svg viewBox="0 0 24 24" width="14" height="14">
+<path d="M12 2l3 6 6 .5-4.5 4 1.5 6L12 16l-6 2.5 1.5-6L3 8.5 9 8z"
+fill="currentColor"/>
+</svg>
+</div>
+
+<div id="logoutBtn" onclick="logout()" title="Logout">
+<svg id="powerIcon" viewBox="0 0 24 24">
+<path d="M12 2v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+<path d="M6.2 6.2a8 8 0 1 0 11.6 0"
+fill="none"
+stroke="currentColor"
+stroke-width="2"
+stroke-linecap="round"/>
+</svg>
+</div>
+
+</div>
+
+
+<!-- SPLIT: admin-panel.html (admin overlay panel) -->
+<div id="configSubPage" class="fbAdmin">
+
+<div class="subHeader">
+
+<span class="subTitle">Painel Administrativo</span>
+
+<div class="subClose" id="btnFecharAdmin" onclick="fecharSubPagina()">✕</div>
+
+</div>
+
+<div class="fbAdminIntro">
+    <div class="fbAdminTitle">Central de Cadastros</div>
+    <div class="fbAdminSubtitle">Aceite ou recuse solicitacoes e defina o nivel da conta.</div>
+</div>
+
+<div class="subContent">
+
+<div class="adminSection fbPanel">
+
+<div class="adminTitle fbPanelHeader">
+Solicitações de Cadastro
+<span id="badgeSolicitacoes">0</span>
+</div>
+
+<div id="listaSolicitacoes"></div>
+</div>
+
+<div class="adminSection fbPanel">
+
+<div class="adminTitle fbPanelHeader">
+Usuários do Sistema
+</div>
+
+<div id="listaUsuarios"></div>
+
+</div>
+
+</div>
+
+
+</div>
+
+
+<!-- /SPLIT: admin-panel.html -->
+
+    <hr>
+    <button onclick="carregarPlanilha('cooperat')">Cooperat.xlsx</button>
+    <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
+    <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
+    <button onclick="carregarPlanilha('saldoEndereco')">Saldo por Endereço.xlsx</button>
+
+    <input type="file" id="fileInput" style="display:none" accept=".xlsx">
+    <hr>
+    <button onclick="atualizarBanco()">Atualizar Banco</button>
+    <div style="margin-top:6px; font-size:10px; text-align:center;">
+    Última atualização:
+    <div id="lastUpdate" style="opacity:0.7;"></div>
+    </div>
+
+
+    <hr>
+    <div class="toggle" style="display:flex; align-items:center; gap:4px;">
+        <input type="checkbox" id="generalSearch" checked>
+        <span>Pesquisa Generalista</span>
+    </div>
+
+    <div class="toggle" style="display:flex; align-items:center; gap:4px;">
+        <input type="checkbox" id="scrollMode" checked>
+        <span>Scroll Progressivo</span>
+    </div>
+    <div class="toggle" style="display:flex; align-items:center; gap:4px;">
+    <input type="checkbox" id="ignoreSpaces">
+    <span>Ignorar Espaços</span>
+    </div>
+
+
+    <hr>
+
+
+
+<!-- MAGNET SYSTEM -->
+
+
+
+
+
+
+
+    <!-- SPLIT: chat.html (chat box) -->
+    <div id="chatBox">
+
+        <div id="chatMessages"></div>
+
+        <div id="chatInputArea">
+            <input type="text" id="chatInput" placeholder="Digite uma mensagem...">
+            <button onclick="enviarMensagem()">➤</button>
+        </div>
+    </div>
+
+
+</div>
+<!-- /SPLIT: chat.html -->
+
+<!-- SPLIT: notification.html (toast) -->
+<div id="notificacao"></div>
+<!-- /SPLIT: notification.html -->
+</div>
+<!-- /SPLIT: config-panel.html -->
+<!-- SPLIT: vendor-xlsx.html (3rd-party lib) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<!-- /SPLIT: vendor-xlsx.html -->
+
+<!-- SPLIT: app-core.js (ui + estoque + admin logic) -->
+<script>
+
+
+
+let selecionados = new Set();
+
+let planilhas = {
+    cooperat: null,
+    incluir: null,
+    saldoAtual: null,
+    saldoEndereco: null
+};
+
+let dados = [];
+let visiveis = [];
+
+window.setDados = function(novosDados){
+    dados = novosDados;
+    aplicarTodosFiltros();
+}
+let limite = 50;
+let ordem = {};
+
+let modoCaptura = false;
+let capturados = new Set(JSON.parse(localStorage.getItem("capturadosMagnet") || "[]"));
+
+function salvarCapturados(){
+    localStorage.setItem(
+        "capturadosMagnet",
+        JSON.stringify(Array.from(capturados))
+    );
+}
+
+function carregarCapturadosSalvos(){
+
+    const salvo = localStorage.getItem("capturadosMagnet");
+
+    if(salvo){
+        capturados = new Set(JSON.parse(salvo));
+    }else{
+        capturados = new Set();
+    }
+
+}
+
+function atualizarBadge(){
+
+    const badge = document.getElementById("magnetBadge");
+
+    if(!badge) return;
+
+    badge.innerText = capturados.size;
+
+}
+
+/* ====== PESQUISA ====== */
+document.getElementById("searchInput").addEventListener("input", ()=>{
+    limite = 50;
+    aplicarTodosFiltros();
+});
+
+document
+.getElementById("btnFecharAdmin")
+.addEventListener("click", fecharSubPagina);
+
+// fallback para garantir o fechamento do painel
+document.addEventListener("click", function(e){
+    if(e && e.target && e.target.id === "btnFecharAdmin"){
+        fecharSubPagina();
+    }
+});
+
+window.aprovar = async function(id){
+
+    const botao = event.target;
+    const card = botao.closest(".solicitacaoItem");
+
+    card.classList.add("aprovadoPulse");
+
+    try{
+        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
+        const dados = snap.val();
+        if(!dados) return;
+
+        const nivel = document.getElementById("nivel_"+id).value;
+        const emailFake = dados.nickname + "@sistema.com";
+
+        // usa auth secundario para nao trocar a sessao do admin
+        const cred = await window.createUserWithEmailAndPassword(window.adminAuth, emailFake, dados.senha);
+
+        await set(ref(db, "usuarios/" + cred.user.uid), {
+            nickname: dados.nickname,
+            nivel: nivel,
+            ativo: true,
+            criadoEm: Date.now(),
+            senha: "definida",
+            senhaAntiga: dados.senha || "",
+            senhaReset: false
+        });
+
+        await set(ref(db, "solicitacoesCadastro/"+id+"/status"),"aprovado");
+        await set(ref(db, "solicitacoesCadastro/"+id), null);
+
+        if(card){
+            card.classList.add("slideOutRight");
+            setTimeout(()=> card.remove(), 350);
+        }
+        iniciarListaUsuarios();
+        mostrarNotificacao("Cadastro aprovado");
+    }catch(e){
+        console.error("Erro ao aprovar:", e);
+        const msg = (e && (e.code || e.message)) ? (e.code || e.message) : "Erro ao aprovar";
+        mostrarNotificacao(msg);
+        if(card) card.classList.remove("aprovadoPulse");
+    }
+
+}
+window.recusar = async function(id){
+
+    const item = event.target.closest(".solicitacaoItem");
+
+    if(item){
+        item.classList.add("slideOutRight");
+
+        setTimeout(async ()=>{
+
+            await set(ref(db,"solicitacoesCadastro/"+id+"/status"),"recusado");
+            await set(ref(db, "solicitacoesCadastro/"+id), null);
+
+        },350);
+    }
+
+}
+
+window.alterarNivel = async function(uid, nivel){
+    if(!uid) return;
+    await set(ref(db, "usuarios/" + uid + "/nivel"), nivel);
+};
+
+window.toggleAtivo = async function(uid, isAtivo){
+    if(!uid) return;
+    const novo = !isAtivo;
+    await set(ref(db, "usuarios/" + uid + "/ativo"), novo);
+};
+
+window.resetSenha = async function(uid){
+    if(!uid) return;
+    await set(ref(db, "usuarios/" + uid + "/senha"), "");
+    await set(ref(db, "usuarios/" + uid + "/senhaReset"), true);
+};
+function iniciarListaUsuarios(){
+
+    const usuariosRef = ref(db,"usuarios");
+
+    onValue(usuariosRef,snap=>{
+
+        const lista = document.getElementById("listaUsuarios");
+        lista.innerHTML = "";
+
+                snap.forEach(child=>{
+
+            const u = child.val();
+            const uid = child.key;
+
+            const nivelRaw = (u.nivel || "op").toString().toLowerCase();
+            const nivelLabel = nivelRaw.toUpperCase();
+            const statusClass = u.ativo === false ? "status-off" : "status-on";
+            const statusText = u.ativo === false ? "Bloqueado" : "Ativo";
+
+            let div = document.createElement("div");
+            div.className="usuarioItem";
+
+            div.innerHTML = `
+            <div class="fbUserRow">
+                <div class="fbLeft">
+                    <div class="fbAvatar small">${formatarNick(u.nickname).slice(0,1)}</div>
+                    <div class="fbInfo">
+                        <div class="fbName">${formatarNick(u.nickname)}</div>
+                        <div class="fbMeta ${statusClass}">${statusText}</div>
+                    </div>
+                </div>
+                <div class="nivelBadge nivel-${nivelRaw}">${nivelLabel}</div>
+            </div>
+            <div class="fbUserActions">
+                <label class="nivelLabel">
+                    Nivel
+                    <select class="nivelSelect" onchange="alterarNivel('${uid}', this.value)">
+                        <option value="op" ${nivelRaw==="op" ? "selected":""}>OP</option>
+                        <option value="mod" ${nivelRaw==="mod" ? "selected":""}>MOD</option>
+                        <option value="admin" ${nivelRaw==="admin" ? "selected":""}>ADM</option>
+                    </select>
+                </label>
+                <div class="fbActions">
+                    <button class="fbBtn ${u.ativo === false ? "fbRestore" : "fbReject"}" onclick="toggleAtivo('${uid}', ${u.ativo === false ? "false" : "true"})">
+                        ${u.ativo === false ? "Reativar" : "Banir"}
+                    </button>
+                    <button class="fbBtn fbApprove" onclick="resetSenha('${uid}')">Resetar senha</button>
+                </div>
+            </div>
+            `;
+
+            lista.appendChild(div);
+
+        });
+
+    });
+
+}
+
+function mostrarNotificacao(msg){
+
+    let box = document.getElementById("notificacao");
+
+    box.innerText = msg;
+    box.classList.add("show");
+
+    setTimeout(()=>{
+        box.classList.remove("show");
+    },4000);
+}
+
+function carregarPlanilha(tipo){
+
+    const input = document.getElementById("fileInput");
+
+    input.onchange = function(e){
+
+        const file = e.target.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(event){
+
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet, {header:1});
+
+            planilhas[tipo] = json;
+
+            // marca botão corretamente
+            document.querySelectorAll("#config button").forEach(btn=>{
+                if(btn.getAttribute("onclick")?.includes(tipo)){
+                    btn.style.background = "#3E1F8F";
+                }
+            });
+        };
+
+        reader.readAsArrayBuffer(file);
+    };
+
+    input.click();
+}
+let progressoAtual = 0;
+let intervaloProgresso;
+
+function iniciarProgresso(){
+
+    progressoAtual = 0;
+    const barra = document.getElementById("progress");
+
+    intervaloProgresso = setInterval(()=>{
+
+        if(progressoAtual < 90){
+            progressoAtual += Math.random() * 8; // sobe de forma orgânica
+            barra.style.width = progressoAtual + "%";
+        }
+
+    }, 120);
+}
+
+
+
+function finalizarProgresso(){
+
+    clearInterval(intervaloProgresso);
+
+    const barra = document.getElementById("progress");
+    barra.style.width = "100%";
+
+    setTimeout(()=>{
+        document.getElementById("loadingScreen").style.display = "none";
+
+        // 🔥 MOSTRA O IMÃ APENAS DEPOIS DO LOADING
+        document.getElementById("magnetIcon").style.display = "flex";
+
+        if (typeof window.focusSearchForMobile === "function") {
+            window.focusSearchForMobile();
+        }
+
+    }, 300);
+}
+
+async function atualizarBanco(btn) {
+
+    btn = btn || document.querySelector("#config button[onclick='atualizarBanco()']");
+    btn.classList.add("loadingUpdate");
+    btn.innerText = "Atualizando...";
+
+    if (!planilhas.incluir || !planilhas.cooperat || !planilhas.saldoAtual) {
+        alert("Carregue as planilhas (Cooperat, Incluir e Saldo Atual) primeiro!");
+        btn.classList.remove("loadingUpdate");
+        btn.innerText = "Atualizar Banco";
+        return;
+    }
+
+    let novosDados = [];
+
+    let incluir = planilhas.incluir;
+    let cooperat = planilhas.cooperat;
+    let saldoAtual = planilhas.saldoAtual;
+    let saldoEndereco = planilhas.saldoEndereco || [];
+
+    for (let i = 2; i < incluir.length; i++) {
+
+        let protheus = incluir[i][1];
+        let cooperatCod = incluir[i][0] ?? "";
+        let descricao = incluir[i][2] ?? "";
+
+        if (!protheus) continue;
+
+        let item = {
+            protheus: protheus.toString().trim(),
+            cooperat: cooperatCod.toString().trim(),
+            descricao: descricao.toString().trim(),
+            enderecoPrincipal: "Sem Endereço",
+            armazemPrincipal: "ND",
+            saldo: 0,
+            enderecos: [],
+            comentarios: []
+        };
+
+        // SALDO TOTAL
+        for (let j = 1; j < saldoAtual.length; j++) {
+            if (saldoAtual[j][1] == protheus) {
+                item.saldo = Number(saldoAtual[j][4]) || 0;
+                break;
+            }
+        }
+
+        // ENDEREÇO ANTIGO
+        for (let j = 2; j < cooperat.length; j++) {
+            if (cooperat[j][0] == cooperatCod) {
+                let end = (cooperat[j][3] || "") + " " +
+                          (cooperat[j][4] || "") + " " +
+                          (cooperat[j][5] || "");
+                item.enderecoPrincipal = end.trim();
+                break;
+            }
+        }
+
+        // DETALHES POR ENDEREÇO
+        let encontrouEnderecos = false;
+
+        for (let j = 1; j < saldoEndereco.length; j++) {
+            if (saldoEndereco[j][1] == protheus) {
+                encontrouEnderecos = true;
+                item.enderecos.push({
+                    endereco: saldoEndereco[j][4] || "ND",
+                    armazem: saldoEndereco[j][2] || "ND",
+                    saldo: Number(saldoEndereco[j][8]) || 0
+                });
+            }
+        }
+
+        if (encontrouEnderecos && item.enderecos.length > 0) {
+            item.enderecoPrincipal = item.enderecos[0].endereco;
+            item.armazemPrincipal = item.enderecos[0].armazem;
+
+            let soma = 0;
+            item.enderecos.forEach(e => soma += e.saldo);
+            item.saldo = soma;
+        }
+
+        novosDados.push(item);
+    }
+
+    /* 🔥 CORREÇÃO AQUI */
+    dados = novosDados;   // <<< usa a variável correta
+    aplicarTodosFiltros();
+
+    try {
+        if (typeof window.firebaseSet === "function") {
+            await window.firebaseSet(window.estoqueRef, {
+            dados: dados,
+            ultimaAtualizacao: Date.now(),
+            atualizadoPor: window.meuNickname
+        });
+        }
+    } catch (error) {
+        console.error("Erro ao subir para o Firebase:", error);
+    }
+
+    setTimeout(() => {
+        btn.classList.remove("loadingUpdate");
+        btn.innerText = "Atualizar Banco";
+    }, 500);
+}
+
+function atualizarEstadoHeader(){
+    let header = document.getElementById("selectAllHeader");
+    let itensMostrados = visiveis.slice(0, limite);
+
+    if(itensMostrados.length === 0){
+        header.checked = false;
+        return;
+    }
+
+    let todosMarcados = itensMostrados.every(item =>
+        selecionados.has(item.protheus)
+    );
+
+    header.checked = todosMarcados;
+}
+
+function criarTd(row, valor){
+    let td = document.createElement("td");
+    td.textContent = valor ?? "";
+    row.appendChild(td);
+    return td;
+}
+
+function renderTabela(){
+    atualizarBadge();
+
+    if (!Array.isArray(visiveis)) visiveis = [];
+
+    let body = document.getElementById("tableBody");
+    body.innerHTML="";
+
+    let itensMostrados = visiveis.slice(0, limite);
+
+    itensMostrados.forEach(item => {
+
+        if (!item) return;
+
+        let row = document.createElement("tr");
+
+        // CHECKBOX
+        let tdCheck = document.createElement("td");
+        let checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = selecionados.has(item.protheus);
+
+        checkbox.addEventListener("change", function(){
+
+    if(this.checked){
+
+        selecionados.add(item.protheus);
+
+        if(modoCaptura){
+            capturados.add(item.protheus);
+            salvarCapturados();
+            atualizarBadge();
+        }
+
+    } else {
+
+        selecionados.delete(item.protheus);
+
+        if(modoCaptura){
+            capturados.delete(item.protheus);
+            salvarCapturados();
+            atualizarBadge();
+        }
+
+    }
+
+});
+
+        tdCheck.appendChild(checkbox);
+        row.appendChild(tdCheck);
+
+        // PROTHEUS
+        criarTd(row, item.protheus || "");
+
+        // COOPERAT
+        criarTd(row, item.cooperat || "");
+
+        // ARMAZEM
+        let tdArm = criarTd(row, item.armazemPrincipal || "");
+
+        let armazensUnicos = [
+            ...new Set(
+                (item.enderecos || []).map(e=>e?.armazem)
+            )
+        ];
+
+        if(armazensUnicos.length > 1){
+            tdArm.style.background = "rgba(255,165,0,0.2)";
+            tdArm.style.cursor = "pointer";
+        }
+
+        tdArm.ondblclick = ()=> abrirModalSaldos(item);
+
+        // DESCRIÇÃO
+        criarTd(row, item.descricao || "");
+
+        // ENDEREÇO
+        let tdEnd = criarTd(row, item.enderecoPrincipal || "");
+
+        if((item.enderecos || []).length > 1){
+            tdEnd.style.background = "rgba(122,60,255,0.25)";
+            tdEnd.style.cursor = "pointer";
+        }
+
+        tdEnd.ondblclick = ()=> abrirModalSaldos(item);
+
+        // SALDO
+        criarTd(row, item.saldo || "");
+
+        row.ondblclick = ()=>{
+            if(item.protheus){
+                navigator.clipboard.writeText(item.protheus);
+            }
+        };
+
+        body.appendChild(row);
+    });
+
+    atualizarEstadoHeader();
+}
+document.getElementById("selectAllHeader").addEventListener("change", function(){
+
+    let marcar = this.checked;
+    let itensMostrados = visiveis.slice(0, limite);
+
+    itensMostrados.forEach(item => {
+
+        if(marcar){
+
+            selecionados.add(item.protheus);
+
+            if(modoCaptura){
+                capturados.add(item.protheus);
+            }
+
+        }else{
+
+            selecionados.delete(item.protheus);
+
+            if(modoCaptura){
+                capturados.delete(item.protheus);
+            }
+
+        }
+
+    });
+
+    salvarCapturados();
+    atualizarBadge();
+    renderTabela();
+
+});
+document.getElementById("tableContainer").addEventListener("scroll", function(){
+
+    if(!document.getElementById("scrollMode").checked) return;
+
+    if(this.scrollTop + this.clientHeight >= this.scrollHeight - 20){
+
+        limite += 50;
+        renderTabela();
+
+    }
+
+});
+
+
+carregarCapturadosSalvos();
+atualizarBadge();
+
+
+function gerarRelatorio(){
+
+    let selecionadosItens = [];
+
+    if(modoCaptura && capturados.size > 0){
+
+        capturados.forEach(codigo=>{
+            let item = dados.find(d => d.protheus == codigo);
+            if(item) selecionadosItens.push(item);
+        });
+
+    }else{
+
+        visiveis.forEach(item=>{
+            if(selecionados.has(item.protheus)){
+                selecionadosItens.push(item);
+            }
+        });
+
+    }
+
+    if(selecionadosItens.length === 0){
+        alert("Nenhum item selecionado.");
+        return;
+    }
+
+    let novaJanela = window.open("", "_blank", "width=1200,height=800");
+
+    novaJanela.document.write(`
+        <html>
+        <head>
+            <title>Relatório Conferência</title>
+            <style>
+
+                @page{
+                    size:A4 portrait;
+                    margin:15mm;
+                }
+
+                body{
+                    background:#0D0D12;
+                    color:#E6E6E6;
+                    font-family:Arial;
+                    padding:20px;
+                    min-height:1122px; /* altura fixa A4 */
+                }
+
+                h2{ color:#9A5CFF; }
+
+                .painel{
+                    border:1px solid #7A3CFF;
+                    padding:10px;
+                    margin-bottom:20px;
+                    display:flex;
+                    gap:15px;
+                    background:#15151D;
+                    flex-wrap:wrap;
+                }
+
+                table{
+                    width:100%;
+                    border-collapse:collapse;
+                    margin-top:10px;
+                    font-size:12px;
+                }
+
+                th, td{
+                    border:1px solid #2A2A35;
+                    padding:2px 4px;
+                    text-align:center;
+                    height:1cm;
+                    max-height:1cm;
+                    overflow:hidden;
+                }
+
+                td.descricao{
+                    white-space:nowrap;
+                }
+
+                input.contagem{
+                    width:85%;
+                    height:80%;
+                    font-size:12px;
+                    text-align:center;
+                }
+
+                tfoot{
+                    font-weight:bold;
+                }
+
+                @media print{
+                    .painel{ display:none; }
+                    body{ background:white; color:black; }
+                }
+
+            </style>
+        </head>
+        <body>
+
+        <h2>Relatório de Conferência</h2>
+        <div>Gerado em: ${new Date().toLocaleString()}</div>
+
+        <div class="painel">
+            <button onclick="window.print()">🖨 Imprimir</button>
+
+            <label><input type="checkbox" id="arm4"> Armazém 4</label>
+            <label><input type="checkbox" id="arm5"> Armazém 5</label>
+            <label><input type="checkbox" id="mostrarCooperat"> Cooperat</label>
+            <label><input type="checkbox" id="ordenarEndereco"> Ordenar por Endereço</label>
+        </div>
+
+        <div id="tabelaContainer"></div>
+
+        </body>
+        </html>
+    `);
+
+    novaJanela.document.close();
+
+    let script = novaJanela.document.createElement("script");
+
+    script.innerHTML = `
+
+        let dadosOriginais = ${JSON.stringify(selecionadosItens)};
+
+        function passaFiltro(armazem){
+            let somente4 = document.getElementById("arm4").checked;
+            let somente5 = document.getElementById("arm5").checked;
+
+            if(!somente4 && !somente5) return true;
+            if(somente4 && somente5) return armazem=="4" || armazem=="5";
+            if(somente4) return armazem=="4";
+            if(somente5) return armazem=="5";
+        }
+
+        function ordenarEndereco(a,b){
+            return a.endereco.localeCompare(
+                b.endereco,
+                undefined,
+                {numeric:true, sensitivity:'base'}
+            );
+        }
+
+        function montarTabela(){
+
+            let ordenar = document.getElementById("ordenarEndereco").checked;
+
+            let linhas = [];
+
+            dadosOriginais.forEach(item=>{
+
+                if(item.enderecos && item.enderecos.length > 0){
+
+                    item.enderecos.forEach(end=>{
+                        if(!passaFiltro(end.armazem)) return;
+
+                        linhas.push({
+                        protheus:item.protheus,
+                        cooperat:item.cooperat,
+                        descricao:item.descricao,
+                        armazem:end.armazem,
+                        endereco:end.endereco,
+                        saldo:Number(end.saldo)
+                    });
+                    });
+
+                } else {
+
+                    if(!passaFiltro(item.armazemPrincipal)) return;
+
+                    linhas.push({
+                    protheus:item.protheus,
+                    cooperat:item.cooperat,
+                    descricao:item.descricao,
+                    armazem:item.armazemPrincipal || "",
+                    endereco:item.enderecoPrincipal || "",
+                    saldo:Number(item.saldo)
+                });
+                }
+            });
+
+            if(ordenar){
+                linhas.sort(ordenarEndereco);
+            }
+
+            let totalItens = linhas.length;
+            let totalBruto = 0;
+
+            let html = "<table><thead><tr>" +
+                        "<th>Protheus</th>" +
+                        "<th class='colCooperat' style='display:none;'>Cooperat</th>" +
+                        "<th>Descrição</th>" +
+                       "<th>Armazém</th>" +
+                       "<th>Endereço</th>" +
+                       "<th>Saldo</th>" +
+                       "<th>Contagem</th>" +
+                       "<th>Diferença</th>" +
+                       "</tr></thead><tbody>";
+
+            linhas.forEach((l,i)=>{
+                html += "<tr>" +
+                        "<td>"+l.protheus+"</td>" +
+                        "<td class='colCooperat' style='display:none;'>"+l.cooperat+"</td>" +
+                        "<td class='descricao'>"+l.descricao+"</td>" +
+                        "<td>"+l.armazem+"</td>" +
+                        "<td>"+l.endereco+"</td>" +
+                        "<td>"+l.saldo+"</td>" +
+                        "<td><input class='contagem' type='number' oninput='calcularDif("+i+","+l.saldo+")' id='cont_"+i+"'></td>" +
+                        "<td id='dif_"+i+"'></td>" +
+                        "</tr>";
+            });
+
+            html += "</tbody><tfoot>" +
+                    "<tr><td colspan='7'>Total de Itens: "+totalItens+
+                    " &nbsp;&nbsp; | &nbsp;&nbsp; Total Bruto Contado: <span id='totalBruto'>0</span></td></tr>" +
+                    "<tr><td colspan='7' style='padding-top:30px;'>__________________________________________<br>Assinatura do Conferente</td></tr>" +
+                    "</tfoot></table>";
+
+            document.getElementById("tabelaContainer").innerHTML = html;
+        }
+        document.getElementById("mostrarCooperat").addEventListener("change", function(){
+
+            let mostrar = this.checked;
+
+            document.querySelectorAll(".colCooperat").forEach(el=>{
+                el.style.display = mostrar ? "" : "none";
+            });
+
+        });    
+
+        function calcularDif(i,saldo){
+            let cont = Number(document.getElementById("cont_"+i).value);
+            let dif = cont - saldo;
+            document.getElementById("dif_"+i).innerText = isNaN(dif) ? "" : dif;
+
+            atualizarTotalBruto();
+        }
+
+        function atualizarTotalBruto(){
+            let inputs = document.querySelectorAll(".contagem");
+            let soma = 0;
+            inputs.forEach(inp=>{
+                let v = Number(inp.value);
+                if(!isNaN(v)) soma += v;
+            });
+            document.getElementById("totalBruto").innerText = soma;
+        }
+
+        document.getElementById("arm4").addEventListener("change", montarTabela);
+        document.getElementById("arm5").addEventListener("change", montarTabela);
+        document.getElementById("ordenarEndereco").addEventListener("change", montarTabela);
+
+        montarTabela();
+    `;
+
+    novaJanela.document.body.appendChild(script);
+    
+
+}
+
+
+/* ====== PESQUISA INDIVIDUAL POR COLUNA ====== */
+
+let filtrosColuna = {};
+
+document.querySelectorAll("th[data-col]").forEach(th => {
+
+    th.addEventListener("dblclick", function(e){
+
+        e.stopPropagation();
+        if(this.querySelector("input")) return;
+
+        let col = this.dataset.col;
+        let titulo = this.querySelector(".titulo");
+        let setas = this.querySelector(".setas");
+
+        // trava largura da coluna
+        let largura = this.offsetWidth + "px";
+        this.style.width = largura;
+        this.style.minWidth = largura;
+        this.style.maxWidth = largura;
+
+        titulo.style.display = "none";
+        setas.style.display = "none";
+
+        let input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "Filtrar...";
+        input.style.width = "95%";
+        input.style.fontSize = "9px";
+
+        this.appendChild(input);
+        input.focus();
+
+        input.addEventListener("keydown", function(ev){
+
+            if(ev.key === "Enter"){
+
+                if(this.value.trim() === ""){
+                    delete filtrosColuna[col];
+                } else {
+                    filtrosColuna[col] = this.value.toLowerCase();
+                }
+
+                aplicarTodosFiltros();
+
+                input.remove();
+                titulo.style.display = "inline";
+                setas.style.display = "flex";
+            }
+        });
+
+    });
+
+});
+
+
+document.querySelectorAll(".setaUp").forEach(seta=>{
+    seta.addEventListener("click", function(e){
+        e.stopPropagation();
+        let col = this.closest("th").dataset.col;
+        ordenar(col, true);
+    });
+});
+
+document.querySelectorAll(".setaDown").forEach(seta=>{
+    seta.addEventListener("click", function(e){
+        e.stopPropagation();
+        let col = this.closest("th").dataset.col;
+        ordenar(col, false);
+    });
+});
+
+let ordensAtivas = [];
+
+function ordenar(col, direcao){
+
+    let existente = ordensAtivas.find(o => o.col === col);
+
+    if(existente){
+
+        if(existente.asc === direcao){
+            ordensAtivas = ordensAtivas.filter(o => o.col !== col);
+        } else {
+            existente.asc = direcao;
+        }
+
+    } else {
+        ordensAtivas.push({col, asc: direcao});
+    }
+
+    aplicarOrdenacao();
+    atualizarVisualHeaders();
+}
+
+function atualizarVisualHeaders(){
+
+    document.querySelectorAll("th[data-col]").forEach(th => {
+
+        let col = th.dataset.col;
+
+        th.classList.remove("col-ordenada","col-filtrada");
+
+        if(ordensAtivas.some(o => o.col === col)){
+            th.classList.add("col-ordenada");
+        }
+
+        if(filtrosColuna[col]){
+            th.classList.add("col-filtrada");
+        }
+    });
+
+}
+
+function aplicarOrdenacao(){
+
+    visiveis.sort((a,b)=>{
+
+        for(let ordem of ordensAtivas){
+
+            let v1;
+            let v2;
+
+            if(ordem.col === "armazem"){
+                v1 = a.armazemPrincipal;
+                v2 = b.armazemPrincipal;
+            }
+            else if(ordem.col === "endereco"){
+                v1 = a.enderecoPrincipal;
+                v2 = b.enderecoPrincipal;
+            }
+            else{
+                v1 = a[ordem.col];
+                v2 = b[ordem.col];
+            }
+
+            if(v1 === undefined) v1 = "";
+            if(v2 === undefined) v2 = "";
+
+            let n1 = Number(v1);
+            let n2 = Number(v2);
+
+            let ambosNumeros = !isNaN(n1) && !isNaN(n2) && v1 !== "" && v2 !== "";
+
+            if(ambosNumeros){
+                if(n1 < n2) return ordem.asc ? -1 : 1;
+                if(n1 > n2) return ordem.asc ? 1 : -1;
+            } else {
+                v1 = v1.toString().toLowerCase();
+                v2 = v2.toString().toLowerCase();
+
+                if(v1 < v2) return ordem.asc ? -1 : 1;
+                if(v1 > v2) return ordem.asc ? 1 : -1;
+            }
+        }
+
+        return 0;
+    });
+
+    renderTabela();
+}
+/* ===== CHAT PROFISSIONAL ===== */
+
+window.meuNickname = null;
+window.mensagens = [];
+
+let limiteChat = 15;
+
+
+
+
+
+const magnetIcon = document.getElementById("magnetIcon");
+
+magnetIcon.addEventListener("click", function(){
+
+    modoCaptura = !modoCaptura;
+
+    if(modoCaptura){
+        magnetIcon.classList.add("active");
+        document.getElementById("app").classList.add("magnetActive");   // ADICIONE
+    }else{
+        magnetIcon.classList.remove("active");
+        document.getElementById("app").classList.remove("magnetActive"); // ADICIONE
+        capturados.clear();
+        salvarCapturados();
+    }
+
+    atualizarBadge();
+
+});
+
+function formatarNick(nome){
+return nome.replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function atualizarContadorCaptura(){
+    magnetCount.innerText = capturados.size;
+}
+
+function enviarMensagemSistema(texto){
+
+    const chatRef = ref(db, "chatGlobal");
+
+    push(chatRef, {
+        nome: "Sistema",
+        texto: texto,
+        data: new Date().toLocaleTimeString(),
+        timestamp: Date.now()
+    });
+}
+
+/* ===== CORES POR NICKNAME ===== */
+
+const coresDisponiveis = [
+    "#22C55E", // verde
+    "#3B82F6", // azul
+    "#EF4444", // vermelho
+    "#F59E0B", // laranja
+    "#A855F7", // roxo
+    "#14B8A6", // teal
+    "#E11D48", // rosa forte
+    "#84CC16", // verde lima
+    "#F97316", // laranja escuro
+    "#06B6D4"  // ciano
+];
+
+let mapaCores = JSON.parse(localStorage.getItem("chatCores")) || {};
+
+function obterCorNickname(nome){
+
+    let chave = nome.toLowerCase(); // 🔥 ignora maiúscula/minúscula
+
+    if(!mapaCores[chave]){
+        let cor = coresDisponiveis[Math.floor(Math.random() * coresDisponiveis.length)];
+        mapaCores[chave] = cor;
+        localStorage.setItem("chatCores", JSON.stringify(mapaCores));
+    }
+
+    return mapaCores[chave];
+}
+
+
+function renderChat(){
+
+    const mensagens = (window.mensagens || []).sort((a,b)=>a.timestamp-b.timestamp);
+    if(!window.meuNickname) return;
+
+    let box = document.getElementById("chatMessages");
+    box.innerHTML = "";
+
+    let ultimas = mensagens.slice(-limiteChat);
+
+    ultimas.forEach(msg => {
+
+        if(msg.texto === "__JOIN__") return;
+
+        let cor = obterCorNickname(msg.nome);
+        let souEu = msg.nome.toLowerCase() === window.meuNickname?.toLowerCase();
+
+        let div = document.createElement("div");
+        div.className = "mensagem";
+        div.style.textAlign = souEu ? "right" : "left";
+
+        div.innerHTML = `
+        <div style="
+            display:inline-flex;
+            flex-direction:column;
+            background:${cor}1A;
+            border-left:3px solid ${cor};
+            padding:3px 6px;
+            border-radius:8px;
+            max-width:170px;
+            font-size:10px;
+            line-height:1.2;
+            overflow-wrap:anywhere;
+            word-break:break-word;
+        ">
+            <span style="font-weight:bold;">
+                ${formatarNick(msg.nome)}
+            </span>
+
+            <span>
+                ${msg.texto}
+            </span>
+
+            <span style="
+                font-size:8px;
+                opacity:0.6;
+                align-self:flex-end;
+            ">
+                ${msg.data}
+            </span>
+        </div>
+        `;
+
+        box.appendChild(div);
+    });
+
+    box.scrollTop = box.scrollHeight;
+}
+
+
+document.getElementById("chatMessages").addEventListener("scroll", function(){
+
+    if(this.scrollTop === 0 && limiteChat < window.mensagens.length){
+        limiteChat += 15;
+        renderChat();
+    }
+});
+
+
+let janelaSaldos = null;
+document.addEventListener("click", function(){
+    if(janelaSaldos && !janelaSaldos.closed){
+        janelaSaldos.close();
+    }
+});
+
+function abrirModalSaldos(item){
+
+    if(janelaSaldos && !janelaSaldos.closed){
+        janelaSaldos.close();
+    }
+
+    janelaSaldos = window.open("", "_blank", "width=600,height=500");
+
+    let html = `
+    <html>
+    <head>
+        <title>Saldos por Endereço</title>
+        <style>
+            body{
+                background:#15151D;
+                color:#E6E6E6;
+                font-family:Arial;
+                padding:15px;
+            }
+            h2{
+                text-align:center;
+                color:#9A5CFF;
+            }
+            .card{
+                border:1px solid #7A3CFF;
+                padding:10px;
+                margin-bottom:10px;
+                border-radius:6px;
+                background:#1F1F2A;
+            }
+        </style>
+    </head>
+    <body>
+        <h2>Saldos por Endereço</h2>
+    `;
+
+    item.enderecos.forEach(info => {
+        html += `
+            <div class="card">
+                <b>Endereço:</b> ${info.endereco}<br>
+                <b>Armazém:</b> ${info.armazem}<br>
+                <b>Saldo:</b> ${info.saldo}
+            </div>
+        `;
+    });
+
+    html += `</body></html>`;
+
+    janelaSaldos.document.write(html);
+    janelaSaldos.document.close();
+}
+
+function abrirSubPagina(){
+
+    document
+    .getElementById("configSubPage")
+    .classList.add("open");
+
+}
+
+function fecharSubPagina(){
+
+    document
+    .getElementById("configSubPage")
+    .classList.remove("open");
+
+}
+
+document
+.getElementById("adminBtn")
+.addEventListener("click", abrirSubPagina);
+
+document
+.getElementById("btnFecharAdmin")
+.addEventListener("click", fecharSubPagina);
+
+// fallback para garantir o fechamento do painel
+document.addEventListener("click", function(e){
+    if(e && e.target && e.target.id === "btnFecharAdmin"){
+        fecharSubPagina();
+    }
+});
+
+function aplicarTodosFiltros(){
+
+    if (!Array.isArray(dados)) dados = [];
+
+    let termoOriginal = (document.getElementById("searchInput")?.value || "").toLowerCase().trim();
+    let general = document.getElementById("generalSearch")?.checked || false;
+    let ignoreSpaces = document.getElementById("ignoreSpaces")?.checked || false;
+
+    let palavras = termoOriginal ? termoOriginal.split(/\s+/) : [];
+
+    visiveis = dados.filter(item => {
+
+        if (!item) return false;
+
+        /* ===== FILTRO PESQUISA GERAL ===== */
+
+        if(termoOriginal){
+
+            let textoOriginal = (
+                (item.protheus || "") + " " +
+                (item.cooperat || "") + " " +
+                (item.descricao || "")
+            ).toLowerCase();
+
+            let texto = ignoreSpaces
+                ? textoOriginal.replace(/\s+/g, "")
+                : textoOriginal;
+
+            let passouBusca = false;
+
+            if(general){
+
+                passouBusca = palavras.every(p => {
+                    let termo = ignoreSpaces
+                        ? p.replace(/\s+/g,"")
+                        : p;
+                    return texto.includes(termo);
+                });
+
+            } else {
+
+                let termo = ignoreSpaces
+                    ? termoOriginal.replace(/\s+/g,"")
+                    : termoOriginal;
+
+                passouBusca = texto.includes(termo);
+            }
+
+            if(!passouBusca) return false;
+        }
+
+        /* ===== FILTROS POR COLUNA ===== */
+
+        for(let col in filtrosColuna){
+
+            let valor = "";
+
+            if(col === "endereco"){
+                valor = item.enderecoPrincipal || "";
+            } else if(col === "armazem"){
+                valor = item.armazemPrincipal || "";
+            } else {
+                valor = item[col] || "";
+            }
+
+            valor = valor.toString().toLowerCase();
+
+            if(!valor.includes(filtrosColuna[col])){
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    if (!Array.isArray(visiveis)) visiveis = [];
+
+    limparSelecionadosInvalidos();
+    aplicarOrdenacao();
+    atualizarVisualHeaders();
+}
+document.querySelectorAll("th[data-col]").forEach(th => {
+
+    th.addEventListener("click", function(e){
+
+        let col = this.dataset.col;
+
+        // remove ordenação
+        ordensAtivas = ordensAtivas.filter(o => o.col !== col);
+
+        // remove filtro
+        if(filtrosColuna[col]){
+            delete filtrosColuna[col];
+        }
+
+        aplicarTodosFiltros();
+        atualizarVisualHeaders();
+    });
+
+});
+
+function limparSelecionadosInvalidos(){
+
+    let todosIds = new Set(dados.map(d => d.protheus));
+
+    selecionados.forEach(id=>{
+        if(!todosIds.has(id)){
+            selecionados.delete(id);
+        }
+    });
+
+}
+
+
+
+document.getElementById("chatInput").addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+        enviarMensagem();
+    }
+});
+
+function isMobileLayout(){
+    return window.matchMedia("(max-width: 900px)").matches;
+}
+
+window.focusSearchForMobile = function(){
+    if(!isMobileLayout()) return;
+    const input = document.getElementById("searchInput");
+    if(input){
+        input.focus({ preventScroll: true });
+    }
+};
+
+function setMobileConfigOpen(isOpen){
+    if(!isMobileLayout()) return;
+    document.body.classList.toggle("mobile-config-open", !!isOpen);
+}
+
+(function initMobileGestures(){
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+
+    function onStart(e){
+        if(!isMobileLayout()) return;
+        if(e.touches && e.touches.length === 1){
+            tracking = true;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }
+    }
+
+    function onEnd(e){
+        if(!tracking || !isMobileLayout()) return;
+        const t = (e.changedTouches && e.changedTouches[0]) || null;
+        if(!t){
+            tracking = false;
+            return;
+        }
+        const dx = t.clientX - startX;
+        const dy = t.clientY - startY;
+        const absX = Math.abs(dx);
+        const absY = Math.abs(dy);
+
+        if(absX > 60 && absX > absY * 1.2){
+            if(dx < 0){
+                setMobileConfigOpen(true);
+            }else{
+                setMobileConfigOpen(false);
+            }
+        }
+        tracking = false;
+    }
+
+    const main = document.getElementById("main");
+    const config = document.getElementById("config");
+
+    if(main){
+        main.addEventListener("touchstart", onStart, { passive: true });
+        main.addEventListener("touchend", onEnd, { passive: true });
+    }
+
+    if(config){
+        config.addEventListener("touchstart", onStart, { passive: true });
+        config.addEventListener("touchend", onEnd, { passive: true });
+    }
+
+    document.addEventListener("click", function(e){
+        if(!isMobileLayout()) return;
+        if(!document.body.classList.contains("mobile-config-open")) return;
+        const cfg = document.getElementById("config");
+        if(cfg && !cfg.contains(e.target)){
+            setMobileConfigOpen(false);
+        }
+    });
+
+    window.addEventListener("resize", function(){
+        if(!isMobileLayout()){
+            document.body.classList.remove("mobile-config-open");
+        }
+    });
+})();
+
+</script>
+<!-- /SPLIT: app-core.js -->
+
+<!-- SPLIT: firebase.js (firebase init + auth) -->
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { 
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  updatePassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyChPIkc1NxpxtpvOU92NxyXsxCFpe3mzgE",
+  authDomain: "chat-fiasul.firebaseapp.com",
+  databaseURL: "https://chat-fiasul-default-rtdb.firebaseio.com",
+  projectId: "chat-fiasul",
+  storageBucket: "chat-fiasul.firebasestorage.app",
+  messagingSenderId: "263776720116",
+  appId: "1:263776720116:web:713fd43f4cb196b0527aa1",
+  measurementId: "G-KC5F0QT711"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+// auth secundario para criar usuarios sem trocar a sessao do admin
+const adminApp = initializeApp(firebaseConfig, "adminApp");
+const adminAuth = getAuth(adminApp);
+window.adminAuth = adminAuth;
+
+window.ref = ref;
+window.push = push;
+window.onValue = onValue;
+window.get = get;
+window.set = set;
+window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+window.updatePassword = updatePassword;
+
+
+import { setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+await setPersistence(auth, browserSessionPersistence);
+
+window.logout = async function() {
+    await signOut(auth);
+    document.getElementById("authScreen").style.display = "flex";
+}
+
+window.auth = auth;
+window.db = db;
+
+function iniciarSolicitacoesAdmin(){
+
+    const solicitacoesRef = ref(db, "solicitacoesCadastro");
+
+    onValue(solicitacoesRef, snapshot=>{
+
+        const lista = document.getElementById("listaSolicitacoes");
+        const badge = document.getElementById("badgeSolicitacoes");
+
+        if(!lista) return;
+
+        lista.innerHTML = "";
+
+        let total = 0;
+
+        const adminBadge = document.getElementById("adminBadge");
+
+        snapshot.forEach(child=>{
+
+            const s = child.val();
+
+            if(s.status !== "pendente") return;
+
+            total++;
+
+            let div = document.createElement("div");
+            div.className = "solicitacaoItem";
+
+            div.innerHTML = `
+            <div class="fbLeft">
+                <div class="fbAvatar">${formatarNick(s.nickname).slice(0,1)}</div>
+                <div class="fbInfo">
+                    <div class="fbName">${formatarNick(s.nickname)}</div>
+                    <div class="fbMeta">Aguardando aprovacao</div>
+                </div>
+            </div>
+
+            <div class="fbRight">
+                <label class="nivelLabel">
+                    Nivel
+                    <select id="nivel_${child.key}" class="nivelSelect">
+                        <option value="op">OP</option>
+                        <option value="mod">MOD</option>
+                        <option value="admin">ADM</option>
+                    </select>
+                </label>
+
+                <div class="fbActions">
+                    <button class="btnAceitarMini fbBtn fbApprove" onclick="aprovar('${child.key}')">Aceitar</button>
+                    <button class="btnRecusarMini fbBtn fbReject" onclick="recusar('${child.key}')">Recusar</button>
+                </div>
+            </div>
+            `;
+
+            lista.appendChild(div);
+
+        });
+
+        badge.innerText = total;
+
+        if(total > 0){
+            adminBadge.innerText = total;
+            adminBadge.style.display = "block";
+        }else{
+            adminBadge.style.display = "none";
+        }
+    });
+}
+
+window.login = async function(){
+
+    let nick = document.getElementById("authNickname").value.trim().toLowerCase();
+    let senha = document.getElementById("authSenha").value;
+
+    window.ultimaSenhaLogin = senha;
+
+    if(!nick || !senha) return alert("Preencha os campos");
+
+    let emailFake = nick + "@sistema.com";
+
+    try{
+        await signInWithEmailAndPassword(auth, emailFake, senha);
+
+    } catch(error){
+        alert("Usuário ou senha inválidos");
+    }
+}
+
+window.cadastrar = async function(){
+
+    let nick = document.getElementById("authNickname").value.trim().toLowerCase();
+    let senha = document.getElementById("authSenha").value;
+
+    if(!nick || !senha){
+        mostrarNotificacao("Preencha os campos");
+        return;
+    }
+
+    try{
+
+        const solicitacaoRef = push(ref(db, "solicitacoesCadastro"));
+
+        await set(solicitacaoRef, {
+            nickname: nick,
+            senha: senha,
+            status: "pendente",
+            criadoEm: Date.now()
+        });
+
+        console.log("Cadastro enviado");
+
+        mostrarNotificacao("✔ Cadastro enviado para aprovação.");
+
+    }catch(error){
+
+        console.error("ERRO FIREBASE:", error);
+        alert(error.message);
+
+    }
+
+}
+
+
+
+onAuthStateChanged(auth, async (user) => {
+
+    const authScreen = document.getElementById("authScreen");
+    const adminBtn = document.getElementById("adminBtn");
+    const adminPanel = document.getElementById("adminPanel");
+
+    if (!user) {
+        authScreen.style.display = "flex";
+
+        setTimeout(()=>{
+            document.getElementById("authNickname").focus();
+        },100);
+
+        if(adminBtn) adminBtn.style.display = "none";
+        if(adminPanel) adminPanel.style.display = "none";
+
+        return;
+    }
+
+    try {
+
+        const snapshot = await get(ref(db, "usuarios/" + user.uid));
+
+        if (!snapshot.exists() || !snapshot.val().ativo) {
+            alert("Usuário bloqueado");
+            await signOut(auth);
+            return;
+        }
+
+        const dadosUsuario = snapshot.val();
+
+        if(dadosUsuario && (dadosUsuario.senha === "" || dadosUsuario.senhaReset === true || (window.ultimaSenhaLogin && dadosUsuario.senhaAntiga === window.ultimaSenhaLogin))) {
+            let novaSenha = "";
+            while(true){
+                novaSenha = prompt("Defina uma nova senha");
+                if(novaSenha === null){
+                    await signOut(auth);
+                    return;
+                }
+                if(novaSenha.length < 4){
+                    alert("Senha muito curta");
+                    continue;
+                }
+                break;
+            }
+            try{
+                if(window.ultimaSenhaLogin){
+                await set(ref(db, "usuarios/" + user.uid + "/senhaAntiga"), window.ultimaSenhaLogin);
+            }
+            await window.updatePassword(auth.currentUser, novaSenha);
+                await set(ref(db, "usuarios/" + user.uid + "/senha"), "definida");
+                await set(ref(db, "usuarios/" + user.uid + "/senhaReset"), false);
+            }catch(e){
+                alert("Nao foi possivel atualizar a senha. Tente novamente.");
+                await signOut(auth);
+                return;
+            }
+        }
+
+        window.meuNickname = dadosUsuario.nickname;
+        // 🔥 ZERA CAPTURAS AO INICIAR SESSÃO
+        capturados.clear();
+        localStorage.removeItem("capturadosMagnet");
+        atualizarBadge();
+
+        authScreen.style.display = "none";
+        setTimeout(()=>{
+            renderChat();
+        },50);
+
+        if (dadosUsuario.nivel === "admin") {
+            
+            if (adminBtn) adminBtn.style.display = "flex";
+            iniciarSolicitacoesAdmin(); // 🔥 AQUI
+            iniciarListaUsuarios();
+            if (adminPanel) adminPanel.style.display = "block";
+        } else {
+            if (adminBtn) adminBtn.style.display = "none";
+            if (adminPanel) adminPanel.style.display = "none";
+        }
+
+        iniciarProgresso();
+
+        await carregarEstoqueInicial();
+
+        iniciarChat();
+
+        resetarTimer(); // 🔥 ativa controle de inatividade
+
+        finalizarProgresso();
+
+    } catch (error) {
+        console.error("Erro ao validar usuário:", error);
+        alert("Erro ao validar sessão.");
+        await signOut(auth);
+    }
+});
+
+let horasSessao = 2;
+let tempoLimite = horasSessao * 60 * 60 * 1000;
+let timerInatividade;
+
+function resetarTimer() {
+    clearTimeout(timerInatividade);
+
+    timerInatividade = setTimeout(async () => {
+        alert("Sessão encerrada por inatividade.");
+        await signOut(auth);
+    }, tempoLimite);
+}
+
+// Eventos que reiniciam o contador
+document.addEventListener("mousemove", resetarTimer);
+document.addEventListener("keydown", resetarTimer);
+document.addEventListener("click", resetarTimer);
+
+const chatRef = ref(db, "chatGlobal");
+const estoqueRef = ref(db, "estoqueGlobal");
+
+// Exporta funções para o escopo global (window)
+window.estoqueRef = estoqueRef;
+window.firebaseSet = set;
+
+// --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
+async function carregarEstoqueInicial() {
+
+    if (typeof iniciarProgresso === "function") iniciarProgresso(); 
+    
+    try {
+        const snapshot = await get(estoqueRef);
+
+        if (snapshot.exists()) {
+
+            const banco = snapshot.val();
+
+            window.setDados(banco.dados || []);
+
+onValue(window.estoqueRef, snapshot => {
+
+    const val = snapshot.val();
+    if(!val) return;
+
+    const data = val.ultimaAtualizacao
+        ? new Date(val.ultimaAtualizacao).toLocaleString()
+        : "Nunca";
+
+    const usuario = val.atualizadoPor || "Sistema";
+
+    document.getElementById("lastUpdate").innerText =
+        data + " por " + usuario;
+
+});
+
+            console.log("✅ Dados carregados do Firebase.");
+
+        } else {
+
+            // 🔥 PRIMEIRA VEZ → NÃO EXISTE NADA
+            window.setDados([]);
+
+            console.log("⚠ Banco ainda não existe. Iniciando vazio.");
+        }
+
+    } catch(e){
+        console.error("Erro carregando estoque:", e);
+    }
+}
+
+function abrirSubPagina(){
+
+    document
+    .getElementById("configSubPage")
+    .classList.add("open");
+
+}
+
+function fecharSubPagina(){
+
+    document
+    .getElementById("configSubPage")
+    .classList.remove("open");
+
+}
+
+// --- LÓGICA DO CHAT EM TEMPO REAL ---
+
+
+// Sobrescreve a função de enviar chat para usar Firebase
+window.enviarMensagem = function() {
+    let input = document.getElementById("chatInput");
+    let texto = input.value.trim();
+    
+    if(!texto) return;
+    if(!window.meuNickname) {
+        document.getElementById("chatOverlay").style.display = "flex";
+        return;
+    }
+
+    const novaMsgRef = push(chatRef);
+    set(novaMsgRef, {
+        nome: window.meuNickname,
+        texto: texto,
+        data: new Date().toLocaleTimeString(), // Apenas hora no chat fica mais limpo
+        timestamp: Date.now()
+    });
+
+    input.value = "";
+};
+
+
+
+const nickInput = document.getElementById("authNickname");
+const senhaInput = document.getElementById("authSenha");
+
+nickInput.addEventListener("keydown", e=>{
+    if(e.key === "Enter"){
+        senhaInput.focus();
+    }
+});
+
+senhaInput.addEventListener("keydown", e=>{
+    if(e.key === "Enter"){
+        login();
+    }
+});
+
+function iniciarChat(){
+
+    onValue(ref(db, "chatGlobal"), snapshot => {
+
+        let lista = [];
+
+        snapshot.forEach(child=>{
+            lista.push(child.val());
+        });
+
+        window.mensagens = lista;
+
+        renderChat();
+
+    });
+
+}
+
+
+salvarCapturados();
+atualizarBadge();
+
+document.getElementById("adminBtn").onclick = function(){
+    abrirSubPagina();
+};
+</script>
+<!-- /SPLIT: firebase.js -->
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
