@@ -1700,6 +1700,9 @@ function setMobileConfigOpen(isOpen){
     let holdInterval = null;
     let startInTable = false;
     let startInHandle = false;
+    let configStartX = 0;
+    let configStartY = 0;
+    let configTracking = false;
 
     function ensureHoldOverlay(){
         let overlay = document.getElementById("holdOverlay");
@@ -1894,6 +1897,29 @@ function setMobileConfigOpen(isOpen){
         config.addEventListener("touchstart", onStart, { passive: true });
         config.addEventListener("touchmove", onMove, { passive: true });
         config.addEventListener("touchend", onEnd, { passive: true });
+        config.addEventListener("touchstart", function(e){
+            if(!isMobileLayout()) return;
+            if(!document.body.classList.contains("mobile-config-open")) return;
+            if(e.touches && e.touches.length === 1){
+                configTracking = true;
+                configStartX = e.touches[0].clientX;
+                configStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+        config.addEventListener("touchend", function(e){
+            if(!configTracking || !isMobileLayout()) return;
+            configTracking = false;
+            if(!document.body.classList.contains("mobile-config-open")) return;
+            const t = (e.changedTouches && e.changedTouches[0]) || null;
+            if(!t) return;
+            const dx = t.clientX - configStartX;
+            const dy = t.clientY - configStartY;
+            const absX = Math.abs(dx);
+            const absY = Math.abs(dy);
+            if(dx > 0 && absX > 80 && absX > absY * 1.2){
+                setMobileConfigOpen(false);
+            }
+        }, { passive: true });
     }
 
     if(tableContainer){
