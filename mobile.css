@@ -32,8 +32,8 @@
         width: 24px;
         height: 100vh;
         z-index: 99999;
-        background: rgba(122, 60, 255, 0.27);
-        border-left: 2px solid rgba(255, 255, 255, 0.35);
+        background: rgba(122, 60, 255, 0.18);
+        border-left: 2px solid rgba(255, 255, 255, 0.25);
         touch-action: none;
         pointer-events: auto;
         display: none;

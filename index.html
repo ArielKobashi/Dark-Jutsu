@@ -1916,7 +1916,7 @@ function setMobileConfigOpen(isOpen){
             const dy = t.clientY - configStartY;
             const absX = Math.abs(dx);
             const absY = Math.abs(dy);
-            if(dx > 0 && absX > 80 && absX > absY * 1.2){
+            if((dx > 0 || dx < 0) && absX > 80 && absX > absY * 1.2){
                 setMobileConfigOpen(false);
             }
         }, { passive: true });
@@ -1962,6 +1962,15 @@ if(searchInput){
 
 updateMobileOverlaysState();
 
+</script>
+<script>
+    window.addEventListener("popstate", function(){
+        if(document.body.classList.contains("mobile-config-open")){
+            setMobileConfigOpen(false);
+            history.pushState({panelClosed:true}, "");
+        }
+    });
+    history.pushState({panelReady:true}, "");
 </script>
 <!-- /SPLIT: app-core.js -->
 
