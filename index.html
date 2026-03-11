@@ -1676,6 +1676,76 @@ function setMobileConfigOpen(isOpen){
     let startX = 0;
     let startY = 0;
     let tracking = false;
+    let touchDown = false;
+    let pendingOpen = false;
+    let holdActive = false;
+    let holdDone = false;
+    let holdInterval = null;
+
+    function ensureHoldOverlay(){
+        let overlay = document.getElementById("holdOverlay");
+        if(!overlay){
+            overlay = document.createElement("div");
+            overlay.id = "holdOverlay";
+            const label = document.createElement("span");
+            label.id = "holdCount";
+            overlay.appendChild(label);
+            document.body.appendChild(overlay);
+        }
+        return overlay;
+    }
+
+    function setHoldOverlay(count){
+        const overlay = ensureHoldOverlay();
+        const label = document.getElementById("holdCount");
+        if(label) label.textContent = String(count);
+        overlay.classList.add("active");
+        overlay.classList.add("flash");
+        setTimeout(()=> overlay.classList.remove("flash"), 180);
+    }
+
+    function clearHoldOverlay(){
+        const overlay = document.getElementById("holdOverlay");
+        if(overlay){
+            overlay.classList.remove("active");
+            overlay.classList.remove("flash");
+        }
+    }
+
+    function startHoldCountdown(){
+        if(holdActive) return;
+        holdActive = true;
+        holdDone = false;
+        let count = 3;
+        setHoldOverlay(count);
+        holdInterval = setInterval(()=>{
+            count -= 1;
+            if(count <= 0){
+                clearInterval(holdInterval);
+                holdInterval = null;
+                holdDone = true;
+                clearHoldOverlay();
+                if(touchDown && pendingOpen){
+                    setMobileConfigOpen(true);
+                }
+                pendingOpen = false;
+                holdActive = false;
+                return;
+            }
+            setHoldOverlay(count);
+        }, 1000);
+    }
+
+    function cancelHold(){
+        if(holdInterval){
+            clearInterval(holdInterval);
+            holdInterval = null;
+        }
+        holdActive = false;
+        holdDone = false;
+        pendingOpen = false;
+        clearHoldOverlay();
+    }
 
     function onStart(e){
         if(!isMobileLayout()) return;
@@ -1683,6 +1753,28 @@ function setMobileConfigOpen(isOpen){
             tracking = true;
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
+            touchDown = true;
+            pendingOpen = false;
+        }
+    }
+
+    function onMove(e){
+        if(!tracking || !isMobileLayout()) return;
+        if(holdActive) return;
+        const t = (e.touches && e.touches[0]) || null;
+        if(!t) return;
+        const dx = t.clientX - startX;
+        const dy = t.clientY - startY;
+        const absX = Math.abs(dx);
+        const absY = Math.abs(dy);
+        if(absX > absY * 1.2){
+            const screenW = window.innerWidth || 0;
+            const openThreshold = 110;
+            const openStartX = screenW * 0.6;
+            if(dx < 0 && absX >= openThreshold && startX >= openStartX){
+                pendingOpen = true;
+                startHoldCountdown();
+            }
         }
     }
 
@@ -1693,20 +1785,22 @@ function setMobileConfigOpen(isOpen){
             tracking = false;
             return;
         }
+        touchDown = false;
         const dx = t.clientX - startX;
         const dy = t.clientY - startY;
         const absX = Math.abs(dx);
         const absY = Math.abs(dy);
 
+        if(holdActive && !holdDone){
+            cancelHold();
+            tracking = false;
+            return;
+        }
+
         if(absX > absY * 1.2){
             const screenW = window.innerWidth || 0;
-            const openThreshold = 110;
             const closeThreshold = 80;
-            const openStartX = screenW * 0.6;
-
-            if(dx < 0 && absX >= openThreshold && startX >= openStartX){
-                setMobileConfigOpen(true);
-            }else if(dx > 0 && absX >= closeThreshold){
+            if(dx > 0 && absX >= closeThreshold){
                 setMobileConfigOpen(false);
             }
         }
@@ -1718,11 +1812,13 @@ function setMobileConfigOpen(isOpen){
 
     if(main){
         main.addEventListener("touchstart", onStart, { passive: true });
+        main.addEventListener("touchmove", onMove, { passive: true });
         main.addEventListener("touchend", onEnd, { passive: true });
     }
 
     if(config){
         config.addEventListener("touchstart", onStart, { passive: true });
+        config.addEventListener("touchmove", onMove, { passive: true });
         config.addEventListener("touchend", onEnd, { passive: true });
     }
 

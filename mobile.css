@@ -1,5 +1,29 @@
 ﻿/* Mobile overrides for the dark anime theme */
 @media (max-width: 900px) {
+    #holdOverlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(12, 0, 0, 0.55);
+        z-index: 50;
+    }
+
+    #holdOverlay.active {
+        display: flex;
+    }
+
+    #holdOverlay.flash {
+        background: rgba(255, 0, 0, 0.65);
+    }
+
+    #holdOverlay span {
+        font-size: 64px;
+        font-weight: 900;
+        color: #ff3b3b;
+        text-shadow: 0 0 18px rgba(255, 0, 0, 0.75);
+    }
     html, body {
         width: 100%;
         height: 100%;
