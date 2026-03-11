@@ -26,6 +26,7 @@
     #main {
         flex: 1 1 auto;
         padding: 10px 8px 6px 8px;
+        min-height: 0;
     }
 
     #searchInput {
@@ -38,6 +39,8 @@
         flex: 1 1 auto;
         overflow: auto;
         border-radius: 8px;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch;
     }
 
     table {
