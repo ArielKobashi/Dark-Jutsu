@@ -1698,10 +1698,15 @@ function setMobileConfigOpen(isOpen){
         const absX = Math.abs(dx);
         const absY = Math.abs(dy);
 
-        if(absX > 80 && absX > absY * 1.2){
-            if(dx < 0){
+        if(absX > absY * 1.2){
+            const screenW = window.innerWidth || 0;
+            const openThreshold = 110;
+            const closeThreshold = 80;
+            const openStartX = screenW * 0.6;
+
+            if(dx < 0 && absX >= openThreshold && startX >= openStartX){
                 setMobileConfigOpen(true);
-            }else{
+            }else if(dx > 0 && absX >= closeThreshold){
                 setMobileConfigOpen(false);
             }
         }
