@@ -21,12 +21,14 @@
         flex-direction: column;
         box-shadow: 0 0 12px #7A3CFF55;
         border-radius: 0;
+        overflow: hidden;
     }
 
     #main {
         flex: 1 1 auto;
         padding: 10px 8px 6px 8px;
         min-height: 0;
+        overflow: hidden;
     }
 
     #searchInput {
@@ -41,6 +43,9 @@
         border-radius: 8px;
         min-height: 0;
         -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+        width: 100%;
     }
 
     table {
