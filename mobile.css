@@ -50,6 +50,11 @@
         box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
     }
 
+    body.auth-open #edgeHandle,
+    body.loading-open #edgeHandle {
+        display: none !important;
+    }
+
     #holdOverlay .holdWrap {
         display: flex;
         flex-direction: column;
