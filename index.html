@@ -33,7 +33,10 @@
     <div id="cadastroBox">
         <h2>Primeiro Acesso</h2>
         <input type="text" id="cadastroNickname" placeholder="Confirmar nickname">
-        <input type="password" id="cadastroSenha" placeholder="Confirmar senha">
+        <div class="senhaWrap">
+            <input type="password" id="cadastroSenha" placeholder="Confirmar senha">
+            <button type="button" class="toggleSenha" onclick="toggleSenha('cadastroSenha', this)">👁</button>
+        </div>
         <input type="tel" id="cadastroCracha" placeholder="Número do crachá" inputmode="numeric" pattern="[0-9]*">
         <div class="cadastroSetor">
             <div class="cadastroSetorLabel">Setor</div>
@@ -1703,6 +1706,11 @@ function isMobileLayout(){
     return window.matchMedia("(max-width: 900px)").matches;
 }
 
+function capitalizarPrimeira(str){
+    if(!str) return "";
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 window.verSolicitacao = async function(id){
     try{
         const snap = await get(ref(db, "solicitacoesCadastro/"+id));
@@ -2359,7 +2367,7 @@ window.abrirCadastro = function(){
     const authScreen = document.getElementById("authScreen");
     if(cadastro) cadastro.style.display = "flex";
     if(authScreen) authScreen.style.display = "none";
-    document.getElementById("cadastroNickname").value = authNick;
+    document.getElementById("cadastroNickname").value = capitalizarPrimeira(authNick);
     document.getElementById("cadastroSenha").value = authSenha;
     updateMobileOverlaysState();
 };
@@ -2369,6 +2377,8 @@ window.fecharCadastro = function(){
     const authScreen = document.getElementById("authScreen");
     if(cadastro) cadastro.style.display = "none";
     if(authScreen) authScreen.style.display = "flex";
+    const senhaInput = document.getElementById("cadastroSenha");
+    if(senhaInput) senhaInput.type = "password";
     updateMobileOverlaysState();
 };
 
@@ -2378,6 +2388,14 @@ function mostrarPending(nick){
     if(authScreen) authScreen.style.display = "none";
     if(pending) pending.style.display = "flex";
     updateMobileOverlaysState();
+}
+
+window.toggleSenha = function(inputId, btn){
+    const input = document.getElementById(inputId);
+    if(!input) return;
+    const isPass = input.type === "password";
+    input.type = isPass ? "text" : "password";
+    if(btn) btn.textContent = isPass ? "🙈" : "👁";
 }
 
 window.voltarLogin = function(){
