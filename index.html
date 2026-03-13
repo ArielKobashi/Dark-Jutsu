@@ -2143,6 +2143,11 @@ window.cadastrar = async function(){
         console.log("Cadastro enviado");
 
         mostrarNotificacao("✔ Cadastro enviado para aprovação.");
+        document.getElementById("authNickname").value = "";
+        document.getElementById("authSenha").value = "";
+        setTimeout(()=>{
+            document.getElementById("authNickname").focus();
+        }, 50);
 
     }catch(error){
 
@@ -2188,7 +2193,7 @@ onAuthStateChanged(auth, async (user) => {
 
         const dadosUsuario = snapshot.val();
 
-        if(dadosUsuario && (dadosUsuario.senha === "" || dadosUsuario.senhaReset === true || (window.ultimaSenhaLogin && dadosUsuario.senhaAntiga === window.ultimaSenhaLogin))) {
+        if(dadosUsuario && (dadosUsuario.senha === "" || dadosUsuario.senhaReset === true)) {
             let novaSenha = "";
             while(true){
                 novaSenha = prompt("Defina uma nova senha");
