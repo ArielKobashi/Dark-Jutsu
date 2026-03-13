@@ -32,8 +32,11 @@
 <div id="pendingScreen" style="display:none;">
     <div id="pendingBox">
         <h2>Aguardando Cadastro</h2>
-        <p>Sua solicitação foi enviada e está aguardando aprovação do administrador.</p>
-        <p>Você será liberado assim que a conta for aprovada.</p>
+        <p>Sua solicitação foi enviada com sucesso.</p>
+        <p>Agora seu acesso fica bloqueado até a aprovação do administrador.</p>
+        <p>Assim que aprovado, você poderá entrar normalmente com seu login e senha.</p>
+        <p>O prazo máximo de aprovação costuma ser de até 12 horas corridas.</p>
+        <p>Se tiver urgência, avise o administrador para liberar o acesso.</p>
         <button onclick="voltarLogin()">Voltar ao Login</button>
     </div>
 </div>
@@ -389,12 +392,15 @@ window.aprovar = async function(id){
         if(!dados) return;
 
         const nivel = document.getElementById("nivel_"+id).value;
-        const emailFake = dados.nickname + "@sistema.com";
+        let uid = dados.uid;
+        if(!uid){
+            const emailFake = dados.nickname + "@sistema.com";
+            // usa auth secundario para nao trocar a sessao do admin
+            const cred = await window.createUserWithEmailAndPassword(window.adminAuth, emailFake, dados.senha);
+            uid = cred.user.uid;
+        }
 
-        // usa auth secundario para nao trocar a sessao do admin
-        const cred = await window.createUserWithEmailAndPassword(window.adminAuth, emailFake, dados.senha);
-
-        await set(ref(db, "usuarios/" + cred.user.uid), {
+        await set(ref(db, "usuarios/" + uid), {
             nickname: dados.nickname,
             nivel: nivel,
             ativo: true,
@@ -2129,25 +2135,6 @@ window.login = async function(){
     let emailFake = nick + "@sistema.com";
 
     try{
-        try{
-            const snap = await get(ref(db, "solicitacoesCadastro"));
-            let pendente = false;
-            if(snap.exists()){
-                snap.forEach(child=>{
-                    const s = child.val();
-                    if(s && s.nickname === nick && s.status === "pendente"){
-                        pendente = true;
-                    }
-                });
-            }
-            if(pendente){
-                mostrarPending(nick);
-                return;
-            }
-        }catch(e){
-            console.error("Erro ao checar pendencia (pre-login):", e);
-        }
-
         await signInWithEmailAndPassword(auth, emailFake, senha);
 
     } catch(error){
@@ -2184,10 +2171,25 @@ window.cadastrar = async function(){
     }
 
     try{
+        const emailFake = nick + "@sistema.com";
+        if(!window.cadastroAuth){
+            const cadastroApp = initializeApp(firebaseConfig, "cadastroApp");
+            window.cadastroAuth = getAuth(cadastroApp);
+        }
+
+        let uid = null;
+        try{
+            const cred = await window.createUserWithEmailAndPassword(window.cadastroAuth, emailFake, senha);
+            uid = cred.user.uid;
+            await signOut(window.cadastroAuth);
+        }catch(e){
+            console.error("Erro criando auth pendente:", e);
+        }
 
         const solicitacaoRef = push(ref(db, "solicitacoesCadastro"));
 
         await set(solicitacaoRef, {
+            uid: uid,
             nickname: nick,
             senha: senha,
             status: "pendente",
@@ -2257,7 +2259,12 @@ onAuthStateChanged(auth, async (user) => {
 
         const snapshot = await get(ref(db, "usuarios/" + user.uid));
 
-        if (!snapshot.exists() || !snapshot.val().ativo) {
+        if (!snapshot.exists()) {
+            mostrarPending(user.email ? user.email.split("@")[0] : "");
+            await signOut(auth);
+            return;
+        }
+        if (!snapshot.val().ativo) {
             alert("Usuário bloqueado");
             await signOut(auth);
             return;
