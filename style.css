@@ -183,6 +183,8 @@ display:none;
 .authTitle{
     text-align:center;
     margin:0 0 2px;
+    /* Para subir o titulo e invadir a area da logo: transform: translateY(-12px); */
+    /* Para descer o titulo: transform: translateY(12px); */
 }
 
 #cadastroScreen{
