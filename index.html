@@ -1,4 +1,4 @@
-﻿
+﻿?
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -35,16 +35,16 @@
         <input type="text" id="cadastroNickname" placeholder="Confirmar nickname">
         <div class="senhaWrap">
             <input type="password" id="cadastroSenha" placeholder="Confirmar senha">
-            <button type="button" class="toggleSenha" onclick="toggleSenha('cadastroSenha', this)">ðŸ‘</button>
+            <button type="button" class="toggleSenha" onclick="toggleSenha('cadastroSenha', this)">👁</button>
         </div>
-        <input type="tel" id="cadastroCracha" placeholder="NÃºmero do crachÃ¡" inputmode="numeric" pattern="[0-9]*">
+        <input type="tel" id="cadastroCracha" placeholder="Número do crachá" inputmode="numeric" pattern="[0-9]*">
         <div class="cadastroSetor">
             <div class="cadastroSetorLabel">Setor</div>
             <div class="cadastroSetorGrid">
                 <label><input type="radio" name="setor" value="Administrativo"> Administrativo</label>
                 <label><input type="radio" name="setor" value="Almoxarifado"> Almoxarifado</label>
-                <label><input type="radio" name="setor" value="SupervisÃ£o"> SupervisÃ£o</label>
-                <label><input type="radio" name="setor" value="OperaÃ§Ã£o"> OperaÃ§Ã£o</label>
+                <label><input type="radio" name="setor" value="Supervisão"> Supervisão</label>
+                <label><input type="radio" name="setor" value="Operação"> Operação</label>
             </div>
         </div>
         <button id="btnConfirmarCadastro" onclick="cadastrar()">Confirmar Cadastro</button>
@@ -57,11 +57,11 @@
 <div id="pendingScreen" style="display:none;">
     <div id="pendingBox">
         <h2>Aguardando Cadastro</h2>
-        <p>Sua solicitaÃ§Ã£o foi enviada com sucesso.</p>
-        <p>Agora seu acesso fica bloqueado atÃ© a aprovaÃ§Ã£o do administrador.</p>
-        <p>Assim que aprovado, vocÃª poderÃ¡ entrar normalmente com seu login e senha.</p>
-        <p>O prazo mÃ¡ximo de aprovaÃ§Ã£o costuma ser de atÃ© 12 horas corridas.</p>
-        <p>Se tiver urgÃªncia, avise o administrador para liberar o acesso.</p>
+        <p>Sua solicitação foi enviada com sucesso.</p>
+        <p>Agora seu acesso fica bloqueado até a aprovação do administrador.</p>
+        <p>Assim que aprovado, você poderá entrar normalmente com seu login e senha.</p>
+        <p>O prazo máximo de aprovação costuma ser de até 12 horas corridas.</p>
+        <p>Se tiver urgência, avise o administrador para liberar o acesso.</p>
         <button onclick="voltarLogin()">Voltar ao Login</button>
     </div>
 </div>
@@ -81,7 +81,7 @@
 <!-- SPLIT: main.html (estoque table + magnet + relatorio) -->
 <div id="main">
 
-    <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descriÃ§Ã£o">
+    <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descrição">
 
     <div id="tableContainer">
         <table>
@@ -105,8 +105,8 @@
                         <div class="headerContent">
                             <span class="titulo">Protheus</span>
                             <span class="setas">
-                                <span class="setaUp">â–²</span>
-                                <span class="setaDown">â–¼</span>
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
                             </span>
                         </div>
                     </th>
@@ -115,38 +115,38 @@
                         <div class="headerContent">
                             <span class="titulo">Cooperat</span>
                             <span class="setas">
-                                <span class="setaUp">â–²</span>
-                                <span class="setaDown">â–¼</span>
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
                             </span>
                         </div>
                     </th>
 
                     <th data-col="armazem">
                         <div class="headerContent">
-                            <span class="titulo">ArmazÃ©m</span>
+                            <span class="titulo">Armazém</span>
                             <span class="setas">
-                                <span class="setaUp">â–²</span>
-                                <span class="setaDown">â–¼</span>
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
                             </span>
                         </div>
                     </th>
 
                     <th data-col="descricao">
                         <div class="headerContent">
-                            <span class="titulo">DescriÃ§Ã£o</span>
+                            <span class="titulo">Descrição</span>
                             <span class="setas">
-                                <span class="setaUp">â–²</span>
-                                <span class="setaDown">â–¼</span>
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
                             </span>
                         </div>
                     </th>
 
                     <th data-col="endereco">
                         <div class="headerContent">
-                            <span class="titulo">EndereÃ§o</span>
+                            <span class="titulo">Endereço</span>
                             <span class="setas">
-                                <span class="setaUp">â–²</span>
-                                <span class="setaDown">â–¼</span>
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
                             </span>
                         </div>
                     </th>
@@ -155,8 +155,8 @@
                         <div class="headerContent">
                             <span class="titulo">Saldo</span>
                             <span class="setas">
-                                <span class="setaUp">â–²</span>
-                                <span class="setaDown">â–¼</span>
+                                <span class="setaUp">▲</span>
+                                <span class="setaDown">▼</span>
                             </span>
                         </div>
                     </th>
@@ -170,7 +170,7 @@
 
 <!-- MAGNET + RELATORIO ABAIXO DA TABELA -->
 
-<div id="magnetIcon" title="Modo ÃmÃ£">
+<div id="magnetIcon" title="Modo Ímã">
 
 <svg 
 viewBox="0 0 640 640"
@@ -184,7 +184,7 @@ xmlns="http://www.w3.org/2000/svg">
 
 </div>
 
-<button id="btnRelatorio" onclick="gerarRelatorio()">Gerar RelatÃ³rio</button>
+<button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relatério</button>
 
 </div> <!-- FECHA #main -->
 <!-- /SPLIT: main.html -->
@@ -225,7 +225,7 @@ stroke-linecap="round"/>
 
 <span class="subTitle">Painel Administrativo</span>
 
-<div class="subClose" id="btnFecharAdmin" onclick="fecharSubPagina()">âœ•</div>
+<div class="subClose" id="btnFecharAdmin" onclick="fecharSubPagina()">✖</div>
 
 </div>
 
@@ -239,7 +239,7 @@ stroke-linecap="round"/>
 <div class="adminSection fbPanel">
 
 <div class="adminTitle fbPanelHeader">
-SolicitaÃ§Ãµes de Cadastro
+Solicitações de Cadastro
 <span id="badgeSolicitacoes">0</span>
 </div>
 
@@ -249,7 +249,7 @@ SolicitaÃ§Ãµes de Cadastro
 <div class="adminSection fbPanel">
 
 <div class="adminTitle fbPanelHeader">
-UsuÃ¡rios do Sistema
+Usuários do Sistema
 </div>
 
 <div id="listaUsuarios"></div>
@@ -268,13 +268,13 @@ UsuÃ¡rios do Sistema
     <button onclick="carregarPlanilha('cooperat')">Cooperat.xlsx</button>
     <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
     <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
-    <button onclick="carregarPlanilha('saldoEndereco')">Saldo por EndereÃ§o.xlsx</button>
+    <button onclick="carregarPlanilha('saldoEndereço')">Saldo por Endereço.xlsx</button>
 
     <input type="file" id="fileInput" style="display:none" accept=".xlsx">
     <hr>
     <button onclick="atualizarBanco()">Atualizar Banco</button>
     <div style="margin-top:6px; font-size:10px; text-align:center;">
-    Ãšltima atualizaÃ§Ã£o:
+    Última atualização:
     <div id="lastUpdate" style="opacity:0.7;"></div>
     </div>
 
@@ -291,7 +291,7 @@ UsuÃ¡rios do Sistema
     </div>
     <div class="toggle" style="display:flex; align-items:center; gap:4px;">
     <input type="checkbox" id="ignoreSpaces">
-    <span>Ignorar EspaÃ§os</span>
+    <span>Ignorar Espaços</span>
     </div>
 
 
@@ -314,7 +314,7 @@ UsuÃ¡rios do Sistema
 
         <div id="chatInputArea">
             <input type="text" id="chatInput" placeholder="Digite uma mensagem...">
-            <button onclick="enviarMensagem()">âž¤</button>
+            <button onclick="enviarMensagem()">➤</button>
         </div>
     </div>
 
@@ -349,7 +349,7 @@ let planilhas = {
     cooperat: null,
     incluir: null,
     saldoAtual: null,
-    saldoEndereco: null
+    saldoEndereço: null
 };
 
 let dados = [];
@@ -584,7 +584,7 @@ function carregarPlanilha(tipo){
 
             planilhas[tipo] = json;
 
-            // marca botÃ£o corretamente
+            // marca botão corretamente
             document.querySelectorAll("#config button").forEach(btn=>{
                 if(btn.getAttribute("onclick")?.includes(tipo)){
                     btn.style.background = "#3E1F8F";
@@ -609,7 +609,7 @@ function iniciarProgresso(){
     intervaloProgresso = setInterval(()=>{
 
         if(progressoAtual < 90){
-            progressoAtual += Math.random() * 8; // sobe de forma orgÃ¢nica
+            progressoAtual += Math.random() * 8; // sobe de forma orgânica
             barra.style.width = progressoAtual + "%";
         }
 
@@ -630,7 +630,7 @@ function finalizarProgresso(){
         appReady = true;
         updateMobileOverlaysState();
 
-        // ðŸ”¥ MOSTRA O IMÃƒ APENAS DEPOIS DO LOADING
+        // 🔥 MOSTRA O ÍMÃ APENAS DEPOIS DO LOADING
         document.getElementById("magnetIcon").style.display = "flex";
 
         if (typeof window.focusSearchForMobile === "function") {
@@ -658,7 +658,7 @@ async function atualizarBanco(btn) {
     let incluir = planilhas.incluir;
     let cooperat = planilhas.cooperat;
     let saldoAtual = planilhas.saldoAtual;
-    let saldoEndereco = planilhas.saldoEndereco || [];
+    let saldoEndereço = planilhas.saldoEndereço || [];
 
     for (let i = 2; i < incluir.length; i++) {
 
@@ -672,7 +672,7 @@ async function atualizarBanco(btn) {
             protheus: protheus.toString().trim(),
             cooperat: cooperatCod.toString().trim(),
             descricao: descricao.toString().trim(),
-            enderecoPrincipal: "Sem EndereÃ§o",
+            enderecoPrincipal: "Sem Endereço",
             armazemPrincipal: "ND",
             saldo: 0,
             enderecos: [],
@@ -687,7 +687,7 @@ async function atualizarBanco(btn) {
             }
         }
 
-        // ENDEREÃ‡O ANTIGO
+        // ENDEREÇO ANTIGO
         for (let j = 2; j < cooperat.length; j++) {
             if (cooperat[j][0] == cooperatCod) {
                 let end = (cooperat[j][3] || "") + " " +
@@ -698,21 +698,21 @@ async function atualizarBanco(btn) {
             }
         }
 
-        // DETALHES POR ENDEREÃ‡O
-        let encontrouEnderecos = false;
+        // DETALHES POR ENDEREÇO
+        let encontrouEndereços = false;
 
-        for (let j = 1; j < saldoEndereco.length; j++) {
-            if (saldoEndereco[j][1] == protheus) {
-                encontrouEnderecos = true;
+        for (let j = 1; j < saldoEndereço.length; j++) {
+            if (saldoEndereço[j][1] == protheus) {
+                encontrouEndereços = true;
                 item.enderecos.push({
-                    endereco: saldoEndereco[j][4] || "ND",
-                    armazem: saldoEndereco[j][2] || "ND",
-                    saldo: Number(saldoEndereco[j][8]) || 0
+                    endereco: saldoEndereço[j][4] || "ND",
+                    armazem: saldoEndereço[j][2] || "ND",
+                    saldo: Number(saldoEndereço[j][8]) || 0
                 });
             }
         }
 
-        if (encontrouEnderecos && item.enderecos.length > 0) {
+        if (encontrouEndereços && item.enderecos.length > 0) {
             item.enderecoPrincipal = item.enderecos[0].endereco;
             item.armazemPrincipal = item.enderecos[0].armazem;
 
@@ -724,8 +724,8 @@ async function atualizarBanco(btn) {
         novosDados.push(item);
     }
 
-    /* ðŸ”¥ CORREÃ‡ÃƒO AQUI */
-    dados = novosDados;   // <<< usa a variÃ¡vel correta
+    /* 🔥 CORREÇÃO AQUI */
+    dados = novosDados;   // <<< usa a variável correta
     aplicarTodosFiltros();
 
     try {
@@ -842,10 +842,10 @@ function renderTabela(){
 
         tdArm.ondblclick = ()=> abrirModalSaldos(item);
 
-        // DESCRIÃ‡ÃƒO
+        // DESCRIÇÃO
         criarTd(row, item.descricao || "");
 
-        // ENDEREÃ‡O
+        // ENDEREÇO
         let tdEnd = criarTd(row, item.enderecoPrincipal || "");
 
         if((item.enderecos || []).length > 1){
@@ -950,7 +950,7 @@ function gerarRelatorio(){
     novaJanela.document.write(`
         <html>
         <head>
-            <title>RelatÃ³rio ConferÃªncia</title>
+            <title>Relatério Conferência</title>
             <style>
 
                 @page{
@@ -1018,16 +1018,16 @@ function gerarRelatorio(){
         </head>
         <body>
 
-        <h2>RelatÃ³rio de ConferÃªncia</h2>
+        <h2>Relatério de Conferência</h2>
         <div>Gerado em: ${new Date().toLocaleString()}</div>
 
         <div class="painel">
-            <button onclick="window.print()">ðŸ–¨ Imprimir</button>
+            <button onclick="window.print()">🖨 Imprimir</button>
 
-            <label><input type="checkbox" id="arm4"> ArmazÃ©m 4</label>
-            <label><input type="checkbox" id="arm5"> ArmazÃ©m 5</label>
+            <label><input type="checkbox" id="arm4"> Armazém 4</label>
+            <label><input type="checkbox" id="arm5"> Armazém 5</label>
             <label><input type="checkbox" id="mostrarCooperat"> Cooperat</label>
-            <label><input type="checkbox" id="ordenarEndereco"> Ordenar por EndereÃ§o</label>
+            <label><input type="checkbox" id="ordenarEndereço"> Ordenar por Endereço</label>
         </div>
 
         <div id="tabelaContainer"></div>
@@ -1054,7 +1054,7 @@ function gerarRelatorio(){
             if(somente5) return armazem=="5";
         }
 
-        function ordenarEndereco(a,b){
+        function ordenarEndereço(a,b){
             return a.endereco.localeCompare(
                 b.endereco,
                 undefined,
@@ -1064,7 +1064,7 @@ function gerarRelatorio(){
 
         function montarTabela(){
 
-            let ordenar = document.getElementById("ordenarEndereco").checked;
+            let ordenar = document.getElementById("ordenarEndereço").checked;
 
             let linhas = [];
 
@@ -1101,7 +1101,7 @@ function gerarRelatorio(){
             });
 
             if(ordenar){
-                linhas.sort(ordenarEndereco);
+                linhas.sort(ordenarEndereço);
             }
 
             let totalItens = linhas.length;
@@ -1110,12 +1110,12 @@ function gerarRelatorio(){
             let html = "<table><thead><tr>" +
                         "<th>Protheus</th>" +
                         "<th class='colCooperat' style='display:none;'>Cooperat</th>" +
-                        "<th>DescriÃ§Ã£o</th>" +
-                       "<th>ArmazÃ©m</th>" +
-                       "<th>EndereÃ§o</th>" +
+                        "<th>Descrição</th>" +
+                       "<th>Armazém</th>" +
+                       "<th>Endereço</th>" +
                        "<th>Saldo</th>" +
                        "<th>Contagem</th>" +
-                       "<th>DiferenÃ§a</th>" +
+                       "<th>Diferença</th>" +
                        "</tr></thead><tbody>";
 
             linhas.forEach((l,i)=>{
@@ -1169,7 +1169,7 @@ function gerarRelatorio(){
 
         document.getElementById("arm4").addEventListener("change", montarTabela);
         document.getElementById("arm5").addEventListener("change", montarTabela);
-        document.getElementById("ordenarEndereco").addEventListener("change", montarTabela);
+        document.getElementById("ordenarEndereço").addEventListener("change", montarTabela);
 
         montarTabela();
     `;
@@ -1410,7 +1410,7 @@ let mapaCores = JSON.parse(localStorage.getItem("chatCores")) || {};
 
 function obterCorNickname(nome){
 
-    let chave = nome.toLowerCase(); // ðŸ”¥ ignora maiÃºscula/minÃºscula
+    let chave = nome.toLowerCase(); // 🔥 ignora maiúscula/minúscula
 
     if(!mapaCores[chave]){
         let cor = coresDisponiveis[Math.floor(Math.random() * coresDisponiveis.length)];
@@ -1509,7 +1509,7 @@ function abrirModalSaldos(item){
     let html = `
     <html>
     <head>
-        <title>Saldos por EndereÃ§o</title>
+        <title>Saldos por Endereço</title>
         <style>
             body{
                 background:#15151D;
@@ -1531,14 +1531,14 @@ function abrirModalSaldos(item){
         </style>
     </head>
     <body>
-        <h2>Saldos por EndereÃ§o</h2>
+        <h2>Saldos por Endereço</h2>
     `;
 
     item.enderecos.forEach(info => {
         html += `
             <div class="card">
-                <b>EndereÃ§o:</b> ${info.endereco}<br>
-                <b>ArmazÃ©m:</b> ${info.armazem}<br>
+                <b>Endereço:</b> ${info.endereco}<br>
+                <b>Armazém:</b> ${info.armazem}<br>
                 <b>Saldo:</b> ${info.saldo}
             </div>
         `;
@@ -1668,7 +1668,7 @@ document.querySelectorAll("th[data-col]").forEach(th => {
 
         let col = this.dataset.col;
 
-        // remove ordenaÃ§Ã£o
+        // remove ordenação
         ordensAtivas = ordensAtivas.filter(o => o.col !== col);
 
         // remove filtro
@@ -1720,7 +1720,7 @@ window.verSolicitacao = async function(id){
         const data = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
         box.innerHTML = `
         <div><b>Nickname:</b> ${dados.nickname || "-"}</div>
-        <div><b>CrachÃ¡:</b> ${dados.cracha || "-"}</div>
+        <div><b>Crachá:</b> ${dados.cracha || "-"}</div>
         <div><b>Setor:</b> ${dados.setor || "-"}</div>
         <div><b>Status:</b> ${dados.status || "-"}</div>
         <div><b>Enviado em:</b> ${data}</div>
@@ -1740,7 +1740,7 @@ window.verUsuario = async function(uid){
         const data = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
         box.innerHTML = `
         <div><b>Nickname:</b> ${dados.nickname || "-"}</div>
-        <div><b>NÃ­vel:</b> ${(dados.nivel || "-").toString().toUpperCase()}</div>
+        <div><b>Nível:</b> ${(dados.nivel || "-").toString().toUpperCase()}</div>
         <div><b>Status:</b> ${dados.ativo === false ? "Bloqueado" : "Ativo"}</div>
         <div><b>Criado em:</b> ${data}</div>
         `;
@@ -2177,7 +2177,7 @@ function iniciarSolicitacoesAdmin(){
                 </div>
                 <div class="fbInfo">
                     <div class="fbName">${formatarNick(s.nickname)}</div>
-                    <div class="fbMeta">Aguardando aprovacao</div>
+                    <div class="fbMeta">Aguardando aprovação</div>
                 </div>
             </div>
 
@@ -2246,7 +2246,7 @@ window.login = async function(){
         }catch(e){
             console.error("Erro ao checar pendencia:", e);
         }
-        alert("UsuÃ¡rio ou senha invÃ¡lidos");
+        alert("Usuário ou senha inválidos");
     }
 }
 
@@ -2259,8 +2259,8 @@ window.cadastrar = async function(){
     const setorMap = {
         "Administrativo": "Administrativo",
         "Almoxarifado": "Almoxarifado",
-        "SupervisÃ£o": "SupervisÃ£o",
-        "OperaÃ§Ã£o": "OperaÃ§Ã£o",
+        "Supervisão": "Supervisão",
+        "Operação": "Operação",
         "Supervisão": "Supervisão",
         "Operação": "Operação"
     };
@@ -2275,11 +2275,11 @@ window.cadastrar = async function(){
         return;
     }
     if(!/^[0-9]+$/.test(cracha)){
-        mostrarNotificacao("O nÃºmero do crachÃ¡ deve conter apenas nÃºmeros");
+        mostrarNotificacao("O número do crachá deve conter apenas números");
         return;
     }
     if(!/^[A-Za-z0-9_.-]{3,20}$/.test(nick)){
-        mostrarNotificacao("Nickname deve ter 3-20 caracteres: letras, nÃºmeros, . _ -");
+        mostrarNotificacao("Nickname deve ter 3-20 caracteres: letras, números, . _ -");
         return;
     }
 
@@ -2299,7 +2299,7 @@ window.cadastrar = async function(){
                     }
                 });
                 if(duplicado){
-                    mostrarNotificacao("Nickname jÃ¡ existe. Escolha outro.");
+                    mostrarNotificacao("Nickname já existe. Escolha outro.");
                     if(btn) btn.disabled = false;
                     return;
                 }
@@ -2314,13 +2314,13 @@ window.cadastrar = async function(){
                     }
                 });
                 if(duplicado){
-                    mostrarNotificacao("Nickname jÃ¡ solicitado. Aguarde aprovaÃ§Ã£o.");
+                    mostrarNotificacao("Nickname já solicitado. Aguarde aprovação.");
                     if(btn) btn.disabled = false;
                     return;
                 }
             }
         }catch(e){
-            console.warn("Sem permissÃ£o para validar duplicidade:", e?.code || e);
+            console.warn("Sem permissão para validar duplicidade:", e?.code || e);
         }
 
         if(!window.cadastroAuth){
@@ -2335,7 +2335,7 @@ window.cadastrar = async function(){
             uid = cred.user.uid;
         }catch(e){
             console.error("Erro criando auth pendente:", e);
-            mostrarNotificacao("NÃ£o foi possÃ­vel criar o usuÃ¡rio. Verifique a senha e tente novamente.");
+            mostrarNotificacao("Não foi possível criar o usuário. Verifique a senha e tente novamente.");
             return;
         }
 
@@ -2355,13 +2355,13 @@ window.cadastrar = async function(){
             try{
                 await signOut(window.cadastroAuth);
             }catch(e){
-                console.warn("Falha ao finalizar sessÃ£o de cadastro:", e?.code || e);
+                console.warn("Falha ao finalizar sessão de cadastro:", e?.code || e);
             }
         }
 
         console.log("Cadastro enviado");
 
-        mostrarNotificacao("âœ” Cadastro enviado para aprovaÃ§Ã£o.");
+        mostrarNotificacao("✔ Cadastro enviado para aprovação.");
         document.getElementById("authNickname").value = "";
         document.getElementById("authSenha").value = "";
         document.getElementById("cadastroNickname").value = "";
@@ -2420,7 +2420,7 @@ window.toggleSenha = function(inputId, btn){
     if(!input) return;
     const isPass = input.type === "password";
     input.type = isPass ? "text" : "password";
-    if(btn) btn.textContent = isPass ? "ðŸ™ˆ" : "ðŸ‘";
+    if(btn) btn.textContent = isPass ? "🙈" : "👁";
 }
 
 window.voltarLogin = function(){
@@ -2466,7 +2466,7 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
         if (!snapshot.val().ativo) {
-            alert("UsuÃ¡rio bloqueado");
+            alert("Usuário bloqueado");
             await signOut(auth);
             return;
         }
@@ -2502,7 +2502,7 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         window.meuNickname = dadosUsuario.nickname;
-        // ðŸ”¥ ZERA CAPTURAS AO INICIAR SESSÃƒO
+        // 🔥 ZERA CAPTURAS AO INICIAR SESSÃO
         capturados.clear();
         localStorage.removeItem("capturadosMagnet");
         atualizarBadge();
@@ -2519,7 +2519,7 @@ onAuthStateChanged(auth, async (user) => {
         if (dadosUsuario.nivel === "admin") {
             
             if (adminBtn) adminBtn.style.display = "flex";
-            iniciarSolicitacoesAdmin(); // ðŸ”¥ AQUI
+            iniciarSolicitacoesAdmin(); // 🔥 AQUI
             iniciarListaUsuarios();
             if (adminPanel) adminPanel.style.display = "block";
         } else {
@@ -2533,13 +2533,13 @@ onAuthStateChanged(auth, async (user) => {
 
         iniciarChat();
 
-        resetarTimer(); // ðŸ”¥ ativa controle de inatividade
+        resetarTimer(); // 🔥 ativa controle de inatividade
 
         finalizarProgresso();
 
     } catch (error) {
-        console.error("Erro ao validar usuÃ¡rio:", error);
-        alert("Erro ao validar sessÃ£o.");
+        console.error("Erro ao validar usuário:", error);
+        alert("Erro ao validar sessão.");
         await signOut(auth);
     }
 });
@@ -2552,7 +2552,7 @@ function resetarTimer() {
     clearTimeout(timerInatividade);
 
     timerInatividade = setTimeout(async () => {
-        alert("SessÃ£o encerrada por inatividade.");
+        alert("Sessão encerrada por inatividade.");
         await signOut(auth);
     }, tempoLimite);
 }
@@ -2565,11 +2565,11 @@ document.addEventListener("click", resetarTimer);
 const chatRef = ref(db, "chatGlobal");
 const estoqueRef = ref(db, "estoqueGlobal");
 
-// Exporta funÃ§Ãµes para o escopo global (window)
+// Exporta funções para o escopo global (window)
 window.estoqueRef = estoqueRef;
 window.firebaseSet = set;
 
-// --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a pÃ¡gina) ---
+// --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
 async function carregarEstoqueInicial() {
 
     if (typeof iniciarProgresso === "function") iniciarProgresso(); 
@@ -2599,14 +2599,14 @@ onValue(window.estoqueRef, snapshot => {
 
 });
 
-            console.log("âœ… Dados carregados do Firebase.");
+            console.log("✅ Dados carregados do Firebase.");
 
         } else {
 
-            // ðŸ”¥ PRIMEIRA VEZ â†’ NÃƒO EXISTE NADA
+            // 🔥 PRIMEIRA VEZ → NÃO EXISTE NADA
             window.setDados([]);
 
-            console.log("âš  Banco ainda nÃ£o existe. Iniciando vazio.");
+            console.log("⚠ Banco ainda não existe. Iniciando vazio.");
         }
 
     } catch(e){
@@ -2630,10 +2630,10 @@ function fecharSubPagina(){
 
 }
 
-// --- LÃ“GICA DO CHAT EM TEMPO REAL ---
+// --- LÓGICA DO CHAT EM TEMPO REAL ---
 
 
-// Sobrescreve a funÃ§Ã£o de enviar chat para usar Firebase
+// Sobrescreve a função de enviar chat para usar Firebase
 window.enviarMensagem = function() {
     let input = document.getElementById("chatInput");
     let texto = input.value.trim();
@@ -2702,6 +2702,17 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
 
 
 
