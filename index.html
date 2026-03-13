@@ -514,7 +514,10 @@ function iniciarListaUsuarios(){
             div.innerHTML = `
             <div class="fbUserRow">
                 <div class="fbLeft">
-                    <div class="fbAvatar small">${formatarNick(u.nickname).slice(0,1)}</div>
+                    <div class="fbAvatarCol">
+                        <div class="fbAvatar small">${formatarNick(u.nickname).slice(0,1)}</div>
+                        <button class="fbBtn fbInfoBtn" onclick="verUsuario('${uid}')">Info</button>
+                    </div>
                     <div class="fbInfo">
                         <div class="fbName">${formatarNick(u.nickname)}</div>
                         <div class="fbMeta ${statusClass}">${statusText}</div>
@@ -1720,6 +1723,25 @@ window.verSolicitacao = async function(id){
     }
 }
 
+window.verUsuario = async function(uid){
+    try{
+        const snap = await get(ref(db, "usuarios/"+uid));
+        const dados = snap.val();
+        if(!dados) return;
+        const box = document.getElementById("cadastroInfoContent");
+        const data = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
+        box.innerHTML = `
+        <div><b>Nickname:</b> ${dados.nickname || "-"}</div>
+        <div><b>Nível:</b> ${(dados.nivel || "-").toString().toUpperCase()}</div>
+        <div><b>Status:</b> ${dados.ativo === false ? "Bloqueado" : "Ativo"}</div>
+        <div><b>Criado em:</b> ${data}</div>
+        `;
+        document.getElementById("cadastroInfoModal").style.display = "flex";
+    }catch(e){
+        console.error("Erro ao abrir detalhes do usuario:", e);
+    }
+}
+
 window.fecharInfoCadastro = function(){
     const modal = document.getElementById("cadastroInfoModal");
     if(modal) modal.style.display = "none";
@@ -2141,7 +2163,10 @@ function iniciarSolicitacoesAdmin(){
 
             div.innerHTML = `
             <div class="fbLeft">
-                <div class="fbAvatar">${formatarNick(s.nickname).slice(0,1)}</div>
+                <div class="fbAvatarCol">
+                    <div class="fbAvatar">${formatarNick(s.nickname).slice(0,1)}</div>
+                    <button class="fbBtn fbInfoBtn" onclick="verSolicitacao('${child.key}')">Info</button>
+                </div>
                 <div class="fbInfo">
                     <div class="fbName">${formatarNick(s.nickname)}</div>
                     <div class="fbMeta">Aguardando aprovacao</div>
@@ -2149,7 +2174,6 @@ function iniciarSolicitacoesAdmin(){
             </div>
 
             <div class="fbRight">
-                <button class="fbBtn fbInfoBtn" onclick="verSolicitacao('${child.key}')">Info</button>
                 <label class="nivelLabel">
                     Nivel
                     <select id="nivel_${child.key}" class="nivelSelect">
