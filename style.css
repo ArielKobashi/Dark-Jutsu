@@ -156,6 +156,32 @@ display:none;
     width:250px;
 }
 
+.authBrand{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    margin-bottom:2px;
+}
+
+.authLogo{
+    width:86px;
+    height:86px;
+    object-fit:contain;
+}
+
+.authName{
+    font-size:14px;
+    font-weight:800;
+    letter-spacing:0.5px;
+    color:#C9B3FF;
+}
+
+.authTitle{
+    text-align:center;
+    margin:0 0 2px;
+}
+
 #cadastroScreen{
     position:absolute;
     width:100%;
