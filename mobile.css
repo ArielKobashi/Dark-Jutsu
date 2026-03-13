@@ -277,6 +277,11 @@
         max-width: 360px;
     }
 
+    .authLogo {
+        width: 120px;
+        height: 120px;
+    }
+
     #loadingScreen h2 {
         font-size: 16px;
         text-align: center;
