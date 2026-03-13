@@ -283,7 +283,7 @@
     }
 
     .authBrand {
-        gap: 1px;
+        gap: -10px;
         margin-bottom: 0;
     }
 
