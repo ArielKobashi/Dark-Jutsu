@@ -156,6 +156,35 @@ display:none;
     width:250px;
 }
 
+#pendingScreen{
+    position:absolute;
+    width:100%;
+    height:100%;
+    background:#0D0D12;
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:55;
+}
+
+#pendingBox{
+    background:#15151D;
+    padding:25px;
+    border:1px solid #7A3CFF;
+    border-radius:10px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    width:280px;
+    text-align:center;
+}
+
+#pendingBox p{
+    font-size:11px;
+    color:#C9C9D6;
+    margin:0;
+}
+
 /* LOADING */
 #loadingScreen {
     position: absolute;

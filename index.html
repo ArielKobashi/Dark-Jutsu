@@ -28,6 +28,17 @@
 </div>
 <!-- /SPLIT: auth.html -->
 
+<!-- SPLIT: pending.html (aguardando cadastro) -->
+<div id="pendingScreen" style="display:none;">
+    <div id="pendingBox">
+        <h2>Aguardando Cadastro</h2>
+        <p>Sua solicitação foi enviada e está aguardando aprovação do administrador.</p>
+        <p>Você será liberado assim que a conta for aprovada.</p>
+        <button onclick="voltarLogin()">Voltar ao Login</button>
+    </div>
+</div>
+<!-- /SPLIT: pending.html -->
+
 <!-- SPLIT: loading.html (loading overlay) -->
 <div id="loadingScreen">
     <h2>Carregando Sistema...</h2>
@@ -1667,11 +1678,14 @@ window.focusSearchForMobile = function(){
 function updateMobileOverlaysState(){
     const auth = document.getElementById("authScreen");
     const loading = document.getElementById("loadingScreen");
+    const pending = document.getElementById("pendingScreen");
     const authOpen = auth && getComputedStyle(auth).display !== "none";
     const loadingOpen = loading && getComputedStyle(loading).display !== "none";
+    const pendingOpen = pending && getComputedStyle(pending).display !== "none";
     document.body.classList.toggle("auth-open", !!authOpen);
     document.body.classList.toggle("loading-open", !!loadingOpen);
-    const showHandle = appReady && !authOpen && !loadingOpen;
+    document.body.classList.toggle("pending-open", !!pendingOpen);
+    const showHandle = appReady && !authOpen && !loadingOpen && !pendingOpen;
     document.body.classList.toggle("show-handle", !!showHandle);
 }
 
@@ -2024,6 +2038,9 @@ await setPersistence(auth, browserSessionPersistence);
 window.logout = async function() {
     await signOut(auth);
     document.getElementById("authScreen").style.display = "flex";
+    if(document.getElementById("pendingScreen")){
+        document.getElementById("pendingScreen").style.display = "none";
+    }
     appReady = false;
     updateMobileOverlaysState();
 }
@@ -2115,6 +2132,24 @@ window.login = async function(){
         await signInWithEmailAndPassword(auth, emailFake, senha);
 
     } catch(error){
+        try{
+            const snap = await get(ref(db, "solicitacoesCadastro"));
+            let pendente = false;
+            if(snap.exists()){
+                snap.forEach(child=>{
+                    const s = child.val();
+                    if(s && s.nickname === nick && s.status === "pendente"){
+                        pendente = true;
+                    }
+                });
+            }
+            if(pendente){
+                mostrarPending(nick);
+                return;
+            }
+        }catch(e){
+            console.error("Erro ao checar pendencia:", e);
+        }
         alert("Usuário ou senha inválidos");
     }
 }
@@ -2158,6 +2193,22 @@ window.cadastrar = async function(){
 
 }
 
+function mostrarPending(nick){
+    const pending = document.getElementById("pendingScreen");
+    const authScreen = document.getElementById("authScreen");
+    if(authScreen) authScreen.style.display = "none";
+    if(pending) pending.style.display = "flex";
+    updateMobileOverlaysState();
+}
+
+window.voltarLogin = function(){
+    const pending = document.getElementById("pendingScreen");
+    const authScreen = document.getElementById("authScreen");
+    if(pending) pending.style.display = "none";
+    if(authScreen) authScreen.style.display = "flex";
+    updateMobileOverlaysState();
+}
+
 
 
 onAuthStateChanged(auth, async (user) => {
@@ -2167,7 +2218,9 @@ onAuthStateChanged(auth, async (user) => {
     const adminPanel = document.getElementById("adminPanel");
 
     if (!user) {
-        authScreen.style.display = "flex";
+        if(document.getElementById("pendingScreen")?.style.display !== "flex"){
+            authScreen.style.display = "flex";
+        }
         appReady = false;
         updateMobileOverlaysState();
 
@@ -2228,6 +2281,9 @@ onAuthStateChanged(auth, async (user) => {
         atualizarBadge();
 
         authScreen.style.display = "none";
+        if(document.getElementById("pendingScreen")){
+            document.getElementById("pendingScreen").style.display = "none";
+        }
         updateMobileOverlaysState();
         setTimeout(()=>{
             renderChat();
