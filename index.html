@@ -2129,6 +2129,25 @@ window.login = async function(){
     let emailFake = nick + "@sistema.com";
 
     try{
+        try{
+            const snap = await get(ref(db, "solicitacoesCadastro"));
+            let pendente = false;
+            if(snap.exists()){
+                snap.forEach(child=>{
+                    const s = child.val();
+                    if(s && s.nickname === nick && s.status === "pendente"){
+                        pendente = true;
+                    }
+                });
+            }
+            if(pendente){
+                mostrarPending(nick);
+                return;
+            }
+        }catch(e){
+            console.error("Erro ao checar pendencia (pre-login):", e);
+        }
+
         await signInWithEmailAndPassword(auth, emailFake, senha);
 
     } catch(error){
