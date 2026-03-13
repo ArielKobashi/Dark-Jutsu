@@ -629,7 +629,7 @@ th.col-ordenada.col-filtrada {
 
 #configSubPage .fbLeft{
     display:flex;
-    align-items:center;
+    align-items:flex-start;
     gap:8px;
 }
 
@@ -663,6 +663,7 @@ th.col-ordenada.col-filtrada {
     display:flex;
     flex-direction:column;
     gap:2px;
+    margin-top:-2px;
 }
 
 #configSubPage .fbName{
@@ -701,7 +702,7 @@ th.col-ordenada.col-filtrada {
 
 #configSubPage .fbActions{
     display:flex;
-    gap:6px;
+    gap:4px;
 }
 
 #configSubPage .fbBtn{
