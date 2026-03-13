@@ -280,6 +280,8 @@
     .authLogo {
         width: 120px;
         height: 120px;
+        /* Para baixar a logo: transform: translateY(6px); */
+        /* Para levantar a logo: transform: translateY(-6px); */
     }
 
     .authBrand {

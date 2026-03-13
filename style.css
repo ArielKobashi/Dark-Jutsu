@@ -168,6 +168,8 @@ display:none;
     width:146px;
     height:146px;
     object-fit:contain;
+    /* Para baixar a logo: transform: translateY(8px); */
+    /* Para levantar a logo: transform: translateY(-8px); */
 }
 
 .authName{
