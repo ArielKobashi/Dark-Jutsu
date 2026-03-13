@@ -168,6 +168,7 @@ display:none;
     width:146px;
     height:146px;
     object-fit:contain;
+   
     /* Para baixar a logo: transform: translateY(8px); */
     /* Para levantar a logo: transform: translateY(-8px); */
 }
@@ -178,13 +179,12 @@ display:none;
     letter-spacing:0.5px;
     color:#C9B3FF;
     margin-bottom:6px;
+    transform: translateY(-39px);
 }
 
 .authTitle{
     text-align:center;
     margin:0 0 2px;
-    /* Para subir o titulo e invadir a area da logo: transform: translateY(-12px); */
-    /* Para descer o titulo: transform: translateY(12px); */
 }
 
 #cadastroScreen{

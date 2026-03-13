@@ -290,7 +290,7 @@
     }
 
     .authTitle {
-        /* Para subir o titulo e invadir a area da logo: transform: translateY(-10px); */
+        transform: translateY(-25px); 
         /* Para descer o titulo: transform: translateY(10px); */
     }
 
