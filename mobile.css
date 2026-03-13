@@ -280,13 +280,18 @@
     .authLogo {
         width: 120px;
         height: 120px;
-        transform: translateY(15px); 
-        transform: translateY(-15px); 
+        /* Para baixar a logo: transform: translateY(6px); */
+        /* Para levantar a logo: transform: translateY(-6px); */
     }
 
     .authBrand {
-        gap: -10px;
+        gap: 5px;
         margin-bottom: 0;
+    }
+
+    .authTitle {
+        /* Para subir o titulo e invadir a area da logo: transform: translateY(-10px); */
+        /* Para descer o titulo: transform: translateY(10px); */
     }
 
     #loadingScreen h2 {
