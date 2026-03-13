@@ -160,7 +160,7 @@ display:none;
     display:flex;
     flex-direction:column;
     align-items:center;
-    gap:4px;
+    gap:6px;
     margin-bottom:0;
 }
 
@@ -175,11 +175,12 @@ display:none;
     font-weight:800;
     letter-spacing:0.5px;
     color:#C9B3FF;
+    margin-bottom:6px;
 }
 
 .authTitle{
     text-align:center;
-    margin:-1cm 0 2px;
+    margin:0 0 2px;
 }
 
 #cadastroScreen{
