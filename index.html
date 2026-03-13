@@ -2169,6 +2169,10 @@ window.cadastrar = async function(){
         mostrarNotificacao("Preencha os campos");
         return;
     }
+    if(senha.length < 6){
+        mostrarNotificacao("A senha precisa ter pelo menos 6 caracteres");
+        return;
+    }
 
     try{
         const emailFake = nick + "@sistema.com";
@@ -2184,6 +2188,8 @@ window.cadastrar = async function(){
             await signOut(window.cadastroAuth);
         }catch(e){
             console.error("Erro criando auth pendente:", e);
+            mostrarNotificacao("Não foi possível criar o usuário. Verifique a senha e tente novamente.");
+            return;
         }
 
         const solicitacaoRef = push(ref(db, "solicitacoesCadastro"));
