@@ -59,6 +59,7 @@
     body.auth-open #edgeHandle,
     body.loading-open #edgeHandle,
     body.pending-open #edgeHandle,
+    body.cadastro-open #edgeHandle,
     body.mobile-config-open #edgeHandle {
         display: none !important;
     }
@@ -270,7 +271,8 @@
     #authBox,
     #chatOverlayBox,
     #nicknameBox,
-    #pendingBox {
+    #pendingBox,
+    #cadastroBox {
         width: 88vw;
         max-width: 360px;
     }

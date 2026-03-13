@@ -23,10 +23,32 @@
         <input type="text" id="authNickname" placeholder="Nickname">
         <input type="password" id="authSenha" placeholder="Senha">
         <button onclick="login()">Entrar</button>
-        <button onclick="cadastrar()">Cadastrar</button>
+        <button onclick="abrirCadastro()">Cadastrar</button>
     </div>
 </div>
 <!-- /SPLIT: auth.html -->
+
+<!-- SPLIT: cadastro.html (primeiro acesso) -->
+<div id="cadastroScreen" style="display:none;">
+    <div id="cadastroBox">
+        <h2>Primeiro Acesso</h2>
+        <input type="text" id="cadastroNickname" placeholder="Confirmar nickname">
+        <input type="password" id="cadastroSenha" placeholder="Confirmar senha">
+        <input type="tel" id="cadastroCracha" placeholder="Número do crachá" inputmode="numeric" pattern="[0-9]*">
+        <div class="cadastroSetor">
+            <div class="cadastroSetorLabel">Setor</div>
+            <div class="cadastroSetorGrid">
+                <label><input type="radio" name="setor" value="Administrativo"> Administrativo</label>
+                <label><input type="radio" name="setor" value="Almoxarifado"> Almoxarifado</label>
+                <label><input type="radio" name="setor" value="Supervisão"> Supervisão</label>
+                <label><input type="radio" name="setor" value="Operação"> Operação</label>
+            </div>
+        </div>
+        <button id="btnConfirmarCadastro" onclick="cadastrar()">Confirmar Cadastro</button>
+        <button onclick="fecharCadastro()">Cancelar</button>
+    </div>
+</div>
+<!-- /SPLIT: cadastro.html -->
 
 <!-- SPLIT: pending.html (aguardando cadastro) -->
 <div id="pendingScreen" style="display:none;">
@@ -302,6 +324,13 @@ Usuários do Sistema
 <!-- /SPLIT: notification.html -->
 </div>
 <!-- /SPLIT: config-panel.html -->
+<div id="cadastroInfoModal">
+    <div class="modalBox">
+        <div class="modalTitle">Detalhes do Cadastro</div>
+        <div id="cadastroInfoContent"></div>
+        <button onclick="fecharInfoCadastro()">Fechar</button>
+    </div>
+</div>
 <!-- SPLIT: vendor-xlsx.html (3rd-party lib) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <!-- /SPLIT: vendor-xlsx.html -->
@@ -1671,6 +1700,31 @@ function isMobileLayout(){
     return window.matchMedia("(max-width: 900px)").matches;
 }
 
+window.verSolicitacao = async function(id){
+    try{
+        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
+        const dados = snap.val();
+        if(!dados) return;
+        const box = document.getElementById("cadastroInfoContent");
+        const data = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
+        box.innerHTML = `
+        <div><b>Nickname:</b> ${dados.nickname || "-"}</div>
+        <div><b>Crachá:</b> ${dados.cracha || "-"}</div>
+        <div><b>Setor:</b> ${dados.setor || "-"}</div>
+        <div><b>Status:</b> ${dados.status || "-"}</div>
+        <div><b>Enviado em:</b> ${data}</div>
+        `;
+        document.getElementById("cadastroInfoModal").style.display = "flex";
+    }catch(e){
+        console.error("Erro ao abrir detalhes:", e);
+    }
+}
+
+window.fecharInfoCadastro = function(){
+    const modal = document.getElementById("cadastroInfoModal");
+    if(modal) modal.style.display = "none";
+}
+
 let appReady = false;
 
 window.focusSearchForMobile = function(){
@@ -1685,13 +1739,16 @@ function updateMobileOverlaysState(){
     const auth = document.getElementById("authScreen");
     const loading = document.getElementById("loadingScreen");
     const pending = document.getElementById("pendingScreen");
+    const cadastro = document.getElementById("cadastroScreen");
     const authOpen = auth && getComputedStyle(auth).display !== "none";
     const loadingOpen = loading && getComputedStyle(loading).display !== "none";
     const pendingOpen = pending && getComputedStyle(pending).display !== "none";
+    const cadastroOpen = cadastro && getComputedStyle(cadastro).display !== "none";
     document.body.classList.toggle("auth-open", !!authOpen);
     document.body.classList.toggle("loading-open", !!loadingOpen);
     document.body.classList.toggle("pending-open", !!pendingOpen);
-    const showHandle = appReady && !authOpen && !loadingOpen && !pendingOpen;
+    document.body.classList.toggle("cadastro-open", !!cadastroOpen);
+    const showHandle = appReady && !authOpen && !loadingOpen && !pendingOpen && !cadastroOpen;
     document.body.classList.toggle("show-handle", !!showHandle);
 }
 
@@ -2092,6 +2149,7 @@ function iniciarSolicitacoesAdmin(){
             </div>
 
             <div class="fbRight">
+                <button class="fbBtn fbInfoBtn" onclick="verSolicitacao('${child.key}')">Info</button>
                 <label class="nivelLabel">
                     Nivel
                     <select id="nivel_${child.key}" class="nivelSelect">
@@ -2162,20 +2220,60 @@ window.login = async function(){
 
 window.cadastrar = async function(){
 
-    let nick = document.getElementById("authNickname").value.trim().toLowerCase();
-    let senha = document.getElementById("authSenha").value;
+    let nick = document.getElementById("cadastroNickname").value.trim().toLowerCase();
+    let senha = document.getElementById("cadastroSenha").value;
+    let cracha = document.getElementById("cadastroCracha").value.trim();
+    let setor = document.querySelector("input[name='setor']:checked")?.value || "";
 
-    if(!nick || !senha){
-        mostrarNotificacao("Preencha os campos");
+    if(!nick || !senha || !cracha || !setor){
+        mostrarNotificacao("Preencha todos os campos");
         return;
     }
     if(senha.length < 6){
         mostrarNotificacao("A senha precisa ter pelo menos 6 caracteres");
         return;
     }
+    if(!/^[0-9]+$/.test(cracha)){
+        mostrarNotificacao("O número do crachá deve conter apenas números");
+        return;
+    }
+
+    const btn = document.getElementById("btnConfirmarCadastro");
+    if(btn) btn.disabled = true;
 
     try{
         const emailFake = nick + "@sistema.com";
+        const usersSnap = await get(ref(db, "usuarios"));
+        if(usersSnap.exists()){
+            let duplicado = false;
+            usersSnap.forEach(child=>{
+                const u = child.val();
+                if(u && u.nickname && u.nickname.toLowerCase() === nick){
+                    duplicado = true;
+                }
+            });
+            if(duplicado){
+                mostrarNotificacao("Nickname já existe. Escolha outro.");
+                if(btn) btn.disabled = false;
+                return;
+            }
+        }
+        const solicitSnap = await get(ref(db, "solicitacoesCadastro"));
+        if(solicitSnap.exists()){
+            let duplicado = false;
+            solicitSnap.forEach(child=>{
+                const s = child.val();
+                if(s && s.nickname && s.nickname.toLowerCase() === nick){
+                    duplicado = true;
+                }
+            });
+            if(duplicado){
+                mostrarNotificacao("Nickname já solicitado. Aguarde aprovação.");
+                if(btn) btn.disabled = false;
+                return;
+            }
+        }
+
         if(!window.cadastroAuth){
             const cadastroApp = initializeApp(firebaseConfig, "cadastroApp");
             window.cadastroAuth = getAuth(cadastroApp);
@@ -2198,6 +2296,8 @@ window.cadastrar = async function(){
             uid: uid,
             nickname: nick,
             senha: senha,
+            cracha: cracha,
+            setor: setor,
             status: "pendente",
             criadoEm: Date.now()
         });
@@ -2207,18 +2307,46 @@ window.cadastrar = async function(){
         mostrarNotificacao("✔ Cadastro enviado para aprovação.");
         document.getElementById("authNickname").value = "";
         document.getElementById("authSenha").value = "";
+        document.getElementById("cadastroNickname").value = "";
+        document.getElementById("cadastroSenha").value = "";
+        document.getElementById("cadastroCracha").value = "";
+        document.querySelectorAll("input[name='setor']").forEach(r=> r.checked = false);
+        fecharCadastro();
+        if(btn) btn.disabled = false;
         setTimeout(()=>{
             document.getElementById("authNickname").focus();
         }, 50);
+        mostrarPending(nick);
 
     }catch(error){
 
         console.error("ERRO FIREBASE:", error);
         alert(error.message);
+        if(btn) btn.disabled = false;
 
     }
 
 }
+
+window.abrirCadastro = function(){
+    const authNick = document.getElementById("authNickname").value.trim().toLowerCase();
+    const authSenha = document.getElementById("authSenha").value;
+    const cadastro = document.getElementById("cadastroScreen");
+    const authScreen = document.getElementById("authScreen");
+    if(cadastro) cadastro.style.display = "flex";
+    if(authScreen) authScreen.style.display = "none";
+    document.getElementById("cadastroNickname").value = authNick;
+    document.getElementById("cadastroSenha").value = authSenha;
+    updateMobileOverlaysState();
+};
+
+window.fecharCadastro = function(){
+    const cadastro = document.getElementById("cadastroScreen");
+    const authScreen = document.getElementById("authScreen");
+    if(cadastro) cadastro.style.display = "none";
+    if(authScreen) authScreen.style.display = "flex";
+    updateMobileOverlaysState();
+};
 
 function mostrarPending(nick){
     const pending = document.getElementById("pendingScreen");
