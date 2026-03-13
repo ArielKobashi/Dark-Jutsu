@@ -161,7 +161,8 @@ display:none;
     flex-direction:column;
     align-items:center;
     gap:4px;
-    margin-bottom:-1cm;
+    margin-bottom:0;
+    transform: translateY(1cm);
 }
 
 .authLogo{

@@ -284,7 +284,8 @@
 
     .authBrand {
         gap: 3px;
-        margin-bottom: -1cm;
+        margin-bottom: 0;
+        transform: translateY(1cm);
     }
 
     #loadingScreen h2 {
