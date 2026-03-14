@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-br">
 <head>
 <!-- SPLIT: head.html (title, meta, css links) -->
@@ -39,7 +39,7 @@
         <input type="text" id="cadastroNickname" placeholder="Confirmar nickname">
         <div class="senhaWrap">
             <input type="password" id="cadastroSenha" placeholder="Confirmar senha">
-            <button type="button" class="toggleSenha" onclick="toggleSenha('cadastroSenha', this)">👁</button>
+            <button type="button" class="toggleSenha" onclick="toggleSenha('cadastroSenha', this)">ðŸ‘</button>
         </div>
         <input type="tel" id="cadastroCracha" placeholder="Número do crachá" inputmode="numeric" pattern="[0-9]*">
         <div class="cadastroSetor">
@@ -109,8 +109,8 @@
                         <div class="headerContent">
                             <span class="titulo">Protheus</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">â–²</span>
+                                <span class="setaDown">â–¼</span>
                             </span>
                         </div>
                     </th>
@@ -119,8 +119,8 @@
                         <div class="headerContent">
                             <span class="titulo">Cooperat</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">â–²</span>
+                                <span class="setaDown">â–¼</span>
                             </span>
                         </div>
                     </th>
@@ -129,8 +129,8 @@
                         <div class="headerContent">
                             <span class="titulo">Armazém</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">â–²</span>
+                                <span class="setaDown">â–¼</span>
                             </span>
                         </div>
                     </th>
@@ -139,8 +139,8 @@
                         <div class="headerContent">
                             <span class="titulo">Descrição</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">â–²</span>
+                                <span class="setaDown">â–¼</span>
                             </span>
                         </div>
                     </th>
@@ -149,8 +149,8 @@
                         <div class="headerContent">
                             <span class="titulo">Endereço</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">â–²</span>
+                                <span class="setaDown">â–¼</span>
                             </span>
                         </div>
                     </th>
@@ -159,8 +159,8 @@
                         <div class="headerContent">
                             <span class="titulo">Saldo</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">â–²</span>
+                                <span class="setaDown">â–¼</span>
                             </span>
                         </div>
                     </th>
@@ -188,7 +188,7 @@ xmlns="http://www.w3.org/2000/svg">
 
 </div>
 
-<button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relatério</button>
+<button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relatório</button>
 
 </div> <!-- FECHA #main -->
 <!-- /SPLIT: main.html -->
@@ -229,13 +229,13 @@ stroke-linecap="round"/>
 
 <span class="subTitle">Painel Administrativo</span>
 
-<div class="subClose" id="btnFecharAdmin" onclick="fecharSubPagina()">✖</div>
+<div class="subClose" id="btnFecharAdmin" onclick="fecharSubPagina()">âœ–</div>
 
 </div>
 
 <div class="fbAdminIntro">
     <div class="fbAdminTitle">Central de Cadastros</div>
-    <div class="fbAdminSubtitle">Aceite ou recuse solicitacoes e defina o nivel da conta.</div>
+    <div class="fbAdminSubtitle">Aceite ou recuse solicitações e defina o nível da conta.</div>
 </div>
 
 <div class="subContent">
@@ -318,7 +318,7 @@ Usuários do Sistema
 
         <div id="chatInputArea">
             <input type="text" id="chatInput" placeholder="Digite uma mensagem...">
-            <button onclick="enviarMensagem()">➤</button>
+            <button onclick="enviarMensagem()">âž¤</button>
         </div>
     </div>
 
@@ -423,11 +423,11 @@ window.aprovar = async function(id){
     card.classList.add("aprovadoPulse");
 
     try{
-        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
+        const snap = await get(ref(db, "solicitaçõesCadastro/"+id));
         const dados = snap.val();
         if(!dados) return;
 
-        const nivel = document.getElementById("nivel_"+id).value;
+        const nível = document.getElementById("nivel_"+id).value;
         let uid = dados.uid;
         if(!uid){
             const emailFake = dados.nickname + "@sistema.com";
@@ -446,8 +446,8 @@ window.aprovar = async function(id){
             senhaReset: false
         });
 
-        await set(ref(db, "solicitacoesCadastro/"+id+"/status"),"aprovado");
-        await set(ref(db, "solicitacoesCadastro/"+id), null);
+        await set(ref(db, "solicitaçõesCadastro/"+id+"/status"),"aprovado");
+        await set(ref(db, "solicitaçõesCadastro/"+id), null);
 
         if(card){
             card.classList.add("slideOutRight");
@@ -472,8 +472,8 @@ window.recusar = async function(id){
 
         setTimeout(async ()=>{
 
-            await set(ref(db,"solicitacoesCadastro/"+id+"/status"),"recusado");
-            await set(ref(db, "solicitacoesCadastro/"+id), null);
+            await set(ref(db,"solicitaçõesCadastro/"+id+"/status"),"recusado");
+            await set(ref(db, "solicitaçõesCadastro/"+id), null);
 
         },350);
     }
@@ -534,7 +534,7 @@ function iniciarListaUsuarios(){
             </div>
             <div class="fbUserActions">
                 <label class="nivelLabel">
-                    Nivel
+                    Nível
                     <select class="nivelSelect" onchange="alterarNivel('${uid}', this.value)">
                         <option value="op" ${nivelRaw==="op" ? "selected":""}>OP</option>
                         <option value="mod" ${nivelRaw==="mod" ? "selected":""}>MOD</option>
@@ -634,7 +634,7 @@ function finalizarProgresso(){
         appReady = true;
         updateMobileOverlaysState();
 
-        // 🔥 MOSTRA O ÍMÃ APENAS DEPOIS DO LOADING
+        // ðŸ”¥ MOSTRA O ÍMÃ APENAS DEPOIS DO LOADING
         document.getElementById("magnetIcon").style.display = "flex";
 
         if (typeof window.focusSearchForMobile === "function") {
@@ -728,7 +728,7 @@ async function atualizarBanco(btn) {
         novosDados.push(item);
     }
 
-    /* 🔥 CORREÇÃO AQUI */
+    /* ðŸ”¥ CORREÇÃO AQUI */
     dados = novosDados;   // <<< usa a variável correta
     aplicarTodosFiltros();
 
@@ -954,7 +954,7 @@ function gerarRelatorio(){
     novaJanela.document.write(`
         <html>
         <head>
-            <title>Relatério Conferência</title>
+            <title>Relatório Conferência</title>
             <style>
 
                 @page{
@@ -1022,11 +1022,11 @@ function gerarRelatorio(){
         </head>
         <body>
 
-        <h2>Relatério de Conferência</h2>
+        <h2>Relatório de Conferência</h2>
         <div>Gerado em: ${new Date().toLocaleString()}</div>
 
         <div class="painel">
-            <button onclick="window.print()">🖨 Imprimir</button>
+            <button onclick="window.print()">ðŸ–¨ Imprimir</button>
 
             <label><input type="checkbox" id="arm4"> Armazém 4</label>
             <label><input type="checkbox" id="arm5"> Armazém 5</label>
@@ -1414,7 +1414,7 @@ let mapaCores = JSON.parse(localStorage.getItem("chatCores")) || {};
 
 function obterCorNickname(nome){
 
-    let chave = nome.toLowerCase(); // 🔥 ignora maiúscula/minúscula
+    let chave = nome.toLowerCase(); // ðŸ”¥ ignora maiúscula/minúscula
 
     if(!mapaCores[chave]){
         let cor = coresDisponiveis[Math.floor(Math.random() * coresDisponiveis.length)];
@@ -1717,7 +1717,7 @@ function capitalizarPrimeira(str){
 
 window.verSolicitacao = async function(id){
     try{
-        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
+        const snap = await get(ref(db, "solicitaçõesCadastro/"+id));
         const dados = snap.val();
         if(!dados) return;
         const box = document.getElementById("cadastroInfoContent");
@@ -1750,7 +1750,7 @@ window.verUsuario = async function(uid){
         `;
         document.getElementById("cadastroInfoModal").style.display = "flex";
     }catch(e){
-        console.error("Erro ao abrir detalhes do usuario:", e);
+        console.error("Erro ao abrir detalhes do usuário:", e);
     }
 }
 
@@ -2147,9 +2147,9 @@ window.db = db;
 
 function iniciarSolicitacoesAdmin(){
 
-    const solicitacoesRef = ref(db, "solicitacoesCadastro");
+    const solicitaçõesRef = ref(db, "solicitaçõesCadastro");
 
-    onValue(solicitacoesRef, snapshot=>{
+    onValue(solicitaçõesRef, snapshot=>{
 
         const lista = document.getElementById("listaSolicitacoes");
         const badge = document.getElementById("badgeSolicitacoes");
@@ -2187,7 +2187,7 @@ function iniciarSolicitacoesAdmin(){
 
             <div class="fbRight">
                 <label class="nivelLabel">
-                    Nivel
+                    Nível
                     <select id="nivel_${child.key}" class="nivelSelect">
                         <option value="op">OP</option>
                         <option value="mod">MOD</option>
@@ -2233,7 +2233,7 @@ window.login = async function(){
 
     } catch(error){
         try{
-            const snap = await get(ref(db, "solicitacoesCadastro"));
+            const snap = await get(ref(db, "solicitaçõesCadastro"));
             let pendente = false;
             if(snap.exists()){
                 snap.forEach(child=>{
@@ -2308,7 +2308,7 @@ window.cadastrar = async function(){
                     return;
                 }
             }
-            const solicitSnap = await get(ref(db, "solicitacoesCadastro"));
+            const solicitSnap = await get(ref(db, "solicitaçõesCadastro"));
             if(solicitSnap.exists()){
                 let duplicado = false;
                 solicitSnap.forEach(child=>{
@@ -2343,7 +2343,7 @@ window.cadastrar = async function(){
             return;
         }
 
-        const solicitacaoRef = push(ref(window.cadastroDb || db, "solicitacoesCadastro"));
+        const solicitacaoRef = push(ref(window.cadastroDb || db, "solicitaçõesCadastro"));
 
         try{
             await set(solicitacaoRef, {
@@ -2365,7 +2365,7 @@ window.cadastrar = async function(){
 
         console.log("Cadastro enviado");
 
-        mostrarNotificacao("✔ Cadastro enviado para aprovação.");
+        mostrarNotificacao("âœ” Cadastro enviado para aprovação.");
         document.getElementById("authNickname").value = "";
         document.getElementById("authSenha").value = "";
         document.getElementById("cadastroNickname").value = "";
@@ -2424,7 +2424,7 @@ window.toggleSenha = function(inputId, btn){
     if(!input) return;
     const isPass = input.type === "password";
     input.type = isPass ? "text" : "password";
-    if(btn) btn.textContent = isPass ? "🙈" : "👁";
+    if(btn) btn.textContent = isPass ? "ðŸ™ˆ" : "ðŸ‘";
 }
 
 window.voltarLogin = function(){
@@ -2499,14 +2499,14 @@ onAuthStateChanged(auth, async (user) => {
                 await set(ref(db, "usuarios/" + user.uid + "/senha"), "definida");
                 await set(ref(db, "usuarios/" + user.uid + "/senhaReset"), false);
             }catch(e){
-                alert("Nao foi possivel atualizar a senha. Tente novamente.");
+                alert("Não foi possível atualizar a senha. Tente novamente.");
                 await signOut(auth);
                 return;
             }
         }
 
         window.meuNickname = dadosUsuario.nickname;
-        // 🔥 ZERA CAPTURAS AO INICIAR SESSÃO
+        // ðŸ”¥ ZERA CAPTURAS AO INICIAR SESSÃO
         capturados.clear();
         localStorage.removeItem("capturadosMagnet");
         atualizarBadge();
@@ -2523,7 +2523,7 @@ onAuthStateChanged(auth, async (user) => {
         if (dadosUsuario.nivel === "admin") {
             
             if (adminBtn) adminBtn.style.display = "flex";
-            iniciarSolicitacoesAdmin(); // 🔥 AQUI
+            iniciarSolicitacoesAdmin(); // ðŸ”¥ AQUI
             iniciarListaUsuarios();
             if (adminPanel) adminPanel.style.display = "block";
         } else {
@@ -2537,7 +2537,7 @@ onAuthStateChanged(auth, async (user) => {
 
         iniciarChat();
 
-        resetarTimer(); // 🔥 ativa controle de inatividade
+        resetarTimer(); // ðŸ”¥ ativa controle de inatividade
 
         finalizarProgresso();
 
@@ -2603,14 +2603,14 @@ onValue(window.estoqueRef, snapshot => {
 
 });
 
-            console.log("✅ Dados carregados do Firebase.");
+            console.log("âœ… Dados carregados do Firebase.");
 
         } else {
 
-            // 🔥 PRIMEIRA VEZ → NÃO EXISTE NADA
+            // ðŸ”¥ PRIMEIRA VEZ â†’ NÃO EXISTE NADA
             window.setDados([]);
 
-            console.log("⚠ Banco ainda não existe. Iniciando vazio.");
+            console.log("âš  Banco ainda não existe. Iniciando vazio.");
         }
 
     } catch(e){
@@ -2706,6 +2706,8 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
+
+
 
 
 
