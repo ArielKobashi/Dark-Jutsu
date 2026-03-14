@@ -229,7 +229,7 @@ stroke-linecap="round"/>
 
 <span class="subTitle">Painel Administrativo</span>
 
-<div class="subClose" id="btnFecharAdmin" onclick="fecharSubPagina()">âœ–</div>
+<div class="subClose" id="btnFecharAdmin" onclick="fecharSubPagina()">&#10006;</div>
 
 </div>
 
@@ -318,7 +318,7 @@ Usuários do Sistema
 
         <div id="chatInputArea">
             <input type="text" id="chatInput" placeholder="Digite uma mensagem...">
-            <button onclick="enviarMensagem()">âž¤</button>
+            <button onclick="enviarMensagem()">&#10148;</button>
         </div>
     </div>
 
@@ -972,6 +972,12 @@ function gerarRelatorio(){
 
                 h2{ color:#9A5CFF; }
 
+                .resumo{
+                    margin-top:6px;
+                    font-size:11px;
+                    opacity:0.9;
+                }
+
                 .painel{
                     border:1px solid #7A3CFF;
                     padding:10px;
@@ -1024,6 +1030,7 @@ function gerarRelatorio(){
 
         <h2>Relatório de Conferência</h2>
         <div>Gerado em: ${new Date().toLocaleString()}</div>
+        <div id="resumoFiltros" class="resumo"></div>
 
         <div class="painel">
             <button onclick="window.print()">🖨 Imprimir</button>
@@ -1048,14 +1055,24 @@ function gerarRelatorio(){
 
         let dadosOriginais = ${JSON.stringify(selecionadosItens)};
 
+        function codigoArmazem(valor){
+            if(valor === null || valor === undefined) return "";
+            const texto = String(valor).trim();
+            if(!texto) return "";
+            const match = texto.match(/\\d+/);
+            if(match) return String(parseInt(match[0], 10));
+            return texto;
+        }
+
         function passaFiltro(armazem){
             let somente4 = document.getElementById("arm4").checked;
             let somente5 = document.getElementById("arm5").checked;
+            const codigo = codigoArmazem(armazem);
 
             if(!somente4 && !somente5) return true;
-            if(somente4 && somente5) return armazem=="4" || armazem=="5";
-            if(somente4) return armazem=="4";
-            if(somente5) return armazem=="5";
+            if(somente4 && somente5) return codigo=="4" || codigo=="5";
+            if(somente4) return codigo=="4";
+            if(somente5) return codigo=="5";
         }
 
         function ordenarEndereço(a,b){
@@ -1142,14 +1159,36 @@ function gerarRelatorio(){
                     "</tfoot></table>";
 
             document.getElementById("tabelaContainer").innerHTML = html;
+            aplicarVisibilidadeCooperat();
+            atualizarResumo();
         }
-        document.getElementById("mostrarCooperat").addEventListener("change", function(){
-
-            let mostrar = this.checked;
-
+        function aplicarVisibilidadeCooperat(){
+            let mostrar = document.getElementById("mostrarCooperat").checked;
             document.querySelectorAll(".colCooperat").forEach(el=>{
                 el.style.display = mostrar ? "" : "none";
             });
+        }
+        function atualizarResumo(){
+            const filtros = [];
+            const arm4 = document.getElementById("arm4").checked;
+            const arm5 = document.getElementById("arm5").checked;
+            const cooperat = document.getElementById("mostrarCooperat").checked;
+            const ordenar = document.getElementById("ordenarEndereço").checked;
+
+            if(arm4 && arm5) filtros.push("Armazém 4 e 5");
+            else if(arm4) filtros.push("Armazém 4");
+            else if(arm5) filtros.push("Armazém 5");
+            else filtros.push("Todos os armazéns");
+
+            filtros.push(cooperat ? "Cooperat: visível" : "Cooperat: oculto");
+            filtros.push(ordenar ? "Ordenado por endereço" : "Ordem original");
+
+            const resumo = document.getElementById("resumoFiltros");
+            if(resumo) resumo.textContent = "Filtros: " + filtros.join(" • ");
+        }
+        document.getElementById("mostrarCooperat").addEventListener("change", function(){
+            aplicarVisibilidadeCooperat();
+            atualizarResumo();
 
         });    
 
@@ -2365,7 +2404,7 @@ window.cadastrar = async function(){
 
         console.log("Cadastro enviado");
 
-        mostrarNotificacao("âœ” Cadastro enviado para aprovação.");
+        mostrarNotificacao("✔ Cadastro enviado para aprovação.");
         document.getElementById("authNickname").value = "";
         document.getElementById("authSenha").value = "";
         document.getElementById("cadastroNickname").value = "";
@@ -2603,7 +2642,7 @@ onValue(window.estoqueRef, snapshot => {
 
 });
 
-            console.log("âœ… Dados carregados do Firebase.");
+            console.log("✅ Dados carregados do Firebase.");
 
         } else {
 
@@ -2706,6 +2745,7 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
+
 
 
 
