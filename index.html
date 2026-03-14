@@ -966,16 +966,16 @@ function gerarRelatorio(){
                     background:#0D0D12;
                     color:#E6E6E6;
                     font-family:Arial;
-                    font-size:18px;
+                    font-size:15px;
                     padding:20px;
                     min-height:1122px; /* altura fixa A4 */
                 }
 
-                h2{ color:#9A5CFF; font-size:24px; }
+                h2{ color:#9A5CFF; font-size:20px; }
 
                 .resumo{
                     margin-top:6px;
-                    font-size:14px;
+                    font-size:11px;
                     opacity:0.9;
                 }
 
@@ -993,15 +993,15 @@ function gerarRelatorio(){
                     width:100%;
                     border-collapse:collapse;
                     margin-top:10px;
-                    font-size:18px;
+                    font-size:15px;
                 }
 
                 th, td{
                     border:1px solid #2A2A35;
-                    padding:6px 8px;
+                    padding:4px 6px;
                     text-align:center;
-                    height:1.4cm;
-                    max-height:1.4cm;
+                    height:1.2cm;
+                    max-height:1.2cm;
                     overflow:hidden;
                 }
 
@@ -1012,7 +1012,7 @@ function gerarRelatorio(){
                 input.contagem{
                     width:85%;
                     height:80%;
-                    font-size:16px;
+                    font-size:14px;
                     text-align:center;
                 }
 
@@ -1022,7 +1022,12 @@ function gerarRelatorio(){
 
                 @media print{
                     .painel{ display:none; }
-                    body{ background:white; color:black; }
+                    body{ background:white; color:black; font-size:20px; }
+                    h2{ font-size:26px; }
+                    .resumo{ font-size:14px; }
+                    table{ font-size:20px; }
+                    th, td{ padding:6px 8px; height:1.5cm; max-height:1.5cm; }
+                    input.contagem{ font-size:18px; }
                 }
 
             </style>
