@@ -966,11 +966,12 @@ function gerarRelatorio(){
                     background:#0D0D12;
                     color:#E6E6E6;
                     font-family:Arial;
+                    font-size:15px;
                     padding:20px;
                     min-height:1122px; /* altura fixa A4 */
                 }
 
-                h2{ color:#9A5CFF; }
+                h2{ color:#9A5CFF; font-size:20px; }
 
                 .resumo{
                     margin-top:6px;
@@ -992,15 +993,15 @@ function gerarRelatorio(){
                     width:100%;
                     border-collapse:collapse;
                     margin-top:10px;
-                    font-size:12px;
+                    font-size:15px;
                 }
 
                 th, td{
                     border:1px solid #2A2A35;
-                    padding:2px 4px;
+                    padding:4px 6px;
                     text-align:center;
-                    height:1cm;
-                    max-height:1cm;
+                    height:1.2cm;
+                    max-height:1.2cm;
                     overflow:hidden;
                 }
 
@@ -1011,7 +1012,7 @@ function gerarRelatorio(){
                 input.contagem{
                     width:85%;
                     height:80%;
-                    font-size:12px;
+                    font-size:14px;
                     text-align:center;
                 }
 
@@ -1054,6 +1055,20 @@ function gerarRelatorio(){
     script.innerHTML = `
 
         let dadosOriginais = ${JSON.stringify(selecionadosItens)};
+        let contagens = {};
+
+        function chaveLinha(l){
+            return [l.protheus, l.armazem, l.endereco].join("||");
+        }
+
+        function capturarContagens(){
+            contagens = {};
+            document.querySelectorAll("input.contagem").forEach(inp=>{
+                const key = inp.dataset.key;
+                if(!key) return;
+                contagens[key] = inp.value;
+            });
+        }
 
         function codigoArmazem(valor){
             if(valor === null || valor === undefined) return "";
@@ -1086,6 +1101,7 @@ function gerarRelatorio(){
         function montarTabela(){
 
             let ordenar = document.getElementById("ordenarEndereço").checked;
+            capturarContagens();
 
             let linhas = [];
 
@@ -1140,6 +1156,10 @@ function gerarRelatorio(){
                        "</tr></thead><tbody>";
 
             linhas.forEach((l,i)=>{
+                const key = chaveLinha(l);
+                const prev = contagens[key] !== undefined ? contagens[key] : "";
+                const prevNum = Number(prev);
+                const difVal = (prev !== "" && !isNaN(prevNum)) ? (prevNum - l.saldo) : "";
                 html += "<tr>" +
                         "<td>"+l.protheus+"</td>" +
                         "<td class='colCooperat' style='display:none;'>"+l.cooperat+"</td>" +
@@ -1147,20 +1167,21 @@ function gerarRelatorio(){
                         "<td>"+l.armazem+"</td>" +
                         "<td>"+l.endereco+"</td>" +
                         "<td>"+l.saldo+"</td>" +
-                        "<td><input class='contagem' type='number' oninput='calcularDif("+i+","+l.saldo+")' id='cont_"+i+"'></td>" +
-                        "<td id='dif_"+i+"'></td>" +
+                        "<td><input class='contagem' type='number' data-key='"+key+"' value='"+prev+"' oninput='calcularDif("+i+","+l.saldo+")' id='cont_"+i+"'></td>" +
+                        "<td id='dif_"+i+"'>"+difVal+"</td>" +
                         "</tr>";
             });
 
             html += "</tbody><tfoot>" +
                     "<tr><td colspan='7'>Total de Itens: "+totalItens+
                     " &nbsp;&nbsp; | &nbsp;&nbsp; Total Bruto Contado: <span id='totalBruto'>0</span></td></tr>" +
-                    "<tr><td colspan='7' style='padding-top:30px;'>__________________________________________<br>Assinatura do Conferente</td></tr>" +
+                    "<tr><td colspan='7' style='padding-top:45px; height:90px;'>__________________________________________<br>Assinatura do Conferente</td></tr>" +
                     "</tfoot></table>";
 
             document.getElementById("tabelaContainer").innerHTML = html;
             aplicarVisibilidadeCooperat();
             atualizarResumo();
+            atualizarTotalBruto();
         }
         function aplicarVisibilidadeCooperat(){
             let mostrar = document.getElementById("mostrarCooperat").checked;

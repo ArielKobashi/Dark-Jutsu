@@ -1305,15 +1305,20 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 }
 
 #chatInputArea button{
-    background:#1877F2;
+    background:linear-gradient(135deg,#5B8CFF,#2F6BFF);
     color:white;
-    border:none;
-    transition:0.2s;
+    border:1px solid #2B59D1;
+    border-radius:10px;
+    font-weight:700;
+    letter-spacing:0.3px;
+    box-sizing:border-box;
+    transition:transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 #chatInputArea button:hover{
     transform:translateY(-1px);
-    box-shadow:0 0 10px rgba(24,119,242,0.35);
+    box-shadow:0 6px 14px rgba(47,107,255,0.35);
+    filter:brightness(1.05);
 }
 
 
