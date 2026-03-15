@@ -300,6 +300,19 @@
     }
 }
 
+.toggleGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px 8px;
+}
+
+.toggleItem{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+}
+
 @media (max-width: 900px) {
     #edgeHandle {
         display: block !important;
