@@ -1315,6 +1315,19 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     transition:transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
 
+.toggleGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px 10px;
+}
+
+.toggleItem{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+}
+
 #chatInputArea button:hover{
     transform:translateY(-1px);
     box-shadow:0 6px 14px rgba(47,107,255,0.35);

@@ -273,7 +273,6 @@ Usuários do Sistema
     <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
     <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
     <button onclick="carregarPlanilha('saldoEndereço')">Saldo por Endereço.xlsx</button>
-    <button id="btnDadosMortos" onclick="importarDadosMortos()">Dados mortos.xlsx (1x)</button>
 
     <input type="file" id="fileInput" style="display:none" accept=".xlsx">
     <hr>
@@ -285,22 +284,23 @@ Usuários do Sistema
 
 
     <hr>
-    <div class="toggle" style="display:flex; align-items:center; gap:4px;">
-        <input type="checkbox" id="generalSearch" checked>
-        <span>Pesquisa Generalista</span>
-    </div>
-
-    <div class="toggle" style="display:flex; align-items:center; gap:4px;">
-        <input type="checkbox" id="scrollMode" checked>
-        <span>Scroll Progressivo</span>
-    </div>
-    <div class="toggle" style="display:flex; align-items:center; gap:4px;">
-    <input type="checkbox" id="ignoreSpaces">
-    <span>Ignorar Espaços</span>
-    </div>
-    <div class="toggle" style="display:flex; align-items:center; gap:4px;">
-        <input type="checkbox" id="mostrarDadosMortos">
-        <span>Dados mortos</span>
+    <div class="toggleGrid">
+        <label class="toggleItem">
+            <input type="checkbox" id="generalSearch" checked>
+            <span>Pesquisa Generalista</span>
+        </label>
+        <label class="toggleItem">
+            <input type="checkbox" id="scrollMode" checked>
+            <span>Scroll Progressivo</span>
+        </label>
+        <label class="toggleItem">
+            <input type="checkbox" id="ignoreSpaces">
+            <span>Ignorar Espaços</span>
+        </label>
+        <label class="toggleItem">
+            <input type="checkbox" id="mostrarDadosMortos">
+            <span>Dados mortos</span>
+        </label>
     </div>
 
 
