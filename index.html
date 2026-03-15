@@ -273,6 +273,7 @@ Usuários do Sistema
     <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
     <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
     <button onclick="carregarPlanilha('saldoEndereço')">Saldo por Endereço.xlsx</button>
+    <button id="btnDadosMortos" onclick="importarDadosMortos()">Dados mortos.xlsx (1x)</button>
 
     <input type="file" id="fileInput" style="display:none" accept=".xlsx">
     <hr>
@@ -296,6 +297,10 @@ Usuários do Sistema
     <div class="toggle" style="display:flex; align-items:center; gap:4px;">
     <input type="checkbox" id="ignoreSpaces">
     <span>Ignorar Espaços</span>
+    </div>
+    <div class="toggle" style="display:flex; align-items:center; gap:4px;">
+        <input type="checkbox" id="mostrarDadosMortos">
+        <span>Dados mortos</span>
     </div>
 
 
@@ -357,10 +362,24 @@ let planilhas = {
 };
 
 let dados = [];
+let dadosMortos = [];
+window.dadosMortos = dadosMortos;
 let visiveis = [];
 
+function getItemKey(item){
+    return (item && (item.protheusKey || item.protheus)) ? (item.protheusKey || item.protheus) : "";
+}
+
+function getBaseDadosTodos(){
+    return (dados || []).concat(dadosMortos || []);
+}
+
+function findItemByKey(key){
+    return getBaseDadosTodos().find(d => getItemKey(d) === key);
+}
+
 window.setDados = function(novosDados){
-    dados = novosDados;
+    dados = Array.isArray(novosDados) ? novosDados : [];
     aplicarTodosFiltros();
 }
 let limite = 50;
@@ -403,6 +422,14 @@ document.getElementById("searchInput").addEventListener("input", ()=>{
     limite = 50;
     aplicarTodosFiltros();
 });
+
+const chkDadosMortos = document.getElementById("mostrarDadosMortos");
+if(chkDadosMortos){
+    chkDadosMortos.addEventListener("change", ()=>{
+        limite = 50;
+        aplicarTodosFiltros();
+    });
+}
 
 document
 .getElementById("btnFecharAdmin")
@@ -657,76 +684,11 @@ async function atualizarBanco(btn) {
         return;
     }
 
-    let novosDados = [];
-
     let incluir = planilhas.incluir;
     let cooperat = planilhas.cooperat;
     let saldoAtual = planilhas.saldoAtual;
     let saldoEndereço = planilhas.saldoEndereço || [];
-
-    for (let i = 2; i < incluir.length; i++) {
-
-        let protheus = incluir[i][1];
-        let cooperatCod = incluir[i][0] ?? "";
-        let descricao = incluir[i][2] ?? "";
-
-        if (!protheus) continue;
-
-        let item = {
-            protheus: protheus.toString().trim(),
-            cooperat: cooperatCod.toString().trim(),
-            descricao: descricao.toString().trim(),
-            enderecoPrincipal: "Sem Endereço",
-            armazemPrincipal: "ND",
-            saldo: 0,
-            enderecos: [],
-            comentarios: []
-        };
-
-        // SALDO TOTAL
-        for (let j = 1; j < saldoAtual.length; j++) {
-            if (saldoAtual[j][1] == protheus) {
-                item.saldo = Number(saldoAtual[j][4]) || 0;
-                break;
-            }
-        }
-
-        // ENDEREÇO ANTIGO
-        for (let j = 2; j < cooperat.length; j++) {
-            if (cooperat[j][0] == cooperatCod) {
-                let end = (cooperat[j][3] || "") + " " +
-                          (cooperat[j][4] || "") + " " +
-                          (cooperat[j][5] || "");
-                item.enderecoPrincipal = end.trim();
-                break;
-            }
-        }
-
-        // DETALHES POR ENDEREÇO
-        let encontrouEndereços = false;
-
-        for (let j = 1; j < saldoEndereço.length; j++) {
-            if (saldoEndereço[j][1] == protheus) {
-                encontrouEndereços = true;
-                item.enderecos.push({
-                    endereco: saldoEndereço[j][4] || "ND",
-                    armazem: saldoEndereço[j][2] || "ND",
-                    saldo: Number(saldoEndereço[j][8]) || 0
-                });
-            }
-        }
-
-        if (encontrouEndereços && item.enderecos.length > 0) {
-            item.enderecoPrincipal = item.enderecos[0].endereco;
-            item.armazemPrincipal = item.enderecos[0].armazem;
-
-            let soma = 0;
-            item.enderecos.forEach(e => soma += e.saldo);
-            item.saldo = soma;
-        }
-
-        novosDados.push(item);
-    }
+    let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereço, false);
 
     /* ðŸ”¥ CORREÇÃO AQUI */
     dados = novosDados;   // <<< usa a variável correta
@@ -736,6 +698,7 @@ async function atualizarBanco(btn) {
         if (typeof window.firebaseSet === "function") {
             await window.firebaseSet(window.estoqueRef, {
             dados: dados,
+            dadosMortos: dadosMortos || [],
             ultimaAtualizacao: Date.now(),
             atualizadoPor: window.meuNickname
         });
@@ -760,7 +723,7 @@ function atualizarEstadoHeader(){
     }
 
     let todosMarcados = itensMostrados.every(item =>
-        selecionados.has(item.protheus)
+        selecionados.has(getItemKey(item))
     );
 
     header.checked = todosMarcados;
@@ -793,26 +756,26 @@ function renderTabela(){
         let tdCheck = document.createElement("td");
         let checkbox = document.createElement("input");
         checkbox.type = "checkbox";
-        checkbox.checked = selecionados.has(item.protheus);
+        checkbox.checked = selecionados.has(getItemKey(item));
 
         checkbox.addEventListener("change", function(){
 
     if(this.checked){
 
-        selecionados.add(item.protheus);
+        selecionados.add(getItemKey(item));
 
         if(modoCaptura){
-            capturados.add(item.protheus);
+            capturados.add(getItemKey(item));
             salvarCapturados();
             atualizarBadge();
         }
 
     } else {
 
-        selecionados.delete(item.protheus);
+        selecionados.delete(getItemKey(item));
 
         if(modoCaptura){
-            capturados.delete(item.protheus);
+            capturados.delete(getItemKey(item));
             salvarCapturados();
             atualizarBadge();
         }
@@ -882,18 +845,18 @@ document.getElementById("selectAllHeader").addEventListener("change", function()
 
         if(marcar){
 
-            selecionados.add(item.protheus);
+            selecionados.add(getItemKey(item));
 
             if(modoCaptura){
-                capturados.add(item.protheus);
+                capturados.add(getItemKey(item));
             }
 
         }else{
 
-            selecionados.delete(item.protheus);
+            selecionados.delete(getItemKey(item));
 
             if(modoCaptura){
-                capturados.delete(item.protheus);
+                capturados.delete(getItemKey(item));
             }
 
         }
@@ -930,14 +893,14 @@ function gerarRelatorio(){
     if(modoCaptura && capturados.size > 0){
 
         capturados.forEach(codigo=>{
-            let item = dados.find(d => d.protheus == codigo);
+            let item = findItemByKey(codigo);
             if(item) selecionadosItens.push(item);
         });
 
     }else{
 
         visiveis.forEach(item=>{
-            if(selecionados.has(item.protheus)){
+            if(selecionados.has(getItemKey(item))){
                 selecionadosItens.push(item);
             }
         });
@@ -1660,7 +1623,12 @@ function aplicarTodosFiltros(){
 
     let palavras = termoOriginal ? termoOriginal.split(/\s+/) : [];
 
-    visiveis = dados.filter(item => {
+    const incluirMortos = document.getElementById("mostrarDadosMortos")?.checked || false;
+    const baseDados = incluirMortos
+        ? (dados || []).concat(dadosMortos || [])
+        : (dados || []);
+
+    visiveis = baseDados.filter(item => {
 
         if (!item) return false;
 
@@ -1753,7 +1721,7 @@ document.querySelectorAll("th[data-col]").forEach(th => {
 
 function limparSelecionadosInvalidos(){
 
-    let todosIds = new Set(dados.map(d => d.protheus));
+    let todosIds = new Set(getBaseDadosTodos().map(d => getItemKey(d)));
 
     selecionados.forEach(id=>{
         if(!todosIds.has(id)){
@@ -1773,6 +1741,194 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
 
 function isMobileLayout(){
     return window.matchMedia("(max-width: 900px)").matches;
+}
+
+function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereço, marcarMorto){
+    let novos = [];
+
+    for (let i = 2; i < basePlanilha.length; i++) {
+
+        let protheus = basePlanilha[i][1];
+        let cooperatCod = basePlanilha[i][0] ?? "";
+        let descricao = basePlanilha[i][2] ?? "";
+
+        if (!protheus) continue;
+
+        let item = {
+            protheus: protheus.toString().trim(),
+            cooperat: cooperatCod.toString().trim(),
+            descricao: descricao.toString().trim(),
+            enderecoPrincipal: "Sem Endereço",
+            armazemPrincipal: "ND",
+            saldo: 0,
+            enderecos: [],
+            comentarios: [],
+            morto: !!marcarMorto
+        };
+
+        // SALDO TOTAL
+        for (let j = 1; j < saldoAtual.length; j++) {
+            if (saldoAtual[j][1] == protheus) {
+                item.saldo = Number(saldoAtual[j][4]) || 0;
+                break;
+            }
+        }
+
+        // ENDEREÇO ANTIGO
+        for (let j = 2; j < cooperat.length; j++) {
+            if (cooperat[j][0] == cooperatCod) {
+                let end = (cooperat[j][3] || "") + " " +
+                          (cooperat[j][4] || "") + " " +
+                          (cooperat[j][5] || "");
+                item.enderecoPrincipal = end.trim();
+                break;
+            }
+        }
+
+        // DETALHES POR ENDEREÇO
+        let encontrouEndereços = false;
+
+        for (let j = 1; j < saldoEndereço.length; j++) {
+            if (saldoEndereço[j][1] == protheus) {
+                encontrouEndereços = true;
+                item.enderecos.push({
+                    endereco: saldoEndereço[j][4] || "ND",
+                    armazem: saldoEndereço[j][2] || "ND",
+                    saldo: Number(saldoEndereço[j][8]) || 0
+                });
+            }
+        }
+
+        if (encontrouEndereços && item.enderecos.length > 0) {
+            item.enderecoPrincipal = item.enderecos[0].endereco;
+            item.armazemPrincipal = item.enderecos[0].armazem;
+
+            let soma = 0;
+            item.enderecos.forEach(e => soma += e.saldo);
+            item.saldo = soma;
+        }
+
+        novos.push(item);
+    }
+
+    return novos;
+}
+
+function gerarItensDadosMortos(basePlanilha){
+    let novos = [];
+
+    function toNumber(valor){
+        if(valor === null || valor === undefined || valor === "") return 0;
+        if(typeof valor === "number") return valor;
+        const texto = String(valor).trim();
+        if(!texto) return 0;
+        const normalizado = texto.replace(/\./g, "").replace(",", ".");
+        const num = Number(normalizado);
+        return isNaN(num) ? 0 : num;
+    }
+
+    for (let i = 1; i < basePlanilha.length; i++) {
+        const row = basePlanilha[i] || [];
+        const cooperatCod = (row[0] ?? "").toString().trim();
+        if(!cooperatCod) continue;
+        const cabecalho = cooperatCod.toLowerCase();
+        if(cabecalho.includes("cooperat") || cabecalho.includes("código")) continue;
+
+        const descricao = (row[1] ?? "").toString().trim();
+        const enderecoAntigo = (row[3] ?? "").toString().trim();
+        const saldoAntigo = toNumber(row[4]);
+
+        const item = {
+            protheus: cooperatCod,
+            cooperat: cooperatCod,
+            descricao: descricao,
+            enderecoPrincipal: enderecoAntigo || "Sem Endereço",
+            armazemPrincipal: "ND",
+            saldo: saldoAntigo || 0,
+            enderecos: [],
+            comentarios: [],
+            morto: true
+        };
+
+        novos.push(item);
+    }
+
+    return novos;
+}
+
+function importarDadosMortos(btn){
+    btn = btn || document.getElementById("btnDadosMortos");
+
+    if(dadosMortos && dadosMortos.length > 0){
+        let ok = confirm("Dados mortos já importados. Deseja substituir?");
+        if(!ok) return;
+    }
+
+    const input = document.getElementById("fileInput");
+    input.value = "";
+
+    input.onchange = function(e){
+        const file = e.target.files[0];
+        if(!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(evt){
+            try{
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, {type:'array'});
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(sheet, {header:1});
+
+                const novosMortosBrutos = gerarItensDadosMortos(json);
+
+                const existentes = new Set(
+                    (dados || []).map(d => (d?.cooperat || "").toString().trim().toLowerCase()).filter(v => v)
+                );
+
+                const vistos = new Set();
+                const novosMortos = [];
+
+                novosMortosBrutos.forEach(item=>{
+                    const cod = (item.cooperat || "").toString().trim().toLowerCase();
+                    if(!cod) return;
+                    if(existentes.has(cod)) return; // já existe no banco principal
+                    if(vistos.has(cod)) return;     // duplicado na planilha
+                    vistos.add(cod);
+
+                    // marca como morto para exibição, mantendo chave única interna
+                    item.protheus = "MORTO";
+                    item.protheusKey = "MORTO|" + cod;
+                    novosMortos.push(item);
+                });
+
+                dadosMortos = novosMortos;
+                window.dadosMortos = dadosMortos;
+                aplicarTodosFiltros();
+
+                if(typeof window.set === "function" && typeof window.ref === "function"){
+                    await window.set(window.ref(window.db, "estoqueGlobal/dadosMortos"), dadosMortos);
+                    await window.set(window.ref(window.db, "estoqueGlobal/ultimaAtualizacao"), Date.now());
+                    if(window.meuNickname){
+                        await window.set(window.ref(window.db, "estoqueGlobal/atualizadoPor"), window.meuNickname);
+                    }
+                }
+
+                if(btn){
+                    btn.classList.add("loaded");
+                    btn.innerText = "Dados mortos (importado)";
+                }
+
+                alert("Dados mortos importados com sucesso.");
+            }catch(err){
+                console.error("Erro ao importar dados mortos:", err);
+                alert("Erro ao importar dados mortos.");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    input.click();
 }
 
 function capitalizarPrimeira(str){
@@ -2650,6 +2806,8 @@ async function carregarEstoqueInicial() {
 
             const banco = snapshot.val();
 
+            dadosMortos = Array.isArray(banco.dadosMortos) ? banco.dadosMortos : [];
+            window.dadosMortos = dadosMortos;
             window.setDados(banco.dados || []);
 
 onValue(window.estoqueRef, snapshot => {
@@ -2673,6 +2831,8 @@ onValue(window.estoqueRef, snapshot => {
         } else {
 
             // ðŸ”¥ PRIMEIRA VEZ â†’ NÃO EXISTE NADA
+            dadosMortos = [];
+            window.dadosMortos = dadosMortos;
             window.setDados([]);
 
             console.log("âš  Banco ainda não existe. Iniciando vazio.");
