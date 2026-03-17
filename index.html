@@ -269,17 +269,19 @@ Usuários do Sistema
 <!-- /SPLIT: admin-panel.html -->
 
     <hr>
-    <button onclick="carregarPlanilha('cooperat')">Cooperat.xlsx</button>
-    <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
-    <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
-    <button onclick="carregarPlanilha('saldoEndereço')">Saldo por Endereço.xlsx</button>
+    <div id="updateControls" style="display:none;">
+        <button onclick="carregarPlanilha('cooperat')">Cooperat.xlsx</button>
+        <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
+        <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
+        <button onclick="carregarPlanilha('saldoEndereço')">Saldo por Endereço.xlsx</button>
 
-    <input type="file" id="fileInput" style="display:none" accept=".xlsx">
-    <hr>
-    <button onclick="atualizarBanco()">Atualizar Banco</button>
-    <div style="margin-top:6px; font-size:10px; text-align:center;">
-    Última atualização:
-    <div id="lastUpdate" style="opacity:0.7;"></div>
+        <input type="file" id="fileInput" style="display:none" accept=".xlsx">
+        <hr>
+        <button onclick="atualizarBanco()">Atualizar Banco</button>
+        <div style="margin-top:6px; font-size:10px; text-align:center;">
+        Última atualização:
+        <div id="lastUpdate" style="opacity:0.7;"></div>
+        </div>
     </div>
 
 
@@ -2560,7 +2562,22 @@ window.cadastrar = async function(){
             uid = cred.user.uid;
         }catch(e){
             console.error("Erro criando auth pendente:", e);
-            mostrarNotificacao("Não foi possível criar o usuário. Verifique a senha e tente novamente.");
+            const code = e?.code || "";
+            let msg = "Não foi possível criar o usuário.";
+            if(code === "auth/weak-password"){
+                msg = "Senha fraca. Use pelo menos 6 caracteres.";
+            }else if(code === "auth/invalid-email"){
+                msg = "E-mail inválido (nickname inválido).";
+            }else if(code === "auth/email-already-in-use"){
+                msg = "Nickname já existe. Escolha outro.";
+            }else if(code === "auth/operation-not-allowed"){
+                msg = "Cadastro desabilitado no Firebase (habilite Email/Senha).";
+            }else if(code === "auth/unauthorized-domain"){
+                msg = "Domínio não autorizado. Use http://localhost ou adicione o domínio no Firebase Auth.";
+            }else if(code){
+                msg = "Erro ao criar usuário: " + code;
+            }
+            mostrarNotificacao(msg);
             return;
         }
 
@@ -2741,7 +2758,13 @@ onAuthStateChanged(auth, async (user) => {
             renderChat();
         },50);
 
-        if (dadosUsuario.nivel === "admin") {
+        const nivelUsuario = (dadosUsuario.nivel || "op").toString().toLowerCase();
+        const updateControls = document.getElementById("updateControls");
+        if(updateControls){
+            updateControls.style.display = (nivelUsuario === "admin" || nivelUsuario === "mod") ? "block" : "none";
+        }
+
+        if (nivelUsuario === "admin") {
             
             if (adminBtn) adminBtn.style.display = "flex";
             iniciarSolicitacoesAdmin(); // ðŸ”¥ AQUI
