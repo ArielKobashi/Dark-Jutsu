@@ -386,9 +386,12 @@ Usuários do Sistema
 </div>
 <div id="adminAlertModal">
     <div class="modalBox">
-        <div class="modalTitle">Aviso</div>
+        <div class="modalTitle">
+            Aviso
+            <span class="modalCloseX" onclick="fecharAdminAlert()">✕</span>
+        </div>
         <div id="adminAlertContent"></div>
-        <button onclick="fecharAdminAlert()">Fechar</button>
+        <div id="adminAlertActions" class="adminAlertActions"></div>
     </div>
 </div>
 <!-- SPLIT: vendor-xlsx.html (3rd-party lib) -->
@@ -505,7 +508,7 @@ window.aprovar = async function(id){
         const nivel = document.getElementById("nivel_"+id).value;
         let uid = dados.uid;
         if(dados?.duplicado === true){
-            mostrarAdminAlert("Solicitação com nickname já existente. Apenas recusa é permitida.");
+            await mostrarConflitoCadastro(id, dados.nickname);
             if(card) card.classList.remove("aprovadoPulse");
             return;
         }
@@ -525,7 +528,7 @@ window.aprovar = async function(id){
                     }catch(err){
                         console.warn("Falha ao marcar nicknamesAuth:", err?.code || err);
                     }
-                    mostrarAdminAlert("Nickname já existe no Auth. Apenas recusa é permitida.");
+                    await mostrarConflitoCadastro(id, dados.nickname);
                     if(card) card.classList.remove("aprovadoPulse");
                     return;
                 }
@@ -627,22 +630,26 @@ window.toggleAtivo = async function(uid, isAtivo){
         }catch(e){
             console.warn("Falha ao ler usuário para banir:", e?.code || e);
         }
-        if(dados){
-            try{
-                const emailLogin = (dados.nickname || "") + "@sistema.com";
-                const emailDesativado = emailLogin + ".desativado";
-                await set(ref(db, "usuariosBanidos/" + uid), {
-                    ...dados,
-                    emailLogin: emailLogin,
-                    emailLoginDesativado: emailDesativado,
-                    status: "banido",
-                    senha: dados.senhaAntiga || "",
-                    banidoEm: Date.now()
-                });
-            }catch(e){
-                console.warn("Falha ao arquivar usuário banido:", e?.code || e);
+            if(dados){
+                try{
+                    const emailLogin = (dados.nickname || "") + "@sistema.com";
+                    const emailDesativado = emailLogin + ".desativado";
+                    await set(ref(db, "usuariosBanidos/" + uid), {
+                        ...dados,
+                        emailLogin: emailLogin,
+                        emailLoginDesativado: emailDesativado,
+                        status: "banido",
+                        senha: dados.senhaAntiga || "",
+                        banidoEm: Date.now()
+                    });
+                    await set(ref(db, "nicknamesAuth/" + nickOnlyKey(dados.nickname)), {
+                        nickname: dados.nickname,
+                        criadoEm: Date.now()
+                    });
+                }catch(e){
+                    console.warn("Falha ao arquivar usuário banido:", e?.code || e);
+                }
             }
-        }
         await set(ref(db, "usuarios/" + uid), null);
         await rebuildNicknamesSimple();
     }else{
@@ -1210,6 +1217,7 @@ function gerarRelatorio(){
 
         <div class="painel">
             <button onclick="window.print()">🖨 Imprimir</button>
+            <button onclick="copiarProtheus()">📋 Copiar Protheus</button>
 
             <label><input type="checkbox" id="arm4"> Armazém 4</label>
             <label><input type="checkbox" id="arm5"> Armazém 5</label>
@@ -1273,6 +1281,8 @@ function gerarRelatorio(){
             );
         }
 
+        let linhasAtuais = [];
+
         function montarTabela(){
 
             let ordenar = document.getElementById("ordenarEndereço").checked;
@@ -1315,6 +1325,8 @@ function gerarRelatorio(){
             if(ordenar){
                 linhas.sort(ordenarEndereço);
             }
+
+            linhasAtuais = linhas;
 
             let totalItens = linhas.length;
             let totalBruto = 0;
@@ -1409,6 +1421,35 @@ function gerarRelatorio(){
         document.getElementById("arm4").addEventListener("change", montarTabela);
         document.getElementById("arm5").addEventListener("change", montarTabela);
         document.getElementById("ordenarEndereço").addEventListener("change", montarTabela);
+
+        async function copiarProtheus(){
+            const codigos = [];
+            const seen = new Set();
+            linhasAtuais.forEach(l=>{
+                const val = (l && l.protheus !== undefined && l.protheus !== null) ? String(l.protheus).trim() : "";
+                if(!val) return;
+                if(seen.has(val)) return;
+                seen.add(val);
+                codigos.push(val);
+            });
+            const texto = codigos.join(",");
+            try{
+                await navigator.clipboard.writeText(texto);
+                alert("Códigos Protheus copiados.");
+            }catch(e){
+                const temp = document.createElement("textarea");
+                temp.value = texto;
+                document.body.appendChild(temp);
+                temp.select();
+                try{
+                    document.execCommand("copy");
+                    alert("Códigos Protheus copiados.");
+                }catch(err){
+                    alert("Não foi possível copiar.");
+                }
+                document.body.removeChild(temp);
+            }
+        }
 
         montarTabela();
     `;
@@ -2203,14 +2244,63 @@ window.fecharInfoCadastro = function(){
 window.mostrarAdminAlert = function(msg){
     const modal = document.getElementById("adminAlertModal");
     const content = document.getElementById("adminAlertContent");
+    const actions = document.getElementById("adminAlertActions");
     if(!modal || !content) return;
     content.textContent = msg || "";
+    if(actions) actions.innerHTML = "";
     modal.style.display = "flex";
 }
 
 window.fecharAdminAlert = function(){
     const modal = document.getElementById("adminAlertModal");
     if(modal) modal.style.display = "none";
+}
+
+async function mostrarConflitoCadastro(idSolicitacao, nickname){
+    const modal = document.getElementById("adminAlertModal");
+    const content = document.getElementById("adminAlertContent");
+    const actions = document.getElementById("adminAlertActions");
+    if(!modal || !content || !actions) return;
+    content.textContent = "Nickname já existe no cadastro. Aceitar não é permitido. Deseja recusar a solicitação ou redefinir a senha do cadastro já existente?";
+    actions.innerHTML = "";
+
+    let uidExistente = "";
+    try{
+        const usersSnap = await get(ref(db, "usuarios"));
+        if(usersSnap.exists()){
+            usersSnap.forEach(child=>{
+                const u = child.val();
+                if(u?.nickname && u.nickname.toLowerCase() === (nickname || "").toLowerCase()){
+                    uidExistente = child.key;
+                }
+            });
+        }
+    }catch(e){}
+
+    const btnRecusar = document.createElement("button");
+    btnRecusar.className = "fbBtn fbReject";
+    btnRecusar.textContent = "Recusar";
+    btnRecusar.onclick = async ()=>{
+        fecharAdminAlert();
+        await recusar(idSolicitacao);
+    };
+
+    const btnReset = document.createElement("button");
+    btnReset.className = "fbBtn fbApprove";
+    btnReset.textContent = "Redefinir senha";
+    btnReset.onclick = async ()=>{
+        if(uidExistente){
+            await resetSenha(uidExistente);
+            mostrarNotificacao("Senha marcada para redefinição.");
+        }else{
+            mostrarNotificacao("Usuário existente não encontrado.");
+        }
+        fecharAdminAlert();
+    };
+
+    actions.appendChild(btnRecusar);
+    actions.appendChild(btnReset);
+    modal.style.display = "flex";
 }
 
 let nickCheckTimer = null;
@@ -2820,20 +2910,22 @@ window.cadastrar = async function(){
             // ignore
         }
 
-        // bloqueia somente se nickname + cracha ja existe em solicitacoes
+        // se nickname + cracha ja existe, reutiliza a solicitacao (nao duplica)
+        let solicitacaoIdExistente = "";
         try{
             const keyCracha = nickCrachaKey(nick, cracha);
             const snapCracha = await get(ref(db, "nicknamesSolicCracha/" + keyCracha));
             if(snapCracha.exists()){
-                mostrarNotificacao("Cadastro já efetuado para esse crachá.");
-                if(btn) btn.disabled = false;
-                return;
+                const val = snapCracha.val();
+                solicitacaoIdExistente = (val && (val.id || val.solicitacaoId || val.key)) ? (val.id || val.solicitacaoId || val.key) : "";
             }
         }catch(e){
             console.warn("Sem permissão para validar cracha duplicado:", e?.code || e);
         }
 
-        const solicitacaoRef = push(ref(db, "solicitaçõesCadastro"));
+        const solicitacaoRef = solicitacaoIdExistente
+            ? ref(db, "solicitaçõesCadastro/" + solicitacaoIdExistente)
+            : push(ref(db, "solicitaçõesCadastro"));
 
         try{
             await set(solicitacaoRef, {
@@ -2846,8 +2938,11 @@ window.cadastrar = async function(){
                 duplicado: nickEmUso,
                 criadoEm: Date.now()
             });
-            await ajustarNickSolicCount(nick, 1);
-            await marcarSolicCracha(nick, cracha);
+            if(!solicitacaoIdExistente){
+                await ajustarNickSolicCount(nick, 1);
+            }
+            const finalId = solicitacaoIdExistente || solicitacaoRef.key || "";
+            await marcarSolicCracha(nick, cracha, finalId);
         }finally{}
 
         console.log("Cadastro enviado");
@@ -2960,12 +3055,13 @@ async function ajustarNickSolicCount(nick, delta){
     }
 }
 
-async function marcarSolicCracha(nick, cracha){
+async function marcarSolicCracha(nick, cracha, solicitId){
     const key = nickCrachaKey(nick, cracha);
     try{
         await set(ref(db, "nicknamesSolicCracha/" + key), {
             nickname: (nick || "").toLowerCase(),
             cracha: (cracha || "").toString().trim(),
+            id: solicitId || "",
             criadoEm: Date.now()
         });
     }catch(e){
@@ -3055,6 +3151,18 @@ async function rebuildNicknamesAuth(){
         console.warn("Falha ao ler usuarios para nicknamesAuth:", e?.code || e);
     }
     try{
+        const banSnap = await get(ref(db, "usuariosBanidos"));
+        if(banSnap.exists()){
+            banSnap.forEach(child=>{
+                const b = child.val();
+                const nick = (b?.nickname || "").toLowerCase();
+                if(nick) names.add(nick);
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao ler banidos para nicknamesAuth:", e?.code || e);
+    }
+    try{
         const currentSnap = await get(ref(db, "nicknamesAuth"));
         if(currentSnap.exists()){
             currentSnap.forEach(child=>{
@@ -3089,7 +3197,7 @@ async function rebuildNicknamesSolic(){
         return;
     }
     const counts = {};
-    const crachaSet = new Set();
+    const crachaMap = new Map();
     try{
         const solicitSnap = await get(ref(db, "solicitaçõesCadastro"));
         if(solicitSnap.exists()){
@@ -3101,7 +3209,8 @@ async function rebuildNicknamesSolic(){
                     counts[nick] = (counts[nick] || 0) + 1;
                 }
                 if(s.nickname && s.cracha){
-                    crachaSet.add(nickCrachaKey(s.nickname, s.cracha));
+                    const key = nickCrachaKey(s.nickname, s.cracha);
+                    crachaMap.set(key, child.key);
                 }
             });
         }
@@ -3137,7 +3246,7 @@ async function rebuildNicknamesSolic(){
         const currentCracha = await get(ref(db, "nicknamesSolicCracha"));
         if(currentCracha.exists()){
             currentCracha.forEach(child=>{
-                if(!crachaSet.has(child.key)){
+                if(!crachaMap.has(child.key)){
                     set(ref(db, "nicknamesSolicCracha/" + child.key), null);
                 }
             });
@@ -3146,8 +3255,8 @@ async function rebuildNicknamesSolic(){
         console.warn("Falha ao limpar nicknamesSolicCracha:", e?.code || e);
     }
     try{
-        for(const key of crachaSet){
-            await set(ref(db, "nicknamesSolicCracha/" + key), { key: key });
+        for(const [key, id] of crachaMap.entries()){
+            await set(ref(db, "nicknamesSolicCracha/" + key), { id: id });
         }
     }catch(e){
         console.warn("Falha ao gravar nicknamesSolicCracha:", e?.code || e);
