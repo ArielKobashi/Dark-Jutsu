@@ -2112,7 +2112,7 @@ async function verificarNickDisponivel(){
         setNickStatus(count > 0 ? "bad" : "ok");
     }catch(e){
         // sem permissão para checar: não exibe status
-        setNickStatus("ok");
+        setNickStatus("");
     }
 }
 
@@ -2770,6 +2770,70 @@ function nickOnlyKey(nick){
     return encodeURIComponent(base).replace(/\./g, "%2E");
 }
 
+async function rebuildNicknamesSimple(){
+    try{
+        const nivelSnap = await get(ref(db, "usuarios/" + auth.currentUser.uid + "/nivel"));
+        if(!nivelSnap.exists() || nivelSnap.val() !== "admin") return;
+    }catch(e){
+        return;
+    }
+    const counts = {};
+    try{
+        const usersSnap = await get(ref(db, "usuarios"));
+        if(usersSnap.exists()){
+            usersSnap.forEach(child=>{
+                const u = child.val();
+                const nick = (u?.nickname || "").toLowerCase();
+                if(nick){
+                    counts[nick] = (counts[nick] || 0) + 1;
+                }
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao ler usuarios para nicknamesSimple:", e?.code || e);
+    }
+    try{
+        const solicitSnap = await get(ref(db, "solicitaçõesCadastro"));
+        if(solicitSnap.exists()){
+            solicitSnap.forEach(child=>{
+                const s = child.val();
+                if(s?.status !== "pendente") return;
+                const nick = (s?.nickname || "").toLowerCase();
+                if(nick){
+                    counts[nick] = (counts[nick] || 0) + 1;
+                }
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao ler solicitações para nicknamesSimple:", e?.code || e);
+    }
+    try{
+        const currentSnap = await get(ref(db, "nicknamesSimple"));
+        if(currentSnap.exists()){
+            currentSnap.forEach(child=>{
+                const v = child.val();
+                const nick = (v?.nickname || "").toLowerCase();
+                if(!nick || !counts[nick]){
+                    set(ref(db, "nicknamesSimple/" + child.key), null);
+                }
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao limpar nicknamesSimple:", e?.code || e);
+    }
+    try{
+        for(const nick in counts){
+            const key = nickOnlyKey(nick);
+            await set(ref(db, "nicknamesSimple/" + key), {
+                nickname: nick,
+                count: counts[nick]
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao gravar nicknamesSimple:", e?.code || e);
+    }
+}
+
 async function ajustarNickCount(nick, delta){
     const key = nickOnlyKey(nick);
     const node = ref(db, "nicknamesSimple/" + key);
@@ -2896,6 +2960,7 @@ onAuthStateChanged(auth, async (user) => {
             if (adminBtn) adminBtn.style.display = "flex";
             iniciarSolicitacoesAdmin(); // ðŸ”¥ AQUI
             iniciarListaUsuarios();
+            rebuildNicknamesSimple();
             if (adminPanel) adminPanel.style.display = "block";
         } else {
             if (adminBtn) adminBtn.style.display = "none";
