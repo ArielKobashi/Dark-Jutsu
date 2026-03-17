@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 import sys
 import time
@@ -14,10 +13,6 @@ from selenium.common.exceptions import NoSuchWindowException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
-try:
-    import pyautogui
-except Exception:
-    pyautogui = None
 
 
 DEFAULT_BASE_URL = "https://fiasulindustria182431.protheus.cloudtotvs.com.br:1703/webapp/index.html"
@@ -453,356 +448,35 @@ def ensure_startprog_selected(driver: webdriver.Chrome, timeout: int = 10) -> bo
     return False
 
 
-def press_tabs_enter(driver: webdriver.Chrome, tabs: int = 3, delay: float = 0.25) -> bool:
+def press_tabs_enter(driver: webdriver.Chrome, tabs: int = 3) -> bool:
     try:
         # garante foco na página
         try:
-            driver.switch_to.default_content()
-            driver.execute_script(
-                """
-                const el = document.activeElement;
-                if(el && el.blur) el.blur();
-                const body = document.body;
-                if(body){ body.focus(); }
-                """
-            )
             body = driver.find_element(By.TAG_NAME, "body")
             ActionChains(driver).move_to_element(body).click().perform()
         except Exception:
             pass
-        time.sleep(delay)
+        time.sleep(0.2)
         try:
             body = driver.find_element(By.TAG_NAME, "body")
             body.send_keys(Keys.ESCAPE)
         except Exception:
             pass
-        time.sleep(delay)
+        time.sleep(0.2)
         for _ in range(max(1, tabs)):
             try:
-                ActionChains(driver).send_keys(Keys.TAB).perform()
+                body = driver.find_element(By.TAG_NAME, "body")
+                body.send_keys(Keys.TAB)
             except Exception:
                 ActionChains(driver).send_keys(Keys.TAB).perform()
-            time.sleep(delay)
-        try:
-            ActionChains(driver).send_keys(Keys.ENTER).perform()
-        except Exception:
-            ActionChains(driver).send_keys(Keys.ENTER).perform()
-        return True
-    except Exception:
-        return False
-
-
-def click_body_background(driver: webdriver.Chrome) -> bool:
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-    try:
-        driver.execute_script(
-            """
-            const body = document.body;
-            if(!body) return false;
-            const rect = body.getBoundingClientRect();
-            const x = rect.left + 5;
-            const y = rect.top + 5;
-            const target = document.elementFromPoint(x, y) || body;
-            ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(type=>{
-                target.dispatchEvent(new MouseEvent(type, {bubbles:true, cancelable:true, view:window, clientX:x, clientY:y}));
-            });
-            body.focus();
-            return true;
-            """
-        )
-        return True
-    except Exception:
+            time.sleep(0.2)
         try:
             body = driver.find_element(By.TAG_NAME, "body")
-            ActionChains(driver).move_to_element_with_offset(body, 5, 5).click().perform()
-            return True
+            body.send_keys(Keys.ENTER)
         except Exception:
-            return False
-
-
-def human_click_viewport(driver: webdriver.Chrome, x: int = 20, y: int = 20) -> bool:
-    try:
-        driver.execute_script(
-            """
-            window.focus();
-            const x = Math.floor(window.innerWidth * 0.5);
-            const y = Math.floor(window.innerHeight * 0.5);
-            const target = document.elementFromPoint(x, y) || document.body;
-            ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(type=>{
-                target.dispatchEvent(new MouseEvent(type, {bubbles:true, cancelable:true, view:window, clientX:x, clientY:y}));
-            });
-            """
-        )
-        body = driver.find_element(By.TAG_NAME, "body")
-        actions = ActionChains(driver)
-        actions.move_to_element_with_offset(body, x, y).pause(0.1).click().perform()
+            ActionChains(driver).send_keys(Keys.ENTER).perform()
         return True
     except Exception:
-        return False
-
-
-def os_click_screen(x: int, y: int) -> bool:
-    if not pyautogui:
-        return False
-    try:
-        pyautogui.FAILSAFE = False
-        pyautogui.moveTo(x, y, duration=0.05)
-        time.sleep(0.05)
-        pyautogui.mouseDown(button="left")
-        time.sleep(0.1)
-        pyautogui.mouseUp(button="left")
-        time.sleep(0.05)
-        pyautogui.click(x, y, button="left")
-        time.sleep(0.1)
-        return True
-    except Exception:
-        return False
-
-
-def os_click_top_left() -> bool:
-    if not pyautogui:
-        return False
-    try:
-        w, h = pyautogui.size()
-        x = max(10, int(w * 0.02))
-        y = max(10, int(h * 0.08)) + 400
-        return os_click_screen(x, y)
-    except Exception:
-        return False
-
-
-def os_send_tabs_enter(tabs: int, delay: float = 0.12) -> bool:
-    if not pyautogui:
-        return False
-
-
-def play_macro(path: str, speed: float = 1.0) -> bool:
-    if not pyautogui:
-        return False
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        start = time.perf_counter()
-        last_dt = 0.0
-        pressed_keys = set()
-        pressed_buttons = set()
-        action_count = 0
-        click_index = 0
-        i = 0
-        click_window = 0.35
-        pos_tol = 2
-        while i < len(data):
-            e = data[i]
-            dt = (e.get("dt", 0.0)) / max(speed, 0.01)
-            time.sleep(max(0, dt - last_dt))
-            kind = e.get("kind")
-            d = e.get("data", {})
-
-            if kind == "mouse_click" and d.get("pressed") is True:
-                btn = "left" if "left" in d.get("button", "").lower() else "right"
-                x = d.get("x")
-                y = d.get("y")
-                # conta cliques (press+release) em sequência
-                clicks = 0
-                j = i
-                last_click_dt = e.get("dt", 0.0)
-                while j + 1 < len(data):
-                    e_down = data[j]
-                    e_up = data[j + 1]
-                    if not (e_down.get("kind") == "mouse_click" and e_down.get("data", {}).get("pressed") is True):
-                        break
-                    if not (e_up.get("kind") == "mouse_click" and e_up.get("data", {}).get("pressed") is False):
-                        break
-                    d_down = e_down.get("data", {})
-                    d_up = e_up.get("data", {})
-                    if ("left" if "left" in d_down.get("button", "").lower() else "right") != btn:
-                        break
-                    if ("left" if "left" in d_up.get("button", "").lower() else "right") != btn:
-                        break
-                    if abs(d_down.get("x", 0) - x) > pos_tol or abs(d_down.get("y", 0) - y) > pos_tol:
-                        break
-                    if abs(d_up.get("x", 0) - x) > pos_tol or abs(d_up.get("y", 0) - y) > pos_tol:
-                        break
-                    if (e_down.get("dt", 0.0) - last_click_dt) > click_window and clicks > 0:
-                        break
-                    clicks += 1
-                    last_click_dt = e_up.get("dt", 0.0)
-                    j += 2
-                    if j >= len(data):
-                        break
-                click_index += 1
-                if btn == "left":
-                    if click_index == 7:
-                        clicks = 2
-                    elif click_index == 8:
-                        # dois duplos cliques seguidos
-                        pyautogui.click(x, y, clicks=2, interval=0.05, button=btn)
-                        pyautogui.click(x, y, clicks=2, interval=0.05, button=btn)
-                        last_dt = (data[j - 1].get("dt", 0.0)) / max(speed, 0.01)
-                        action_count += 4
-                        if action_count % 5 == 0:
-                            print(f"Macro: {action_count} acoes executadas")
-                        i = j
-                        continue
-                    elif click_index == 12:
-                        # repetir o clique apos 1s
-                        pyautogui.click(x, y, clicks=max(1, clicks), interval=0.05, button=btn)
-                        time.sleep(1.0)
-                        pyautogui.click(x, y, clicks=max(1, clicks), interval=0.05, button=btn)
-                        last_dt = (data[j - 1].get("dt", 0.0)) / max(speed, 0.01)
-                        action_count += 2
-                        if action_count % 5 == 0:
-                            print(f"Macro: {action_count} acoes executadas")
-                        i = j
-                        continue
-                pyautogui.click(x, y, clicks=max(1, clicks), interval=0.05, button=btn)
-                last_dt = (data[j - 1].get("dt", 0.0)) / max(speed, 0.01)
-                action_count += clicks
-                if action_count % 5 == 0:
-                    print(f"Macro: {action_count} acoes executadas")
-                i = j
-                continue
-
-            if kind == "mouse_click":
-                btn = "left" if "left" in d.get("button", "").lower() else "right"
-                pyautogui.moveTo(d["x"], d["y"])
-                if d.get("pressed"):
-                    pressed_buttons.add(btn)
-                    pyautogui.mouseDown(button=btn)
-                    action_count += 1
-                else:
-                    pressed_buttons.discard(btn)
-                    pyautogui.mouseUp(button=btn)
-                    action_count += 1
-            elif kind == "mouse_scroll":
-                pyautogui.scroll(d.get("dy", 0))
-                action_count += 1
-            elif kind == "key_press":
-                key = d.get("key", "")
-                if key.startswith("Key."):
-                    k = key.split(".", 1)[1]
-                    pressed_keys.add(k)
-                    pyautogui.keyDown(k)
-                else:
-                    pressed_keys.add(key)
-                    pyautogui.keyDown(key)
-                action_count += 1
-            elif kind == "key_release":
-                key = d.get("key", "")
-                if key.startswith("Key."):
-                    k = key.split(".", 1)[1]
-                    pressed_keys.discard(k)
-                    pyautogui.keyUp(k)
-                else:
-                    pressed_keys.discard(key)
-                    pyautogui.keyUp(key)
-                action_count += 1
-            if action_count % 5 == 0 and action_count > 0:
-                print(f"Macro: {action_count} acoes executadas")
-            last_dt = dt
-            i += 1
-        # garante que nada fique "travado"
-        for btn in list(pressed_buttons):
-            try:
-                pyautogui.mouseUp(button=btn)
-            except Exception:
-                pass
-        for k in list(pressed_keys):
-            try:
-                pyautogui.keyUp(k)
-            except Exception:
-                pass
-        try:
-            pyautogui.press("enter")
-        except Exception:
-            pass
-        return True
-    except Exception:
-        return False
-    try:
-        for _ in range(max(1, tabs)):
-            pyautogui.press("tab")
-            time.sleep(delay)
-        pyautogui.press("enter")
-        return True
-    except Exception:
-        return False
-
-
-def os_scroll_down(amount: int = 600) -> bool:
-    if not pyautogui:
-        return False
-    try:
-        pyautogui.scroll(-abs(amount))
-        time.sleep(0.1)
-        return True
-    except Exception:
-        return False
-
-
-def os_click_bottom_center_right() -> bool:
-    if not pyautogui:
-        return False
-    try:
-        w, h = pyautogui.size()
-        x = int(w * 0.68)
-        y = int(h * 0.90)
-        return os_click_screen(x, y)
-    except Exception:
-        return False
-
-
-def os_click_webview_selector(driver: webdriver.Chrome, selector: str) -> bool:
-    if not pyautogui:
-        return False
-    try:
-        driver.switch_to.default_content()
-        metrics = driver.execute_script(
-            """
-            const iframe = document.querySelector("wa-webview iframe");
-            if(!iframe) return null;
-            const r = iframe.getBoundingClientRect();
-            return {
-                iframeLeft: r.left,
-                iframeTop: r.top,
-                screenX: window.screenX,
-                screenY: window.screenY,
-                outerWidth: window.outerWidth,
-                outerHeight: window.outerHeight,
-                innerWidth: window.innerWidth,
-                innerHeight: window.innerHeight
-            };
-            """
-        )
-        if not metrics:
-            return False
-        if not switch_to_webview_iframe(driver):
-            return False
-        rect = driver.execute_script(
-            """
-            const el = document.querySelector(arguments[0]);
-            if(!el) return null;
-            const r = el.getBoundingClientRect();
-            return { left: r.left, top: r.top, width: r.width, height: r.height };
-            """,
-            selector,
-        )
-        driver.switch_to.default_content()
-        if not rect:
-            return False
-        chrome_x = (metrics["outerWidth"] - metrics["innerWidth"]) / 2
-        chrome_y = (metrics["outerHeight"] - metrics["innerHeight"])
-        x = int(metrics["screenX"] + chrome_x + metrics["iframeLeft"] + rect["left"] + rect["width"] / 2)
-        y = int(metrics["screenY"] + chrome_y + metrics["iframeTop"] + rect["top"] + rect["height"] / 2)
-        return os_click_screen(x, y)
-    except Exception:
-        try:
-            driver.switch_to.default_content()
-        except Exception:
-            pass
         return False
 
 
@@ -917,205 +591,6 @@ def wait_for_selector(driver: webdriver.Chrome, selector: str, timeout: int = 30
             pass
         time.sleep(0.3)
     return False
-
-
-def switch_to_webview_iframe(driver: webdriver.Chrome) -> bool:
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-    try:
-        iframe = driver.find_element(By.CSS_SELECTOR, "wa-webview iframe")
-        driver.switch_to.frame(iframe)
-        return True
-    except Exception:
-        try:
-            for frame in driver.find_elements(By.TAG_NAME, "iframe"):
-                try:
-                    driver.switch_to.frame(frame)
-                    return True
-                except Exception:
-                    driver.switch_to.default_content()
-                    continue
-        except Exception:
-            pass
-    return False
-
-
-def send_tabs_enter_active(driver: webdriver.Chrome, tabs: int, delay: float = 0.25) -> bool:
-    try:
-        for _ in range(max(1, tabs)):
-            try:
-                driver.switch_to.active_element.send_keys(Keys.TAB)
-            except Exception:
-                ActionChains(driver).send_keys(Keys.TAB).perform()
-            time.sleep(delay)
-        try:
-            driver.switch_to.active_element.send_keys(Keys.ENTER)
-        except Exception:
-            ActionChains(driver).send_keys(Keys.ENTER).perform()
-        return True
-    except Exception:
-        return False
-
-
-def send_tabs_enter_body(driver: webdriver.Chrome, tabs: int, delay: float = 0.25) -> bool:
-    try:
-        body = driver.find_element(By.TAG_NAME, "body")
-        for _ in range(max(1, tabs)):
-            body.send_keys(Keys.TAB)
-            time.sleep(delay)
-        body.send_keys(Keys.ENTER)
-        return True
-    except Exception:
-        return False
-
-
-def send_tabs_enter_from_element(elem, tabs: int, delay: float = 0.25) -> bool:
-    try:
-        elem.click()
-        for _ in range(max(1, tabs)):
-            elem.send_keys(Keys.TAB)
-            time.sleep(delay)
-        elem.send_keys(Keys.ENTER)
-        return True
-    except Exception:
-        return False
-
-
-def click_entrar_button_attempts(driver: webdriver.Chrome) -> bool:
-    attempts = [
-        ("JS texto", None),
-        ("XPath texto", "//button[.//span[normalize-space()='Entrar'] or normalize-space()='Entrar']"),
-        ("CSS po-button", "button.po-button"),
-        ("JS dispatch", None),
-    ]
-    for label, selector in attempts:
-        print(f"Tentativa: clicar 'Entrar' ({label})")
-        try:
-            if label == "JS texto":
-                clicked = driver.execute_script(
-                    """
-                    function findBtn(root){
-                        const nodes = Array.from(root.querySelectorAll('button, .po-button'));
-                        return nodes.find(b => (b.textContent || '').trim().toLowerCase() === 'entrar');
-                    }
-                    let btn = findBtn(document);
-                    if(btn){ btn.click(); return true; }
-                    const frames = Array.from(document.querySelectorAll('iframe'));
-                    for(const f of frames){
-                        try{
-                            if(f.contentDocument){
-                                btn = findBtn(f.contentDocument);
-                                if(btn){ btn.click(); return true; }
-                            }
-                        }catch(e){}
-                    }
-                    return false;
-                    """
-                )
-            elif label == "XPath texto":
-                btn = driver.find_element(By.XPATH, selector)
-                btn.click()
-            else:
-                if label == "JS dispatch":
-                    driver.execute_script(
-                        """
-                        const nodes = Array.from(document.querySelectorAll('button, .po-button'));
-                        const btn = nodes.find(b => (b.textContent || '').trim().toLowerCase() === 'entrar');
-                        if(!btn) return false;
-                        const r = btn.getBoundingClientRect();
-                        const x = r.left + r.width/2;
-                        const y = r.top + r.height/2;
-                        const target = document.elementFromPoint(x, y) || btn;
-                        ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(type=>{
-                            target.dispatchEvent(new MouseEvent(type, {bubbles:true, cancelable:true, view:window, clientX:x, clientY:y}));
-                        });
-                        return true;
-                        """
-                    )
-                else:
-                    btn = driver.find_element(By.CSS_SELECTOR, selector)
-                    if (btn.text or "").strip().lower() == "entrar":
-                        btn.click()
-                    else:
-                        # tenta achar span interno
-                        span = btn.find_element(By.CSS_SELECTOR, ".po-button-label")
-                        if (span.text or "").strip().lower() == "entrar":
-                            btn.click()
-        except Exception:
-            pass
-
-        while True:
-            ans = input("Deu certo? (s/n): ").strip().lower()
-            if ans == "s":
-                return True
-            if ans == "n":
-                break
-    return False
-
-
-def wait_for_third_page_ready(driver: webdriver.Chrome, timeout: int = 30) -> bool:
-    end = time.time() + timeout
-    while time.time() < end:
-        try:
-            ready = driver.execute_script(
-                """
-                const hasBase = !!document.querySelector("input[name='base_date']");
-                const hasSpinner = !!document.querySelector("wa-svg[data-advpl='tsvg']");
-                return hasBase && !hasSpinner;
-                """
-            )
-            if ready:
-                return True
-        except Exception:
-            pass
-        time.sleep(0.5)
-    return False
-
-
-def focus_first_text_field_in_frame(driver: webdriver.Chrome) -> bool:
-    try:
-        return bool(driver.execute_script(
-            """
-            function focusCandidate(el){
-                try{
-                    el.focus();
-                    el.click();
-                    return document.activeElement === el;
-                }catch(e){ return false; }
-            }
-            const selectors = [
-                "input:not([type='hidden']):not([disabled])",
-                "textarea:not([disabled])",
-                "[contenteditable='true']",
-                "select:not([disabled])",
-                "[tabindex]:not([tabindex='-1'])"
-            ];
-            for(const sel of selectors){
-                const el = document.querySelector(sel);
-                if(el && focusCandidate(el)) return true;
-            }
-            return false;
-            """
-        ))
-    except Exception:
-        return False
-
-
-def focus_base_date_field_in_frame(driver: webdriver.Chrome) -> bool:
-    try:
-        return bool(driver.execute_script(
-            """
-            const el = document.querySelector("input[name='base_date']");
-            if(!el) return false;
-            el.focus();
-            el.click();
-            return document.activeElement === el;
-            """
-        ))
-    except Exception:
-        return False
 
 
 def dialog_is_open(driver: webdriver.Chrome) -> bool:
@@ -1302,30 +777,20 @@ def login_protheus(driver: webdriver.Chrome, wait: WebDriverWait, user: str, sen
     time.sleep(0.4)
     # Fluxo solicitado
     print("Etapa: SmartClient - enviando 2 TABs + ENTER")
-    try:
-        ensure_active_window(driver)
-        driver.switch_to.default_content()
-        driver.execute_script(
-            """
-            const combo = document.querySelector("wa-combobox#selectEnv");
-            const input = combo && combo.shadowRoot ? combo.shadowRoot.querySelector("input[type='text']") : null;
-            if(input){ input.focus(); }
-            """
-        )
-    except Exception:
-        pass
-    press_tabs_enter(driver, tabs=2)
-
-    print("Etapa: Login - aguardando 20s")
-    time.sleep(20)
+    press_tabs_enter(driver, tabs=1)
+# esta acontecendo algo nessa parte que da só um tab e depois some o selector de elemento e não completa os dois tabs
+    print("Etapa: Login - aguardando 10s")
+    time.sleep(10)
     print("Etapa: Login - digitando credenciais (teclado) + TAB + ENTER")
     type_login_keyboard_flow(driver, user, senha)
 
     print("Etapa: Pos-login - aguardando 10s")
     time.sleep(10)
+    print("Etapa: Pos-login - enviando 14 TABs + ENTER")
+    press_tabs_enter(driver, tabs=14)
 
-    print("Etapa: Final - aguardando 20s antes de fechar")
-    time.sleep(20)
+    print("Etapa: Final - aguardando 15s antes de fechar")
+    time.sleep(15)
 
     print("Etapa: Fluxo concluido")
     return True
@@ -1345,59 +810,6 @@ def wait_for_download(download_dir: Path, before: set, timeout: int = 120):
             return list(new_files)
         time.sleep(0.5)
     return []
-
-
-def rename_latest_download(download_dir: Path, new_name: str, timeout: int = 120) -> bool:
-    start = time.time()
-    while time.time() - start < timeout:
-        crs = list(download_dir.glob("*.crdownload"))
-        files = [
-            p for p in download_dir.glob("*.xlsx")
-            if p.is_file() and p.name.lower().startswith("mata")
-        ]
-        if not files:
-            time.sleep(0.5)
-            continue
-        latest = max(files, key=lambda p: p.stat().st_mtime)
-        # Se houver .crdownload antigo, nao bloqueia o rename do xlsx mais novo
-        if crs:
-            newest_cr = max(crs, key=lambda p: p.stat().st_mtime)
-            if newest_cr.stat().st_mtime >= latest.stat().st_mtime:
-                time.sleep(0.5)
-                continue
-        print(f"Arquivo detectado para renomear: {latest.name}")
-        target = download_dir / new_name
-        if latest.name.lower() == new_name.lower():
-            print("Aviso: arquivo ja esta com o nome desejado.")
-            return True
-        try:
-            if target.exists():
-                target.unlink()
-        except Exception:
-            pass
-        try:
-            latest.rename(target)
-            print(f"Arquivo renomeado para: {target.name}")
-            return True
-        except Exception as e:
-            print(f"Aviso: falha ao renomear ({e}). Tentando mover...")
-            try:
-                import shutil
-                shutil.move(str(latest), str(target))
-                print(f"Arquivo renomeado para: {target.name}")
-                return True
-            except Exception as e2:
-                print(f"Aviso: nao consegui mover/renomear ({e2}).")
-                time.sleep(0.5)
-    print("Aviso: nao encontrei arquivo para renomear.")
-    return False
-
-
-def rename_latest_from_paths(paths: list[Path], new_name: str, timeout: int = 120) -> bool:
-    for p in paths:
-        if rename_latest_download(p, new_name, timeout=timeout):
-            return True
-    return False
 
 
 def download_links(driver: webdriver.Chrome, download_dir: Path, links: list[str]):
@@ -1468,19 +880,9 @@ def main():
         return
 
     time.sleep(5)
+    download_links(driver, download_dir, links)
 
-    # Executa a macro como ultima etapa antes de fechar
-    macro_path = str(Path(__file__).resolve().parent / "macro.json")
-    print("Etapa final: executando macro")
-    play_macro(macro_path, speed=1.0)
-
-    # Renomeia o ultimo download para incluir.xlsx:
-    # 1) tenta na pasta do projeto; 2) fallback na pasta Downloads
-    project_dir = Path(__file__).resolve().parent
-    downloads_dir = Path.home() / "Downloads"
-    rename_latest_from_paths([project_dir, downloads_dir], "incluir.xlsx", timeout=20)
-
-    print("Finalizado")
+    print("Downloads finalizados")
     time.sleep(3)
     driver.quit()
 
