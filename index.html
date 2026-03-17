@@ -485,6 +485,9 @@ window.aprovar = async function(id){
             senhaAntiga: dados.senha || "",
             senhaReset: false
         });
+        if(dados?.nickname){
+            await ajustarNickCount(dados.nickname, 1);
+        }
         if(dados?.nickname && dados?.cracha){
             const key = nickKey(dados.nickname, dados.cracha);
             await set(ref(db, "nicknames/" + key), {
@@ -497,6 +500,9 @@ window.aprovar = async function(id){
 
         await set(ref(db, "solicitaçõesCadastro/"+id+"/status"),"aprovado");
         await set(ref(db, "solicitaçõesCadastro/"+id), null);
+        if(dados?.nickname){
+            await ajustarNickCount(dados.nickname, -1);
+        }
 
         if(card){
             card.classList.add("slideOutRight");
@@ -536,6 +542,9 @@ window.recusar = async function(id){
 
             await set(ref(db,"solicitaçõesCadastro/"+id+"/status"),"recusado");
             await set(ref(db, "solicitaçõesCadastro/"+id), null);
+            if(dados?.nickname){
+                await ajustarNickCount(dados.nickname, -1);
+            }
             if(dados?.uid){
                 try{
                     await set(ref(db, "usuarios/" + dados.uid), null);
@@ -574,6 +583,9 @@ window.toggleAtivo = async function(uid, isAtivo){
             console.warn("Falha ao ler usuário para banir:", e?.code || e);
         }
         await set(ref(db, "usuarios/" + uid), null);
+        if(dados?.nickname){
+            await ajustarNickCount(dados.nickname, -1);
+        }
         if(dados?.nickname && dados?.cracha){
             try{
                 const key = nickKey(dados.nickname, dados.cracha);
@@ -2089,17 +2101,23 @@ async function verificarNickDisponivel(){
         setNickStatus("");
         return;
     }
-    if(!/^[A-Za-z0-9_.-]{3,20}$/.test(nick) || !/^[0-9]{1,10}$/.test(cracha)){
-        setNickStatus("bad");
+    if(!/^[A-Za-z0-9_.-]{3,20}$/.test(nick)){
+        setNickStatus("");
         return;
     }
     try{
-        const key = nickKey(nick, cracha);
-        const snap = await get(ref(db, "nicknames/" + key));
-        setNickStatus(snap.exists() ? "bad" : "ok");
+        const key = nickOnlyKey(nick);
+        const snap = await get(ref(db, "nicknamesSimple/" + key));
+        if(!snap.exists()){
+            setNickStatus("ok");
+            return;
+        }
+        const val = snap.val();
+        const count = (val && typeof val.count === "number") ? val.count : 1;
+        setNickStatus(count > 0 ? "bad" : "ok");
     }catch(e){
         // sem permissão para checar: não exibe status
-        setNickStatus("bad");
+        setNickStatus("");
     }
 }
 
@@ -2433,7 +2451,7 @@ updateMobileOverlaysState();
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, set, get, onValue, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { 
   getAuth,
   createUserWithEmailAndPassword,
@@ -2667,6 +2685,7 @@ window.cadastrar = async function(){
                 status: "pendente",
                 criadoEm: Date.now()
             });
+            await ajustarNickCount(nick, 1);
             await set(ref(window.cadastroDb || db, "nicknames/" + nickKeyStr), {
                 nickname: nick,
                 cracha: cracha,
@@ -2749,6 +2768,33 @@ window.toggleSenha = function(inputId, btn){
 function nickKey(nick, cracha){
     const base = (nick || "").toLowerCase() + "|" + (cracha || "").toString().trim();
     return encodeURIComponent(base).replace(/\./g, "%2E");
+}
+
+function nickOnlyKey(nick){
+    const base = (nick || "").toLowerCase();
+    return encodeURIComponent(base).replace(/\./g, "%2E");
+}
+
+async function ajustarNickCount(nick, delta){
+    const key = nickOnlyKey(nick);
+    const node = ref(db, "nicknamesSimple/" + key);
+    try{
+        await runTransaction(node, current => {
+            let count = 0;
+            if(current && typeof current === "object" && typeof current.count === "number"){
+                count = current.count;
+            }else if(typeof current === "number"){
+                count = current;
+            }
+            count = count + delta;
+            if(count <= 0){
+                return null;
+            }
+            return { nickname: (nick || "").toLowerCase(), count: count };
+        });
+    }catch(e){
+        console.warn("Falha ao ajustar nicknamesSimple:", e?.code || e);
+    }
 }
 
 window.voltarLogin = function(){
@@ -3013,9 +3059,6 @@ senhaInput.addEventListener("keydown", e=>{
 const cadastroNickInput = document.getElementById("cadastroNickname");
 const cadastroCrachaInput = document.getElementById("cadastroCracha");
 function agendarChecagemNick(){
-    if(cadastroNickInput && cadastroNickInput.value.trim().length >= 3){
-        setNickStatus("bad");
-    }
     if(nickCheckTimer) clearTimeout(nickCheckTimer);
     nickCheckTimer = setTimeout(verificarNickDisponivel, 250);
 }
