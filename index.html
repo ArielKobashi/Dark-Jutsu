@@ -2096,12 +2096,7 @@ async function verificarNickDisponivel(){
     const crachaEl = document.getElementById("cadastroCracha");
     if(!nickEl || !crachaEl) return;
     const nick = nickEl.value.trim().toLowerCase();
-    const cracha = crachaEl.value.trim();
     if(!nick || nick.length < 3){
-        setNickStatus("");
-        return;
-    }
-    if(!/^[A-Za-z0-9_.-]{3,20}$/.test(nick)){
         setNickStatus("");
         return;
     }
@@ -2117,7 +2112,7 @@ async function verificarNickDisponivel(){
         setNickStatus(count > 0 ? "bad" : "ok");
     }catch(e){
         // sem permissão para checar: não exibe status
-        setNickStatus("");
+        setNickStatus("ok");
     }
 }
 
@@ -3060,6 +3055,7 @@ const cadastroNickInput = document.getElementById("cadastroNickname");
 const cadastroCrachaInput = document.getElementById("cadastroCracha");
 function agendarChecagemNick(){
     if(nickCheckTimer) clearTimeout(nickCheckTimer);
+    verificarNickDisponivel();
     nickCheckTimer = setTimeout(verificarNickDisponivel, 250);
 }
 if(cadastroNickInput){
