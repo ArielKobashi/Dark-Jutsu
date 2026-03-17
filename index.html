@@ -74,6 +74,16 @@
 </div>
 <!-- /SPLIT: pending.html -->
 
+<!-- SPLIT: banned.html (usuario banido) -->
+<div id="bannedScreen" style="display:none;">
+    <div id="bannedBox">
+        <h2>Você foi banido.</h2>
+        <div class="bannedSkull">💀</div>
+        <button onclick="voltarLogin()">Voltar ao Login</button>
+    </div>
+</div>
+<!-- /SPLIT: banned.html -->
+
 <!-- SPLIT: loading.html (loading overlay) -->
 <div id="loadingScreen">
     <h2>Carregando Sistema...</h2>
@@ -231,6 +241,9 @@ stroke-linecap="round"/>
 <div class="subHeader">
 
 <span class="subTitle">Painel Administrativo</span>
+<button class="banidosBtn" onclick="abrirBanidos()" title="Banidos">
+    <span class="skullBadge">💀</span>
+</button>
 
 <div class="subClose" id="btnFecharAdmin" onclick="fecharSubPagina()">&#10006;</div>
 
@@ -267,6 +280,29 @@ Usuários do Sistema
 
 
 </div>
+
+<!-- SPLIT: banidos-panel.html (admin overlay) -->
+<div id="banidosPanel" class="fbBanidos">
+    <div class="subHeader">
+        <span class="subTitle">Usuários Banidos</span>
+        <div class="subClose" onclick="fecharBanidos()">&#10006;</div>
+    </div>
+    <div class="subContent">
+        <div class="adminSection fbPanel">
+            <div class="adminTitle fbPanelHeader banidosHeader">
+                <label class="toggleItem banidosSelectAll">
+                    <input type="checkbox" id="banidosSelectAll">
+                    <span>Selecionar todos</span>
+                </label>
+                <button class="fbBtn fbReject banidosBulkBtn" onclick="apagarBanidosSelecionados()">
+                    Apagar selecionados
+                </button>
+            </div>
+            <div id="listaBanidos"></div>
+        </div>
+    </div>
+</div>
+<!-- /SPLIT: banidos-panel.html -->
 
 
 <!-- /SPLIT: admin-panel.html -->
@@ -476,8 +512,25 @@ window.aprovar = async function(id){
         if(!uid){
             const emailFake = dados.nickname + "@sistema.com";
             // usa auth secundario para nao trocar a sessao do admin
-            const cred = await window.createUserWithEmailAndPassword(window.adminAuth, emailFake, dados.senha);
-            uid = cred.user.uid;
+            try{
+                const cred = await window.createUserWithEmailAndPassword(window.adminAuth, emailFake, dados.senha);
+                uid = cred.user.uid;
+            }catch(e){
+                if(e?.code === "auth/email-already-in-use"){
+                    try{
+                        await set(ref(db, "nicknamesAuth/" + nickOnlyKey(dados.nickname)), {
+                            nickname: dados.nickname,
+                            criadoEm: Date.now()
+                        });
+                    }catch(err){
+                        console.warn("Falha ao marcar nicknamesAuth:", err?.code || err);
+                    }
+                    mostrarAdminAlert("Nickname já existe no Auth. Apenas recusa é permitida.");
+                    if(card) card.classList.remove("aprovadoPulse");
+                    return;
+                }
+                throw e;
+            }
         }
 
         await set(ref(db, "usuarios/" + uid), {
@@ -490,18 +543,18 @@ window.aprovar = async function(id){
             senhaAntiga: dados.senha || "",
             senhaReset: false
         });
-        if(dados?.nickname && dados?.cracha){
-            const key = nickKey(dados.nickname, dados.cracha);
-            await set(ref(db, "nicknames/" + key), {
+        try{
+            await set(ref(db, "nicknamesAuth/" + nickOnlyKey(dados.nickname)), {
                 nickname: dados.nickname,
-                cracha: dados.cracha,
-                status: "aprovado",
                 criadoEm: Date.now()
             });
+        }catch(e){
+            console.warn("Falha ao gravar nicknamesAuth:", e?.code || e);
         }
-
         await set(ref(db, "solicitaçõesCadastro/"+id+"/status"),"aprovado");
         await set(ref(db, "solicitaçõesCadastro/"+id), null);
+        await ajustarNickSolicCount(dados.nickname, -1);
+        await desmarcarSolicCracha(dados.nickname, dados.cracha);
         await rebuildNicknamesSimple();
 
         if(card){
@@ -542,20 +595,14 @@ window.recusar = async function(id){
 
             await set(ref(db,"solicitaçõesCadastro/"+id+"/status"),"recusado");
             await set(ref(db, "solicitaçõesCadastro/"+id), null);
+            await ajustarNickSolicCount(dados.nickname, -1);
+            await desmarcarSolicCracha(dados.nickname, dados.cracha);
             await rebuildNicknamesSimple();
             if(dados?.uid){
                 try{
                     await set(ref(db, "usuarios/" + dados.uid), null);
                 }catch(e){
                     console.warn("Falha ao limpar usuário recusado:", e?.code || e);
-                }
-            }
-            if(dados?.nickname && dados?.cracha){
-                try{
-                    const key = nickKey(dados.nickname, dados.cracha);
-                    await set(ref(db, "nicknames/" + key), null);
-                }catch(e){
-                    console.warn("Falha ao limpar nickname recusado:", e?.code || e);
                 }
             }
 
@@ -588,6 +635,8 @@ window.toggleAtivo = async function(uid, isAtivo){
                     ...dados,
                     emailLogin: emailLogin,
                     emailLoginDesativado: emailDesativado,
+                    status: "banido",
+                    senha: dados.senhaAntiga || "",
                     banidoEm: Date.now()
                 });
             }catch(e){
@@ -596,14 +645,6 @@ window.toggleAtivo = async function(uid, isAtivo){
         }
         await set(ref(db, "usuarios/" + uid), null);
         await rebuildNicknamesSimple();
-        if(dados?.nickname && dados?.cracha){
-            try{
-                const key = nickKey(dados.nickname, dados.cracha);
-                await set(ref(db, "nicknames/" + key), null);
-            }catch(e){
-                console.warn("Falha ao limpar nickname banido:", e?.code || e);
-            }
-        }
     }else{
         // Reativar usuário bloqueado existente
         await set(ref(db, "usuarios/" + uid + "/ativo"), true);
@@ -615,6 +656,80 @@ window.resetSenha = async function(uid){
     await set(ref(db, "usuarios/" + uid + "/senha"), "");
     await set(ref(db, "usuarios/" + uid + "/senhaReset"), true);
 };
+
+function iniciarListaBanidos(){
+    const banidosRef = ref(db, "usuariosBanidos");
+    onValue(banidosRef, snap=>{
+        const lista = document.getElementById("listaBanidos");
+        if(!lista) return;
+        lista.innerHTML = "";
+        const selectAll = document.getElementById("banidosSelectAll");
+        if(selectAll) selectAll.checked = false;
+        snap.forEach(child=>{
+            const b = child.val() || {};
+            const uid = child.key;
+            const nick = b.nickname || "-";
+            const cracha = b.cracha || "-";
+            const email = b.emailLogin || "-";
+            const senha = b.senha || "-";
+            const data = b.banidoEm ? new Date(b.banidoEm).toLocaleString() : "-";
+            let div = document.createElement("div");
+            div.className = "usuarioItem";
+            div.innerHTML = `
+            <div class="fbUserRow">
+                <label class="banidoCheck">
+                    <input type="checkbox" class="banidoCheckbox" data-uid="${uid}">
+                </label>
+                <div class="fbLeft">
+                    <div class="fbAvatarCol">
+                        <div class="fbAvatar small">${formatarNick(nick).slice(0,1)}</div>
+                    </div>
+                    <div class="fbInfo">
+                        <div class="fbName">${formatarNick(nick)}</div>
+                        <div class="fbMeta">Crachá: ${cracha}</div>
+                        <div class="fbMeta">Email: ${email}</div>
+                        <div class="fbMeta">Senha: ${senha}</div>
+                        <div class="fbMeta">Banido em: ${data}</div>
+                    </div>
+                </div>
+                <div class="nivelBadge nivel-admin">BANIDO</div>
+            </div>
+            <div class="fbUserActions">
+                <button class="fbBtn fbReject" onclick="apagarBanido('${uid}')">Apagar</button>
+            </div>
+            `;
+            lista.appendChild(div);
+        });
+    });
+}
+
+window.apagarBanido = async function(uid){
+    if(!uid) return;
+    await set(ref(db, "usuariosBanidos/" + uid), null);
+}
+
+window.apagarBanidosSelecionados = async function(){
+    const checks = Array.from(document.querySelectorAll(".banidoCheckbox:checked"));
+    if(checks.length === 0) return;
+    const ok = confirm("Tem certeza que quer apagar os dados de banimento? A limpeza dos usuários Firebase foi feita corretamente?");
+    if(!ok) return;
+    for(const c of checks){
+        const uid = c.getAttribute("data-uid");
+        if(uid){
+            await set(ref(db, "usuariosBanidos/" + uid), null);
+        }
+    }
+}
+
+const banidosSelectAll = document.getElementById("banidosSelectAll");
+if(banidosSelectAll){
+    banidosSelectAll.addEventListener("change", ()=>{
+        const checked = banidosSelectAll.checked;
+        document.querySelectorAll(".banidoCheckbox").forEach(cb=>{
+            cb.checked = checked;
+        });
+    });
+}
 function iniciarListaUsuarios(){
 
     const usuariosRef = ref(db,"usuarios");
@@ -1682,6 +1797,19 @@ function abrirSubPagina(){
 
 }
 
+function abrirBanidos(){
+    const panel = document.getElementById("banidosPanel");
+    if(panel){
+        panel.classList.add("open");
+        iniciarListaBanidos();
+    }
+}
+
+function fecharBanidos(){
+    const panel = document.getElementById("banidosPanel");
+    if(panel) panel.classList.remove("open");
+}
+
 function fecharSubPagina(){
 
     document
@@ -2112,14 +2240,16 @@ async function verificarNickDisponivel(){
     }
     try{
         const key = nickOnlyKey(nick);
-        const snap = await get(ref(db, "nicknamesSimple/" + key));
-        if(!snap.exists()){
-            setNickStatus("ok");
-            return;
+        let usado = false;
+        const authSnap = await get(ref(db, "nicknamesAuth/" + key));
+        if(authSnap.exists()) usado = true;
+        const solicitSnap = await get(ref(db, "nicknamesSolic/" + key));
+        if(solicitSnap.exists()){
+            const val = solicitSnap.val();
+            const count = (val && typeof val.count === "number") ? val.count : 1;
+            if(count > 0) usado = true;
         }
-        const val = snap.val();
-        const count = (val && typeof val.count === "number") ? val.count : 1;
-        setNickStatus(count > 0 ? "bad" : "ok");
+        setNickStatus(usado ? "bad" : "ok");
     }catch(e){
         // sem permissão para checar: não exibe status
         setNickStatus("");
@@ -2505,6 +2635,9 @@ window.logout = async function() {
     if(document.getElementById("pendingScreen")){
         document.getElementById("pendingScreen").style.display = "none";
     }
+    if(document.getElementById("bannedScreen")){
+        document.getElementById("bannedScreen").style.display = "none";
+    }
     appReady = false;
     updateMobileOverlaysState();
 }
@@ -2671,51 +2804,33 @@ window.cadastrar = async function(){
         }catch(e){
             console.warn("Sem permissão para validar duplicidade:", e?.code || e);
         }
-
-        if(!window.cadastroAuth){
-            const cadastroApp = initializeApp(firebaseConfig, "cadastroApp");
-            window.cadastroAuth = getAuth(cadastroApp);
-            window.cadastroDb = getDatabase(cadastroApp);
-        }
-
-        let uid = "";
-        if(!nickEmUso){
-            try{
-                const emailFake = nick + "@sistema.com";
-                const cred = await window.createUserWithEmailAndPassword(window.cadastroAuth, emailFake, senha);
-                uid = cred.user.uid;
-            }catch(e){
-                console.error("Erro criando auth pendente:", e);
-                const code = e?.code || "";
-                let msg = "Não foi possível criar o usuário.";
-                if(code === "auth/weak-password"){
-                    msg = "Senha fraca. Use pelo menos 6 caracteres.";
-                }else if(code === "auth/invalid-email"){
-                    msg = "E-mail inválido (nickname inválido).";
-                }else if(code === "auth/email-already-in-use"){
-                    msg = "Nickname já existe. Solicitação enviada para revisão.";
-                    nickEmUso = true;
-                }else if(code === "auth/operation-not-allowed"){
-                    msg = "Cadastro desabilitado no Firebase (habilite Email/Senha).";
-                }else if(code === "auth/unauthorized-domain"){
-                    msg = "Domínio não autorizado. Use http://localhost ou adicione o domínio no Firebase Auth.";
-                }else if(code){
-                    msg = "Erro ao criar usuário: " + code;
-                }
-                mostrarNotificacao(msg);
-                if(code !== "auth/email-already-in-use"){
-                    if(btn) btn.disabled = false;
-                    return;
-                }
+        try{
+            const authSnap = await get(ref(db, "nicknamesAuth/" + nickOnlyKey(nick)));
+            if(authSnap.exists()){
+                nickEmUso = true;
             }
+        }catch(e){
+            // ignore
         }
 
-        const solicitacaoRef = push(ref(window.cadastroDb || db, "solicitaçõesCadastro"));
-        const nickKeyStr = nickKey(nick, cracha);
+        // bloqueia somente se nickname + cracha ja existe em solicitacoes
+        try{
+            const keyCracha = nickCrachaKey(nick, cracha);
+            const snapCracha = await get(ref(db, "nicknamesSolicCracha/" + keyCracha));
+            if(snapCracha.exists()){
+                mostrarNotificacao("Cadastro já efetuado para esse crachá.");
+                if(btn) btn.disabled = false;
+                return;
+            }
+        }catch(e){
+            console.warn("Sem permissão para validar cracha duplicado:", e?.code || e);
+        }
+
+        const solicitacaoRef = push(ref(db, "solicitaçõesCadastro"));
 
         try{
             await set(solicitacaoRef, {
-                uid: uid,
+                uid: "",
                 nickname: nick,
                 senha: senha,
                 cracha: cracha,
@@ -2724,19 +2839,9 @@ window.cadastrar = async function(){
                 duplicado: nickEmUso,
                 criadoEm: Date.now()
             });
-            await set(ref(window.cadastroDb || db, "nicknames/" + nickKeyStr), {
-                nickname: nick,
-                cracha: cracha,
-                status: "pendente",
-                criadoEm: Date.now()
-            });
-        }finally{
-            try{
-                await signOut(window.cadastroAuth);
-            }catch(e){
-                console.warn("Falha ao finalizar sessão de cadastro:", e?.code || e);
-            }
-        }
+            await ajustarNickSolicCount(nick, 1);
+            await marcarSolicCracha(nick, cracha);
+        }finally{}
 
         console.log("Cadastro enviado");
 
@@ -2795,6 +2900,14 @@ function mostrarPending(nick){
     updateMobileOverlaysState();
 }
 
+function mostrarBanido(){
+    const banned = document.getElementById("bannedScreen");
+    const authScreen = document.getElementById("authScreen");
+    if(authScreen) authScreen.style.display = "none";
+    if(banned) banned.style.display = "flex";
+    updateMobileOverlaysState();
+}
+
 window.toggleSenha = function(inputId, btn){
     const input = document.getElementById(inputId);
     if(!input) return;
@@ -2811,6 +2924,55 @@ function nickKey(nick, cracha){
 function nickOnlyKey(nick){
     const base = (nick || "").toLowerCase();
     return encodeURIComponent(base).replace(/\./g, "%2E");
+}
+
+function nickCrachaKey(nick, cracha){
+    const base = (nick || "").toLowerCase() + "|" + (cracha || "").toString().trim();
+    return encodeURIComponent(base).replace(/\./g, "%2E");
+}
+
+async function ajustarNickSolicCount(nick, delta){
+    const key = nickOnlyKey(nick);
+    const node = ref(db, "nicknamesSolic/" + key);
+    try{
+        await runTransaction(node, current => {
+            let count = 0;
+            if(current && typeof current === "object" && typeof current.count === "number"){
+                count = current.count;
+            }else if(typeof current === "number"){
+                count = current;
+            }
+            count = count + delta;
+            if(count <= 0){
+                return null;
+            }
+            return { nickname: (nick || "").toLowerCase(), count: count };
+        });
+    }catch(e){
+        console.warn("Falha ao ajustar nicknamesSolic:", e?.code || e);
+    }
+}
+
+async function marcarSolicCracha(nick, cracha){
+    const key = nickCrachaKey(nick, cracha);
+    try{
+        await set(ref(db, "nicknamesSolicCracha/" + key), {
+            nickname: (nick || "").toLowerCase(),
+            cracha: (cracha || "").toString().trim(),
+            criadoEm: Date.now()
+        });
+    }catch(e){
+        console.warn("Falha ao marcar nicknamesSolicCracha:", e?.code || e);
+    }
+}
+
+async function desmarcarSolicCracha(nick, cracha){
+    const key = nickCrachaKey(nick, cracha);
+    try{
+        await set(ref(db, "nicknamesSolicCracha/" + key), null);
+    }catch(e){
+        console.warn("Falha ao limpar nicknamesSolicCracha:", e?.code || e);
+    }
 }
 
 async function rebuildNicknamesSimple(){
@@ -2864,6 +3026,127 @@ async function rebuildNicknamesSimple(){
     }
 }
 
+async function rebuildNicknamesAuth(){
+    try{
+        const nivelSnap = await get(ref(db, "usuarios/" + auth.currentUser.uid + "/nivel"));
+        if(!nivelSnap.exists() || nivelSnap.val() !== "admin") return;
+    }catch(e){
+        return;
+    }
+    const names = new Set();
+    try{
+        const usersSnap = await get(ref(db, "usuarios"));
+        if(usersSnap.exists()){
+            usersSnap.forEach(child=>{
+                const u = child.val();
+                if(u?.ativo === false) return;
+                const nick = (u?.nickname || "").toLowerCase();
+                if(nick) names.add(nick);
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao ler usuarios para nicknamesAuth:", e?.code || e);
+    }
+    try{
+        const currentSnap = await get(ref(db, "nicknamesAuth"));
+        if(currentSnap.exists()){
+            currentSnap.forEach(child=>{
+                const v = child.val();
+                const nick = (v?.nickname || "").toLowerCase();
+                if(!nick || !names.has(nick)){
+                    set(ref(db, "nicknamesAuth/" + child.key), null);
+                }
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao limpar nicknamesAuth:", e?.code || e);
+    }
+    try{
+        for(const nick of names){
+            const key = nickOnlyKey(nick);
+            await set(ref(db, "nicknamesAuth/" + key), {
+                nickname: nick,
+                criadoEm: Date.now()
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao gravar nicknamesAuth:", e?.code || e);
+    }
+}
+
+async function rebuildNicknamesSolic(){
+    try{
+        const nivelSnap = await get(ref(db, "usuarios/" + auth.currentUser.uid + "/nivel"));
+        if(!nivelSnap.exists() || nivelSnap.val() !== "admin") return;
+    }catch(e){
+        return;
+    }
+    const counts = {};
+    const crachaSet = new Set();
+    try{
+        const solicitSnap = await get(ref(db, "solicitaçõesCadastro"));
+        if(solicitSnap.exists()){
+            solicitSnap.forEach(child=>{
+                const s = child.val();
+                if(!s || s.status !== "pendente") return;
+                const nick = (s.nickname || "").toLowerCase();
+                if(nick){
+                    counts[nick] = (counts[nick] || 0) + 1;
+                }
+                if(s.nickname && s.cracha){
+                    crachaSet.add(nickCrachaKey(s.nickname, s.cracha));
+                }
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao ler solicitações para nicknamesSolic:", e?.code || e);
+    }
+    try{
+        const currentSnap = await get(ref(db, "nicknamesSolic"));
+        if(currentSnap.exists()){
+            currentSnap.forEach(child=>{
+                const v = child.val();
+                const nick = (v?.nickname || "").toLowerCase();
+                if(!nick || !counts[nick]){
+                    set(ref(db, "nicknamesSolic/" + child.key), null);
+                }
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao limpar nicknamesSolic:", e?.code || e);
+    }
+    try{
+        for(const nick in counts){
+            const key = nickOnlyKey(nick);
+            await set(ref(db, "nicknamesSolic/" + key), {
+                nickname: nick,
+                count: counts[nick]
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao gravar nicknamesSolic:", e?.code || e);
+    }
+    try{
+        const currentCracha = await get(ref(db, "nicknamesSolicCracha"));
+        if(currentCracha.exists()){
+            currentCracha.forEach(child=>{
+                if(!crachaSet.has(child.key)){
+                    set(ref(db, "nicknamesSolicCracha/" + child.key), null);
+                }
+            });
+        }
+    }catch(e){
+        console.warn("Falha ao limpar nicknamesSolicCracha:", e?.code || e);
+    }
+    try{
+        for(const key of crachaSet){
+            await set(ref(db, "nicknamesSolicCracha/" + key), { key: key });
+        }
+    }catch(e){
+        console.warn("Falha ao gravar nicknamesSolicCracha:", e?.code || e);
+    }
+}
+
 async function ajustarNickCount(nick, delta){
     const key = nickOnlyKey(nick);
     const node = ref(db, "nicknamesSimple/" + key);
@@ -2888,8 +3171,10 @@ async function ajustarNickCount(nick, delta){
 
 window.voltarLogin = function(){
     const pending = document.getElementById("pendingScreen");
+    const banned = document.getElementById("bannedScreen");
     const authScreen = document.getElementById("authScreen");
     if(pending) pending.style.display = "none";
+    if(banned) banned.style.display = "none";
     if(authScreen) authScreen.style.display = "flex";
     updateMobileOverlaysState();
 }
@@ -2924,6 +3209,14 @@ onAuthStateChanged(auth, async (user) => {
         const snapshot = await get(ref(db, "usuarios/" + user.uid));
 
         if (!snapshot.exists()) {
+            try{
+                const banSnap = await get(ref(db, "usuariosBanidos/" + user.uid));
+                if(banSnap.exists()){
+                    mostrarBanido();
+                    await signOut(auth);
+                    return;
+                }
+            }catch(e){}
             mostrarPending(user.email ? user.email.split("@")[0] : "");
             await signOut(auth);
             return;
@@ -2991,6 +3284,8 @@ onAuthStateChanged(auth, async (user) => {
             iniciarSolicitacoesAdmin(); // ðŸ”¥ AQUI
             iniciarListaUsuarios();
             rebuildNicknamesSimple();
+            rebuildNicknamesAuth();
+            rebuildNicknamesSolic();
             if (adminPanel) adminPanel.style.display = "block";
         } else {
             if (adminBtn) adminBtn.style.display = "none";

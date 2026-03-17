@@ -268,11 +268,23 @@
         z-index: 40;
     }
 
+    #banidosPanel{
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        border-left: none;
+        border-top: 1px solid #16A34A40;
+        z-index: 41;
+    }
+
     #authBox,
     #chatOverlayBox,
     #nicknameBox,
     #pendingBox,
-    #cadastroBox {
+    #cadastroBox,
+    #bannedBox {
         width: 88vw;
         max-width: 360px;
     }
