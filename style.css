@@ -243,16 +243,21 @@ display:none;
 }
 
 .nickWrap{
+    position:relative;
     display:flex;
     align-items:center;
-    gap:6px;
 }
 
 .nickWrap input{
     flex:1;
+    padding-right:30px;
 }
 
 .nickStatus{
+    position:absolute;
+    right:8px;
+    top:50%;
+    transform:translateY(-50%);
     width:18px;
     height:18px;
     display:flex;
@@ -261,6 +266,7 @@ display:none;
     font-size:14px;
     opacity:0;
     transition:opacity 0.2s;
+    pointer-events:none;
 }
 
 .nickStatus.ok{
