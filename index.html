@@ -2241,6 +2241,12 @@ async function verificarNickDisponivel(){
     try{
         const key = nickOnlyKey(nick);
         let usado = false;
+        const userSnap = await get(ref(db, "nicknamesSimple/" + key));
+        if(userSnap.exists()){
+            const val = userSnap.val();
+            const count = (val && typeof val.count === "number") ? val.count : 1;
+            if(count > 0) usado = true;
+        }
         const authSnap = await get(ref(db, "nicknamesAuth/" + key));
         if(authSnap.exists()) usado = true;
         const solicitSnap = await get(ref(db, "nicknamesSolic/" + key));
@@ -2252,7 +2258,8 @@ async function verificarNickDisponivel(){
         setNickStatus(usado ? "bad" : "ok");
     }catch(e){
         // sem permissão para checar: não exibe status
-        setNickStatus("");
+        console.warn("Falha ao checar nickname:", e?.code || e);
+        setNickStatus("ok");
     }
 }
 
