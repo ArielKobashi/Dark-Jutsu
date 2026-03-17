@@ -466,8 +466,13 @@ window.aprovar = async function(id){
         const dados = snap.val();
         if(!dados) return;
 
-        const nível = document.getElementById("nivel_"+id).value;
+        const nivel = document.getElementById("nivel_"+id).value;
         let uid = dados.uid;
+        if(dados?.duplicado === true){
+            mostrarAdminAlert("Solicitação com nickname já existente. Apenas recusa é permitida.");
+            if(card) card.classList.remove("aprovadoPulse");
+            return;
+        }
         if(!uid){
             const emailFake = dados.nickname + "@sistema.com";
             // usa auth secundario para nao trocar a sessao do admin
@@ -500,9 +505,6 @@ window.aprovar = async function(id){
 
         await set(ref(db, "solicitaçõesCadastro/"+id+"/status"),"aprovado");
         await set(ref(db, "solicitaçõesCadastro/"+id), null);
-        if(dados?.nickname){
-            await ajustarNickCount(dados.nickname, -1);
-        }
 
         if(card){
             card.classList.add("slideOutRight");
@@ -542,9 +544,6 @@ window.recusar = async function(id){
 
             await set(ref(db,"solicitaçõesCadastro/"+id+"/status"),"recusado");
             await set(ref(db, "solicitaçõesCadastro/"+id), null);
-            if(dados?.nickname){
-                await ajustarNickCount(dados.nickname, -1);
-            }
             if(dados?.uid){
                 try{
                     await set(ref(db, "usuarios/" + dados.uid), null);
@@ -2649,13 +2648,14 @@ window.cadastrar = async function(){
 
     try{
         // cadastro não cria usuário no Auth; apenas solicita aprovação
+        let nickEmUso = false;
         try{
-            const key = nickKey(nick, cracha);
-            const nickSnap = await get(ref(db, "nicknames/" + key));
-            if(nickSnap.exists()){
-                mostrarNotificacao("Nickname já existe. Escolha outro.");
-                if(btn) btn.disabled = false;
-                return;
+            const key = nickOnlyKey(nick);
+            const snap = await get(ref(db, "nicknamesSimple/" + key));
+            if(snap.exists()){
+                const val = snap.val();
+                const count = (val && typeof val.count === "number") ? val.count : 1;
+                if(count > 0) nickEmUso = true;
             }
         }catch(e){
             console.warn("Sem permissão para validar duplicidade:", e?.code || e);
@@ -2667,20 +2667,52 @@ window.cadastrar = async function(){
             window.cadastroDb = getDatabase(cadastroApp);
         }
 
+        let uid = "";
+        if(!nickEmUso){
+            try{
+                const emailFake = nick + "@sistema.com";
+                const cred = await window.createUserWithEmailAndPassword(window.cadastroAuth, emailFake, senha);
+                uid = cred.user.uid;
+            }catch(e){
+                console.error("Erro criando auth pendente:", e);
+                const code = e?.code || "";
+                let msg = "Não foi possível criar o usuário.";
+                if(code === "auth/weak-password"){
+                    msg = "Senha fraca. Use pelo menos 6 caracteres.";
+                }else if(code === "auth/invalid-email"){
+                    msg = "E-mail inválido (nickname inválido).";
+                }else if(code === "auth/email-already-in-use"){
+                    msg = "Nickname já existe. Solicitação enviada para revisão.";
+                    nickEmUso = true;
+                }else if(code === "auth/operation-not-allowed"){
+                    msg = "Cadastro desabilitado no Firebase (habilite Email/Senha).";
+                }else if(code === "auth/unauthorized-domain"){
+                    msg = "Domínio não autorizado. Use http://localhost ou adicione o domínio no Firebase Auth.";
+                }else if(code){
+                    msg = "Erro ao criar usuário: " + code;
+                }
+                mostrarNotificacao(msg);
+                if(code !== "auth/email-already-in-use"){
+                    if(btn) btn.disabled = false;
+                    return;
+                }
+            }
+        }
+
         const solicitacaoRef = push(ref(window.cadastroDb || db, "solicitaçõesCadastro"));
         const nickKeyStr = nickKey(nick, cracha);
 
         try{
             await set(solicitacaoRef, {
-                uid: "",
+                uid: uid,
                 nickname: nick,
                 senha: senha,
                 cracha: cracha,
                 setor: setor,
                 status: "pendente",
+                duplicado: nickEmUso,
                 criadoEm: Date.now()
             });
-            await ajustarNickCount(nick, 1);
             await set(ref(window.cadastroDb || db, "nicknames/" + nickKeyStr), {
                 nickname: nick,
                 cracha: cracha,
@@ -2792,21 +2824,7 @@ async function rebuildNicknamesSimple(){
     }catch(e){
         console.warn("Falha ao ler usuarios para nicknamesSimple:", e?.code || e);
     }
-    try{
-        const solicitSnap = await get(ref(db, "solicitaçõesCadastro"));
-        if(solicitSnap.exists()){
-            solicitSnap.forEach(child=>{
-                const s = child.val();
-                if(s?.status !== "pendente") return;
-                const nick = (s?.nickname || "").toLowerCase();
-                if(nick){
-                    counts[nick] = (counts[nick] || 0) + 1;
-                }
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao ler solicitações para nicknamesSimple:", e?.code || e);
-    }
+    // nicknamesSimple considera apenas usuarios ativos
     try{
         const currentSnap = await get(ref(db, "nicknamesSimple"));
         if(currentSnap.exists()){
