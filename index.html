@@ -490,9 +490,6 @@ window.aprovar = async function(id){
             senhaAntiga: dados.senha || "",
             senhaReset: false
         });
-        if(dados?.nickname){
-            await ajustarNickCount(dados.nickname, 1);
-        }
         if(dados?.nickname && dados?.cracha){
             const key = nickKey(dados.nickname, dados.cracha);
             await set(ref(db, "nicknames/" + key), {
@@ -505,6 +502,7 @@ window.aprovar = async function(id){
 
         await set(ref(db, "solicitaçõesCadastro/"+id+"/status"),"aprovado");
         await set(ref(db, "solicitaçõesCadastro/"+id), null);
+        await rebuildNicknamesSimple();
 
         if(card){
             card.classList.add("slideOutRight");
@@ -544,6 +542,7 @@ window.recusar = async function(id){
 
             await set(ref(db,"solicitaçõesCadastro/"+id+"/status"),"recusado");
             await set(ref(db, "solicitaçõesCadastro/"+id), null);
+            await rebuildNicknamesSimple();
             if(dados?.uid){
                 try{
                     await set(ref(db, "usuarios/" + dados.uid), null);
@@ -581,10 +580,22 @@ window.toggleAtivo = async function(uid, isAtivo){
         }catch(e){
             console.warn("Falha ao ler usuário para banir:", e?.code || e);
         }
-        await set(ref(db, "usuarios/" + uid), null);
-        if(dados?.nickname){
-            await ajustarNickCount(dados.nickname, -1);
+        if(dados){
+            try{
+                const emailLogin = (dados.nickname || "") + "@sistema.com";
+                const emailDesativado = emailLogin + ".desativado";
+                await set(ref(db, "usuariosBanidos/" + uid), {
+                    ...dados,
+                    emailLogin: emailLogin,
+                    emailLoginDesativado: emailDesativado,
+                    banidoEm: Date.now()
+                });
+            }catch(e){
+                console.warn("Falha ao arquivar usuário banido:", e?.code || e);
+            }
         }
+        await set(ref(db, "usuarios/" + uid), null);
+        await rebuildNicknamesSimple();
         if(dados?.nickname && dados?.cracha){
             try{
                 const key = nickKey(dados.nickname, dados.cracha);
@@ -2815,6 +2826,7 @@ async function rebuildNicknamesSimple(){
         if(usersSnap.exists()){
             usersSnap.forEach(child=>{
                 const u = child.val();
+                if(u?.ativo === false) return;
                 const nick = (u?.nickname || "").toLowerCase();
                 if(nick){
                     counts[nick] = (counts[nick] || 0) + 1;
