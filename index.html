@@ -26,7 +26,6 @@
         <h2 class="authTitle">Login</h2>
         <input type="text" id="authNickname" placeholder="Nickname">
         <input type="password" id="authSenha" placeholder="Senha">
-        <input type="tel" id="authCracha" placeholder="Crachá (se aplicável)" inputmode="numeric" pattern="[0-9]*">
         <button onclick="login()">Entrar</button>
         <button onclick="abrirCadastro()">Cadastrar</button>
     </div>
@@ -37,10 +36,13 @@
 <div id="cadastroScreen" style="display:none;">
     <div id="cadastroBox">
         <h2>Primeiro Acesso</h2>
-        <input type="text" id="cadastroNickname" placeholder="Confirmar nickname">
+        <div class="nickWrap">
+            <input type="text" id="cadastroNickname" placeholder="Confirmar nickname">
+            <span id="nickStatus" class="nickStatus" aria-hidden="true"></span>
+        </div>
         <div class="senhaWrap">
             <input type="password" id="cadastroSenha" placeholder="Confirmar senha">
-            <button type="button" class="toggleSenha" onclick="toggleSenha('cadastroSenha', this)">ðŸ‘</button>
+            <button type="button" class="toggleSenha" onclick="toggleSenha('cadastroSenha', this)">&#128065;</button>
         </div>
         <input type="tel" id="cadastroCracha" placeholder="Número do crachá" inputmode="numeric" pattern="[0-9]*">
         <div class="cadastroSetor">
@@ -346,6 +348,13 @@ Usuários do Sistema
         <button onclick="fecharInfoCadastro()">Fechar</button>
     </div>
 </div>
+<div id="adminAlertModal">
+    <div class="modalBox">
+        <div class="modalTitle">Aviso</div>
+        <div id="adminAlertContent"></div>
+        <button onclick="fecharAdminAlert()">Fechar</button>
+    </div>
+</div>
 <!-- SPLIT: vendor-xlsx.html (3rd-party lib) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <!-- /SPLIT: vendor-xlsx.html -->
@@ -460,7 +469,7 @@ window.aprovar = async function(id){
         const nível = document.getElementById("nivel_"+id).value;
         let uid = dados.uid;
         if(!uid){
-            const emailFake = dados.cracha ? (dados.nickname + "." + dados.cracha + "@sistema.com") : (dados.nickname + "@sistema.com");
+            const emailFake = dados.nickname + "@sistema.com";
             // usa auth secundario para nao trocar a sessao do admin
             const cred = await window.createUserWithEmailAndPassword(window.adminAuth, emailFake, dados.senha);
             uid = cred.user.uid;
@@ -476,6 +485,15 @@ window.aprovar = async function(id){
             senhaAntiga: dados.senha || "",
             senhaReset: false
         });
+        if(dados?.nickname && dados?.cracha){
+            const key = nickKey(dados.nickname, dados.cracha);
+            await set(ref(db, "nicknames/" + key), {
+                nickname: dados.nickname,
+                cracha: dados.cracha,
+                status: "aprovado",
+                criadoEm: Date.now()
+            });
+        }
 
         await set(ref(db, "solicitaçõesCadastro/"+id+"/status"),"aprovado");
         await set(ref(db, "solicitaçõesCadastro/"+id), null);
@@ -488,8 +506,13 @@ window.aprovar = async function(id){
         mostrarNotificacao("Cadastro aprovado");
     }catch(e){
         console.error("Erro ao aprovar:", e);
-        const msg = (e && (e.code || e.message)) ? (e.code || e.message) : "Erro ao aprovar";
-        mostrarNotificacao(msg);
+        const code = e?.code || "";
+        if(code === "auth/email-already-in-use"){
+            mostrarAdminAlert("Nickname já existe no Auth. Recuse a solicitação ou escolha outro nickname.");
+        }else{
+            const msg = (e && (e.code || e.message)) ? (e.code || e.message) : "Erro ao aprovar";
+            mostrarNotificacao(msg);
+        }
         if(card) card.classList.remove("aprovadoPulse");
     }
 
@@ -520,6 +543,14 @@ window.recusar = async function(id){
                     console.warn("Falha ao limpar usuário recusado:", e?.code || e);
                 }
             }
+            if(dados?.nickname && dados?.cracha){
+                try{
+                    const key = nickKey(dados.nickname, dados.cracha);
+                    await set(ref(db, "nicknames/" + key), null);
+                }catch(e){
+                    console.warn("Falha ao limpar nickname recusado:", e?.code || e);
+                }
+            }
 
         },350);
     }
@@ -535,7 +566,22 @@ window.toggleAtivo = async function(uid, isAtivo){
     if(!uid) return;
     if(isAtivo){
         // Banir: remove da base de dados
+        let dados = null;
+        try{
+            const snap = await get(ref(db, "usuarios/" + uid));
+            dados = snap.val();
+        }catch(e){
+            console.warn("Falha ao ler usuário para banir:", e?.code || e);
+        }
         await set(ref(db, "usuarios/" + uid), null);
+        if(dados?.nickname && dados?.cracha){
+            try{
+                const key = nickKey(dados.nickname, dados.cracha);
+                await set(ref(db, "nicknames/" + key), null);
+            }catch(e){
+                console.warn("Falha ao limpar nickname banido:", e?.code || e);
+            }
+        }
     }else{
         // Reativar usuário bloqueado existente
         await set(ref(db, "usuarios/" + uid + "/ativo"), true);
@@ -2004,6 +2050,55 @@ window.fecharInfoCadastro = function(){
     if(modal) modal.style.display = "none";
 }
 
+window.mostrarAdminAlert = function(msg){
+    const modal = document.getElementById("adminAlertModal");
+    const content = document.getElementById("adminAlertContent");
+    if(!modal || !content) return;
+    content.textContent = msg || "";
+    modal.style.display = "flex";
+}
+
+window.fecharAdminAlert = function(){
+    const modal = document.getElementById("adminAlertModal");
+    if(modal) modal.style.display = "none";
+}
+
+let nickCheckTimer = null;
+function setNickStatus(state){
+    const el = document.getElementById("nickStatus");
+    if(!el) return;
+    el.classList.remove("ok","bad");
+    if(state === "ok"){
+        el.innerHTML = "&#10003;";
+        el.classList.add("ok");
+    }else if(state === "bad"){
+        el.innerHTML = "&#10007;";
+        el.classList.add("bad");
+    }else{
+        el.innerHTML = "";
+    }
+}
+
+async function verificarNickDisponivel(){
+    const nickEl = document.getElementById("cadastroNickname");
+    const crachaEl = document.getElementById("cadastroCracha");
+    if(!nickEl || !crachaEl) return;
+    const nick = nickEl.value.trim().toLowerCase();
+    const cracha = crachaEl.value.trim();
+    if(!nick || nick.length < 3 || !cracha){
+        setNickStatus("");
+        return;
+    }
+    try{
+        const key = nickKey(nick, cracha);
+        const snap = await get(ref(db, "nicknames/" + key));
+        setNickStatus(snap.exists() ? "bad" : "ok");
+    }catch(e){
+        // sem permissão para checar: não exibe status
+        setNickStatus("");
+    }
+}
+
 let appReady = false;
 
 window.focusSearchForMobile = function(){
@@ -2466,13 +2561,12 @@ window.login = async function(){
 
     let nick = document.getElementById("authNickname").value.trim().toLowerCase();
     let senha = document.getElementById("authSenha").value;
-    let cracha = document.getElementById("authCracha")?.value.trim() || "";
 
     window.ultimaSenhaLogin = senha;
 
     if(!nick || !senha) return alert("Preencha os campos");
 
-    let emailFake = cracha ? (nick + "." + cracha + "@sistema.com") : (nick + "@sistema.com");
+    let emailFake = nick + "@sistema.com";
 
     try{
         await signInWithEmailAndPassword(auth, emailFake, senha);
@@ -2537,41 +2631,14 @@ window.cadastrar = async function(){
     if(btn) btn.disabled = true;
 
     try{
-        const emailFake = nick + "." + cracha + "@sistema.com";
+        // cadastro não cria usuário no Auth; apenas solicita aprovação
         try{
-            const usersSnap = await get(ref(db, "usuarios"));
-            if(usersSnap.exists()){
-                let duplicado = false;
-                usersSnap.forEach(child=>{
-                    const u = child.val();
-                    const uNick = u?.nickname ? u.nickname.toLowerCase() : "";
-                    const uCracha = (u?.cracha || "").toString().trim();
-                    if(uNick === nick && (!uCracha || uCracha === cracha)){
-                        duplicado = true;
-                    }
-                });
-                if(duplicado){
-                    mostrarNotificacao("Nickname já existe. Escolha outro.");
-                    if(btn) btn.disabled = false;
-                    return;
-                }
-            }
-            const solicitSnap = await get(ref(db, "solicitaçõesCadastro"));
-            if(solicitSnap.exists()){
-                let duplicado = false;
-                solicitSnap.forEach(child=>{
-                    const s = child.val();
-                    const sNick = s?.nickname ? s.nickname.toLowerCase() : "";
-                    const sCracha = (s?.cracha || "").toString().trim();
-                    if(sNick === nick && sCracha === cracha){
-                        duplicado = true;
-                    }
-                });
-                if(duplicado){
-                    mostrarNotificacao("Nickname já solicitado. Aguarde aprovação.");
-                    if(btn) btn.disabled = false;
-                    return;
-                }
+            const key = nickKey(nick, cracha);
+            const nickSnap = await get(ref(db, "nicknames/" + key));
+            if(nickSnap.exists()){
+                mostrarNotificacao("Nickname já existe. Escolha outro.");
+                if(btn) btn.disabled = false;
+                return;
             }
         }catch(e){
             console.warn("Sem permissão para validar duplicidade:", e?.code || e);
@@ -2583,40 +2650,22 @@ window.cadastrar = async function(){
             window.cadastroDb = getDatabase(cadastroApp);
         }
 
-        let uid = null;
-        try{
-            const cred = await window.createUserWithEmailAndPassword(window.cadastroAuth, emailFake, senha);
-            uid = cred.user.uid;
-        }catch(e){
-            console.error("Erro criando auth pendente:", e);
-            const code = e?.code || "";
-            let msg = "Não foi possível criar o usuário.";
-            if(code === "auth/weak-password"){
-                msg = "Senha fraca. Use pelo menos 6 caracteres.";
-            }else if(code === "auth/invalid-email"){
-                msg = "E-mail inválido (nickname inválido).";
-            }else if(code === "auth/email-already-in-use"){
-                msg = "Cadastro já existe para este nickname e crachá.";
-            }else if(code === "auth/operation-not-allowed"){
-                msg = "Cadastro desabilitado no Firebase (habilite Email/Senha).";
-            }else if(code === "auth/unauthorized-domain"){
-                msg = "Domínio não autorizado. Use http://localhost ou adicione o domínio no Firebase Auth.";
-            }else if(code){
-                msg = "Erro ao criar usuário: " + code;
-            }
-            mostrarNotificacao(msg);
-            return;
-        }
-
         const solicitacaoRef = push(ref(window.cadastroDb || db, "solicitaçõesCadastro"));
+        const nickKeyStr = nickKey(nick, cracha);
 
         try{
             await set(solicitacaoRef, {
-                uid: uid,
+                uid: "",
                 nickname: nick,
                 senha: senha,
                 cracha: cracha,
                 setor: setor,
+                status: "pendente",
+                criadoEm: Date.now()
+            });
+            await set(ref(window.cadastroDb || db, "nicknames/" + nickKeyStr), {
+                nickname: nick,
+                cracha: cracha,
                 status: "pendente",
                 criadoEm: Date.now()
             });
@@ -2657,14 +2706,13 @@ window.cadastrar = async function(){
 window.abrirCadastro = function(){
     const authNick = document.getElementById("authNickname").value.trim().toLowerCase();
     const authSenha = document.getElementById("authSenha").value;
-    const authCracha = document.getElementById("authCracha")?.value.trim() || "";
     const cadastro = document.getElementById("cadastroScreen");
     const authScreen = document.getElementById("authScreen");
     if(cadastro) cadastro.style.display = "flex";
     if(authScreen) authScreen.style.display = "none";
     document.getElementById("cadastroNickname").value = capitalizarPrimeira(authNick);
     document.getElementById("cadastroSenha").value = authSenha;
-    document.getElementById("cadastroCracha").value = authCracha;
+    setNickStatus("");
     updateMobileOverlaysState();
 };
 
@@ -2691,7 +2739,12 @@ window.toggleSenha = function(inputId, btn){
     if(!input) return;
     const isPass = input.type === "password";
     input.type = isPass ? "text" : "password";
-    if(btn) btn.textContent = isPass ? "ðŸ™ˆ" : "ðŸ‘";
+    if(btn) btn.innerHTML = isPass ? "&#128584;" : "&#128065;";
+}
+
+function nickKey(nick, cracha){
+    const base = (nick || "").toLowerCase() + "|" + (cracha || "").toString().trim();
+    return encodeURIComponent(base).replace(/\./g, "%2E");
 }
 
 window.voltarLogin = function(){
@@ -2952,6 +3005,19 @@ senhaInput.addEventListener("keydown", e=>{
         login();
     }
 });
+
+const cadastroNickInput = document.getElementById("cadastroNickname");
+const cadastroCrachaInput = document.getElementById("cadastroCracha");
+function agendarChecagemNick(){
+    if(nickCheckTimer) clearTimeout(nickCheckTimer);
+    nickCheckTimer = setTimeout(verificarNickDisponivel, 250);
+}
+if(cadastroNickInput){
+    cadastroNickInput.addEventListener("input", agendarChecagemNick);
+}
+if(cadastroCrachaInput){
+    cadastroCrachaInput.addEventListener("input", agendarChecagemNick);
+}
 
 function iniciarChat(){
 

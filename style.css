@@ -242,6 +242,37 @@ display:none;
     text-align:center;
 }
 
+.nickWrap{
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+
+.nickWrap input{
+    flex:1;
+}
+
+.nickStatus{
+    width:18px;
+    height:18px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:14px;
+    opacity:0;
+    transition:opacity 0.2s;
+}
+
+.nickStatus.ok{
+    color:#42B72A;
+    opacity:1;
+}
+
+.nickStatus.bad{
+    color:#F02849;
+    opacity:1;
+}
+
 .senhaWrap{
     display:flex;
     align-items:center;
@@ -296,6 +327,34 @@ display:none;
 }
 
 #cadastroInfoModal .modalTitle{
+    font-size:13px;
+    font-weight:bold;
+    color:#9A5CFF;
+    margin-bottom:8px;
+}
+
+#adminAlertModal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.55);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:60;
+}
+
+#adminAlertModal .modalBox{
+    background:#15151D;
+    border:1px solid #7A3CFF;
+    border-radius:10px;
+    padding:16px;
+    width:320px;
+    color:#E6E6E6;
+    font-size:12px;
+    text-align:center;
+}
+
+#adminAlertModal .modalTitle{
     font-size:13px;
     font-weight:bold;
     color:#9A5CFF;

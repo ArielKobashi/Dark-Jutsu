@@ -277,6 +277,17 @@
         max-width: 360px;
     }
 
+    .nickStatus{
+        width:20px;
+        height:20px;
+        font-size:16px;
+    }
+
+    #adminAlertModal .modalBox{
+        width:88vw;
+        max-width:360px;
+    }
+
     .authLogo {
         width: 120px;
         height: 120px;
