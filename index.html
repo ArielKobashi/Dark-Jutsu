@@ -44,14 +44,14 @@
             <input type="password" id="cadastroSenha" placeholder="Confirmar senha">
             <button type="button" class="toggleSenha" onclick="toggleSenha('cadastroSenha', this)">&#128065;</button>
         </div>
-        <input type="tel" id="cadastroCracha" placeholder="Número do crachá" inputmode="numeric" pattern="[0-9]*">
+        <input type="tel" id="cadastroCracha" placeholder="N�mero do crach�" inputmode="numeric" pattern="[0-9]*">
         <div class="cadastroSetor">
             <div class="cadastroSetorLabel">Setor</div>
             <div class="cadastroSetorGrid">
                 <label><input type="radio" name="setor" value="Administrativo"> Administrativo</label>
                 <label><input type="radio" name="setor" value="Almoxarifado"> Almoxarifado</label>
-                <label><input type="radio" name="setor" value="Supervisão"> Supervisão</label>
-                <label><input type="radio" name="setor" value="Operação"> Operação</label>
+                <label><input type="radio" name="setor" value="Supervis�o"> Supervis�o</label>
+                <label><input type="radio" name="setor" value="Opera��o"> Opera��o</label>
             </div>
         </div>
         <button id="btnConfirmarCadastro" onclick="cadastrar()">Confirmar Cadastro</button>
@@ -64,11 +64,11 @@
 <div id="pendingScreen" style="display:none;">
     <div id="pendingBox">
         <h2>Aguardando Cadastro</h2>
-        <p>Sua solicitação foi enviada com sucesso.</p>
-        <p>Agora seu acesso fica bloqueado até a aprovação do administrador.</p>
-        <p>Assim que aprovado, você poderá entrar normalmente com seu login e senha.</p>
-        <p>O prazo máximo de aprovação costuma ser de até 12 horas corridas.</p>
-        <p>Se tiver urgência, avise o administrador para liberar o acesso.</p>
+        <p>Sua solicita��o foi enviada com sucesso.</p>
+        <p>Agora seu acesso fica bloqueado at� a aprova��o do administrador.</p>
+        <p>Assim que aprovado, voc� poder� entrar normalmente com seu login e senha.</p>
+        <p>O prazo m�ximo de aprova��o costuma ser de at� 12 horas corridas.</p>
+        <p>Se tiver urg�ncia, avise o administrador para liberar o acesso.</p>
         <button onclick="voltarLogin()">Voltar ao Login</button>
     </div>
 </div>
@@ -77,8 +77,8 @@
 <!-- SPLIT: banned.html (usuario banido) -->
 <div id="bannedScreen" style="display:none;">
     <div id="bannedBox">
-        <h2>Você foi banido.</h2>
-        <div class="bannedSkull">💀</div>
+        <h2>Voc� foi banido.</h2>
+        <div class="bannedSkull">??</div>
         <button onclick="voltarLogin()">Voltar ao Login</button>
     </div>
 </div>
@@ -98,7 +98,7 @@
 <!-- SPLIT: main.html (estoque table + magnet + relatorio) -->
 <div id="main">
 
-    <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descrição">
+    <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descri��o">
 
     <div id="tableContainer">
         <table>
@@ -122,8 +122,8 @@
                         <div class="headerContent">
                             <span class="titulo">Protheus</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">?</span>
+                                <span class="setaDown">?</span>
                             </span>
                         </div>
                     </th>
@@ -132,38 +132,38 @@
                         <div class="headerContent">
                             <span class="titulo">Cooperat</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">?</span>
+                                <span class="setaDown">?</span>
                             </span>
                         </div>
                     </th>
 
                     <th data-col="armazem">
                         <div class="headerContent">
-                            <span class="titulo">Armazém</span>
+                            <span class="titulo">Armaz�m</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">?</span>
+                                <span class="setaDown">?</span>
                             </span>
                         </div>
                     </th>
 
                     <th data-col="descricao">
                         <div class="headerContent">
-                            <span class="titulo">Descrição</span>
+                            <span class="titulo">Descri��o</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">?</span>
+                                <span class="setaDown">?</span>
                             </span>
                         </div>
                     </th>
 
                     <th data-col="endereco">
                         <div class="headerContent">
-                            <span class="titulo">Endereço</span>
+                            <span class="titulo">Endere�o</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">?</span>
+                                <span class="setaDown">?</span>
                             </span>
                         </div>
                     </th>
@@ -172,8 +172,8 @@
                         <div class="headerContent">
                             <span class="titulo">Saldo</span>
                             <span class="setas">
-                                <span class="setaUp">▲</span>
-                                <span class="setaDown">▼</span>
+                                <span class="setaUp">?</span>
+                                <span class="setaDown">?</span>
                             </span>
                         </div>
                     </th>
@@ -187,7 +187,7 @@
 
 <!-- MAGNET + RELATORIO ABAIXO DA TABELA -->
 
-<div id="magnetIcon" title="Modo Ímã">
+<div id="magnetIcon" title="Modo �m�">
 
 <svg 
 viewBox="0 0 640 640"
@@ -201,7 +201,7 @@ xmlns="http://www.w3.org/2000/svg">
 
 </div>
 
-<button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relatório</button>
+<button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relat�rio</button>
 
 </div> <!-- FECHA #main -->
 <!-- /SPLIT: main.html -->
@@ -242,7 +242,7 @@ stroke-linecap="round"/>
 
 <span class="subTitle">Painel Administrativo</span>
 <button class="banidosBtn" onclick="abrirBanidos()" title="Banidos">
-    <span class="skullBadge">💀</span>
+    <span class="skullBadge">??</span>
 </button>
 
 <div class="subClose" id="btnFecharAdmin" onclick="fecharSubPagina()">&#10006;</div>
@@ -251,7 +251,7 @@ stroke-linecap="round"/>
 
 <div class="fbAdminIntro">
     <div class="fbAdminTitle">Central de Cadastros</div>
-    <div class="fbAdminSubtitle">Aceite ou recuse solicitações e defina o nível da conta.</div>
+    <div class="fbAdminSubtitle">Aceite ou recuse solicita��es e defina o n�vel da conta.</div>
 </div>
 
 <div class="subContent">
@@ -259,7 +259,7 @@ stroke-linecap="round"/>
 <div class="adminSection fbPanel">
 
 <div class="adminTitle fbPanelHeader">
-Solicitações de Cadastro
+Solicita��es de Cadastro
 <span id="badgeSolicitacoes">0</span>
 </div>
 
@@ -269,7 +269,7 @@ Solicitações de Cadastro
 <div class="adminSection fbPanel">
 
 <div class="adminTitle fbPanelHeader">
-Usuários do Sistema
+Usu�rios do Sistema
 </div>
 
 <div id="listaUsuarios"></div>
@@ -284,7 +284,7 @@ Usuários do Sistema
 <!-- SPLIT: banidos-panel.html (admin overlay) -->
 <div id="banidosPanel" class="fbBanidos">
     <div class="subHeader">
-        <span class="subTitle">Usuários Banidos</span>
+        <span class="subTitle">Usu�rios Banidos</span>
         <div class="subClose" onclick="fecharBanidos()">&#10006;</div>
     </div>
     <div class="subContent">
@@ -312,13 +312,13 @@ Usuários do Sistema
         <button onclick="carregarPlanilha('cooperat')">Cooperat.xlsx</button>
         <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
         <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
-        <button onclick="carregarPlanilha('saldoEndereço')">Saldo por Endereço.xlsx</button>
+        <button onclick="carregarPlanilha('saldoEndere�o')">Saldo por Endere�o.xlsx</button>
 
         <input type="file" id="fileInput" style="display:none" accept=".xlsx">
         <hr>
         <button onclick="atualizarBanco()">Atualizar Banco</button>
         <div style="margin-top:6px; font-size:10px; text-align:center;">
-        Última atualização:
+        �ltima atualiza��o:
         <div id="lastUpdate" style="opacity:0.7;"></div>
         </div>
     </div>
@@ -336,7 +336,7 @@ Usuários do Sistema
         </label>
         <label class="toggleItem">
             <input type="checkbox" id="ignoreSpaces">
-            <span>Ignorar Espaços</span>
+            <span>Ignorar Espa�os</span>
         </label>
         <label class="toggleItem">
             <input type="checkbox" id="mostrarDadosMortos">
@@ -360,16 +360,16 @@ Usuários do Sistema
     <!-- SPLIT: chat.html (chat box) -->
     <div id="chatWrap">
         <div id="chatRooms">
-            <button class="roomBtn room-red active" data-room="publica" title="Sala pública" aria-label="Sala pública" onclick="trocarSala('publica')"></button>
+            <button class="roomBtn room-red active" data-room="publica" title="Sala p�blica" aria-label="Sala p�blica" onclick="trocarSala('publica')"></button>
             <button class="roomBtn room-yellow" data-room="sala2" title="Sala Privada 1" aria-label="Sala Privada 1" onclick="trocarSala('sala2')"></button>
             <button class="roomBtn room-blue" data-room="sala3" title="Sala Privada 2" aria-label="Sala Privada 2" onclick="trocarSala('sala3')"></button>
         </div>
         <div id="chatBox">
-            <button id="chatClearBtn" title="Limpar mensagens" onclick="limparMensagensSala()">🗑️</button>
+            <button id="chatClearBtn" title="Limpar mensagens" onclick="limparMensagensSala()">???</button>
             <div id="chatMessages"></div>
             <div id="chatTyping" aria-live="polite"></div>
-            <div id="chatPublicGate" role="button" aria-label="Abrir sala pública" onclick="abrirSalaPublica()">
-                <span>Toque para abrir a sala pública</span>
+            <div id="chatPublicGate" role="button" aria-label="Abrir sala p�blica" onclick="abrirSalaPublica()">
+                <span>Toque para abrir a sala p�blica</span>
             </div>
 
             <div id="chatInputArea">
@@ -399,7 +399,7 @@ Usuários do Sistema
     <div class="modalBox">
         <div class="modalTitle">
             Aviso
-            <span class="modalCloseX" onclick="fecharAdminAlert()">✕</span>
+            <span class="modalCloseX" onclick="fecharAdminAlert()">?</span>
         </div>
         <div id="adminAlertContent"></div>
         <div id="adminAlertActions" class="adminAlertActions"></div>
@@ -420,7 +420,7 @@ let planilhas = {
     cooperat: null,
     incluir: null,
     saldoAtual: null,
-    saldoEndereço: null
+    saldoEndere�o: null
 };
 
 let dados = [];
@@ -512,7 +512,7 @@ window.aprovar = async function(id){
     card.classList.add("aprovadoPulse");
 
     try{
-        const snap = await get(ref(db, "solicitaçõesCadastro/"+id));
+        const snap = await get(ref(db, "solicita��esCadastro/"+id));
         const dados = snap.val();
         if(!dados) return;
 
@@ -565,8 +565,8 @@ window.aprovar = async function(id){
         }catch(e){
             console.warn("Falha ao gravar nicknamesAuth:", e?.code || e);
         }
-        await set(ref(db, "solicitaçõesCadastro/"+id+"/status"),"aprovado");
-        await set(ref(db, "solicitaçõesCadastro/"+id), null);
+        await set(ref(db, "solicita��esCadastro/"+id+"/status"),"aprovado");
+        await set(ref(db, "solicita��esCadastro/"+id), null);
         await ajustarNickSolicCount(dados.nickname, -1);
         await desmarcarSolicCracha(dados.nickname, dados.cracha);
         await rebuildNicknamesSimple();
@@ -581,7 +581,7 @@ window.aprovar = async function(id){
         console.error("Erro ao aprovar:", e);
         const code = e?.code || "";
         if(code === "auth/email-already-in-use"){
-            mostrarAdminAlert("Nickname já existe no Auth. Recuse a solicitação ou escolha outro nickname.");
+            mostrarAdminAlert("Nickname j� existe no Auth. Recuse a solicita��o ou escolha outro nickname.");
         }else{
             const msg = (e && (e.code || e.message)) ? (e.code || e.message) : "Erro ao aprovar";
             mostrarNotificacao(msg);
@@ -601,14 +601,14 @@ window.recusar = async function(id){
 
             let dados = null;
             try{
-                const snap = await get(ref(db, "solicitaçõesCadastro/"+id));
+                const snap = await get(ref(db, "solicita��esCadastro/"+id));
                 dados = snap.val();
             }catch(e){
-                console.warn("Falha ao ler solicitação para recusa:", e?.code || e);
+                console.warn("Falha ao ler solicita��o para recusa:", e?.code || e);
             }
 
-            await set(ref(db,"solicitaçõesCadastro/"+id+"/status"),"recusado");
-            await set(ref(db, "solicitaçõesCadastro/"+id), null);
+            await set(ref(db,"solicita��esCadastro/"+id+"/status"),"recusado");
+            await set(ref(db, "solicita��esCadastro/"+id), null);
             await ajustarNickSolicCount(dados.nickname, -1);
             await desmarcarSolicCracha(dados.nickname, dados.cracha);
             await rebuildNicknamesSimple();
@@ -616,7 +616,7 @@ window.recusar = async function(id){
                 try{
                     await set(ref(db, "usuarios/" + dados.uid), null);
                 }catch(e){
-                    console.warn("Falha ao limpar usuário recusado:", e?.code || e);
+                    console.warn("Falha ao limpar usu�rio recusado:", e?.code || e);
                 }
             }
 
@@ -639,7 +639,7 @@ window.toggleAtivo = async function(uid, isAtivo){
             const snap = await get(ref(db, "usuarios/" + uid));
             dados = snap.val();
         }catch(e){
-            console.warn("Falha ao ler usuário para banir:", e?.code || e);
+            console.warn("Falha ao ler usu�rio para banir:", e?.code || e);
         }
             if(dados){
                 try{
@@ -658,13 +658,13 @@ window.toggleAtivo = async function(uid, isAtivo){
                         criadoEm: Date.now()
                     });
                 }catch(e){
-                    console.warn("Falha ao arquivar usuário banido:", e?.code || e);
+                    console.warn("Falha ao arquivar usu�rio banido:", e?.code || e);
                 }
             }
         await set(ref(db, "usuarios/" + uid), null);
         await rebuildNicknamesSimple();
     }else{
-        // Reativar usuário bloqueado existente
+        // Reativar usu�rio bloqueado existente
         await set(ref(db, "usuarios/" + uid + "/ativo"), true);
     }
 };
@@ -704,7 +704,7 @@ function iniciarListaBanidos(){
                     </div>
                     <div class="fbInfo">
                         <div class="fbName">${formatarNick(nick)}</div>
-                        <div class="fbMeta">Crachá: ${cracha}</div>
+                        <div class="fbMeta">Crach�: ${cracha}</div>
                         <div class="fbMeta">Email: ${email}</div>
                         <div class="fbMeta">Senha: ${senha}</div>
                         <div class="fbMeta">Banido em: ${data}</div>
@@ -729,7 +729,7 @@ window.apagarBanido = async function(uid){
 window.apagarBanidosSelecionados = async function(){
     const checks = Array.from(document.querySelectorAll(".banidoCheckbox:checked"));
     if(checks.length === 0) return;
-    const ok = confirm("Tem certeza que quer apagar os dados de banimento? A limpeza dos usuários Firebase foi feita corretamente?");
+    const ok = confirm("Tem certeza que quer apagar os dados de banimento? A limpeza dos usu�rios Firebase foi feita corretamente?");
     if(!ok) return;
     for(const c of checks){
         const uid = c.getAttribute("data-uid");
@@ -786,7 +786,7 @@ function iniciarListaUsuarios(){
             </div>
             <div class="fbUserActions">
                 <label class="nivelLabel">
-                    Nível
+                    N�vel
                     <select class="nivelSelect" onchange="alterarNivel('${uid}', this.value)">
                         <option value="op" ${nivelRaw==="op" ? "selected":""}>OP</option>
                         <option value="mod" ${nivelRaw==="mod" ? "selected":""}>MOD</option>
@@ -840,7 +840,7 @@ function carregarPlanilha(tipo){
 
             planilhas[tipo] = json;
 
-            // marca botão corretamente
+            // marca bot�o corretamente
             document.querySelectorAll("#config button").forEach(btn=>{
                 if(btn.getAttribute("onclick")?.includes(tipo)){
                     btn.style.background = "#3E1F8F";
@@ -865,7 +865,7 @@ function iniciarProgresso(){
     intervaloProgresso = setInterval(()=>{
 
         if(progressoAtual < 90){
-            progressoAtual += Math.random() * 8; // sobe de forma orgânica
+            progressoAtual += Math.random() * 8; // sobe de forma org�nica
             barra.style.width = progressoAtual + "%";
         }
 
@@ -886,7 +886,7 @@ function finalizarProgresso(){
         appReady = true;
         updateMobileOverlaysState();
 
-        // ðŸ”¥ MOSTRA O ÍMÃ APENAS DEPOIS DO LOADING
+        // 🔥 MOSTRA O �M� APENAS DEPOIS DO LOADING
         document.getElementById("magnetIcon").style.display = "flex";
 
         if (typeof window.focusSearchForMobile === "function") {
@@ -912,11 +912,11 @@ async function atualizarBanco(btn) {
     let incluir = planilhas.incluir;
     let cooperat = planilhas.cooperat;
     let saldoAtual = planilhas.saldoAtual;
-    let saldoEndereço = planilhas.saldoEndereço || [];
-    let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereço, false);
+    let saldoEndere�o = planilhas.saldoEndere�o || [];
+    let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndere�o, false);
 
-    /* ðŸ”¥ CORREÇÃO AQUI */
-    dados = novosDados;   // <<< usa a variável correta
+    /* 🔥 CORRE��O AQUI */
+    dados = novosDados;   // <<< usa a vari�vel correta
     aplicarTodosFiltros();
 
     try {
@@ -1034,10 +1034,10 @@ function renderTabela(){
 
         tdArm.ondblclick = ()=> abrirModalSaldos(item);
 
-        // DESCRIÇÃO
+        // DESCRI��O
         criarTd(row, item.descricao || "");
 
-        // ENDEREÇO
+        // ENDERE�O
         let tdEnd = criarTd(row, item.enderecoPrincipal || "");
 
         if((item.enderecos || []).length > 1){
@@ -1142,7 +1142,7 @@ function gerarRelatorio(){
     novaJanela.document.write(`
         <html>
         <head>
-            <title>Relatório Conferência</title>
+            <title>Relat�rio Confer�ncia</title>
             <style>
 
                 @page{
@@ -1222,18 +1222,18 @@ function gerarRelatorio(){
         </head>
         <body>
 
-        <h2>Relatório de Conferência</h2>
+        <h2>Relat�rio de Confer�ncia</h2>
         <div>Gerado em: ${new Date().toLocaleString()}</div>
         <div id="resumoFiltros" class="resumo"></div>
 
         <div class="painel">
-            <button onclick="window.print()">🖨 Imprimir</button>
-            <button onclick="copiarProtheus()">📋 Copiar Protheus</button>
+            <button onclick="window.print()">?? Imprimir</button>
+            <button onclick="copiarProtheus()">?? Copiar Protheus</button>
 
-            <label><input type="checkbox" id="arm4"> Armazém 4</label>
-            <label><input type="checkbox" id="arm5"> Armazém 5</label>
+            <label><input type="checkbox" id="arm4"> Armaz�m 4</label>
+            <label><input type="checkbox" id="arm5"> Armaz�m 5</label>
             <label><input type="checkbox" id="mostrarCooperat"> Cooperat</label>
-            <label><input type="checkbox" id="ordenarEndereço"> Ordenar por Endereço</label>
+            <label><input type="checkbox" id="ordenarEndere�o"> Ordenar por Endere�o</label>
         </div>
 
         <div id="tabelaContainer"></div>
@@ -1284,7 +1284,7 @@ function gerarRelatorio(){
             if(somente5) return codigo=="5";
         }
 
-        function ordenarEndereço(a,b){
+        function ordenarEndere�o(a,b){
             return a.endereco.localeCompare(
                 b.endereco,
                 undefined,
@@ -1296,7 +1296,7 @@ function gerarRelatorio(){
 
         function montarTabela(){
 
-            let ordenar = document.getElementById("ordenarEndereço").checked;
+            let ordenar = document.getElementById("ordenarEndere�o").checked;
             capturarContagens();
 
             let linhas = [];
@@ -1334,7 +1334,7 @@ function gerarRelatorio(){
             });
 
             if(ordenar){
-                linhas.sort(ordenarEndereço);
+                linhas.sort(ordenarEndere�o);
             }
 
             linhasAtuais = linhas;
@@ -1345,12 +1345,12 @@ function gerarRelatorio(){
             let html = "<table><thead><tr>" +
                         "<th>Protheus</th>" +
                         "<th class='colCooperat' style='display:none;'>Cooperat</th>" +
-                        "<th>Descrição</th>" +
-                       "<th>Armazém</th>" +
-                       "<th>Endereço</th>" +
+                        "<th>Descri��o</th>" +
+                       "<th>Armaz�m</th>" +
+                       "<th>Endere�o</th>" +
                        "<th>Saldo</th>" +
                        "<th>Contagem</th>" +
-                       "<th>Diferença</th>" +
+                       "<th>Diferen�a</th>" +
                        "</tr></thead><tbody>";
 
             linhas.forEach((l,i)=>{
@@ -1392,18 +1392,18 @@ function gerarRelatorio(){
             const arm4 = document.getElementById("arm4").checked;
             const arm5 = document.getElementById("arm5").checked;
             const cooperat = document.getElementById("mostrarCooperat").checked;
-            const ordenar = document.getElementById("ordenarEndereço").checked;
+            const ordenar = document.getElementById("ordenarEndere�o").checked;
 
-            if(arm4 && arm5) filtros.push("Armazém 4 e 5");
-            else if(arm4) filtros.push("Armazém 4");
-            else if(arm5) filtros.push("Armazém 5");
-            else filtros.push("Todos os armazéns");
+            if(arm4 && arm5) filtros.push("Armaz�m 4 e 5");
+            else if(arm4) filtros.push("Armaz�m 4");
+            else if(arm5) filtros.push("Armaz�m 5");
+            else filtros.push("Todos os armaz�ns");
 
-            filtros.push(cooperat ? "Cooperat: visível" : "Cooperat: oculto");
-            filtros.push(ordenar ? "Ordenado por endereço" : "Ordem original");
+            filtros.push(cooperat ? "Cooperat: vis�vel" : "Cooperat: oculto");
+            filtros.push(ordenar ? "Ordenado por endere�o" : "Ordem original");
 
             const resumo = document.getElementById("resumoFiltros");
-            if(resumo) resumo.textContent = "Filtros: " + filtros.join(" • ");
+            if(resumo) resumo.textContent = "Filtros: " + filtros.join(" � ");
         }
         document.getElementById("mostrarCooperat").addEventListener("change", function(){
             aplicarVisibilidadeCooperat();
@@ -1431,7 +1431,7 @@ function gerarRelatorio(){
 
         document.getElementById("arm4").addEventListener("change", montarTabela);
         document.getElementById("arm5").addEventListener("change", montarTabela);
-        document.getElementById("ordenarEndereço").addEventListener("change", montarTabela);
+        document.getElementById("ordenarEndere�o").addEventListener("change", montarTabela);
 
         async function copiarProtheus(){
             const codigos = [];
@@ -1446,7 +1446,7 @@ function gerarRelatorio(){
             const texto = codigos.join(",");
             try{
                 await navigator.clipboard.writeText(texto);
-                alert("Códigos Protheus copiados.");
+                alert("C�digos Protheus copiados.");
             }catch(e){
                 const temp = document.createElement("textarea");
                 temp.value = texto;
@@ -1454,9 +1454,9 @@ function gerarRelatorio(){
                 temp.select();
                 try{
                     document.execCommand("copy");
-                    alert("Códigos Protheus copiados.");
+                    alert("C�digos Protheus copiados.");
                 }catch(err){
-                    alert("Não foi possível copiar.");
+                    alert("N�o foi poss�vel copiar.");
                 }
                 document.body.removeChild(temp);
             }
@@ -1703,7 +1703,7 @@ let mapaCores = JSON.parse(localStorage.getItem("chatCores")) || {};
 
 function obterCorNickname(nome){
 
-    let chave = nome.toLowerCase(); // ðŸ”¥ ignora maiúscula/minúscula
+    let chave = nome.toLowerCase(); // 🔥 ignora mai�scula/min�scula
 
     if(!mapaCores[chave]){
         let cor = coresDisponiveis[Math.floor(Math.random() * coresDisponiveis.length)];
@@ -1810,7 +1810,7 @@ function abrirModalSaldos(item){
     let html = `
     <html>
     <head>
-        <title>Saldos por Endereço</title>
+        <title>Saldos por Endere�o</title>
         <style>
             body{
                 background:#15151D;
@@ -1832,14 +1832,14 @@ function abrirModalSaldos(item){
         </style>
     </head>
     <body>
-        <h2>Saldos por Endereço</h2>
+        <h2>Saldos por Endere�o</h2>
     `;
 
     item.enderecos.forEach(info => {
         html += `
             <div class="card">
-                <b>Endereço:</b> ${info.endereco}<br>
-                <b>Armazém:</b> ${info.armazem}<br>
+                <b>Endere�o:</b> ${info.endereco}<br>
+                <b>Armaz�m:</b> ${info.armazem}<br>
                 <b>Saldo:</b> ${info.saldo}
             </div>
         `;
@@ -1987,7 +1987,7 @@ document.querySelectorAll("th[data-col]").forEach(th => {
 
         let col = this.dataset.col;
 
-        // remove ordenação
+        // remove ordena��o
         ordensAtivas = ordensAtivas.filter(o => o.col !== col);
 
         // remove filtro
@@ -2047,7 +2047,7 @@ function isMobileLayout(){
     return window.matchMedia("(max-width: 900px)").matches;
 }
 
-function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereço, marcarMorto){
+function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndere�o, marcarMorto){
     let novos = [];
 
     for (let i = 2; i < basePlanilha.length; i++) {
@@ -2062,7 +2062,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereço, 
             protheus: protheus.toString().trim(),
             cooperat: cooperatCod.toString().trim(),
             descricao: descricao.toString().trim(),
-            enderecoPrincipal: "Sem Endereço",
+            enderecoPrincipal: "Sem Endere�o",
             armazemPrincipal: "ND",
             saldo: 0,
             enderecos: [],
@@ -2078,7 +2078,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereço, 
             }
         }
 
-        // ENDEREÇO ANTIGO
+        // ENDERE�O ANTIGO
         for (let j = 2; j < cooperat.length; j++) {
             if (cooperat[j][0] == cooperatCod) {
                 let end = (cooperat[j][3] || "") + " " +
@@ -2089,21 +2089,21 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereço, 
             }
         }
 
-        // DETALHES POR ENDEREÇO
-        let encontrouEndereços = false;
+        // DETALHES POR ENDERE�O
+        let encontrouEndere�os = false;
 
-        for (let j = 1; j < saldoEndereço.length; j++) {
-            if (saldoEndereço[j][1] == protheus) {
-                encontrouEndereços = true;
+        for (let j = 1; j < saldoEndere�o.length; j++) {
+            if (saldoEndere�o[j][1] == protheus) {
+                encontrouEndere�os = true;
                 item.enderecos.push({
-                    endereco: saldoEndereço[j][4] || "ND",
-                    armazem: saldoEndereço[j][2] || "ND",
-                    saldo: Number(saldoEndereço[j][8]) || 0
+                    endereco: saldoEndere�o[j][4] || "ND",
+                    armazem: saldoEndere�o[j][2] || "ND",
+                    saldo: Number(saldoEndere�o[j][8]) || 0
                 });
             }
         }
 
-        if (encontrouEndereços && item.enderecos.length > 0) {
+        if (encontrouEndere�os && item.enderecos.length > 0) {
             item.enderecoPrincipal = item.enderecos[0].endereco;
             item.armazemPrincipal = item.enderecos[0].armazem;
 
@@ -2136,7 +2136,7 @@ function gerarItensDadosMortos(basePlanilha){
         const cooperatCod = (row[0] ?? "").toString().trim();
         if(!cooperatCod) continue;
         const cabecalho = cooperatCod.toLowerCase();
-        if(cabecalho.includes("cooperat") || cabecalho.includes("código")) continue;
+        if(cabecalho.includes("cooperat") || cabecalho.includes("c�digo")) continue;
 
         const descricao = (row[1] ?? "").toString().trim();
         const enderecoAntigo = (row[3] ?? "").toString().trim();
@@ -2146,7 +2146,7 @@ function gerarItensDadosMortos(basePlanilha){
             protheus: cooperatCod,
             cooperat: cooperatCod,
             descricao: descricao,
-            enderecoPrincipal: enderecoAntigo || "Sem Endereço",
+            enderecoPrincipal: enderecoAntigo || "Sem Endere�o",
             armazemPrincipal: "ND",
             saldo: saldoAntigo || 0,
             enderecos: [],
@@ -2164,7 +2164,7 @@ function importarDadosMortos(btn){
     btn = btn || document.getElementById("btnDadosMortos");
 
     if(dadosMortos && dadosMortos.length > 0){
-        let ok = confirm("Dados mortos já importados. Deseja substituir?");
+        let ok = confirm("Dados mortos j� importados. Deseja substituir?");
         if(!ok) return;
     }
 
@@ -2196,11 +2196,11 @@ function importarDadosMortos(btn){
                 novosMortosBrutos.forEach(item=>{
                     const cod = (item.cooperat || "").toString().trim().toLowerCase();
                     if(!cod) return;
-                    if(existentes.has(cod)) return; // já existe no banco principal
+                    if(existentes.has(cod)) return; // j� existe no banco principal
                     if(vistos.has(cod)) return;     // duplicado na planilha
                     vistos.add(cod);
 
-                    // marca como morto para exibição, mantendo chave única interna
+                    // marca como morto para exibi��o, mantendo chave �nica interna
                     item.protheus = "MORTO";
                     item.protheusKey = "MORTO|" + cod;
                     novosMortos.push(item);
@@ -2242,14 +2242,14 @@ function capitalizarPrimeira(str){
 
 window.verSolicitacao = async function(id){
     try{
-        const snap = await get(ref(db, "solicitaçõesCadastro/"+id));
+        const snap = await get(ref(db, "solicita��esCadastro/"+id));
         const dados = snap.val();
         if(!dados) return;
         const box = document.getElementById("cadastroInfoContent");
         const data = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
         box.innerHTML = `
         <div><b>Nickname:</b> ${dados.nickname || "-"}</div>
-        <div><b>Crachá:</b> ${dados.cracha || "-"}</div>
+        <div><b>Crach�:</b> ${dados.cracha || "-"}</div>
         <div><b>Setor:</b> ${dados.setor || "-"}</div>
         <div><b>Status:</b> ${dados.status || "-"}</div>
         <div><b>Enviado em:</b> ${data}</div>
@@ -2269,13 +2269,13 @@ window.verUsuario = async function(uid){
         const data = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
         box.innerHTML = `
         <div><b>Nickname:</b> ${dados.nickname || "-"}</div>
-        <div><b>Nível:</b> ${(dados.nivel || "-").toString().toUpperCase()}</div>
+        <div><b>N�vel:</b> ${(dados.nivel || "-").toString().toUpperCase()}</div>
         <div><b>Status:</b> ${dados.ativo === false ? "Bloqueado" : "Ativo"}</div>
         <div><b>Criado em:</b> ${data}</div>
         `;
         document.getElementById("cadastroInfoModal").style.display = "flex";
     }catch(e){
-        console.error("Erro ao abrir detalhes do usuário:", e);
+        console.error("Erro ao abrir detalhes do usu�rio:", e);
     }
 }
 
@@ -2304,7 +2304,7 @@ async function mostrarConflitoCadastro(idSolicitacao, nickname){
     const content = document.getElementById("adminAlertContent");
     const actions = document.getElementById("adminAlertActions");
     if(!modal || !content || !actions) return;
-    content.textContent = "Nickname já existe no cadastro. Aceitar não é permitido. Deseja recusar a solicitação ou redefinir a senha do cadastro já existente?";
+    content.textContent = "Nickname j� existe no cadastro. Aceitar n�o � permitido. Deseja recusar a solicita��o ou redefinir a senha do cadastro j� existente?";
     actions.innerHTML = "";
 
     let uidExistente = "";
@@ -2334,9 +2334,9 @@ async function mostrarConflitoCadastro(idSolicitacao, nickname){
     btnReset.onclick = async ()=>{
         if(uidExistente){
             await resetSenha(uidExistente);
-            mostrarNotificacao("Senha marcada para redefinição.");
+            mostrarNotificacao("Senha marcada para redefini��o.");
         }else{
-            mostrarNotificacao("Usuário existente não encontrado.");
+            mostrarNotificacao("Usu�rio existente n�o encontrado.");
         }
         fecharAdminAlert();
     };
@@ -2395,7 +2395,7 @@ async function verificarNickDisponivel(){
         }
         setNickStatus(usado ? "bad" : "ok");
     }catch(e){
-        // sem permissão para checar: não exibe status
+        // sem permiss�o para checar: n�o exibe status
         console.warn("Falha ao checar nickname:", e?.code || e);
         setNickStatus("ok");
     }
@@ -2792,9 +2792,9 @@ window.db = db;
 
 function iniciarSolicitacoesAdmin(){
 
-    const solicitaçõesRef = ref(db, "solicitaçõesCadastro");
+    const solicita��esRef = ref(db, "solicita��esCadastro");
 
-    onValue(solicitaçõesRef, snapshot=>{
+    onValue(solicita��esRef, snapshot=>{
 
         const lista = document.getElementById("listaSolicitacoes");
         const badge = document.getElementById("badgeSolicitacoes");
@@ -2826,13 +2826,13 @@ function iniciarSolicitacoesAdmin(){
                 </div>
                 <div class="fbInfo">
                     <div class="fbName">${formatarNick(s.nickname)}</div>
-                    <div class="fbMeta">Aguardando aprovação</div>
+                    <div class="fbMeta">Aguardando aprova��o</div>
                 </div>
             </div>
 
             <div class="fbRight">
                 <label class="nivelLabel">
-                    Nível
+                    N�vel
                     <select id="nivel_${child.key}" class="nivelSelect">
                         <option value="op">OP</option>
                         <option value="mod">MOD</option>
@@ -2878,7 +2878,7 @@ window.login = async function(){
 
     } catch(error){
         try{
-            const snap = await get(ref(db, "solicitaçõesCadastro"));
+            const snap = await get(ref(db, "solicita��esCadastro"));
             let pendente = false;
             if(snap.exists()){
                 snap.forEach(child=>{
@@ -2895,7 +2895,7 @@ window.login = async function(){
         }catch(e){
             console.error("Erro ao checar pendencia:", e);
         }
-        alert("Usuário ou senha inválidos");
+        alert("Usu�rio ou senha inv�lidos");
     }
 }
 
@@ -2908,10 +2908,10 @@ window.cadastrar = async function(){
     const setorMap = {
         "Administrativo": "Administrativo",
         "Almoxarifado": "Almoxarifado",
-        "Supervisão": "Supervisão",
-        "Operação": "Operação",
-        "Supervisão": "Supervisão",
-        "Operação": "Operação"
+        "Supervis�o": "Supervis�o",
+        "Opera��o": "Opera��o",
+        "Supervis�o": "Supervis�o",
+        "Opera��o": "Opera��o"
     };
     let setor = setorMap[setorRaw] || setorRaw;
 
@@ -2924,11 +2924,11 @@ window.cadastrar = async function(){
         return;
     }
     if(!/^[0-9]+$/.test(cracha)){
-        mostrarNotificacao("O número do crachá deve conter apenas números");
+        mostrarNotificacao("O n�mero do crach� deve conter apenas n�meros");
         return;
     }
     if(!/^[A-Za-z0-9_.-]{3,20}$/.test(nick)){
-        mostrarNotificacao("Nickname deve ter 3-20 caracteres: letras, números, . _ -");
+        mostrarNotificacao("Nickname deve ter 3-20 caracteres: letras, n�meros, . _ -");
         return;
     }
 
@@ -2936,7 +2936,7 @@ window.cadastrar = async function(){
     if(btn) btn.disabled = true;
 
     try{
-        // cadastro não cria usuário no Auth; apenas solicita aprovação
+        // cadastro n�o cria usu�rio no Auth; apenas solicita aprova��o
         let nickEmUso = false;
         try{
             const key = nickOnlyKey(nick);
@@ -2947,7 +2947,7 @@ window.cadastrar = async function(){
                 if(count > 0) nickEmUso = true;
             }
         }catch(e){
-            console.warn("Sem permissão para validar duplicidade:", e?.code || e);
+            console.warn("Sem permiss�o para validar duplicidade:", e?.code || e);
         }
         try{
             const authSnap = await get(ref(db, "nicknamesAuth/" + nickOnlyKey(nick)));
@@ -2968,12 +2968,12 @@ window.cadastrar = async function(){
                 solicitacaoIdExistente = (val && (val.id || val.solicitacaoId || val.key)) ? (val.id || val.solicitacaoId || val.key) : "";
             }
         }catch(e){
-            console.warn("Sem permissão para validar cracha duplicado:", e?.code || e);
+            console.warn("Sem permiss�o para validar cracha duplicado:", e?.code || e);
         }
 
         const solicitacaoRef = solicitacaoIdExistente
-            ? ref(db, "solicitaçõesCadastro/" + solicitacaoIdExistente)
-            : push(ref(db, "solicitaçõesCadastro"));
+            ? ref(db, "solicita��esCadastro/" + solicitacaoIdExistente)
+            : push(ref(db, "solicita��esCadastro"));
 
         try{
             await set(solicitacaoRef, {
@@ -2995,7 +2995,7 @@ window.cadastrar = async function(){
 
         console.log("Cadastro enviado");
 
-        mostrarNotificacao("✔ Cadastro enviado para aprovação.");
+        mostrarNotificacao("? Cadastro enviado para aprova��o.");
         document.getElementById("authNickname").value = "";
         document.getElementById("authSenha").value = "";
         document.getElementById("cadastroNickname").value = "";
@@ -3247,7 +3247,7 @@ async function rebuildNicknamesSolic(){
     const counts = {};
     const crachaMap = new Map();
     try{
-        const solicitSnap = await get(ref(db, "solicitaçõesCadastro"));
+        const solicitSnap = await get(ref(db, "solicita��esCadastro"));
         if(solicitSnap.exists()){
             solicitSnap.forEach(child=>{
                 const s = child.val();
@@ -3263,7 +3263,7 @@ async function rebuildNicknamesSolic(){
             });
         }
     }catch(e){
-        console.warn("Falha ao ler solicitações para nicknamesSolic:", e?.code || e);
+        console.warn("Falha ao ler solicita��es para nicknamesSolic:", e?.code || e);
     }
     try{
         const currentSnap = await get(ref(db, "nicknamesSolic"));
@@ -3386,7 +3386,7 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
         if (!snapshot.val().ativo) {
-            alert("Usuário bloqueado");
+            alert("Usu�rio bloqueado");
             await signOut(auth);
             return;
         }
@@ -3415,7 +3415,7 @@ onAuthStateChanged(auth, async (user) => {
                 await set(ref(db, "usuarios/" + user.uid + "/senha"), "definida");
                 await set(ref(db, "usuarios/" + user.uid + "/senhaReset"), false);
             }catch(e){
-                alert("Não foi possível atualizar a senha. Tente novamente.");
+                alert("N�o foi poss�vel atualizar a senha. Tente novamente.");
                 await signOut(auth);
                 return;
             }
@@ -3424,7 +3424,7 @@ onAuthStateChanged(auth, async (user) => {
         window.meuNickname = dadosUsuario.nickname;
         window.meuCracha = dadosUsuario.cracha || "";
         setSalaAtiva(salaAtual);
-        // ðŸ”¥ ZERA CAPTURAS AO INICIAR SESSÃO
+        // 🔥 ZERA CAPTURAS AO INICIAR SESS�O
         capturados.clear();
         localStorage.removeItem("capturadosMagnet");
         atualizarBadge();
@@ -3448,7 +3448,7 @@ onAuthStateChanged(auth, async (user) => {
         if (nivelUsuario === "admin") {
             
             if (adminBtn) adminBtn.style.display = "flex";
-            iniciarSolicitacoesAdmin(); // ðŸ”¥ AQUI
+            iniciarSolicitacoesAdmin(); // 🔥 AQUI
             iniciarListaUsuarios();
             rebuildNicknamesSimple();
             rebuildNicknamesAuth();
@@ -3465,13 +3465,13 @@ onAuthStateChanged(auth, async (user) => {
 
         iniciarChatSePermitido();
 
-        resetarTimer(); // ðŸ”¥ ativa controle de inatividade
+        resetarTimer(); // 🔥 ativa controle de inatividade
 
         finalizarProgresso();
 
     } catch (error) {
-        console.error("Erro ao validar usuário:", error);
-        alert("Erro ao validar sessão.");
+        console.error("Erro ao validar usu�rio:", error);
+        alert("Erro ao validar sess�o.");
         await signOut(auth);
     }
 });
@@ -3484,7 +3484,7 @@ function resetarTimer() {
     clearTimeout(timerInatividade);
 
     timerInatividade = setTimeout(async () => {
-        alert("Sessão encerrada por inatividade.");
+        alert("Sess�o encerrada por inatividade.");
         await signOut(auth);
     }, tempoLimite);
 }
@@ -3496,11 +3496,11 @@ document.addEventListener("click", resetarTimer);
 
 const estoqueRef = ref(db, "estoqueGlobal");
 
-// Exporta funções para o escopo global (window)
+// Exporta fun��es para o escopo global (window)
 window.estoqueRef = estoqueRef;
 window.firebaseSet = set;
 
-// --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
+// --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a p�gina) ---
 async function carregarEstoqueInicial() {
 
     if (typeof iniciarProgresso === "function") iniciarProgresso(); 
@@ -3532,16 +3532,16 @@ onValue(window.estoqueRef, snapshot => {
 
 });
 
-            console.log("✅ Dados carregados do Firebase.");
+            console.log("? Dados carregados do Firebase.");
 
         } else {
 
-            // ðŸ”¥ PRIMEIRA VEZ â†’ NÃO EXISTE NADA
+            // 🔥 PRIMEIRA VEZ → N�O EXISTE NADA
             dadosMortos = [];
             window.dadosMortos = dadosMortos;
             window.setDados([]);
 
-            console.log("âš  Banco ainda não existe. Iniciando vazio.");
+            console.log("⚠ Banco ainda n�o existe. Iniciando vazio.");
         }
 
     } catch(e){
@@ -3565,7 +3565,7 @@ function fecharSubPagina(){
 
 }
 
-// --- LÓGICA DO CHAT EM TEMPO REAL ---
+// --- L�GICA DO CHAT EM TEMPO REAL ---
 
 
 let salaAtual = "publica";
@@ -3713,10 +3713,10 @@ async function definirSenhaSala(roomId){
         return;
     }
     if(roomId === "publica") return;
-    const senha = prompt("Defina uma senha de 6 dígitos para a sala:");
+    const senha = prompt("Defina uma senha de 6 d�gitos para a sala:");
     if(senha === null) return;
     if(!/^[0-9]{6}$/.test(senha)){
-        mostrarNotificacao("A senha deve ter 6 dígitos.");
+        mostrarNotificacao("A senha deve ter 6 d�gitos.");
         return;
     }
     await set(ref(db, "chatRooms/" + roomId + "/senha"), senha);
@@ -3735,7 +3735,7 @@ async function limparMensagensSala(){
 }
 window.limparMensagensSala = limparMensagensSala;
 
-// Sobrescreve a função de enviar chat para usar Firebase
+// Sobrescreve a fun��o de enviar chat para usar Firebase
 window.enviarMensagem = function() {
     let input = document.getElementById("chatInput");
     let texto = input.value.trim();
@@ -3826,6 +3826,9 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
+
+
+
 
 
 
