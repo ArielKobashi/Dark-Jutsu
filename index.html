@@ -368,7 +368,7 @@ Usuários do Sistema
             <button id="chatClearBtn" title="Limpar mensagens" onclick="limparMensagensSala()">🗑️</button>
             <div id="chatMessages"></div>
             <div id="chatTyping" aria-live="polite"></div>
-            <div id="chatPublicGate" role="button" aria-label="Abrir sala pública">
+            <div id="chatPublicGate" role="button" aria-label="Abrir sala pública" onclick="abrirSalaPublica()">
                 <span>Toque para abrir a sala pública</span>
             </div>
 
@@ -2042,14 +2042,6 @@ document.getElementById("chatInput").addEventListener("blur", function(){
     setDigitando(salaAtual, false);
 });
 
-const chatPublicGate = document.getElementById("chatPublicGate");
-if(chatPublicGate){
-    chatPublicGate.addEventListener("click", function(){
-        chatPublicUnlocked = true;
-        atualizarGatePublico();
-        iniciarChatSePermitido();
-    });
-}
 
 function isMobileLayout(){
     return window.matchMedia("(max-width: 900px)").matches;
@@ -3591,9 +3583,7 @@ function setSalaAtiva(roomId){
     });
     const chatBox = document.getElementById("chatBox");
     if(chatBox) chatBox.setAttribute("data-room", roomId);
-    if(roomId === "publica" && !chatPublicUnlocked){
-        atualizarGatePublico();
-    }
+    atualizarGatePublico();
 }
 
 async function verificarSenhaSala(roomId){
@@ -3705,6 +3695,12 @@ function iniciarChatSePermitido(){
     }
     iniciarChat();
 }
+
+window.abrirSalaPublica = function(){
+    chatPublicUnlocked = true;
+    atualizarGatePublico();
+    iniciarChatSePermitido();
+};
 
 async function definirSenhaSala(roomId){
     if(window.nivelUsuario !== "admin"){
