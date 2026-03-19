@@ -2362,6 +2362,11 @@ function setNickStatus(state){
     }
 }
 
+function nickOnlyKey(nick){
+    const base = (nick || "").toLowerCase();
+    return encodeURIComponent(base).replace(/\./g, "%2E");
+}
+
 async function verificarNickDisponivel(){
     const nickEl = document.getElementById("cadastroNickname");
     const crachaEl = document.getElementById("cadastroCracha");
