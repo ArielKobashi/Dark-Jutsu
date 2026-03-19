@@ -50,8 +50,8 @@
             <div class="cadastroSetorGrid">
                 <label><input type="radio" name="setor" value="Administrativo"> Administrativo</label>
                 <label><input type="radio" name="setor" value="Almoxarifado"> Almoxarifado</label>
-                <label><input type="radio" name="setor" value="Supervis�o"> Supervis�o</label>
-                <label><input type="radio" name="setor" value="Opera��o"> Opera��o</label>
+                <label><input type="radio" name="setor" value="Supervisão"> Supervisão</label>
+                <label><input type="radio" name="setor" value="Operação"> Operação</label>
             </div>
         </div>
         <button id="btnConfirmarCadastro" onclick="cadastrar()">Confirmar Cadastro</button>
@@ -251,7 +251,7 @@ stroke-linecap="round"/>
 
 <div class="fbAdminIntro">
     <div class="fbAdminTitle">Central de Cadastros</div>
-    <div class="fbAdminSubtitle">Aceite ou recuse solicita��es e defina o n�vel da conta.</div>
+    <div class="fbAdminSubtitle">Aceite ou recuse Solicitacoes e defina o n�vel da conta.</div>
 </div>
 
 <div class="subContent">
@@ -259,7 +259,7 @@ stroke-linecap="round"/>
 <div class="adminSection fbPanel">
 
 <div class="adminTitle fbPanelHeader">
-Solicita��es de Cadastro
+Solicitacoes de Cadastro
 <span id="badgeSolicitacoes">0</span>
 </div>
 
@@ -312,7 +312,7 @@ Usu�rios do Sistema
         <button onclick="carregarPlanilha('cooperat')">Cooperat.xlsx</button>
         <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
         <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
-        <button onclick="carregarPlanilha('saldoEndere�o')">Saldo por Endere�o.xlsx</button>
+        <button onclick="carregarPlanilha('saldoEndereco')">Saldo por Endereco.xlsx</button>
 
         <input type="file" id="fileInput" style="display:none" accept=".xlsx">
         <hr>
@@ -420,7 +420,7 @@ let planilhas = {
     cooperat: null,
     incluir: null,
     saldoAtual: null,
-    saldoEndere�o: null
+    saldoEndereco: null
 };
 
 let dados = [];
@@ -512,7 +512,7 @@ window.aprovar = async function(id){
     card.classList.add("aprovadoPulse");
 
     try{
-        const snap = await get(ref(db, "solicita��esCadastro/"+id));
+        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
         const dados = snap.val();
         if(!dados) return;
 
@@ -565,8 +565,8 @@ window.aprovar = async function(id){
         }catch(e){
             console.warn("Falha ao gravar nicknamesAuth:", e?.code || e);
         }
-        await set(ref(db, "solicita��esCadastro/"+id+"/status"),"aprovado");
-        await set(ref(db, "solicita��esCadastro/"+id), null);
+        await set(ref(db, "solicitacoesCadastro/"+id+"/status"),"aprovado");
+        await set(ref(db, "solicitacoesCadastro/"+id), null);
         await ajustarNickSolicCount(dados.nickname, -1);
         await desmarcarSolicCracha(dados.nickname, dados.cracha);
         await rebuildNicknamesSimple();
@@ -601,14 +601,14 @@ window.recusar = async function(id){
 
             let dados = null;
             try{
-                const snap = await get(ref(db, "solicita��esCadastro/"+id));
+                const snap = await get(ref(db, "solicitacoesCadastro/"+id));
                 dados = snap.val();
             }catch(e){
                 console.warn("Falha ao ler solicita��o para recusa:", e?.code || e);
             }
 
-            await set(ref(db,"solicita��esCadastro/"+id+"/status"),"recusado");
-            await set(ref(db, "solicita��esCadastro/"+id), null);
+            await set(ref(db,"solicitacoesCadastro/"+id+"/status"),"recusado");
+            await set(ref(db, "solicitacoesCadastro/"+id), null);
             await ajustarNickSolicCount(dados.nickname, -1);
             await desmarcarSolicCracha(dados.nickname, dados.cracha);
             await rebuildNicknamesSimple();
@@ -912,8 +912,8 @@ async function atualizarBanco(btn) {
     let incluir = planilhas.incluir;
     let cooperat = planilhas.cooperat;
     let saldoAtual = planilhas.saldoAtual;
-    let saldoEndere�o = planilhas.saldoEndere�o || [];
-    let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndere�o, false);
+    let saldoEndereco = planilhas.saldoEndereco || [];
+    let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereco, false);
 
     /* 🔥 CORRE��O AQUI */
     dados = novosDados;   // <<< usa a vari�vel correta
@@ -2047,20 +2047,20 @@ function isMobileLayout(){
     return window.matchMedia("(max-width: 900px)").matches;
 }
 
-function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndere�o, marcarMorto){
+function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, marcarMorto){
     let novos = [];
 
     for (let i = 2; i < basePlanilha.length; i++) {
 
         let protheus = basePlanilha[i][1];
-        let cooperatCod = basePlanilha[i][0] ?? "";
+        let coOperaçãod = basePlanilha[i][0] ?? "";
         let descricao = basePlanilha[i][2] ?? "";
 
         if (!protheus) continue;
 
         let item = {
             protheus: protheus.toString().trim(),
-            cooperat: cooperatCod.toString().trim(),
+            cooperat: coOperaçãod.toString().trim(),
             descricao: descricao.toString().trim(),
             enderecoPrincipal: "Sem Endere�o",
             armazemPrincipal: "ND",
@@ -2080,7 +2080,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndere�o,
 
         // ENDERE�O ANTIGO
         for (let j = 2; j < cooperat.length; j++) {
-            if (cooperat[j][0] == cooperatCod) {
+            if (cooperat[j][0] == coOperaçãod) {
                 let end = (cooperat[j][3] || "") + " " +
                           (cooperat[j][4] || "") + " " +
                           (cooperat[j][5] || "");
@@ -2092,13 +2092,13 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndere�o,
         // DETALHES POR ENDERE�O
         let encontrouEndere�os = false;
 
-        for (let j = 1; j < saldoEndere�o.length; j++) {
-            if (saldoEndere�o[j][1] == protheus) {
+        for (let j = 1; j < saldoEndereco.length; j++) {
+            if (saldoEndereco[j][1] == protheus) {
                 encontrouEndere�os = true;
                 item.enderecos.push({
-                    endereco: saldoEndere�o[j][4] || "ND",
-                    armazem: saldoEndere�o[j][2] || "ND",
-                    saldo: Number(saldoEndere�o[j][8]) || 0
+                    endereco: saldoEndereco[j][4] || "ND",
+                    armazem: saldoEndereco[j][2] || "ND",
+                    saldo: Number(saldoEndereco[j][8]) || 0
                 });
             }
         }
@@ -2133,9 +2133,9 @@ function gerarItensDadosMortos(basePlanilha){
 
     for (let i = 1; i < basePlanilha.length; i++) {
         const row = basePlanilha[i] || [];
-        const cooperatCod = (row[0] ?? "").toString().trim();
-        if(!cooperatCod) continue;
-        const cabecalho = cooperatCod.toLowerCase();
+        const coOperaçãod = (row[0] ?? "").toString().trim();
+        if(!coOperaçãod) continue;
+        const cabecalho = coOperaçãod.toLowerCase();
         if(cabecalho.includes("cooperat") || cabecalho.includes("c�digo")) continue;
 
         const descricao = (row[1] ?? "").toString().trim();
@@ -2143,8 +2143,8 @@ function gerarItensDadosMortos(basePlanilha){
         const saldoAntigo = toNumber(row[4]);
 
         const item = {
-            protheus: cooperatCod,
-            cooperat: cooperatCod,
+            protheus: coOperaçãod,
+            cooperat: coOperaçãod,
             descricao: descricao,
             enderecoPrincipal: enderecoAntigo || "Sem Endere�o",
             armazemPrincipal: "ND",
@@ -2242,7 +2242,7 @@ function capitalizarPrimeira(str){
 
 window.verSolicitacao = async function(id){
     try{
-        const snap = await get(ref(db, "solicita��esCadastro/"+id));
+        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
         const dados = snap.val();
         if(!dados) return;
         const box = document.getElementById("cadastroInfoContent");
@@ -2792,9 +2792,9 @@ window.db = db;
 
 function iniciarSolicitacoesAdmin(){
 
-    const solicita��esRef = ref(db, "solicita��esCadastro");
+    const solicitacoesRef = ref(db, "solicitacoesCadastro");
 
-    onValue(solicita��esRef, snapshot=>{
+    onValue(solicitacoesRef, snapshot=>{
 
         const lista = document.getElementById("listaSolicitacoes");
         const badge = document.getElementById("badgeSolicitacoes");
@@ -2878,7 +2878,7 @@ window.login = async function(){
 
     } catch(error){
         try{
-            const snap = await get(ref(db, "solicita��esCadastro"));
+            const snap = await get(ref(db, "solicitacoesCadastro"));
             let pendente = false;
             if(snap.exists()){
                 snap.forEach(child=>{
@@ -2908,10 +2908,10 @@ window.cadastrar = async function(){
     const setorMap = {
         "Administrativo": "Administrativo",
         "Almoxarifado": "Almoxarifado",
-        "Supervis�o": "Supervis�o",
-        "Opera��o": "Opera��o",
-        "Supervis�o": "Supervis�o",
-        "Opera��o": "Opera��o"
+        "Supervisão": "Supervisão",
+        "Operação": "Operação",
+        "Supervisão": "Supervisão",
+        "Operação": "Operação"
     };
     let setor = setorMap[setorRaw] || setorRaw;
 
@@ -2972,8 +2972,8 @@ window.cadastrar = async function(){
         }
 
         const solicitacaoRef = solicitacaoIdExistente
-            ? ref(db, "solicita��esCadastro/" + solicitacaoIdExistente)
-            : push(ref(db, "solicita��esCadastro"));
+            ? ref(db, "solicitacoesCadastro/" + solicitacaoIdExistente)
+            : push(ref(db, "solicitacoesCadastro"));
 
         try{
             await set(solicitacaoRef, {
@@ -3247,7 +3247,7 @@ async function rebuildNicknamesSolic(){
     const counts = {};
     const crachaMap = new Map();
     try{
-        const solicitSnap = await get(ref(db, "solicita��esCadastro"));
+        const solicitSnap = await get(ref(db, "solicitacoesCadastro"));
         if(solicitSnap.exists()){
             solicitSnap.forEach(child=>{
                 const s = child.val();
@@ -3263,7 +3263,7 @@ async function rebuildNicknamesSolic(){
             });
         }
     }catch(e){
-        console.warn("Falha ao ler solicita��es para nicknamesSolic:", e?.code || e);
+        console.warn("Falha ao ler Solicitacoes para nicknamesSolic:", e?.code || e);
     }
     try{
         const currentSnap = await get(ref(db, "nicknamesSolic"));
@@ -3826,6 +3826,11 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
+
+
+
+
+
 
 
 
