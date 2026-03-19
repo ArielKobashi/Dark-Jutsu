@@ -569,7 +569,7 @@ window.aprovar = async function(id){
             ...dados,
             status: "aprovado"
         });
-        await ajustarNickSolicCount(dados.nickname, -1);
+        await window.ajustarNickSolicCount(dados.nickname, -1);
         await desmarcarSolicCracha(dados.nickname, dados.cracha);
         await rebuildNicknamesSimple();
 
@@ -615,7 +615,7 @@ window.recusar = async function(id){
     }
 
     if(dados){
-        await ajustarNickSolicCount(dados.nickname, -1);
+        await window.ajustarNickSolicCount(dados.nickname, -1);
         await desmarcarSolicCracha(dados.nickname, dados.cracha);
         await rebuildNicknamesSimple();
         if(dados?.uid){
@@ -3001,8 +3001,8 @@ window.cadastrar = async function(){
                 criadoEm: Date.now()
             });
             if(!solicitacaoIdExistente){
-                await ajustarNickSolicCount(nick, 1);
-            }
+                await window.ajustarNickSolicCount(nick, 1);
+              }
             const finalId = solicitacaoIdExistente || solicitacaoRef.key || "";
             await marcarSolicCracha(nick, cracha, finalId);
         }finally{}
@@ -3116,6 +3116,7 @@ async function ajustarNickSolicCount(nick, delta){
         console.warn("Falha ao ajustar nicknamesSolic:", e?.code || e);
     }
 }
+window.ajustarNickSolicCount = ajustarNickSolicCount;
 
 async function marcarSolicCracha(nick, cracha, solicitId){
     const key = nickCrachaKey(nick, cracha);
