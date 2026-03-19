@@ -2978,6 +2978,13 @@ window.cadastrar = async function(){
             console.warn("Sem permissão para validar cracha duplicado:", e?.code || e);
         }
 
+        if(solicitacaoIdExistente){
+            mostrarNotificacao("Já existe uma solicitação pendente para este nickname e crachá.");
+            mostrarPending(nick);
+            if(btn) btn.disabled = false;
+            return;
+        }
+
         const solicitacaoRef = solicitacaoIdExistente
             ? ref(db, "solicitacoesCadastro/" + solicitacaoIdExistente)
             : push(ref(db, "solicitacoesCadastro"));
