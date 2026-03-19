@@ -1082,11 +1082,17 @@ th.col-ordenada.col-filtrada {
 }
 
 .mensagem.sistema{
+    display:table;
+    margin:6px auto;
     text-align:center;
     font-size:9px;
-    color:rgba(160,170,190,0.6);
-    padding:2px 0;
-    letter-spacing:0.2px;
+    color:#B8C6D9;
+    background:rgba(14,23,35,0.7);
+    border:1px solid rgba(91,140,255,0.25);
+    padding:3px 10px;
+    border-radius:999px;
+    letter-spacing:0.3px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);
 }
 
 hr {

@@ -1679,10 +1679,12 @@ function atualizarContadorCaptura(){
 
 function enviarMensagemSistema(texto){
 
-    if(typeof getChatRef !== "function") return;
-    const chatRef = getChatRef(salaAtual);
+    if(typeof window.getChatRef !== "function") return;
+    if(typeof window.push !== "function") return;
+    const chatRef = window.getChatRef(window.salaAtual);
+    if(!chatRef) return;
 
-    push(chatRef, {
+    window.push(chatRef, {
         nome: "Sistema",
         texto: texto,
         tipo: "system",
@@ -3584,6 +3586,7 @@ function fecharSubPagina(){
 
 
 let salaAtual = "publica";
+window.salaAtual = salaAtual;
 let chatUnsub = null;
 let chatPublicUnlocked = false;
 const salasChat = [
@@ -3595,9 +3598,11 @@ const salasChat = [
 function getChatRef(roomId){
     return ref(db, "chatRooms/" + roomId + "/messages");
 }
+window.getChatRef = getChatRef;
 
 function setSalaAtiva(roomId){
     salaAtual = roomId;
+    window.salaAtual = salaAtual;
     document.querySelectorAll(".roomBtn").forEach(btn=>{
         btn.classList.toggle("active", btn.dataset.room === roomId);
     });

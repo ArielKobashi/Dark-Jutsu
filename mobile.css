@@ -267,6 +267,12 @@
         padding: 8px;
     }
 
+    .mensagem.sistema{
+        font-size:10px;
+        padding:3px 8px;
+        margin:6px auto;
+    }
+
     #chatTyping{
         min-height:12px;
         padding:2px 8px 6px;
