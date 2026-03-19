@@ -565,8 +565,10 @@ window.aprovar = async function(id){
         }catch(e){
             console.warn("Falha ao gravar nicknamesAuth:", e?.code || e);
         }
-        await set(ref(db, "solicitacoesCadastro/"+id+"/status"),"aprovado");
-        await set(ref(db, "solicitacoesCadastro/"+id), null);
+        await set(ref(db, "solicitacoesCadastro/"+id), {
+            ...dados,
+            status: "aprovado"
+        });
         await ajustarNickSolicCount(dados.nickname, -1);
         await desmarcarSolicCracha(dados.nickname, dados.cracha);
         await rebuildNicknamesSimple();
@@ -594,34 +596,45 @@ window.recusar = async function(id){
 
     const item = event.target.closest(".solicitacaoItem");
 
-    if(item){
-        item.classList.add("slideOutRight");
+    if(!item) return;
 
-        setTimeout(async ()=>{
-
-            let dados = null;
-            try{
-                const snap = await get(ref(db, "solicitacoesCadastro/"+id));
-                dados = snap.val();
-            }catch(e){
-                console.warn("Falha ao ler solicitação para recusa:", e?.code || e);
-            }
-
-            await set(ref(db,"solicitacoesCadastro/"+id+"/status"),"recusado");
-            await set(ref(db, "solicitacoesCadastro/"+id), null);
-            await ajustarNickSolicCount(dados.nickname, -1);
-            await desmarcarSolicCracha(dados.nickname, dados.cracha);
-            await rebuildNicknamesSimple();
-            if(dados?.uid){
-                try{
-                    await set(ref(db, "usuarios/" + dados.uid), null);
-                }catch(e){
-                    console.warn("Falha ao limpar usuário recusado:", e?.code || e);
-                }
-            }
-
-        },350);
+    let dados = null;
+    try{
+        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
+        dados = snap.val();
+    }catch(e){
+        console.warn("Falha ao ler solicitação para recusa:", e?.code || e);
     }
+
+    if(!dados){
+        mostrarNotificacao("Solicitação não encontrada.");
+        return;
+    }
+
+    try{
+        await set(ref(db, "solicitacoesCadastro/"+id), {
+            ...dados,
+            status: "recusado"
+        });
+    }catch(e){
+        const msg = (e && (e.code || e.message)) ? (e.code || e.message) : "Erro ao recusar";
+        mostrarNotificacao(msg);
+        return;
+    }
+
+    await ajustarNickSolicCount(dados.nickname, -1);
+    await desmarcarSolicCracha(dados.nickname, dados.cracha);
+    await rebuildNicknamesSimple();
+    if(dados?.uid){
+        try{
+            await set(ref(db, "usuarios/" + dados.uid), null);
+        }catch(e){
+            console.warn("Falha ao limpar usuário recusado:", e?.code || e);
+        }
+    }
+
+    item.classList.add("slideOutRight");
+    setTimeout(()=> item.remove(), 350);
 
 }
 
