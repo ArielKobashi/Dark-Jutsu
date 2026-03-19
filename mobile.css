@@ -240,11 +240,17 @@
         gap:6px;
         flex:1;
         min-height:0;
+        --chat-gap:6px;
     }
 
     .roomBtn{
         width:10px;
         height:10px;
+    }
+
+    .roomBtn::before{
+        height:7px;
+        border-radius:0 5px 5px 0;
     }
 
     #chatClearBtn{

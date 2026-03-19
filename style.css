@@ -763,6 +763,7 @@ th.col-ordenada.col-filtrada {
     flex-direction:row-reverse;
     flex:1;
     min-height:0;
+    --chat-gap:8px;
 }
 
 #chatRooms{
@@ -782,6 +783,24 @@ th.col-ordenada.col-filtrada {
     padding:0;
     cursor:pointer;
     box-shadow:0 0 8px rgba(0,0,0,0.4) inset;
+    position:relative;
+    z-index:1;
+}
+
+.roomBtn::before{
+    content:"";
+    position:absolute;
+    left:calc(-1 * var(--chat-gap));
+    width:calc(100% + var(--chat-gap));
+    height:8px;
+    top:50%;
+    transform:translateY(-50%);
+    background:#0E1723;
+    border:1px solid #223044;
+    border-left:0;
+    border-radius:0 6px 6px 0;
+    z-index:-1;
+    pointer-events:none;
 }
 
 .roomBtn.active{
