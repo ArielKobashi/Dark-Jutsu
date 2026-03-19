@@ -833,6 +833,8 @@ window.migrarSetorManutencao = async function(){
         let usuariosAlterados = 0;
         let solicitacoesAlteradas = 0;
 
+        let solicitacoesFalha = 0;
+
         if(usuariosSnap.exists()){
             const updates = [];
             usuariosSnap.forEach(child=>{
@@ -843,8 +845,12 @@ window.migrarSetorManutencao = async function(){
                 }
             });
             for(const item of updates){
-                await set(ref(db, item.path), "Manutenção");
-                usuariosAlterados++;
+                try{
+                    await set(ref(db, item.path), "Manutenção");
+                    usuariosAlterados++;
+                }catch(e){
+                    console.warn("Falha ao migrar usuário:", item.path, e?.code || e);
+                }
             }
         }
 
@@ -858,15 +864,21 @@ window.migrarSetorManutencao = async function(){
                 }
             });
             for(const item of updates){
-                await set(ref(db, item.path), "Manutenção");
-                solicitacoesAlteradas++;
+                try{
+                    await set(ref(db, item.path), "Manutenção");
+                    solicitacoesAlteradas++;
+                }catch(e){
+                    solicitacoesFalha++;
+                    console.warn("Falha ao migrar solicitação:", item.path, e?.code || e);
+                }
             }
         }
 
         if(typeof window.mostrarNotificacao === "function"){
-            window.mostrarNotificacao(`Migração concluída: ${usuariosAlterados} usuários, ${solicitacoesAlteradas} solicitações.`);
+            const extra = solicitacoesFalha > 0 ? ` (${solicitacoesFalha} solicitações bloqueadas pelas regras)` : "";
+            window.mostrarNotificacao(`Migração concluída: ${usuariosAlterados} usuários, ${solicitacoesAlteradas} solicitações.${extra}`);
         }
-        console.log("Migração concluída", { usuariosAlterados, solicitacoesAlteradas });
+        console.log("Migração concluída", { usuariosAlterados, solicitacoesAlteradas, solicitacoesFalha });
     }catch(e){
         console.error("Erro ao migrar setor:", e);
         if(typeof window.mostrarNotificacao === "function"){
