@@ -1677,11 +1677,12 @@ function atualizarContadorCaptura(){
     magnetCount.innerText = capturados.size;
 }
 
-function enviarMensagemSistema(texto){
+function enviarMensagemSistema(texto, roomId){
 
     if(typeof window.getChatRef !== "function") return;
     if(typeof window.push !== "function") return;
-    const chatRef = window.getChatRef(window.salaAtual);
+    const targetRoom = roomId || window.salaAtual;
+    const chatRef = window.getChatRef(targetRoom);
     if(!chatRef) return;
 
     window.push(chatRef, {
@@ -3632,6 +3633,10 @@ async function trocarSala(roomId){
             return;
         }
     }
+    const salaOrigem = salaAtual;
+    if(salaOrigem && salaOrigem !== roomId){
+        anunciarSaidaSala(salaOrigem);
+    }
     setDigitando(salaAtual, false);
     setSalaAtiva(roomId);
     iniciarChatSePermitido();
@@ -3641,13 +3646,23 @@ window.trocarSala = trocarSala;
 let ultimaSalaEntrada = null;
 function anunciarEntradaSala(roomId){
     if(!window.meuNickname) return;
-    if(typeof getChatRef !== "function") return;
+    if(typeof window.getChatRef !== "function") return;
     if(ultimaSalaEntrada === roomId) return;
     ultimaSalaEntrada = roomId;
     const cracha = (window.meuCracha || "").toString().trim();
     const nickFmt = formatarNick(window.meuNickname || "");
     const tag = cracha ? `${nickFmt}:${cracha}` : nickFmt;
-    enviarMensagemSistema(`${tag} entrou na sala...`);
+    enviarMensagemSistema(`${tag} entrou na sala...`, roomId);
+}
+
+function anunciarSaidaSala(roomId){
+    if(!window.meuNickname) return;
+    if(typeof window.getChatRef !== "function") return;
+    if(ultimaSalaEntrada !== roomId) return;
+    const cracha = (window.meuCracha || "").toString().trim();
+    const nickFmt = formatarNick(window.meuNickname || "");
+    const tag = cracha ? `${nickFmt}:${cracha}` : nickFmt;
+    enviarMensagemSistema(`${tag} saiu da sala...`, roomId);
 }
 
 let typingUnsub = null;
