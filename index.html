@@ -606,30 +606,24 @@ window.recusar = async function(id){
         console.warn("Falha ao ler solicitação para recusa:", e?.code || e);
     }
 
-    if(!dados){
-        mostrarNotificacao("Solicitação não encontrada.");
-        return;
-    }
-
     try{
-        await set(ref(db, "solicitacoesCadastro/"+id), {
-            ...dados,
-            status: "recusado"
-        });
+        await set(ref(db, "solicitacoesCadastro/"+id), null);
     }catch(e){
         const msg = (e && (e.code || e.message)) ? (e.code || e.message) : "Erro ao recusar";
         mostrarNotificacao(msg);
         return;
     }
 
-    await ajustarNickSolicCount(dados.nickname, -1);
-    await desmarcarSolicCracha(dados.nickname, dados.cracha);
-    await rebuildNicknamesSimple();
-    if(dados?.uid){
-        try{
-            await set(ref(db, "usuarios/" + dados.uid), null);
-        }catch(e){
-            console.warn("Falha ao limpar usuário recusado:", e?.code || e);
+    if(dados){
+        await ajustarNickSolicCount(dados.nickname, -1);
+        await desmarcarSolicCracha(dados.nickname, dados.cracha);
+        await rebuildNicknamesSimple();
+        if(dados?.uid){
+            try{
+                await set(ref(db, "usuarios/" + dados.uid), null);
+            }catch(e){
+                console.warn("Falha ao limpar usuário recusado:", e?.code || e);
+            }
         }
     }
 
