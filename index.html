@@ -1669,7 +1669,8 @@ function atualizarContadorCaptura(){
 
 function enviarMensagemSistema(texto){
 
-const chatRef = getChatRef(salaAtual);
+    if(typeof getChatRef !== "function") return;
+    const chatRef = getChatRef(salaAtual);
 
     push(chatRef, {
         nome: "Sistema",
@@ -3625,6 +3626,7 @@ window.trocarSala = trocarSala;
 let ultimaSalaEntrada = null;
 function anunciarEntradaSala(roomId){
     if(!window.meuNickname) return;
+    if(typeof getChatRef !== "function") return;
     if(ultimaSalaEntrada === roomId) return;
     ultimaSalaEntrada = roomId;
     const cracha = (window.meuCracha || "").toString().trim();
