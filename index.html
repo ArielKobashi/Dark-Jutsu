@@ -358,13 +358,20 @@ Usuários do Sistema
 
 
     <!-- SPLIT: chat.html (chat box) -->
-    <div id="chatBox">
+    <div id="chatWrap">
+        <div id="chatRooms">
+            <button class="roomBtn room-red active" data-room="publica" onclick="trocarSala('publica')"></button>
+            <button class="roomBtn room-yellow" data-room="sala2" onclick="trocarSala('sala2')"></button>
+            <button class="roomBtn room-blue" data-room="sala3" onclick="trocarSala('sala3')"></button>
+        </div>
+        <div id="chatBox">
+            <button id="chatClearBtn" title="Limpar mensagens" onclick="limparMensagensSala()">🧹</button>
+            <div id="chatMessages"></div>
 
-        <div id="chatMessages"></div>
-
-        <div id="chatInputArea">
-            <input type="text" id="chatInput" placeholder="Digite uma mensagem...">
-            <button onclick="enviarMensagem()">&#10148;</button>
+            <div id="chatInputArea">
+                <input type="text" id="chatInput" placeholder="Digite uma mensagem...">
+                <button onclick="enviarMensagem()">&#10148;</button>
+            </div>
         </div>
     </div>
 
@@ -1661,7 +1668,7 @@ function atualizarContadorCaptura(){
 
 function enviarMensagemSistema(texto){
 
-    const chatRef = ref(db, "chatGlobal");
+const chatRef = getChatRef(salaAtual);
 
     push(chatRef, {
         nome: "Sistema",
@@ -3389,6 +3396,7 @@ onAuthStateChanged(auth, async (user) => {
         },50);
 
         const nivelUsuario = (dadosUsuario.nivel || "op").toString().toLowerCase();
+        window.nivelUsuario = nivelUsuario;
         const updateControls = document.getElementById("updateControls");
         if(updateControls){
             updateControls.style.display = (nivelUsuario === "admin" || nivelUsuario === "mod") ? "block" : "none";
@@ -3443,7 +3451,6 @@ document.addEventListener("mousemove", resetarTimer);
 document.addEventListener("keydown", resetarTimer);
 document.addEventListener("click", resetarTimer);
 
-const chatRef = ref(db, "chatGlobal");
 const estoqueRef = ref(db, "estoqueGlobal");
 
 // Exporta funções para o escopo global (window)
@@ -3518,6 +3525,79 @@ function fecharSubPagina(){
 // --- LÓGICA DO CHAT EM TEMPO REAL ---
 
 
+let salaAtual = "publica";
+let chatUnsub = null;
+const salasChat = [
+    { id: "publica", label: "Publica", publico: true },
+    { id: "sala2", label: "Sala 2", publico: false },
+    { id: "sala3", label: "Sala 3", publico: false }
+];
+
+function getChatRef(roomId){
+    return ref(db, "chatRooms/" + roomId + "/messages");
+}
+
+function setSalaAtiva(roomId){
+    salaAtual = roomId;
+    document.querySelectorAll(".roomBtn").forEach(btn=>{
+        btn.classList.toggle("active", btn.dataset.room === roomId);
+    });
+}
+
+async function verificarSenhaSala(roomId){
+    const snap = await get(ref(db, "chatRooms/" + roomId + "/senha"));
+    return snap.exists() ? String(snap.val()) : "";
+}
+
+async function trocarSala(roomId){
+    const room = salasChat.find(r=> r.id === roomId);
+    if(!room) return;
+    if(!room.publico){
+        const senhaDb = await verificarSenhaSala(roomId);
+        if(!senhaDb){
+            mostrarNotificacao("Sala sem senha definida. Procure o admin.");
+            return;
+        }
+        const senha = prompt("Digite a senha da sala:");
+        if(senha === null) return;
+        if(String(senha) !== String(senhaDb)){
+            mostrarNotificacao("Senha incorreta.");
+            return;
+        }
+    }
+    setSalaAtiva(roomId);
+    iniciarChat();
+}
+window.trocarSala = trocarSala;
+
+async function definirSenhaSala(roomId){
+    if(window.nivelUsuario !== "admin"){
+        mostrarNotificacao("Apenas admin pode alterar senha.");
+        return;
+    }
+    if(roomId === "publica") return;
+    const senha = prompt("Defina uma senha de 6 dígitos para a sala:");
+    if(senha === null) return;
+    if(!/^[0-9]{6}$/.test(senha)){
+        mostrarNotificacao("A senha deve ter 6 dígitos.");
+        return;
+    }
+    await set(ref(db, "chatRooms/" + roomId + "/senha"), senha);
+    mostrarNotificacao("Senha atualizada.");
+}
+window.definirSenhaSala = definirSenhaSala;
+
+async function limparMensagensSala(){
+    if(window.nivelUsuario !== "admin"){
+        mostrarNotificacao("Apenas admin pode limpar o chat.");
+        return;
+    }
+    const ok = confirm("Apagar todas as mensagens desta sala?");
+    if(!ok) return;
+    await set(getChatRef(salaAtual), null);
+}
+window.limparMensagensSala = limparMensagensSala;
+
 // Sobrescreve a função de enviar chat para usar Firebase
 window.enviarMensagem = function() {
     let input = document.getElementById("chatInput");
@@ -3529,7 +3609,7 @@ window.enviarMensagem = function() {
         return;
     }
 
-    const novaMsgRef = push(chatRef);
+    const novaMsgRef = push(getChatRef(salaAtual));
     set(novaMsgRef, {
         nome: window.meuNickname,
         texto: texto,
@@ -3571,22 +3651,23 @@ if(cadastroCrachaInput){
     cadastroCrachaInput.addEventListener("input", agendarChecagemNick);
 }
 
+document.querySelectorAll(".roomBtn").forEach(btn=>{
+    btn.addEventListener("dblclick", ()=>{
+        const roomId = btn.dataset.room;
+        definirSenhaSala(roomId);
+    });
+});
+
 function iniciarChat(){
-
-    onValue(ref(db, "chatGlobal"), snapshot => {
-
+    if(chatUnsub) chatUnsub();
+    chatUnsub = onValue(getChatRef(salaAtual), snapshot => {
         let lista = [];
-
         snapshot.forEach(child=>{
             lista.push(child.val());
         });
-
         window.mensagens = lista;
-
         renderChat();
-
     });
-
 }
 
 
