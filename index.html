@@ -2090,11 +2090,11 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
         }
 
         // DETALHES POR ENDERE�O
-        let encontrouEndere�os = false;
+        let encontrouEnderecos = false;
 
         for (let j = 1; j < saldoEndereco.length; j++) {
             if (saldoEndereco[j][1] == protheus) {
-                encontrouEndere�os = true;
+                encontrouEnderecos = true;
                 item.enderecos.push({
                     endereco: saldoEndereco[j][4] || "ND",
                     armazem: saldoEndereco[j][2] || "ND",
@@ -2103,7 +2103,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             }
         }
 
-        if (encontrouEndere�os && item.enderecos.length > 0) {
+        if (encontrouEnderecos && item.enderecos.length > 0) {
             item.enderecoPrincipal = item.enderecos[0].endereco;
             item.armazemPrincipal = item.enderecos[0].armazem;
 
