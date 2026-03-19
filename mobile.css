@@ -236,6 +236,14 @@
         height: 100%;
     }
 
+    #chatBox::after{
+        top:3px;
+        bottom:3px;
+        right:-5px;
+        width:5px;
+        border-radius:0 7px 7px 0;
+    }
+
     #chatWrap{
         gap:6px;
         flex:1;
@@ -248,10 +256,6 @@
         height:10px;
     }
 
-    .roomBtn::before{
-        height:7px;
-        border-radius:0 5px 5px 0;
-    }
 
     #chatClearBtn{
         top:4px;

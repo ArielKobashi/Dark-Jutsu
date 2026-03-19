@@ -757,6 +757,20 @@ th.col-ordenada.col-filtrada {
     z-index:1;
 }
 
+#chatBox::after{
+    content:"";
+    position:absolute;
+    top:4px;
+    bottom:4px;
+    right:-6px;
+    width:6px;
+    border:1px solid rgba(91,140,255,0.35);
+    border-left:0;
+    border-radius:0 8px 8px 0;
+    pointer-events:none;
+    z-index:0;
+}
+
 #chatWrap{
     display:flex;
     gap:8px;
@@ -792,21 +806,6 @@ th.col-ordenada.col-filtrada {
     background-clip:padding-box;
 }
 
-.roomBtn::before{
-    content:"";
-    position:absolute;
-    left:calc(-1 * var(--chat-gap));
-    width:calc(100% + var(--chat-gap));
-    height:8px;
-    top:50%;
-    transform:translateY(-50%);
-    background:#0E1723;
-    border:1px solid #223044;
-    border-left:0;
-    border-radius:0 6px 6px 0;
-    z-index:-1;
-    pointer-events:none;
-}
 
 .roomBtn.active{
     box-shadow:0 0 10px rgba(255,255,255,0.25), 0 0 12px currentColor;
