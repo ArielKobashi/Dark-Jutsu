@@ -1069,6 +1069,14 @@ th.col-ordenada.col-filtrada {
     min-height:0; /* ðŸ”¥ CORREÃ‡ÃƒO DO BUG DO FLEX */
 }
 
+#chatTyping{
+    min-height:14px;
+    padding:2px 8px 6px;
+    font-size:9px;
+    color:rgba(207,227,255,0.6);
+    letter-spacing:0.2px;
+}
+
 .mensagem{
     margin-bottom:6px;
 }
@@ -1477,15 +1485,34 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 /* ===== CHAT MODERNO ===== */
 
 #chatBox{
-    background:linear-gradient(180deg,#0E1723,#0B121A);
+    background:var(--chat-wallpaper, linear-gradient(180deg,#0E1723,#0B121A));
     border:1px solid #223044;
     box-shadow:0 6px 20px rgba(0,0,0,0.35);
 }
 
+#chatBox[data-room="publica"]{
+    --chat-wallpaper:
+        radial-gradient(120% 80% at 80% 10%, rgba(239,68,68,0.18), transparent 60%),
+        radial-gradient(120% 80% at 10% 90%, rgba(239,68,68,0.12), transparent 65%),
+        linear-gradient(180deg, #1A0A0A, #0E0707);
+}
+
+#chatBox[data-room="sala2"]{
+    --chat-wallpaper:
+        radial-gradient(120% 80% at 80% 10%, rgba(245,158,11,0.18), transparent 60%),
+        radial-gradient(120% 80% at 10% 90%, rgba(245,158,11,0.12), transparent 65%),
+        linear-gradient(180deg, #1A1405, #0E0B06);
+}
+
+#chatBox[data-room="sala3"]{
+    --chat-wallpaper:
+        radial-gradient(120% 80% at 80% 10%, rgba(59,130,246,0.2), transparent 60%),
+        radial-gradient(120% 80% at 10% 90%, rgba(59,130,246,0.12), transparent 65%),
+        linear-gradient(180deg, #0A1424, #070D16);
+}
+
 #chatMessages{
-    background:
-    radial-gradient(circle at 20% 20%, rgba(24,119,242,0.08), transparent 40%),
-    #0B121A;
+    background:rgba(6,8,12,0.35);
     padding:8px;
 }
 

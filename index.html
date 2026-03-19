@@ -360,13 +360,14 @@ Usuários do Sistema
     <!-- SPLIT: chat.html (chat box) -->
     <div id="chatWrap">
         <div id="chatRooms">
-            <button class="roomBtn room-red active" data-room="publica" onclick="trocarSala('publica')"></button>
-            <button class="roomBtn room-yellow" data-room="sala2" onclick="trocarSala('sala2')"></button>
-            <button class="roomBtn room-blue" data-room="sala3" onclick="trocarSala('sala3')"></button>
+            <button class="roomBtn room-red active" data-room="publica" title="Sala pública" aria-label="Sala pública" onclick="trocarSala('publica')"></button>
+            <button class="roomBtn room-yellow" data-room="sala2" title="Sala Privada 1" aria-label="Sala Privada 1" onclick="trocarSala('sala2')"></button>
+            <button class="roomBtn room-blue" data-room="sala3" title="Sala Privada 2" aria-label="Sala Privada 2" onclick="trocarSala('sala3')"></button>
         </div>
         <div id="chatBox">
             <button id="chatClearBtn" title="Limpar mensagens" onclick="limparMensagensSala()">🗑️</button>
             <div id="chatMessages"></div>
+            <div id="chatTyping" aria-live="polite"></div>
 
             <div id="chatInputArea">
                 <input type="text" id="chatInput" placeholder="Digite uma mensagem...">
@@ -1673,6 +1674,7 @@ const chatRef = getChatRef(salaAtual);
     push(chatRef, {
         nome: "Sistema",
         texto: texto,
+        tipo: "system",
         data: new Date().toLocaleTimeString(),
         timestamp: Date.now()
     });
@@ -1722,6 +1724,29 @@ function renderChat(){
     ultimas.forEach(msg => {
 
         if(msg.texto === "__JOIN__") return;
+
+        if(msg.tipo === "system"){
+            let div = document.createElement("div");
+            div.className = "mensagem sistema";
+            div.style.textAlign = "center";
+            div.innerHTML = `
+            <div style="
+                display:inline-block;
+                font-size:9px;
+                opacity:0.6;
+                padding:2px 6px;
+                border:1px dashed rgba(207,227,255,0.15);
+                border-radius:999px;
+                background:rgba(14,23,35,0.35);
+                max-width:190px;
+                overflow-wrap:anywhere;
+            ">
+                ${msg.texto}
+            </div>
+            `;
+            box.appendChild(div);
+            return;
+        }
 
         let cor = obterCorNickname(msg.nome);
         let souEu = msg.nome.toLowerCase() === window.meuNickname?.toLowerCase();
@@ -2005,6 +2030,27 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
     if(e.key === "Enter"){
         enviarMensagem();
     }
+});
+
+document.getElementById("chatInput").addEventListener("input", function(){
+    const texto = this.value.trim();
+    if(!texto){
+        setDigitando(salaAtual, false);
+        return;
+    }
+    const agora = Date.now();
+    if(agora - lastTypingSent > TYPING_THROTTLE){
+        setDigitando(salaAtual, true);
+        lastTypingSent = agora;
+    }
+    if(typingIdleTimer) clearTimeout(typingIdleTimer);
+    typingIdleTimer = setTimeout(()=>{
+        setDigitando(salaAtual, false);
+    }, TYPING_TTL);
+});
+
+document.getElementById("chatInput").addEventListener("blur", function(){
+    setDigitando(salaAtual, false);
 });
 
 function isMobileLayout(){
@@ -3381,6 +3427,8 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         window.meuNickname = dadosUsuario.nickname;
+        window.meuCracha = dadosUsuario.cracha || "";
+        setSalaAtiva(salaAtual);
         // ðŸ”¥ ZERA CAPTURAS AO INICIAR SESSÃO
         capturados.clear();
         localStorage.removeItem("capturadosMagnet");
@@ -3542,6 +3590,9 @@ function setSalaAtiva(roomId){
     document.querySelectorAll(".roomBtn").forEach(btn=>{
         btn.classList.toggle("active", btn.dataset.room === roomId);
     });
+    const chatBox = document.getElementById("chatBox");
+    if(chatBox) chatBox.setAttribute("data-room", roomId);
+    anunciarEntradaSala(roomId);
 }
 
 async function verificarSenhaSala(roomId){
@@ -3565,10 +3616,75 @@ async function trocarSala(roomId){
             return;
         }
     }
+    setDigitando(salaAtual, false);
     setSalaAtiva(roomId);
     iniciarChat();
 }
 window.trocarSala = trocarSala;
+
+let ultimaSalaEntrada = null;
+function anunciarEntradaSala(roomId){
+    if(!window.meuNickname) return;
+    if(ultimaSalaEntrada === roomId) return;
+    ultimaSalaEntrada = roomId;
+    const cracha = (window.meuCracha || "").toString().trim();
+    const nickFmt = formatarNick(window.meuNickname || "");
+    const tag = cracha ? `${nickFmt}:${cracha}` : nickFmt;
+    enviarMensagemSistema(`${tag} entrou na sala...`);
+}
+
+let typingUnsub = null;
+let typingUsers = {};
+let typingIdleTimer = null;
+let lastTypingSent = 0;
+const TYPING_TTL = 4500;
+const TYPING_THROTTLE = 1200;
+
+function getTypingRef(roomId){
+    return ref(db, "chatRooms/" + roomId + "/typing");
+}
+
+function setDigitando(roomId, ativo){
+    if(!auth?.currentUser || !roomId) return;
+    const uid = auth.currentUser.uid;
+    const node = ref(db, "chatRooms/" + roomId + "/typing/" + uid);
+    if(!ativo){
+        set(node, null);
+        return;
+    }
+    const cracha = (window.meuCracha || "").toString().trim();
+    set(node, {
+        nickname: window.meuNickname || "",
+        cracha: cracha,
+        ts: Date.now()
+    });
+}
+
+function atualizarDigitandoUI(){
+    const el = document.getElementById("chatTyping");
+    if(!el) return;
+    const agora = Date.now();
+    const meuNick = (window.meuNickname || "").toLowerCase();
+    const ativos = Object.values(typingUsers || {}).filter(u=>{
+        if(!u || !u.ts) return false;
+        if(agora - u.ts > TYPING_TTL) return false;
+        return (u.nickname || "").toLowerCase() !== meuNick;
+    });
+    if(!ativos.length){
+        el.textContent = "";
+        return;
+    }
+    const nomes = ativos.map(u=>{
+        const nick = formatarNick(u.nickname || "");
+        const cracha = (u.cracha || "").toString().trim();
+        return cracha ? `${nick}:${cracha}` : nick;
+    }).filter(Boolean);
+    if(!nomes.length){
+        el.textContent = "";
+        return;
+    }
+    el.textContent = `${nomes.slice(0,2).join(", ")} digitando...`;
+}
 
 async function definirSenhaSala(roomId){
     if(window.nivelUsuario !== "admin"){
@@ -3609,6 +3725,7 @@ window.enviarMensagem = function() {
         return;
     }
 
+    setDigitando(salaAtual, false);
     const novaMsgRef = push(getChatRef(salaAtual));
     set(novaMsgRef, {
         nome: window.meuNickname,
@@ -3660,6 +3777,7 @@ document.querySelectorAll(".roomBtn").forEach(btn=>{
 
 function iniciarChat(){
     if(chatUnsub) chatUnsub();
+    if(typingUnsub) typingUnsub();
     chatUnsub = onValue(getChatRef(salaAtual), snapshot => {
         let lista = [];
         snapshot.forEach(child=>{
@@ -3667,6 +3785,10 @@ function iniciarChat(){
         });
         window.mensagens = lista;
         renderChat();
+    });
+    typingUnsub = onValue(getTypingRef(salaAtual), snapshot => {
+        typingUsers = snapshot.val() || {};
+        atualizarDigitandoUI();
     });
 }
 
