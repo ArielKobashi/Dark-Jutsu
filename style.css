@@ -760,6 +760,7 @@ th.col-ordenada.col-filtrada {
     display:flex;
     gap:8px;
     align-items:stretch;
+    flex-direction:row-reverse;
 }
 
 #chatRooms{
@@ -772,10 +773,10 @@ th.col-ordenada.col-filtrada {
 }
 
 .roomBtn{
-    width:22px;
-    height:22px;
+    width:11px;
+    height:11px;
     border-radius:50%;
-    border:2px solid #1E1E2A;
+    border:1px solid #1E1E2A;
     padding:0;
     cursor:pointer;
     box-shadow:0 0 8px rgba(0,0,0,0.4) inset;
