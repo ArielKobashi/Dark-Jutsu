@@ -773,6 +773,7 @@ th.col-ordenada.col-filtrada {
     align-items:center;
     justify-content:flex-start;
     padding-top:6px;
+    position:relative;
 }
 
 .roomBtn{
@@ -785,6 +786,7 @@ th.col-ordenada.col-filtrada {
     box-shadow:0 0 8px rgba(0,0,0,0.4) inset;
     position:relative;
     z-index:1;
+    background-clip:padding-box;
 }
 
 .roomBtn::before{
@@ -799,7 +801,7 @@ th.col-ordenada.col-filtrada {
     border:1px solid #223044;
     border-left:0;
     border-radius:0 6px 6px 0;
-    z-index:-1;
+    z-index:0;
     pointer-events:none;
 }
 
