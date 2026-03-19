@@ -1081,6 +1081,14 @@ th.col-ordenada.col-filtrada {
     margin-bottom:6px;
 }
 
+.mensagem.sistema{
+    text-align:center;
+    font-size:9px;
+    color:rgba(160,170,190,0.6);
+    padding:2px 0;
+    letter-spacing:0.2px;
+}
+
 hr {
     display: block;
     width: 100%;
@@ -1494,7 +1502,7 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     --chat-wallpaper:
         radial-gradient(120% 80% at 80% 10%, rgba(239,68,68,0.18), transparent 60%),
         radial-gradient(120% 80% at 10% 90%, rgba(239,68,68,0.12), transparent 65%),
-        linear-gradient(180deg, #1A0A0A, #0E0707);
+        linear-gradient(180deg, #1E0C0C, #100808);
 }
 
 #chatBox[data-room="sala2"]{
@@ -1514,6 +1522,31 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 #chatMessages{
     background:rgba(6,8,12,0.35);
     padding:8px;
+}
+
+#chatPublicGate{
+    position:absolute;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    background:rgba(8,10,16,0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color:rgba(207,227,255,0.8);
+    font-size:10px;
+    letter-spacing:0.3px;
+    z-index:3;
+    cursor:pointer;
+    padding:10px;
+}
+
+#chatPublicGate span{
+    padding:4px 8px;
+    border:1px solid rgba(207,227,255,0.2);
+    border-radius:999px;
+    background:rgba(14,23,35,0.35);
 }
 
 #chatMessages{

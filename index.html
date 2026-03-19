@@ -368,6 +368,9 @@ Usuários do Sistema
             <button id="chatClearBtn" title="Limpar mensagens" onclick="limparMensagensSala()">🗑️</button>
             <div id="chatMessages"></div>
             <div id="chatTyping" aria-live="polite"></div>
+            <div id="chatPublicGate" role="button" aria-label="Abrir sala pública">
+                <span>Toque para abrir a sala pública</span>
+            </div>
 
             <div id="chatInputArea">
                 <input type="text" id="chatInput" placeholder="Digite uma mensagem...">
@@ -1729,22 +1732,7 @@ function renderChat(){
         if(msg.tipo === "system"){
             let div = document.createElement("div");
             div.className = "mensagem sistema";
-            div.style.textAlign = "center";
-            div.innerHTML = `
-            <div style="
-                display:inline-block;
-                font-size:9px;
-                opacity:0.6;
-                padding:2px 6px;
-                border:1px dashed rgba(207,227,255,0.15);
-                border-radius:999px;
-                background:rgba(14,23,35,0.35);
-                max-width:190px;
-                overflow-wrap:anywhere;
-            ">
-                ${msg.texto}
-            </div>
-            `;
+            div.textContent = msg.texto;
             box.appendChild(div);
             return;
         }
@@ -2053,6 +2041,15 @@ document.getElementById("chatInput").addEventListener("input", function(){
 document.getElementById("chatInput").addEventListener("blur", function(){
     setDigitando(salaAtual, false);
 });
+
+const chatPublicGate = document.getElementById("chatPublicGate");
+if(chatPublicGate){
+    chatPublicGate.addEventListener("click", function(){
+        chatPublicUnlocked = true;
+        atualizarGatePublico();
+        iniciarChatSePermitido();
+    });
+}
 
 function isMobileLayout(){
     return window.matchMedia("(max-width: 900px)").matches;
@@ -3469,7 +3466,7 @@ onAuthStateChanged(auth, async (user) => {
 
         await carregarEstoqueInicial();
 
-        iniciarChat();
+        iniciarChatSePermitido();
 
         resetarTimer(); // ðŸ”¥ ativa controle de inatividade
 
@@ -3576,6 +3573,7 @@ function fecharSubPagina(){
 
 let salaAtual = "publica";
 let chatUnsub = null;
+let chatPublicUnlocked = false;
 const salasChat = [
     { id: "publica", label: "Publica", publico: true },
     { id: "sala2", label: "Sala 2", publico: false },
@@ -3593,7 +3591,9 @@ function setSalaAtiva(roomId){
     });
     const chatBox = document.getElementById("chatBox");
     if(chatBox) chatBox.setAttribute("data-room", roomId);
-    anunciarEntradaSala(roomId);
+    if(roomId === "publica" && !chatPublicUnlocked){
+        atualizarGatePublico();
+    }
 }
 
 async function verificarSenhaSala(roomId){
@@ -3619,7 +3619,7 @@ async function trocarSala(roomId){
     }
     setDigitando(salaAtual, false);
     setSalaAtiva(roomId);
-    iniciarChat();
+    iniciarChatSePermitido();
 }
 window.trocarSala = trocarSala;
 
@@ -3686,6 +3686,24 @@ function atualizarDigitandoUI(){
         return;
     }
     el.textContent = `${nomes.slice(0,2).join(", ")} digitando...`;
+}
+
+function atualizarGatePublico(){
+    const gate = document.getElementById("chatPublicGate");
+    if(!gate) return;
+    if(salaAtual === "publica" && !chatPublicUnlocked){
+        gate.style.display = "flex";
+    }else{
+        gate.style.display = "none";
+    }
+}
+
+function iniciarChatSePermitido(){
+    if(salaAtual === "publica" && !chatPublicUnlocked){
+        atualizarGatePublico();
+        return;
+    }
+    iniciarChat();
 }
 
 async function definirSenhaSala(roomId){
@@ -3792,6 +3810,7 @@ function iniciarChat(){
         typingUsers = snapshot.val() || {};
         atualizarDigitandoUI();
     });
+    anunciarEntradaSala(salaAtual);
 }
 
 
