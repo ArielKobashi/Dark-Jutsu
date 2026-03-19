@@ -761,6 +761,8 @@ th.col-ordenada.col-filtrada {
     gap:8px;
     align-items:stretch;
     flex-direction:row-reverse;
+    flex:1;
+    min-height:0;
 }
 
 #chatRooms{

@@ -232,11 +232,14 @@
 
     #chatBox {
         min-height: 180px;
-        max-height: 35vh;
+        max-height: none;
+        height: 100%;
     }
 
     #chatWrap{
         gap:6px;
+        flex:1;
+        min-height:0;
     }
 
     .roomBtn{
