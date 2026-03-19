@@ -360,9 +360,9 @@ Usuários do Sistema
     <!-- SPLIT: chat.html (chat box) -->
     <div id="chatWrap">
         <div id="chatRooms">
-            <button class="roomBtn room-red active" data-room="publica" title="Sala pública" aria-label="Sala pública" onclick="trocarSala('publica')"></button>
-            <button class="roomBtn room-yellow" data-room="sala2" title="Sala Privada 1" aria-label="Sala Privada 1" onclick="trocarSala('sala2')"></button>
-            <button class="roomBtn room-blue" data-room="sala3" title="Sala Privada 2" aria-label="Sala Privada 2" onclick="trocarSala('sala3')"></button>
+            <button class="roomBtn room-red active" data-room="publica" title="Sala pública" aria-label="Sala pública"></button>
+            <button class="roomBtn room-yellow" data-room="sala2" title="Sala Privada 1" aria-label="Sala Privada 1"></button>
+            <button class="roomBtn room-blue" data-room="sala3" title="Sala Privada 2" aria-label="Sala Privada 2"></button>
         </div>
         <div id="chatBox">
             <button id="chatClearBtn" title="Limpar mensagens" onclick="limparMensagensSala()">🗑️</button>
@@ -3825,8 +3825,18 @@ if(cadastroCrachaInput){
 }
 
 document.querySelectorAll(".roomBtn").forEach(btn=>{
-    btn.addEventListener("dblclick", ()=>{
+    let clickTimer = null;
+    btn.addEventListener("click", ()=>{
+        if(clickTimer) clearTimeout(clickTimer);
         const roomId = btn.dataset.room;
+        clickTimer = setTimeout(()=> trocarSala(roomId), 220);
+    });
+    btn.addEventListener("dblclick", (e)=>{
+        if(window.nivelUsuario !== "admin") return;
+        const roomId = btn.dataset.room;
+        if(roomId === "publica") return;
+        if(clickTimer) clearTimeout(clickTimer);
+        e.preventDefault();
         definirSenhaSala(roomId);
     });
 });
