@@ -48,7 +48,7 @@
         <div class="cadastroSetor">
             <div class="cadastroSetorLabel">Setor</div>
             <div class="cadastroSetorGrid">
-                <label><input type="radio" name="setor" value="Administrativo"> Administrativo</label>
+                <label><input type="radio" name="setor" value="Manutenção"> Manutenção</label>
                 <label><input type="radio" name="setor" value="Almoxarifado"> Almoxarifado</label>
                 <label><input type="radio" name="setor" value="Supervisão"> Supervisão</label>
                 <label><input type="radio" name="setor" value="Operação"> Operação</label>
@@ -367,7 +367,6 @@ Usuários do Sistema
         <div id="chatBox">
             <button id="chatClearBtn" title="Limpar mensagens" onclick="limparMensagensSala()">🗑️</button>
             <div id="chatMessages"></div>
-            <div id="chatTyping" aria-live="polite"></div>
             <div id="chatPublicGate" role="button" aria-label="Abrir sala pública" onclick="abrirSalaPublica()">
                 <span>Toque para abrir a sala pública</span>
             </div>
@@ -550,6 +549,7 @@ window.aprovar = async function(id){
         await set(ref(db, "usuarios/" + uid), {
             nickname: dados.nickname,
             cracha: dados.cracha || "",
+            setor: dados.setor || "",
             nivel: nivel,
             ativo: true,
             criadoEm: Date.now(),
@@ -787,6 +787,8 @@ function iniciarListaUsuarios(){
                     <div class="fbInfo">
                         <div class="fbName">${formatarNick(u.nickname)}</div>
                         <div class="fbMeta ${statusClass}">${statusText}</div>
+                        <div class="fbMeta">Crachá: ${u.cracha || "-"}</div>
+                        <div class="fbMeta">Setor: ${u.setor || "-"}</div>
                     </div>
                 </div>
                 <div class="nivelBadge nivel-${nivelRaw}">${nivelLabel}</div>
@@ -816,6 +818,62 @@ function iniciarListaUsuarios(){
     });
 
 }
+
+// Migração pontual de setor: "Administrativo/Administração" -> "Manutenção"
+window.migrarSetorManutencao = async function(){
+    try{
+        if(window.nivelUsuario !== "admin"){
+            if(typeof window.mostrarNotificacao === "function"){
+                window.mostrarNotificacao("Apenas admin pode migrar setores.");
+            }
+            return;
+        }
+        const usuariosSnap = await get(ref(db,"usuarios"));
+        const solicitSnap = await get(ref(db,"solicitacoesCadastro"));
+        let usuariosAlterados = 0;
+        let solicitacoesAlteradas = 0;
+
+        if(usuariosSnap.exists()){
+            const updates = [];
+            usuariosSnap.forEach(child=>{
+                const u = child.val();
+                const setor = (u?.setor || "").toString();
+                if(setor === "Administrativo" || setor === "Administração"){
+                    updates.push({ path: "usuarios/" + child.key + "/setor" });
+                }
+            });
+            for(const item of updates){
+                await set(ref(db, item.path), "Manutenção");
+                usuariosAlterados++;
+            }
+        }
+
+        if(solicitSnap.exists()){
+            const updates = [];
+            solicitSnap.forEach(child=>{
+                const s = child.val();
+                const setor = (s?.setor || "").toString();
+                if(setor === "Administrativo" || setor === "Administração"){
+                    updates.push({ path: "solicitacoesCadastro/" + child.key + "/setor" });
+                }
+            });
+            for(const item of updates){
+                await set(ref(db, item.path), "Manutenção");
+                solicitacoesAlteradas++;
+            }
+        }
+
+        if(typeof window.mostrarNotificacao === "function"){
+            window.mostrarNotificacao(`Migração concluída: ${usuariosAlterados} usuários, ${solicitacoesAlteradas} solicitações.`);
+        }
+        console.log("Migração concluída", { usuariosAlterados, solicitacoesAlteradas });
+    }catch(e){
+        console.error("Erro ao migrar setor:", e);
+        if(typeof window.mostrarNotificacao === "function"){
+            window.mostrarNotificacao("Erro ao migrar setor.");
+        }
+    }
+};
 
 function mostrarNotificacao(msg){
 
@@ -2279,6 +2337,8 @@ window.verUsuario = async function(uid){
         const data = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
         box.innerHTML = `
         <div><b>Nickname:</b> ${dados.nickname || "-"}</div>
+        <div><b>Crachá:</b> ${dados.cracha || "-"}</div>
+        <div><b>Setor:</b> ${dados.setor || "-"}</div>
         <div><b>Nível:</b> ${(dados.nivel || "-").toString().toUpperCase()}</div>
         <div><b>Status:</b> ${dados.ativo === false ? "Bloqueado" : "Ativo"}</div>
         <div><b>Criado em:</b> ${data}</div>
@@ -2916,7 +2976,7 @@ window.cadastrar = async function(){
     let cracha = document.getElementById("cadastroCracha").value.trim();
     let setorRaw = document.querySelector("input[name='setor']:checked")?.value || "";
     const setorMap = {
-        "Administrativo": "Administrativo",
+        "Manutenção": "Manutenção",
         "Almoxarifado": "Almoxarifado",
         "Supervisão": "Supervisão",
         "Operação": "Operação",
