@@ -1040,7 +1040,8 @@ function criarTd(row, valor){
 
 let dragSelectActive = false;
 let dragSelectValue = true;
-let dragSelectLastKey = "";
+let dragSelectLastIndex = -1;
+let checkboxIndexMap = [];
 let dragPointerX = 0;
 let dragPointerY = 0;
 let dragSuppressClick = false;
@@ -1064,7 +1065,7 @@ function aplicarSelecaoCheckbox(checkbox, marcar){
     if(!checkbox) return;
     const key = checkbox.dataset.key || "";
     if(!key) return;
-    if(dragSelectLastKey === key && checkbox.checked === marcar) return;
+    if(checkbox.checked === marcar) return;
 
     checkbox.checked = marcar;
     if(marcar){
@@ -1082,33 +1083,57 @@ function aplicarSelecaoCheckbox(checkbox, marcar){
             atualizarBadge();
         }
     }
-    dragSelectLastKey = key;
     atualizarEstadoHeader();
+}
+
+function aplicarSelecaoRange(indexA, indexB, marcar){
+    if(indexA < 0 || indexB < 0) return;
+    const inicio = Math.min(indexA, indexB);
+    const fim = Math.max(indexA, indexB);
+    for(let i = inicio; i <= fim; i++){
+        const cb = checkboxIndexMap[i];
+        if(cb) aplicarSelecaoCheckbox(cb, marcar);
+    }
+}
+
+function atualizarDragSelecao(){
+    const cb = getCheckboxFromPoint(dragPointerX, dragPointerY);
+    if(!cb) return;
+    const indexAtual = parseInt(cb.dataset.index || "-1", 10);
+    if(indexAtual < 0) return;
+    if(dragSelectLastIndex === -1){
+        dragSelectLastIndex = indexAtual;
+        aplicarSelecaoCheckbox(cb, dragSelectValue);
+        return;
+    }
+    if(indexAtual !== dragSelectLastIndex){
+        aplicarSelecaoRange(dragSelectLastIndex, indexAtual, dragSelectValue);
+        dragSelectLastIndex = indexAtual;
+    }
 }
 
 document.addEventListener("mousemove", function(e){
     if(!dragSelectActive) return;
     if(!e.ctrlKey){
         dragSelectActive = false;
-        dragSelectLastKey = "";
+        dragSelectLastIndex = -1;
         return;
     }
     dragPointerX = e.clientX;
     dragPointerY = e.clientY;
-    const cb = getCheckboxFromPoint(dragPointerX, dragPointerY);
-    if(cb) aplicarSelecaoCheckbox(cb, dragSelectValue);
+    atualizarDragSelecao();
 });
 
 document.addEventListener("mouseup", function(){
     dragSelectActive = false;
-    dragSelectLastKey = "";
+    dragSelectLastIndex = -1;
     dragSuppressClick = false;
 });
 
 document.addEventListener("keyup", function(e){
     if(e.key === "Control"){
         dragSelectActive = false;
-        dragSelectLastKey = "";
+        dragSelectLastIndex = -1;
     }
 });
 
@@ -1116,8 +1141,7 @@ const tableContainerDrag = document.getElementById("tableContainer");
 if(tableContainerDrag){
     tableContainerDrag.addEventListener("scroll", function(){
         if(!dragSelectActive) return;
-        const cb = getCheckboxFromPoint(dragPointerX, dragPointerY);
-        if(cb) aplicarSelecaoCheckbox(cb, dragSelectValue);
+        atualizarDragSelecao();
     });
     tableContainerDrag.addEventListener("wheel", function(e){
         if(dragSelectActive && e.ctrlKey){
@@ -1136,8 +1160,9 @@ function renderTabela(){
     body.innerHTML="";
 
     let itensMostrados = visiveis.slice(0, limite);
+    checkboxIndexMap = [];
 
-    itensMostrados.forEach(item => {
+    itensMostrados.forEach((item, idx) => {
 
         if (!item) return;
 
@@ -1148,6 +1173,8 @@ function renderTabela(){
         let checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.dataset.key = getItemKey(item);
+        checkbox.dataset.index = String(idx);
+        checkboxIndexMap[idx] = checkbox;
         checkbox.checked = selecionados.has(getItemKey(item));
 
         checkbox.addEventListener("change", function(){
@@ -1181,11 +1208,11 @@ function renderTabela(){
             e.preventDefault();
             dragSelectActive = true;
             dragSelectValue = !checkbox.checked;
-            dragSelectLastKey = "";
+            dragSelectLastIndex = idx;
             dragPointerX = e.clientX;
             dragPointerY = e.clientY;
             dragSuppressClick = true;
-            aplicarSelecaoCheckbox(checkbox, dragSelectValue);
+            aplicarSelecaoRange(idx, idx, dragSelectValue);
         });
 
         checkbox.addEventListener("click", function(e){
