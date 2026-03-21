@@ -1119,6 +1119,11 @@ if(tableContainerDrag){
         const cb = getCheckboxFromPoint(dragPointerX, dragPointerY);
         if(cb) aplicarSelecaoCheckbox(cb, dragSelectValue);
     });
+    tableContainerDrag.addEventListener("wheel", function(e){
+        if(dragSelectActive && e.ctrlKey){
+            e.preventDefault();
+        }
+    }, { passive: false });
 }
 
 function renderTabela(){
