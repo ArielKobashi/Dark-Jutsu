@@ -565,10 +565,7 @@ window.aprovar = async function(id){
         }catch(e){
             console.warn("Falha ao gravar nicknamesAuth:", e?.code || e);
         }
-        await set(ref(db, "solicitacoesCadastro/"+id), {
-            ...dados,
-            status: "aprovado"
-        });
+        await set(ref(db, "solicitacoesCadastro/"+id), null);
         await window.ajustarNickSolicCount(dados.nickname, -1);
         await desmarcarSolicCracha(dados.nickname, dados.cracha);
         await rebuildNicknamesSimple();
