@@ -1278,6 +1278,20 @@ function renderTabela(){
         }
 
         tdEnd.ondblclick = ()=> abrirModalSaldos(item);
+        tdEnd.addEventListener("mousedown", function(e){
+            if(e.button !== 0) return;
+            e.preventDefault();
+            dragSelectActive = true;
+            dragSelectValue = !checkbox.checked;
+            dragSelectLastIndex = -1;
+            dragPointerX = e.clientX;
+            dragPointerY = e.clientY;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            dragStartIndex = idx;
+            dragMoved = false;
+            dragSuppressClick = false;
+        });
 
         // SALDO
         criarTd(row, item.saldo || "");
