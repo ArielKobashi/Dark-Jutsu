@@ -1038,6 +1038,89 @@ function criarTd(row, valor){
     return td;
 }
 
+let dragSelectActive = false;
+let dragSelectValue = true;
+let dragSelectLastKey = "";
+let dragPointerX = 0;
+let dragPointerY = 0;
+let dragSuppressClick = false;
+
+function getCheckboxFromPoint(x, y){
+    const el = document.elementFromPoint(x, y);
+    if(!el) return null;
+    let cb = null;
+    if(el.tagName === "INPUT" && el.type === "checkbox"){
+        cb = el;
+    }else if(el.closest){
+        cb = el.closest("tr")?.querySelector('input[type="checkbox"][data-key]') || null;
+    }
+    if(!cb) return null;
+    if(!cb.dataset || !cb.dataset.key) return null;
+    if(!cb.closest || !cb.closest("#tableBody")) return null;
+    return cb;
+}
+
+function aplicarSelecaoCheckbox(checkbox, marcar){
+    if(!checkbox) return;
+    const key = checkbox.dataset.key || "";
+    if(!key) return;
+    if(dragSelectLastKey === key && checkbox.checked === marcar) return;
+
+    checkbox.checked = marcar;
+    if(marcar){
+        selecionados.add(key);
+        if(modoCaptura){
+            capturados.add(key);
+            salvarCapturados();
+            atualizarBadge();
+        }
+    }else{
+        selecionados.delete(key);
+        if(modoCaptura){
+            capturados.delete(key);
+            salvarCapturados();
+            atualizarBadge();
+        }
+    }
+    dragSelectLastKey = key;
+    atualizarEstadoHeader();
+}
+
+document.addEventListener("mousemove", function(e){
+    if(!dragSelectActive) return;
+    if(!e.ctrlKey){
+        dragSelectActive = false;
+        dragSelectLastKey = "";
+        return;
+    }
+    dragPointerX = e.clientX;
+    dragPointerY = e.clientY;
+    const cb = getCheckboxFromPoint(dragPointerX, dragPointerY);
+    if(cb) aplicarSelecaoCheckbox(cb, dragSelectValue);
+});
+
+document.addEventListener("mouseup", function(){
+    dragSelectActive = false;
+    dragSelectLastKey = "";
+    dragSuppressClick = false;
+});
+
+document.addEventListener("keyup", function(e){
+    if(e.key === "Control"){
+        dragSelectActive = false;
+        dragSelectLastKey = "";
+    }
+});
+
+const tableContainerDrag = document.getElementById("tableContainer");
+if(tableContainerDrag){
+    tableContainerDrag.addEventListener("scroll", function(){
+        if(!dragSelectActive) return;
+        const cb = getCheckboxFromPoint(dragPointerX, dragPointerY);
+        if(cb) aplicarSelecaoCheckbox(cb, dragSelectValue);
+    });
+}
+
 function renderTabela(){
     atualizarBadge();
 
@@ -1058,6 +1141,7 @@ function renderTabela(){
         let tdCheck = document.createElement("td");
         let checkbox = document.createElement("input");
         checkbox.type = "checkbox";
+        checkbox.dataset.key = getItemKey(item);
         checkbox.checked = selecionados.has(getItemKey(item));
 
         checkbox.addEventListener("change", function(){
@@ -1085,6 +1169,26 @@ function renderTabela(){
     }
 
 });
+
+        checkbox.addEventListener("mousedown", function(e){
+            if(!e.ctrlKey) return;
+            e.preventDefault();
+            dragSelectActive = true;
+            dragSelectValue = !checkbox.checked;
+            dragSelectLastKey = "";
+            dragPointerX = e.clientX;
+            dragPointerY = e.clientY;
+            dragSuppressClick = true;
+            aplicarSelecaoCheckbox(checkbox, dragSelectValue);
+        });
+
+        checkbox.addEventListener("click", function(e){
+            if(dragSuppressClick){
+                e.preventDefault();
+                e.stopPropagation();
+                dragSuppressClick = false;
+            }
+        });
 
         tdCheck.appendChild(checkbox);
         row.appendChild(tdCheck);
