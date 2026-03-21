@@ -1042,6 +1042,10 @@ let checkboxIndexMap = [];
 let dragPointerX = 0;
 let dragPointerY = 0;
 let dragSuppressClick = false;
+let dragMoved = false;
+let dragStartX = 0;
+let dragStartY = 0;
+let dragStartIndex = -1;
 
 function getCheckboxFromPoint(x, y){
     const el = document.elementFromPoint(x, y);
@@ -1113,13 +1117,26 @@ document.addEventListener("mousemove", function(e){
     if(!dragSelectActive) return;
     dragPointerX = e.clientX;
     dragPointerY = e.clientY;
-    atualizarDragSelecao();
+    const dx = Math.abs(dragPointerX - dragStartX);
+    const dy = Math.abs(dragPointerY - dragStartY);
+    if(!dragMoved && (dx > 2 || dy > 2)){
+        dragMoved = true;
+        dragSuppressClick = true;
+        if(dragStartIndex >= 0){
+            aplicarSelecaoRange(dragStartIndex, dragStartIndex, dragSelectValue);
+            dragSelectLastIndex = dragStartIndex;
+        }
+    }
+    if(dragMoved){
+        atualizarDragSelecao();
+    }
 });
 
 document.addEventListener("mouseup", function(){
     dragSelectActive = false;
     dragSelectLastIndex = -1;
-    dragSuppressClick = false;
+    dragStartIndex = -1;
+    dragMoved = false;
 });
 
 document.addEventListener("keyup", function(e){
@@ -1132,6 +1149,14 @@ const tableContainerDrag = document.getElementById("tableContainer");
 if(tableContainerDrag){
     tableContainerDrag.addEventListener("scroll", function(){
         if(!dragSelectActive) return;
+        if(!dragMoved){
+            dragMoved = true;
+            dragSuppressClick = true;
+            if(dragStartIndex >= 0){
+                aplicarSelecaoRange(dragStartIndex, dragStartIndex, dragSelectValue);
+                dragSelectLastIndex = dragStartIndex;
+            }
+        }
         atualizarDragSelecao();
     });
     tableContainerDrag.addEventListener("wheel", function(e){
@@ -1196,22 +1221,24 @@ function renderTabela(){
 
         checkbox.addEventListener("mousedown", function(e){
             if(e.button !== 0) return;
-            e.preventDefault();
             dragSelectActive = true;
             dragSelectValue = !checkbox.checked;
-            dragSelectLastIndex = idx;
+            dragSelectLastIndex = -1;
             dragPointerX = e.clientX;
             dragPointerY = e.clientY;
-            dragSuppressClick = true;
-            aplicarSelecaoRange(idx, idx, dragSelectValue);
-        });
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragStartIndex = idx;
+    dragMoved = false;
+    dragSuppressClick = false;
+});
 
         checkbox.addEventListener("click", function(e){
             if(dragSuppressClick){
                 e.preventDefault();
                 e.stopPropagation();
-                dragSuppressClick = false;
             }
+            dragSuppressClick = false;
         });
 
         tdCheck.appendChild(checkbox);
