@@ -1122,6 +1122,7 @@ if(tableContainerDrag){
     tableContainerDrag.addEventListener("wheel", function(e){
         if(dragSelectActive && e.ctrlKey){
             e.preventDefault();
+            tableContainerDrag.scrollTop += e.deltaY;
         }
     }, { passive: false });
 }
