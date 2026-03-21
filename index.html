@@ -1037,7 +1037,6 @@ function criarTd(row, valor){
 
 let dragSelectActive = false;
 let dragSelectValue = true;
-let dragSelectLastIndex = -1;
 let checkboxIndexMap = [];
 let dragPointerX = 0;
 let dragPointerY = 0;
@@ -1046,6 +1045,9 @@ let dragMoved = false;
 let dragStartX = 0;
 let dragStartY = 0;
 let dragStartIndex = -1;
+let dragRangeStart = -1;
+let dragRangeEnd = -1;
+let dragBaseStateByIndex = [];
 
 function getCheckboxFromPoint(x, y){
     const el = document.elementFromPoint(x, y);
@@ -1087,13 +1089,21 @@ function aplicarSelecaoCheckbox(checkbox, marcar){
     atualizarEstadoHeader();
 }
 
-function aplicarSelecaoRange(indexA, indexB, marcar){
-    if(indexA < 0 || indexB < 0) return;
-    const inicio = Math.min(indexA, indexB);
-    const fim = Math.max(indexA, indexB);
-    for(let i = inicio; i <= fim; i++){
+function atualizarRangeSelecao(indexAtual){
+    if(dragStartIndex < 0 || indexAtual < 0) return;
+    const novoInicio = Math.min(dragStartIndex, indexAtual);
+    const novoFim = Math.max(dragStartIndex, indexAtual);
+    dragRangeStart = novoInicio;
+    dragRangeEnd = novoFim;
+    for(let i = 0; i < checkboxIndexMap.length; i++){
         const cb = checkboxIndexMap[i];
-        if(cb) aplicarSelecaoCheckbox(cb, marcar);
+        if(!cb) continue;
+        if(i >= dragRangeStart && i <= dragRangeEnd){
+            aplicarSelecaoCheckbox(cb, dragSelectValue);
+        }else{
+            const base = !!dragBaseStateByIndex[i];
+            aplicarSelecaoCheckbox(cb, base);
+        }
     }
 }
 
@@ -1102,15 +1112,7 @@ function atualizarDragSelecao(){
     if(!cb) return;
     const indexAtual = parseInt(cb.dataset.index || "-1", 10);
     if(indexAtual < 0) return;
-    if(dragSelectLastIndex === -1){
-        dragSelectLastIndex = indexAtual;
-        aplicarSelecaoCheckbox(cb, dragSelectValue);
-        return;
-    }
-    if(indexAtual !== dragSelectLastIndex){
-        aplicarSelecaoRange(dragSelectLastIndex, indexAtual, dragSelectValue);
-        dragSelectLastIndex = indexAtual;
-    }
+    atualizarRangeSelecao(indexAtual);
 }
 
 document.addEventListener("mousemove", function(e){
@@ -1122,20 +1124,16 @@ document.addEventListener("mousemove", function(e){
     if(!dragMoved && (dx > 2 || dy > 2)){
         dragMoved = true;
         dragSuppressClick = true;
-        if(dragStartIndex >= 0){
-            aplicarSelecaoRange(dragStartIndex, dragStartIndex, dragSelectValue);
-            dragSelectLastIndex = dragStartIndex;
-        }
     }
-    if(dragMoved){
-        atualizarDragSelecao();
-    }
+    if(dragMoved) atualizarDragSelecao();
 });
 
 document.addEventListener("mouseup", function(){
     dragSelectActive = false;
-    dragSelectLastIndex = -1;
     dragStartIndex = -1;
+    dragRangeStart = -1;
+    dragRangeEnd = -1;
+    dragBaseStateByIndex = [];
     dragMoved = false;
 });
 
@@ -1152,10 +1150,6 @@ if(tableContainerDrag){
         if(!dragMoved){
             dragMoved = true;
             dragSuppressClick = true;
-            if(dragStartIndex >= 0){
-                aplicarSelecaoRange(dragStartIndex, dragStartIndex, dragSelectValue);
-                dragSelectLastIndex = dragStartIndex;
-            }
         }
         atualizarDragSelecao();
     });
@@ -1223,15 +1217,17 @@ function renderTabela(){
             if(e.button !== 0) return;
             dragSelectActive = true;
             dragSelectValue = !checkbox.checked;
-            dragSelectLastIndex = -1;
             dragPointerX = e.clientX;
             dragPointerY = e.clientY;
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
-    dragStartIndex = idx;
-    dragMoved = false;
-    dragSuppressClick = false;
-});
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            dragStartIndex = idx;
+            dragRangeStart = -1;
+            dragRangeEnd = -1;
+            dragBaseStateByIndex = checkboxIndexMap.map(cb => cb ? cb.checked : false);
+            dragMoved = false;
+            dragSuppressClick = false;
+        });
 
         checkbox.addEventListener("click", function(e){
             if(dragSuppressClick){
@@ -1283,12 +1279,14 @@ function renderTabela(){
             e.preventDefault();
             dragSelectActive = true;
             dragSelectValue = !checkbox.checked;
-            dragSelectLastIndex = -1;
             dragPointerX = e.clientX;
             dragPointerY = e.clientY;
             dragStartX = e.clientX;
             dragStartY = e.clientY;
             dragStartIndex = idx;
+            dragRangeStart = -1;
+            dragRangeEnd = -1;
+            dragBaseStateByIndex = checkboxIndexMap.map(cb => cb ? cb.checked : false);
             dragMoved = false;
             dragSuppressClick = false;
         });
