@@ -1111,11 +1111,6 @@ function atualizarDragSelecao(){
 
 document.addEventListener("mousemove", function(e){
     if(!dragSelectActive) return;
-    if(!e.ctrlKey){
-        dragSelectActive = false;
-        dragSelectLastIndex = -1;
-        return;
-    }
     dragPointerX = e.clientX;
     dragPointerY = e.clientY;
     atualizarDragSelecao();
@@ -1129,8 +1124,7 @@ document.addEventListener("mouseup", function(){
 
 document.addEventListener("keyup", function(e){
     if(e.key === "Control"){
-        dragSelectActive = false;
-        dragSelectLastIndex = -1;
+        return;
     }
 });
 
@@ -1201,7 +1195,7 @@ function renderTabela(){
 });
 
         checkbox.addEventListener("mousedown", function(e){
-            if(!e.ctrlKey) return;
+            if(e.button !== 0) return;
             e.preventDefault();
             dragSelectActive = true;
             dragSelectValue = !checkbox.checked;
