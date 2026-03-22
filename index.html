@@ -330,10 +330,6 @@ Usuários do Sistema
             <input type="checkbox" id="generalSearch" checked>
             <span>Pesquisa Generalista</span>
         </label>
-        <label class="toggleItem">
-            <input type="checkbox" id="scrollMode" checked>
-            <span>Scroll Progressivo</span>
-        </label>
       <label class="toggleItem">
           <input type="checkbox" id="ignoreSpaces">
           <span>Ignorar Espaços</span>
@@ -1366,9 +1362,6 @@ document.getElementById("selectAllHeader").addEventListener("change", function()
 
 });
 document.getElementById("tableContainer").addEventListener("scroll", function(){
-
-    if(!document.getElementById("scrollMode").checked) return;
-
     if(this.scrollTop + this.clientHeight >= this.scrollHeight - 20){
 
         limite += 50;
