@@ -334,10 +334,14 @@ Usuários do Sistema
             <input type="checkbox" id="scrollMode" checked>
             <span>Scroll Progressivo</span>
         </label>
-        <label class="toggleItem">
-            <input type="checkbox" id="ignoreSpaces">
-            <span>Ignorar Espaços</span>
-        </label>
+      <label class="toggleItem">
+          <input type="checkbox" id="ignoreSpaces">
+          <span>Ignorar Espaços</span>
+      </label>
+      <label class="toggleItem">
+          <input type="checkbox" id="ignoreSeparators">
+          <span>Ignorar Pontos/Traços</span>
+      </label>
         <label class="toggleItem">
             <input type="checkbox" id="mostrarDadosMortos">
             <span>Dados mortos</span>
@@ -483,6 +487,30 @@ document.getElementById("searchInput").addEventListener("input", ()=>{
     limite = 50;
     aplicarTodosFiltros();
 });
+
+const chkGeneral = document.getElementById("generalSearch");
+if(chkGeneral){
+    chkGeneral.addEventListener("change", ()=>{
+        limite = 50;
+        aplicarTodosFiltros();
+    });
+}
+
+const chkIgnoreSpaces = document.getElementById("ignoreSpaces");
+if(chkIgnoreSpaces){
+    chkIgnoreSpaces.addEventListener("change", ()=>{
+        limite = 50;
+        aplicarTodosFiltros();
+    });
+}
+
+const chkIgnoreSeparators = document.getElementById("ignoreSeparators");
+if(chkIgnoreSeparators){
+    chkIgnoreSeparators.addEventListener("change", ()=>{
+        limite = 50;
+        aplicarTodosFiltros();
+    });
+}
 
 const chkDadosMortos = document.getElementById("mostrarDadosMortos");
 if(chkDadosMortos){
@@ -2149,6 +2177,32 @@ function aplicarTodosFiltros(){
     let termoOriginal = (document.getElementById("searchInput")?.value || "").toLowerCase().trim();
     let general = document.getElementById("generalSearch")?.checked || false;
     let ignoreSpaces = document.getElementById("ignoreSpaces")?.checked || false;
+    let ignoreSeparators = document.getElementById("ignoreSeparators")?.checked || false;
+
+    const normalizarTexto = (str) => {
+        let t = (str || "").toLowerCase();
+        if(ignoreSpaces) t = t.replace(/\s+/g, "");
+        if(ignoreSeparators) t = t.replace(/[.\-/_]/g, "");
+        return t;
+    };
+    const normalizarTermo = (str) => {
+        let t = (str || "").toLowerCase();
+        if(ignoreSpaces) t = t.replace(/\s+/g, "");
+        if(ignoreSeparators) t = t.replace(/[.\-/_]/g, "");
+        return t;
+    };
+    const escaparRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const correspondeTermo = (texto, termoBruto) => {
+        const termo = normalizarTermo(termoBruto);
+        if(!termo) return true;
+        if(termo.includes("*")){
+            const parts = termo.split("*").map(p => escaparRegex(p));
+            const pattern = parts.join(".*");
+            const re = new RegExp(pattern);
+            return re.test(texto);
+        }
+        return texto.includes(termo);
+    };
 
     let palavras = termoOriginal ? termoOriginal.split(/\s+/) : [];
 
@@ -2171,28 +2225,19 @@ function aplicarTodosFiltros(){
                 (item.descricao || "")
             ).toLowerCase();
 
-            let texto = ignoreSpaces
-                ? textoOriginal.replace(/\s+/g, "")
-                : textoOriginal;
+            let texto = normalizarTexto(textoOriginal);
 
             let passouBusca = false;
 
             if(general){
 
                 passouBusca = palavras.every(p => {
-                    let termo = ignoreSpaces
-                        ? p.replace(/\s+/g,"")
-                        : p;
-                    return texto.includes(termo);
+                    return correspondeTermo(texto, p);
                 });
 
             } else {
 
-                let termo = ignoreSpaces
-                    ? termoOriginal.replace(/\s+/g,"")
-                    : termoOriginal;
-
-                passouBusca = texto.includes(termo);
+                passouBusca = correspondeTermo(texto, termoOriginal);
             }
 
             if(!passouBusca) return false;
