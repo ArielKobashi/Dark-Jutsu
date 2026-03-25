@@ -780,6 +780,7 @@ events = [
     (41.44788098335266, 'move', {'x': 930, 'y': 674}),  # 0775
     (42.215904235839844, 'click', {'x': 930, 'y': 674, 'button': 'left', 'pressed': True}),  # 0776
     (42.327991008758545, 'click', {'x': 930, 'y': 674, 'button': 'left', 'pressed': False}),  # 0777
+    (41.43993163108826, 'wait_pixel', {'x': 502, 'y': 594, 'rgb': (240, 240, 240), 'tolerance': 0, 'timeout': 200, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_003 wait_pixel'}),  # 0774a
     (178.31264400482178, 'key_down', {'key': 'm'}),  # 0778
     (178.43257451057434, 'key_up', {'key': 'm'}),  # 0779
     (178.60956287384033, 'key_down', {'key': 'a'}),  # 0780

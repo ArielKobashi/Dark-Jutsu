@@ -78,7 +78,7 @@ def configurar_logger(log_path: Path) -> logging.Logger:
 
 def main():
     base = Path(__file__).resolve().parent
-    macros = [base / "macro_004.py", base / "macro_001.py", base / "macro_002.py", base / "macro_003.py"]
+    macros = [ base / "macro_004.py",base /"macro_001.py", base / base / "macro_002.py", base / "macro_003.py"]
     logger = configurar_logger(base / "executar_tudo.log")
     controller = ExecutionController()
     logger.info("Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).")
