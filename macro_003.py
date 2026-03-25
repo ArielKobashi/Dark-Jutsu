@@ -1618,12 +1618,14 @@ def play():
     k = keyboard.Controller()
     controller = ExecutionController()
     last = 0.0
-    for t, kind, data in events:
+    for idx, (t, kind, data) in enumerate(events, start=1):
         controller.poll_keypress()
         controller.wait_if_paused()
         if controller.stop_requested:
             controller.close()
             raise StopRequested("Parada solicitada. Encerrando macro.")
+        if isinstance(data, dict) and "_event_index" not in data:
+            data["_event_index"] = idx
         wait = t - last
         if wait > 0:
             if not sleep_with_controls(wait, controller):

@@ -42,3 +42,33 @@
 2026-03-25 01:59:17,878 | INFO | Etapa concluida com sucesso: macro_004.py
 2026-03-25 01:59:17,880 | INFO | Iniciando etapa: macro_001.py
 2026-03-25 02:00:48,162 | WARNING | Parada solicitada durante macro_001.py: Parada solicitada. Encerrando macro.
+2026-03-25 02:07:59,159 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-25 02:07:59,161 | INFO | Iniciando etapa: macro_004.py
+2026-03-25 02:08:01,900 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-25 02:08:01,990 | INFO | Iniciando etapa: macro_001.py
+2026-03-25 02:10:23,257 | ERROR | Falha na etapa macro_001.py: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0).
+Traceback (most recent call last):
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\executar_tudo.py", line 98, in main
+    executar_macro(macro)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\executar_tudo.py", line 22, in executar_macro
+    mod.play()
+    ~~~~~~~~^^
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\macro_001.py", line 1092, in play
+    if handle_custom_event(kind, data, controller):
+       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\macro_controls.py", line 116, in handle_custom_event
+    _wait_for_pixel(
+    ~~~~~~~~~~~~~~~^
+        x,
+        ^^
+    ...<7 lines>...
+        error_on_timeout,
+        ^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\macro_controls.py", line 176, in _wait_for_pixel
+    raise RuntimeError(
+    ...<2 lines>...
+    )
+RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0).

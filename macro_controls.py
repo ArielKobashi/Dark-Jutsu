@@ -112,6 +112,7 @@ def handle_custom_event(kind: str, data: dict, controller: ExecutionController) 
         timeout = float(data.get("timeout", 0))
         interval = float(data.get("interval", 0.2))
         error_on_timeout = bool(data.get("error_on_timeout", False))
+        context = data.get("label") or data.get("_event_index")
         should_match = kind == "wait_pixel"
         _wait_for_pixel(
             x,
@@ -123,6 +124,7 @@ def handle_custom_event(kind: str, data: dict, controller: ExecutionController) 
             should_match,
             controller,
             error_on_timeout,
+            context,
         )
         return True
 
@@ -160,6 +162,7 @@ def _wait_for_pixel(
     should_match: bool,
     controller: ExecutionController,
     error_on_timeout: bool,
+    context,
 ):
     start = time.time()
     while True:
@@ -173,9 +176,11 @@ def _wait_for_pixel(
             return
         if timeout > 0 and (time.time() - start) >= timeout:
             if error_on_timeout:
+                ctx = f" Contexto: {context}." if context else ""
                 raise RuntimeError(
                     f"Timeout esperando pixel ({x},{y}) ficar "
-                    f"{target_rgb} (tolerancia {tolerance})."
+                    f"{target_rgb} (tolerancia {tolerance}) em {timeout:.1f}s."
+                    f"{ctx}"
                 )
             return
         time.sleep(interval)

@@ -101,8 +101,10 @@ def main():
             logger.warning("Parada solicitada durante %s: %s", macro.name, exc)
             break
         except Exception as exc:
-            logger.exception("Falha na etapa %s: %s", macro.name, exc)
-            raise
+            controller.stop_requested = True
+            logger.error("Falha na etapa %s: %s", macro.name, exc)
+            logger.error("Automacao encerrada com erro.")
+            break
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
 
