@@ -22,3 +22,13 @@
 2026-03-24 23:53:43,345 | INFO | Etapa concluida com sucesso: macro_002.py
 2026-03-24 23:53:43,346 | INFO | Iniciando etapa: macro_003.py
 2026-03-24 23:53:57,864 | WARNING | Parada solicitada durante macro_003.py: Parada solicitada. Encerrando macro.
+2026-03-25 01:21:10,971 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-25 01:21:10,972 | INFO | Iniciando etapa: macro_004.py
+2026-03-25 01:21:13,668 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-25 01:21:13,685 | INFO | Iniciando etapa: macro_001.py
+2026-03-25 01:21:52,318 | WARNING | Parada solicitada durante macro_001.py: Parada solicitada. Encerrando macro.
+2026-03-25 01:30:32,821 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-25 01:30:32,822 | INFO | Iniciando etapa: macro_004.py
+2026-03-25 01:30:35,509 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-25 01:30:35,520 | INFO | Iniciando etapa: macro_001.py
+2026-03-25 01:34:41,547 | WARNING | Parada solicitada durante macro_001.py: Parada solicitada. Encerrando macro.
