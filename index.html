@@ -1000,16 +1000,17 @@ async function atualizarBanco(btn) {
     btn.classList.add("loadingUpdate");
     btn.innerText = "Atualizando...";
 
-    if (!planilhas.incluir || !planilhas.cooperat || !planilhas.saldoAtual) {
-        alert("Carregue as planilhas (Cooperat, Incluir e Saldo Atual) primeiro!");
+    const carregadas = Object.values(planilhas).filter(Boolean).length;
+    if (!planilhas.incluir || carregadas < 3) {
+        alert("Carregue pelo menos 3 planilhas (Incluir é obrigatória) antes de atualizar!");
         btn.classList.remove("loadingUpdate");
         btn.innerText = "Atualizar Banco";
         return;
     }
 
     let incluir = planilhas.incluir;
-    let cooperat = planilhas.cooperat;
-    let saldoAtual = planilhas.saldoAtual;
+    let cooperat = planilhas.cooperat || [];
+    let saldoAtual = planilhas.saldoAtual || [];
     let saldoEndereco = planilhas.saldoEndereco || [];
     let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereco, false);
 
