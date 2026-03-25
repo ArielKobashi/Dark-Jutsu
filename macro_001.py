@@ -1,6 +1,8 @@
 ﻿import time
+import importlib.util
+from pathlib import Path
 from pynput import mouse, keyboard  # type: ignore
-from macro_controls import ExecutionController, StopRequested, handle_custom_event, sleep_with_controls
+from macro_controls import ExecutionController, StopRequested, handle_custom_event, pixel_matches, sleep_with_controls
 
 events = [
     (0.8634214401245117, 'move', {'x': 802, 'y': 499}),  # 0001
@@ -727,6 +729,7 @@ events = [
     (45.479578256607056, 'move', {'x': 938, 'y': 670}),  # 0718
     (45.79173302650452, 'click', {'x': 938, 'y': 670, 'button': 'left', 'pressed': True}),  # 0719
     (45.871777057647705, 'click', {'x': 938, 'y': 670, 'button': 'left', 'pressed': False}),  # 0720
+    (45.871777057647705, 'wait_pixel', {'x': 502, 'y': 594, 'rgb': (240, 240, 240), 'tolerance': 0, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_001 #0720 wait_pixel'}),  # 0720a
     (46.887693643569946, 'move', {'x': 938, 'y': 670}),  # 0721
     (46.89548206329346, 'move', {'x': 937, 'y': 670}),  # 0722
     (46.903701066970825, 'move', {'x': 937, 'y': 670}),  # 0723
@@ -1067,10 +1070,49 @@ def _parse_key(value):
         return getattr(keyboard.Key, name, value)
     return value
 
+
+def _carregar_macro(path: Path):
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Falha ao carregar {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _executar_macro(path: Path):
+    mod = _carregar_macro(path)
+    if hasattr(mod, "play"):
+        mod.play()
+    else:
+        raise RuntimeError(f"{path.name} nao possui funcao play()")
+
+
+def _garantir_pixel_inicial(controller: ExecutionController):
+    x, y = 32, 137
+    alvo = (255, 255, 255)
+    tolerancia = 0
+    if pixel_matches(x, y, alvo, tolerancia):
+        return
+    base = Path(__file__).resolve().parent
+    macro_path = base / "macro_005.py"
+    if not macro_path.exists():
+        controller.close()
+        raise FileNotFoundError(f"Nao encontrei {macro_path}")
+    for _ in range(2):
+        _executar_macro(macro_path)
+        if pixel_matches(x, y, alvo, tolerancia):
+            return
+    controller.close()
+    raise RuntimeError(
+        f"Pixel ({x},{y}) nao ficou {alvo} apos 2 execucoes de {macro_path.name}."
+    )
+
 def play():
     m = mouse.Controller()
     k = keyboard.Controller()
     controller = ExecutionController()
+    _garantir_pixel_inicial(controller)
     last = 0.0
     for idx, (t, kind, data) in enumerate(events, start=1):
         controller.poll_keypress()
@@ -1117,4 +1159,5 @@ def play():
 
 if __name__ == '__main__':
     play()
+
 

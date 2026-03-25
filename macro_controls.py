@@ -204,3 +204,11 @@ def _get_pixel_color(x: int, y: int) -> tuple:
     g = (color >> 8) & 0xFF
     b = (color >> 16) & 0xFF
     return (r, g, b)
+
+
+def get_pixel_color(x: int, y: int) -> tuple:
+    return _get_pixel_color(x, y)
+
+
+def pixel_matches(x: int, y: int, target_rgb: tuple, tolerance: int = 0) -> bool:
+    return _color_matches(_get_pixel_color(x, y), target_rgb, tolerance)
