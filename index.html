@@ -435,6 +435,29 @@ function getBaseDadosTodos(){
     return (dados || []).concat(dadosMortos || []);
 }
 
+function normalizarEndereco(valor){
+    const texto = (valor ?? "").toString().trim();
+    if(!texto) return "";
+    return texto.replace(/\s+/g, " ").toUpperCase();
+}
+
+function isEnderecoValido(valor){
+    const norm = normalizarEndereco(valor);
+    if(!norm) return false;
+    const invalidos = new Set([
+        "ND",
+        "N/D",
+        "SEM ENDERECO",
+        "SEM ENDEREÇO",
+        "SEMENDERECO",
+        "SEMENDEREÇO",
+        "S/ENDERECO",
+        "S/ENDEREÇO",
+        "-"
+    ]);
+    return !invalidos.has(norm);
+}
+
 function findItemByKey(key){
     return getBaseDadosTodos().find(d => getItemKey(d) === key);
 }
@@ -2104,12 +2127,41 @@ function abrirModalSaldos(item){
         <h2>Saldos por Endereço</h2>
     `;
 
-    item.enderecos.forEach(info => {
+    const listaEnderecos = [];
+    (item.enderecos || []).forEach(info => {
+        listaEnderecos.push({
+            endereco: info.endereco,
+            armazem: info.armazem,
+            saldo: info.saldo,
+            origem: "Saldo Endereço"
+        });
+    });
+
+    const enderecoCooperat = (item.enderecoPrincipal ?? "").toString().trim();
+    if(isEnderecoValido(enderecoCooperat)){
+        const normCooperat = normalizarEndereco(enderecoCooperat);
+        const jaExiste = listaEnderecos.some(l => normalizarEndereco(l?.endereco) === normCooperat);
+        if(!jaExiste){
+            listaEnderecos.push({
+                endereco: enderecoCooperat,
+                armazem: "Cooperat",
+                saldo: "-",
+                origem: "Cooperat"
+            });
+        }
+    }
+
+    if(listaEnderecos.length === 0){
+        html += `<div style="text-align:center; opacity:0.7;">Sem endereços disponíveis.</div>`;
+    }
+
+    listaEnderecos.forEach(info => {
         html += `
             <div class="card">
                 <b>Endereço:</b> ${info.endereco}<br>
                 <b>Armazém:</b> ${info.armazem}<br>
-                <b>Saldo:</b> ${info.saldo}
+                <b>Saldo:</b> ${info.saldo}<br>
+                <b>Origem:</b> ${info.origem || "-"}
             </div>
         `;
     });
@@ -2371,7 +2423,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
                           (cooperat[j][4] || "") + " " +
                           (cooperat[j][5] || "");
                 const endTrim = end.trim();
-                if(endTrim){
+                if(isEnderecoValido(endTrim)){
                     item.enderecoPrincipal = endTrim;
                 }
                 break;
@@ -2386,8 +2438,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             if (saldoEndereco[j][1] == protheus) {
                 encontrouEnderecos = true;
                 const enderecoRaw = (saldoEndereco[j][4] ?? "").toString().trim();
-                const enderecoNormalizado = enderecoRaw.toUpperCase();
-                if(enderecoRaw && enderecoNormalizado !== "ND"){
+                if(isEnderecoValido(enderecoRaw)){
                     encontrouEnderecoValido = true;
                 }
                 item.enderecos.push({
@@ -2400,10 +2451,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
 
         if (encontrouEnderecos && item.enderecos.length > 0) {
             if(encontrouEnderecoValido){
-                const primeiroValido = item.enderecos.find(e => {
-                    const end = (e.endereco ?? "").toString().trim();
-                    return end && end.toUpperCase() !== "ND";
-                });
+                const primeiroValido = item.enderecos.find(e => isEnderecoValido(e?.endereco));
                 if(primeiroValido){
                     item.enderecoPrincipal = primeiroValido.endereco;
                     item.armazemPrincipal = primeiroValido.armazem;
