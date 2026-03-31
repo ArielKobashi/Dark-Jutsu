@@ -2430,6 +2430,17 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             }
         }
 
+        // FALLBACK: mantém endereço anterior se Cooperat não foi carregada
+        if(!isEnderecoValido(item.enderecoPrincipal)){
+            const anterior = (dados || []).find(d =>
+                (d?.protheus && d.protheus == item.protheus) ||
+                (d?.cooperat && d.cooperat == item.cooperat)
+            );
+            if(anterior && isEnderecoValido(anterior.enderecoPrincipal)){
+                item.enderecoPrincipal = anterior.enderecoPrincipal;
+            }
+        }
+
         // DETALHES POR ENDEREÇO
         let encontrouEnderecos = false;
         let encontrouEnderecoValido = false;
