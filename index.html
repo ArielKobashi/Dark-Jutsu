@@ -2370,28 +2370,45 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
                 let end = (cooperat[j][3] || "") + " " +
                           (cooperat[j][4] || "") + " " +
                           (cooperat[j][5] || "");
-                item.enderecoPrincipal = end.trim();
+                const endTrim = end.trim();
+                if(endTrim){
+                    item.enderecoPrincipal = endTrim;
+                }
                 break;
             }
         }
 
         // DETALHES POR ENDEREÇO
         let encontrouEnderecos = false;
+        let encontrouEnderecoValido = false;
 
         for (let j = 1; j < saldoEndereco.length; j++) {
             if (saldoEndereco[j][1] == protheus) {
                 encontrouEnderecos = true;
+                const enderecoRaw = (saldoEndereco[j][4] ?? "").toString().trim();
+                const enderecoNormalizado = enderecoRaw.toUpperCase();
+                if(enderecoRaw && enderecoNormalizado !== "ND"){
+                    encontrouEnderecoValido = true;
+                }
                 item.enderecos.push({
-                    endereco: saldoEndereco[j][4] || "ND",
-                    armazem: saldoEndereco[j][2] || "ND",
+                    endereco: enderecoRaw || "ND",
+                    armazem: (saldoEndereco[j][2] ?? "").toString().trim() || "ND",
                     saldo: Number(saldoEndereco[j][8]) || 0
                 });
             }
         }
 
         if (encontrouEnderecos && item.enderecos.length > 0) {
-            item.enderecoPrincipal = item.enderecos[0].endereco;
-            item.armazemPrincipal = item.enderecos[0].armazem;
+            if(encontrouEnderecoValido){
+                const primeiroValido = item.enderecos.find(e => {
+                    const end = (e.endereco ?? "").toString().trim();
+                    return end && end.toUpperCase() !== "ND";
+                });
+                if(primeiroValido){
+                    item.enderecoPrincipal = primeiroValido.endereco;
+                    item.armazemPrincipal = primeiroValido.armazem;
+                }
+            }
 
             let soma = 0;
             item.enderecos.forEach(e => soma += e.saldo);

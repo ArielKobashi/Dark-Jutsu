@@ -175,3 +175,13 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-03-25 04:36:02,479 | INFO | Iniciando etapa: macro_003.py
 2026-03-25 04:41:37,333 | INFO | Etapa concluida com sucesso: macro_003.py
 2026-03-25 04:41:37,333 | INFO | Automacao finalizada com sucesso.
+2026-03-30 23:17:53,322 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-30 23:17:53,324 | INFO | Iniciando etapa: macro_004.py
+2026-03-30 23:17:55,962 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-30 23:17:56,062 | INFO | Iniciando etapa: macro_001.py
+2026-03-30 23:19:20,626 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-30 23:19:20,630 | INFO | Iniciando etapa: macro_002.py
+2026-03-30 23:22:20,674 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-03-30 23:22:20,676 | INFO | Iniciando etapa: macro_003.py
+2026-03-30 23:27:53,866 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-03-30 23:27:53,869 | INFO | Automacao finalizada com sucesso.
