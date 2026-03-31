@@ -185,3 +185,94 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-03-30 23:22:20,676 | INFO | Iniciando etapa: macro_003.py
 2026-03-30 23:27:53,866 | INFO | Etapa concluida com sucesso: macro_003.py
 2026-03-30 23:27:53,869 | INFO | Automacao finalizada com sucesso.
+2026-03-31 01:34:09,547 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 01:34:09,548 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 01:34:12,328 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 01:34:12,390 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 01:35:36,811 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 01:35:36,812 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 01:38:17,672 | ERROR | Falha na etapa macro_002.py: Timeout esperando pixel (502,594) ficar (240, 240, 240) (tolerancia 0) em 120.0s. Contexto: macro_002 wait_pixel.
+2026-03-31 01:38:17,672 | ERROR | Automacao encerrada com erro.
+2026-03-31 02:38:21,612 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 02:38:21,613 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 02:38:24,301 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 02:38:24,354 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 02:39:48,938 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 02:39:48,943 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 02:41:27,477 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 02:41:27,478 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 02:41:30,217 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 02:41:30,268 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 02:42:54,823 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 02:42:54,827 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 02:43:01,351 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro.
+2026-03-31 02:46:09,867 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 02:46:09,869 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 02:46:12,573 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 02:46:12,576 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 02:47:37,097 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 02:47:37,100 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 02:47:58,630 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro.
+2026-03-31 02:54:18,321 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 02:54:18,324 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 02:54:21,014 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 02:54:21,058 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 02:55:45,661 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 02:55:45,665 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 02:56:01,480 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro.
+2026-03-31 02:57:41,630 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 02:57:41,631 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 02:57:44,297 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 02:57:44,298 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 02:58:15,792 | WARNING | Parada solicitada durante macro_001.py: Parada solicitada. Encerrando macro.
+2026-03-31 02:58:36,969 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 02:58:36,969 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 02:58:39,647 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 02:58:39,648 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 03:00:04,285 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 03:00:04,287 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 03:02:45,103 | ERROR | Falha na etapa macro_002.py: Timeout esperando pixel (502,594) ficar (240, 240, 240) (tolerancia 0) em 120.0s. Contexto: macro_002 wait_pixel.
+2026-03-31 03:02:45,105 | ERROR | Automacao encerrada com erro.
+2026-03-31 03:03:42,218 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 03:03:42,219 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 03:03:44,854 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 03:03:44,856 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 03:04:16,355 | ERROR | Falha na etapa macro_001.py: Pixel (32,137) nao ficou (255, 255, 255) apos 2 execucoes de macro_005.py.
+2026-03-31 03:04:16,356 | ERROR | Automacao encerrada com erro.
+2026-03-31 03:04:28,669 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 03:04:28,670 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 03:04:31,350 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 03:04:31,352 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 03:05:55,968 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 03:05:55,971 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 03:08:51,971 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-03-31 03:08:51,975 | INFO | Iniciando etapa: macro_003.py
+2026-03-31 03:08:57,439 | WARNING | Parada solicitada durante macro_003.py: Parada solicitada. Encerrando macro.
+2026-03-31 03:12:39,878 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 03:12:39,879 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 03:12:42,643 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 03:12:42,653 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 03:14:07,081 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 03:14:07,083 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 03:17:12,144 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-03-31 03:17:12,146 | INFO | Iniciando etapa: macro_003.py
+2026-03-31 03:17:17,111 | WARNING | Parada solicitada durante macro_003.py: Parada solicitada. Encerrando macro.
+2026-03-31 03:25:12,301 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 03:25:12,305 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 03:25:15,028 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 03:25:15,072 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 03:26:39,526 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 03:26:39,533 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 03:29:46,171 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-03-31 03:29:46,174 | INFO | Iniciando etapa: macro_003.py
+2026-03-31 03:30:19,489 | WARNING | Parada solicitada durante macro_003.py: Parada solicitada. Encerrando macro.
+2026-03-31 03:31:07,608 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).
+2026-03-31 03:31:07,609 | INFO | Iniciando etapa: macro_004.py
+2026-03-31 03:31:10,299 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-03-31 03:31:10,338 | INFO | Iniciando etapa: macro_001.py
+2026-03-31 03:32:34,876 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-03-31 03:32:34,883 | INFO | Iniciando etapa: macro_002.py
+2026-03-31 03:35:31,606 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-03-31 03:35:31,608 | INFO | Iniciando etapa: macro_003.py
+2026-03-31 03:41:11,495 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-03-31 03:41:11,500 | INFO | Automacao finalizada com sucesso.
