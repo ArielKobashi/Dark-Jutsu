@@ -2,7 +2,7 @@
 import importlib.util
 from pathlib import Path
 from pynput import mouse, keyboard  # type: ignore
-from macro_controls import ExecutionController, StopRequested, handle_custom_event, pixel_matches, sleep_with_controls
+from controladordeatualização import ExecutionController, StopRequested, handle_custom_event, pixel_matches, sleep_with_controls
 
 events = [
     (0.8634214401245117, 'move', {'x': 802, 'y': 499}),  # 0001
@@ -206,6 +206,26 @@ events = [
     (6.151775598526001, 'move', {'x': 160, 'y': 379}),  # 0199
     (6.392011880874634, 'click', {'x': 160, 'y': 379, 'button': 'left', 'pressed': True}),  # 0200
     (6.503679513931274, 'click', {'x': 160, 'y': 379, 'button': 'left', 'pressed': False}),  # 0201
+    # ===== CONDICAO PIXEL (859,494) -> SE DIFERENTE, FAZ SEQUENCIA E REPETE #0199-#0201 =====
+    (6.510000000000001, 'pixel_branch_sequence', {
+        'wait_before_check': 2,
+        'x': 859,
+        'y': 494,
+        'blocked_rgb': [(32, 32, 32), (28, 28, 28)],
+        'macro_like_events': [
+            (2.0, 'move', {'x': 883, 'y': 493}),
+            (2.0, 'click', {'x': 883, 'y': 493, 'button': 'left', 'pressed': True}),
+            (2.12, 'click', {'x': 883, 'y': 493, 'button': 'left', 'pressed': False}),
+            (4.12, 'move', {'x': 1340, 'y': 119}),
+            (4.12, 'click', {'x': 1340, 'y': 119, 'button': 'left', 'pressed': True}),
+            (4.24, 'click', {'x': 1340, 'y': 119, 'button': 'left', 'pressed': False}),
+            (6.24, 'move', {'x': 160, 'y': 379}),
+            (6.24, 'click', {'x': 160, 'y': 379, 'button': 'left', 'pressed': True}),
+            (6.36, 'click', {'x': 160, 'y': 379, 'button': 'left', 'pressed': False}),
+        ],
+        'label': 'macro_001 #0201.5',
+    }),  # 0201.5
+    # ===== FIM CONDICAO PIXEL =====
     (8.463797569274902, 'move', {'x': 160, 'y': 380}),  # 0202
     (11.88783860206604, 'move', {'x': 160, 'y': 380}),  # 0203
     (11.903835535049438, 'move', {'x': 160, 'y': 379}),  # 0204
@@ -1108,36 +1128,41 @@ def _garantir_pixel_inicial(controller: ExecutionController):
         f"Pixel ({x},{y}) nao ficou {alvo} apos 2 execucoes de {macro_path.name}."
     )
 
+
 def play():
     m = mouse.Controller()
     k = keyboard.Controller()
     controller = ExecutionController()
+    controller.set_macro_context(__name__, len(events))
     _garantir_pixel_inicial(controller)
     last = 0.0
     for idx, (t, kind, data) in enumerate(events, start=1):
+        controller.update_event_position(idx - 1, idx, len(events))
         controller.poll_keypress()
         controller.wait_if_paused()
         if controller.stop_requested:
             controller.close()
-            raise StopRequested("Parada solicitada. Encerrando macro.")
+            raise StopRequested(controller.get_stop_message())
         if isinstance(data, dict) and "_event_index" not in data:
             data["_event_index"] = idx
         wait = t - last
         if wait > 0:
             if not sleep_with_controls(wait, controller):
                 controller.close()
-                raise StopRequested("Parada solicitada. Encerrando macro.")
+                raise StopRequested(controller.get_stop_message())
         last = t
         controller.poll_keypress()
         controller.wait_if_paused()
         if controller.stop_requested:
             controller.close()
-            raise StopRequested("Parada solicitada. Encerrando macro.")
+            raise StopRequested(controller.get_stop_message())
         if handle_custom_event(kind, data, controller):
             continue
         if kind == 'move':
+            controller.set_locked_mouse_position(data['x'], data['y'])
             m.position = (data['x'], data['y'])
         elif kind == 'click':
+            controller.set_locked_mouse_position(data['x'], data['y'])
             m.position = (data['x'], data['y'])
             btn = _parse_button(data['button'])
             if data['pressed']:
@@ -1145,6 +1170,7 @@ def play():
             else:
                 m.release(btn)
         elif kind == 'scroll':
+            controller.set_locked_mouse_position(data['x'], data['y'])
             m.position = (data['x'], data['y'])
             m.scroll(data['dx'], data['dy'])
         elif kind == 'key_down':
@@ -1159,5 +1185,8 @@ def play():
 
 if __name__ == '__main__':
     play()
+
+
+
 
 

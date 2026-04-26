@@ -1,6 +1,6 @@
 ﻿import time
 from pynput import mouse, keyboard  # type: ignore
-from macro_controls import ExecutionController, StopRequested, handle_custom_event, sleep_with_controls
+from controladordeatualização import ExecutionController, StopRequested, handle_custom_event, sleep_with_controls
 
 events = [
     (0.8157269954681396, 'move', {'x': 454, 'y': 571}),  # 0001
@@ -1617,31 +1617,35 @@ def play():
     m = mouse.Controller()
     k = keyboard.Controller()
     controller = ExecutionController()
+    controller.set_macro_context(__name__, len(events))
     last = 0.0
     for idx, (t, kind, data) in enumerate(events, start=1):
+        controller.update_event_position(idx - 1, idx, len(events))
         controller.poll_keypress()
         controller.wait_if_paused()
         if controller.stop_requested:
             controller.close()
-            raise StopRequested("Parada solicitada. Encerrando macro.")
+            raise StopRequested(controller.get_stop_message())
         if isinstance(data, dict) and "_event_index" not in data:
             data["_event_index"] = idx
         wait = t - last
         if wait > 0:
             if not sleep_with_controls(wait, controller):
                 controller.close()
-                raise StopRequested("Parada solicitada. Encerrando macro.")
+                raise StopRequested(controller.get_stop_message())
         last = t
         controller.poll_keypress()
         controller.wait_if_paused()
         if controller.stop_requested:
             controller.close()
-            raise StopRequested("Parada solicitada. Encerrando macro.")
+            raise StopRequested(controller.get_stop_message())
         if handle_custom_event(kind, data, controller):
             continue
         if kind == 'move':
+            controller.set_locked_mouse_position(data['x'], data['y'])
             m.position = (data['x'], data['y'])
         elif kind == 'click':
+            controller.set_locked_mouse_position(data['x'], data['y'])
             m.position = (data['x'], data['y'])
             btn = _parse_button(data['button'])
             if data['pressed']:
@@ -1649,6 +1653,7 @@ def play():
             else:
                 m.release(btn)
         elif kind == 'scroll':
+            controller.set_locked_mouse_position(data['x'], data['y'])
             m.position = (data['x'], data['y'])
             m.scroll(data['dx'], data['dy'])
         elif kind == 'key_down':
@@ -1663,4 +1668,7 @@ def play():
 
 if __name__ == '__main__':
     play()
+
+
+
 

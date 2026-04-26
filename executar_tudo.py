@@ -1,10 +1,13 @@
 import importlib.util
 import logging
-import time
 from pathlib import Path
 
-import msvcrt
-from macro_controls import StopRequested
+from controladordeatualização import (
+    ExecutionController,
+    StopRequested,
+    push_status,
+    validate_macro_comment_sequence,
+)
 
 
 def carregar_macro(path: Path):
@@ -24,44 +27,19 @@ def executar_macro(path: Path):
         raise RuntimeError(f"{path.name} nao possui funcao play()")
 
 
-class ExecutionController:
-    def __init__(self):
-        self.paused = False
-        self.stop_requested = False
-
-    def poll_keypress(self, logger: logging.Logger):
-        if not msvcrt.kbhit():
-            return
-        key = msvcrt.getch()
-        if not key:
-            return
+class MacroPanelLogHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord):
         try:
-            char = key.decode("utf-8").lower()
-        except UnicodeDecodeError:
-            return
-        if char == "p":
-            if not self.paused:
-                self.paused = True
-                logger.info("Pausado. Pressione R para retomar ou S para parar.")
-        elif char == "r":
-            if self.paused:
-                self.paused = False
-                logger.info("Retomado.")
-        elif char == "s":
-            if not self.stop_requested:
-                self.stop_requested = True
-                logger.warning("Parada solicitada. Encerrando apos a etapa atual.")
-
-    def wait_if_paused(self, logger: logging.Logger):
-        while self.paused and not self.stop_requested:
-            self.poll_keypress(logger)
-            time.sleep(0.1)
+            push_status(self.format(record))
+        except Exception:
+            pass
 
 
 def configurar_logger(log_path: Path) -> logging.Logger:
     logger = logging.getLogger("executar_tudo")
-    if logger.handlers:
+    if getattr(logger, "_macro_logger_configured", False):
         return logger
+
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
@@ -71,37 +49,56 @@ def configurar_logger(log_path: Path) -> logging.Logger:
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
 
+    panel_handler = MacroPanelLogHandler()
+    panel_handler.setFormatter(formatter)
+
     logger.addHandler(file_handler)
     logger.addHandler(stream_handler)
+    logger.addHandler(panel_handler)
+    logger._macro_logger_configured = True
     return logger
 
 
 def main():
     base = Path(__file__).resolve().parent
-    macros = [ base / "macro_004.py",base /"macro_001.py", base / base / "macro_002.py", base / "macro_003.py"]
+    macros = [
+        base / "macro_002.py",
+        base / "macro_004.py",
+        base / "macro_001.py",
+        base / "macro_003.py",
+    ]
+
     logger = configurar_logger(base / "executar_tudo.log")
     controller = ExecutionController()
-    logger.info("Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (P/R/S no console).")
+
+    logger.info(
+        "Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para "
+        "(tambem P/R/S e botoes na janela). "
+        "Identificador de pixel: ative no botao e use Espaco para capturar."
+    )
+
     for macro in macros:
-        controller.poll_keypress(logger)
+        controller.poll_keypress()
         if controller.stop_requested:
-            logger.warning("Execucao interrompida antes da proxima etapa.")
+            logger.warning(controller.get_stop_message())
             break
-        controller.wait_if_paused(logger)
+
+        controller.wait_if_paused()
         if controller.stop_requested:
-            logger.warning("Execucao interrompida antes da proxima etapa.")
+            logger.warning(controller.get_stop_message())
             break
+
         if not macro.exists():
             raise FileNotFoundError(f"Nao encontrei {macro}")
+
+        validate_macro_comment_sequence(macro)
         logger.info("Iniciando etapa: %s", macro.name)
+
         try:
             executar_macro(macro)
         except StopRequested as exc:
-            controller.stop_requested = True
-            logger.warning("Parada solicitada durante %s: %s", macro.name, exc)
             break
         except Exception as exc:
-            controller.stop_requested = True
             logger.error("Falha na etapa %s: %s", macro.name, exc)
             logger.error("Automacao encerrada com erro.")
             break

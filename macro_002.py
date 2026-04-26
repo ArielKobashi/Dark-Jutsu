@@ -1,6 +1,19 @@
 ﻿import time
 from pynput import mouse, keyboard  # type: ignore
-from macro_controls import ExecutionController, StopRequested, handle_custom_event, sleep_with_controls
+from controladordeatualização import ExecutionController, StopRequested, handle_custom_event, sleep_with_controls
+
+SCAN_RECTANGLE = {
+    'x_min': 13,
+    'x_max': 13,
+    'y_min': 400,
+    'y_max': 715,
+    'blocked_rgb': [(54, 54, 54), (32, 32, 32)],
+    'click_delay': 1.0,
+    'step_delay': 0.0,
+    'follow_cursor': False,
+    'control_check_interval': 128,
+    'label': 'macro_002 scan inicial',
+}
 
 events = [
     (1.2954661846160889, 'move', {'x': 380, 'y': 633}),  # 0001
@@ -99,9 +112,9 @@ events = [
     (2.871274948120117, 'move', {'x': 76, 'y': 456}),  # 0094
     (2.879194974899292, 'move', {'x': 75, 'y': 456}),  # 0095
     (3.1994473934173584, 'move', {'x': 75, 'y': 455}),  # 0096
-    (3.2076079845428467, 'move', {'x': 75, 'y': 454}),  # 0097
-    (4.631530284881592, 'click', {'x': 53, 'y': 469, 'button': 'left', 'pressed': True}),  # 0098 clique no botão Atualizações
-    (4.727565765380859, 'click', {'x': 53, 'y': 469, 'button': 'left', 'pressed': False}),  # 0099
+    (3.2076079845428467, 'move', {'x': 52, 'y': 450}),  # 0097
+    (4.631530284881592, 'click', {'x': 52, 'y': 450, 'button': 'left', 'pressed': True}),  # 0098 clique no botão Atualizações
+    (4.727565765380859, 'click', {'x': 52, 'y': 450, 'button': 'left', 'pressed': False}),  # 0099
     (6.927469730377197, 'move', {'x': 75, 'y': 454}),  # 0100
     (6.935444593429565, 'move', {'x': 75, 'y': 455}),  # 0101
     (6.943618297576904, 'move', {'x': 75, 'y': 456}),  # 0102
@@ -136,8 +149,8 @@ events = [
     (7.199202299118042, 'move', {'x': 69, 'y': 490}),  # 0131
     (7.207204103469849, 'move', {'x': 69, 'y': 491}),  # 0132
     (7.231215715408325, 'move', {'x': 69, 'y': 492}),  # 0133
-    (7.775228261947632, 'click', {'x': 58, 'y': 511, 'button': 'left', 'pressed': True}),  # 0134 clique no botão de Saldos
-    (7.895477056503296, 'click', {'x': 58, 'y': 511, 'button': 'left', 'pressed': False}),  # 0135
+    (7.775228261947632, 'click', {'x': 56, 'y': 491, 'button': 'left', 'pressed': True}),  # 0134 clique no botão de Saldos
+    (7.895477056503296, 'click', {'x': 56, 'y': 491, 'button': 'left', 'pressed': False}),  # 0135
     (9.831451654434204, 'move', {'x': 69, 'y': 493}),  # 0136
     (9.839385271072388, 'move', {'x': 69, 'y': 494}),  # 0137
     (9.8552405834198, 'move', {'x': 69, 'y': 495}),  # 0138
@@ -155,8 +168,8 @@ events = [
     (10.015513181686401, 'move', {'x': 69, 'y': 506}),  # 0150
     (10.023298501968384, 'move', {'x': 69, 'y': 507}),  # 0151
     (10.175371646881104, 'move', {'x': 69, 'y': 508}),  # 0152
-    (10.743554830551147, 'click', {'x': 62, 'y': 531, 'button': 'left', 'pressed': True}),  # 0153 clique no botão Atual
-    (10.847405433654785, 'click', {'x': 62, 'y': 531, 'button': 'left', 'pressed': False}),  # 0154
+    (10.743554830551147, 'click', {'x': 62, 'y': 512, 'button': 'left', 'pressed': True}),  # 0153 clique no botão Atual
+    (10.847405433654785, 'click', {'x': 62, 'y': 512, 'button': 'left', 'pressed': False}),  # 0154
     (13.271344661712646, 'move', {'x': 69, 'y': 508}),  # 0155
     (13.279595613479614, 'move', {'x': 70, 'y': 508}),  # 0156
     (26.495590686798096, 'move', {'x': 71, 'y': 508}),  # 0157
@@ -677,7 +690,7 @@ events = [
     (39.719462633132935, 'move', {'x': 918, 'y': 662}),  # 0672
     (39.72754216194153, 'move', {'x': 917, 'y': 661}),  # 0673
     (39.735472679138184, 'move', {'x': 917, 'y': 660}),  # 0674
-    (39.735472679138184, 'wait_pixel', {'x': 502, 'y': 594, 'rgb': (240, 240, 240), 'tolerance': 0, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_002 wait_pixel'}),  # 0674a
+    (39.735472679138184, 'wait_pixel', {'x': 502, 'y': 594, 'rgb': (240, 240, 240), 'tolerance': 30, 'search_mode': 'quadrants_plus_center', 'center_rgb': (229, 243, 255), 'center_tolerance': 30, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_002 wait_pixel'}),  # 0674a
     (97.9843270778656, 'key_down', {'key': 'm'}),  # 0675
     (98.10466957092285, 'key_up', {'key': 'm'}),  # 0676
     (98.15273690223694, 'key_down', {'key': 'a'}),  # 0677
@@ -1128,31 +1141,38 @@ def play():
     m = mouse.Controller()
     k = keyboard.Controller()
     controller = ExecutionController()
+    controller.set_macro_context(__name__, len(events))
+    if not handle_custom_event('scan_click_rectangle', SCAN_RECTANGLE, controller):
+        controller.close()
+        raise RuntimeError('Falha ao iniciar a varredura inicial da macro_002.')
     last = 0.0
     for idx, (t, kind, data) in enumerate(events, start=1):
+        controller.update_event_position(idx - 1, idx, len(events))
         controller.poll_keypress()
         controller.wait_if_paused()
         if controller.stop_requested:
             controller.close()
-            raise StopRequested("Parada solicitada. Encerrando macro.")
+            raise StopRequested(controller.get_stop_message())
         if isinstance(data, dict) and "_event_index" not in data:
             data["_event_index"] = idx
         wait = t - last
         if wait > 0:
             if not sleep_with_controls(wait, controller):
                 controller.close()
-                raise StopRequested("Parada solicitada. Encerrando macro.")
+                raise StopRequested(controller.get_stop_message())
         last = t
         controller.poll_keypress()
         controller.wait_if_paused()
         if controller.stop_requested:
             controller.close()
-            raise StopRequested("Parada solicitada. Encerrando macro.")
+            raise StopRequested(controller.get_stop_message())
         if handle_custom_event(kind, data, controller):
             continue
         if kind == 'move':
+            controller.set_locked_mouse_position(data['x'], data['y'])
             m.position = (data['x'], data['y'])
         elif kind == 'click':
+            controller.set_locked_mouse_position(data['x'], data['y'])
             m.position = (data['x'], data['y'])
             btn = _parse_button(data['button'])
             if data['pressed']:
@@ -1160,6 +1180,7 @@ def play():
             else:
                 m.release(btn)
         elif kind == 'scroll':
+            controller.set_locked_mouse_position(data['x'], data['y'])
             m.position = (data['x'], data['y'])
             m.scroll(data['dx'], data['dy'])
         elif kind == 'key_down':
@@ -1174,4 +1195,7 @@ def play():
 
 if __name__ == '__main__':
     play()
+
+
+
 
