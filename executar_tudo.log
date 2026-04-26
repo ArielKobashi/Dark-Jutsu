@@ -486,3 +486,9 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-04-26 05:48:53,382 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0674 e #0675 (macro_002).
 2026-04-26 05:53:48,943 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
 2026-04-26 05:53:48,957 | INFO | Iniciando etapa: macro_002.py
+2026-04-26 05:58:12,560 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-04-26 05:58:12,591 | INFO | Iniciando etapa: macro_002.py
+2026-04-26 06:06:42,041 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-04-26 06:06:42,079 | INFO | Iniciando etapa: macro_004.py
+2026-04-26 06:06:44,814 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-04-26 06:06:44,856 | INFO | Iniciando etapa: macro_001.py
