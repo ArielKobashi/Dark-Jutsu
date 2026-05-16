@@ -12,7 +12,7 @@ SCAN_RECTANGLE = {
     'step_delay': 0.0,
     'follow_cursor': False,
     'control_check_interval': 128,
-    'label': 'macro_002 scan inicial',
+    'label': 'macro_004 scan inicial',
 }
 
 events = [
@@ -690,7 +690,7 @@ events = [
     (39.719462633132935, 'move', {'x': 918, 'y': 662}),  # 0672
     (39.72754216194153, 'move', {'x': 917, 'y': 661}),  # 0673
     (39.735472679138184, 'move', {'x': 917, 'y': 660}),  # 0674
-    (39.735472679138184, 'wait_pixel', {'x': 502, 'y': 594, 'rgb': (240, 240, 240), 'tolerance': 30, 'search_mode': 'quadrants_plus_center', 'center_rgb': (229, 243, 255), 'center_tolerance': 30, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_002 wait_pixel'}),  # 0674a
+    (39.735472679138184, 'wait_pixel', {'x': 502, 'y': 594, 'rgb': (240, 240, 240), 'tolerance': 30, 'search_mode': 'quadrants_plus_center', 'center_rgb': (229, 243, 255), 'center_tolerance': 30, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_004 wait_pixel'}),  # 0674a
     (97.9843270778656, 'key_down', {'key': 'm'}),  # 0675
     (98.10466957092285, 'key_up', {'key': 'm'}),  # 0676
     (98.15273690223694, 'key_down', {'key': 'a'}),  # 0677
@@ -1144,9 +1144,63 @@ def play():
     controller.set_macro_context(__name__, len(events))
     if not handle_custom_event('scan_click_rectangle', SCAN_RECTANGLE, controller):
         controller.close()
-        raise RuntimeError('Falha ao iniciar a varredura inicial da macro_002.')
+        raise RuntimeError('Falha ao iniciar a varredura inicial da macro_004.')
     last = 0.0
+    skip_next_events = 0
+    release_alt_click_153 = False
+    release_alt_click_153_wait = 0.0
     for idx, (t, kind, data) in enumerate(events, start=1):
+        if skip_next_events > 0:
+            skip_next_events -= 1
+            continue
+
+        if idx == 97 and controller.totvs_news_visible():
+            controller.set_locked_mouse_position(55, 473)
+            m.position = (55, 473)
+            m.click(mouse.Button.left, 1)
+            if idx + 1 < len(events):
+                last = float(events[idx + 1][0])
+            else:
+                last = float(t)
+            skip_next_events = 2
+            continue
+
+        if idx == 134 and controller.totvs_news_visible():
+            controller.set_locked_mouse_position(54, 513)
+            m.position = (54, 513)
+            if not sleep_with_controls(0.08, controller):
+                controller.close()
+                raise StopRequested(controller.get_stop_message())
+            hold = max(0.05, float(events[idx + 1][0]) - float(t)) if idx + 1 < len(events) else 0.1
+            m.press(mouse.Button.left)
+            time.sleep(hold)
+            m.release(mouse.Button.left)
+            last = float(events[idx + 1][0]) if idx + 1 < len(events) else float(t)
+            skip_next_events = 1
+            continue
+
+        if idx == 153 and controller.totvs_news_visible():
+            controller.set_locked_mouse_position(62, 530)
+            m.position = (62, 530)
+            if not sleep_with_controls(2.0, controller):
+                controller.close()
+                raise StopRequested(controller.get_stop_message())
+            release_alt_click_153_wait = max(0.05, float(events[idx + 1][0]) - float(t)) if idx + 1 < len(events) else 0.1
+            m.press(mouse.Button.left)
+            release_alt_click_153 = True
+            continue
+
+        if idx == 154 and release_alt_click_153:
+            controller.set_locked_mouse_position(62, 530)
+            m.position = (62, 530)
+            if release_alt_click_153_wait > 0 and not sleep_with_controls(release_alt_click_153_wait, controller):
+                controller.close()
+                raise StopRequested(controller.get_stop_message())
+            m.release(mouse.Button.left)
+            release_alt_click_153 = False
+            release_alt_click_153_wait = 0.0
+            continue
+
         controller.update_event_position(idx - 1, idx, len(events))
         controller.poll_keypress()
         controller.wait_if_paused()

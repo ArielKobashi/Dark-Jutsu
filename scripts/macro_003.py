@@ -223,7 +223,7 @@ events = [
             (6.24, 'click', {'x': 160, 'y': 379, 'button': 'left', 'pressed': True}),
             (6.36, 'click', {'x': 160, 'y': 379, 'button': 'left', 'pressed': False}),
         ],
-        'label': 'macro_001 #0201.5',
+        'label': 'macro_003 #0201.5',
     }),  # 0201.5
     # ===== FIM CONDICAO PIXEL =====
     (8.463797569274902, 'move', {'x': 160, 'y': 380}),  # 0202
@@ -232,7 +232,7 @@ events = [
     (11.935701608657837, 'move', {'x': 160, 'y': 378}),  # 0205
     (11.943460702896118, 'move', {'x': 160, 'y': 377}),  # 0206
     # ===== GATILHO PIXEL (AGUARDA COR #F74949) =====
-    (20.919968605041504, 'wait_pixel', {'x': 20, 'y': 224, 'rgb': (247, 73, 73), 'tolerance': 0, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_001 #0207'}),  # 0207
+    (20.919968605041504, 'wait_pixel', {'x': 20, 'y': 224, 'rgb': (247, 73, 73), 'tolerance': 0, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_003 #0207'}),  # 0207
     # ===== FIM GATILHO =====
     (20.919968605041504, 'key_down', {'key': 'Key.enter'}),  # 0208
     (20.99184560775757, 'key_up', {'key': 'Key.enter'}),  # 0209
@@ -480,7 +480,7 @@ events = [
     (37.45581007003784, 'move', {'x': 353, 'y': 265}),  # 0451
     (37.46361804008484, 'move', {'x': 352, 'y': 265}),  # 0452
     # ===== GATILHO PIXEL (AGUARDA COR #00659A) =====
-    (38.46402072906494, 'wait_pixel', {'x': 576, 'y': 323, 'rgb': (0, 101, 154), 'tolerance': 0, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_001 #0453'}),  # 0453
+    (38.46402072906494, 'wait_pixel', {'x': 576, 'y': 323, 'rgb': (0, 101, 154), 'tolerance': 0, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_003 #0453'}),  # 0453
     # ===== FIM GATILHO =====
     (38.46402072906494, 'click', {'x': 352, 'y': 265, 'button': 'left', 'pressed': True}),  # 0454
     (38.567564249038696, 'click', {'x': 352, 'y': 265, 'button': 'left', 'pressed': False}),  # 0455
@@ -1134,7 +1134,6 @@ def play():
     k = keyboard.Controller()
     controller = ExecutionController()
     controller.set_macro_context(__name__, len(events))
-    _garantir_pixel_inicial(controller)
     last = 0.0
     for idx, (t, kind, data) in enumerate(events, start=1):
         controller.update_event_position(idx - 1, idx, len(events))

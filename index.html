@@ -464,6 +464,7 @@ function findItemByKey(key){
 
 window.setDados = function(novosDados){
     dados = Array.isArray(novosDados) ? novosDados : [];
+    window.dados = dados;
     aplicarTodosFiltros();
 }
 let limite = 50;
@@ -1037,21 +1038,37 @@ async function atualizarBanco(btn) {
     let saldoEndereco = planilhas.saldoEndereco || [];
     let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereco, false);
 
-    /* 🔥 CORREÇÃO AQUI */
-    dados = novosDados;   // <<< usa a variável correta
-    aplicarTodosFiltros();
+    window.setDados(novosDados);
+    window.dadosMortos = Array.isArray(dadosMortos) ? dadosMortos : [];
+
+    const payload = {
+        dados: dados,
+        dadosMortos: window.dadosMortos || [],
+        ultimaAtualizacao: Date.now(),
+        atualizadoPor: window.meuNickname || "Sistema"
+    };
 
     try {
-        if (typeof window.firebaseSet === "function") {
-            await window.firebaseSet(window.estoqueRef, {
-            dados: dados,
-            dadosMortos: dadosMortos || [],
-            ultimaAtualizacao: Date.now(),
-            atualizadoPor: window.meuNickname
-        });
+        if (typeof window.firebaseUpdate === "function") {
+            await window.firebaseUpdate(window.estoqueRef, payload);
+        } else if (typeof window.firebaseSet === "function") {
+            await window.firebaseSet(window.estoqueRef, payload);
+        }
+
+        const conferido = await get(window.estoqueRef);
+        const salvo = conferido.exists() ? conferido.val() : null;
+        if (!salvo || salvo.ultimaAtualizacao !== payload.ultimaAtualizacao) {
+            const msg = "A atualização foi enviada, mas o banco voltou para um estado anterior.";
+            console.warn(msg, { salvo, payload });
+            if (typeof window.mostrarNotificacao === "function") {
+                window.mostrarNotificacao(msg);
+            }
         }
     } catch (error) {
         console.error("Erro ao subir para o Firebase:", error);
+        if (typeof window.mostrarNotificacao === "function") {
+            window.mostrarNotificacao("Erro ao atualizar o banco. Veja o console.");
+        }
     }
 
     setTimeout(() => {
@@ -3095,7 +3112,7 @@ updateMobileOverlaysState();
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, set, update, get, onValue, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { 
   getAuth,
   createUserWithEmailAndPassword,
@@ -3130,6 +3147,7 @@ window.push = push;
 window.onValue = onValue;
 window.get = get;
 window.set = set;
+window.update = update;
 window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
 window.updatePassword = updatePassword;
 
@@ -3871,6 +3889,7 @@ const estoqueRef = ref(db, "estoqueGlobal");
 // Exporta funções para o escopo global (window)
 window.estoqueRef = estoqueRef;
 window.firebaseSet = set;
+window.firebaseUpdate = update;
 
 // --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
 async function carregarEstoqueInicial() {

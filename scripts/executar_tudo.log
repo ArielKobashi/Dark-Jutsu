@@ -492,3 +492,199 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-04-26 06:06:42,079 | INFO | Iniciando etapa: macro_004.py
 2026-04-26 06:06:44,814 | INFO | Etapa concluida com sucesso: macro_004.py
 2026-04-26 06:06:44,856 | INFO | Iniciando etapa: macro_001.py
+2026-05-14 02:27:11,422 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-14 02:27:11,471 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 01:03:45,331 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 01:03:45,361 | INFO | Gatilho inicial: capturar referencia TOTVS habilitado.
+2026-05-16 01:03:45,572 | INFO | Gatilho inicial: verificar TOTVS habilitado.
+2026-05-16 01:03:46,388 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 03:27:59,440 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 03:27:59,478 | INFO | Gatilho inicial: capturar referencia TOTVS habilitado.
+2026-05-16 03:27:59,723 | INFO | Gatilho inicial: verificar TOTVS habilitado.
+2026-05-16 03:28:00,535 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 03:28:03,242 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 03:28:03,362 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 03:28:13,779 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 03:28:13,779 | INFO | Gatilho inicial: capturar referencia TOTVS habilitado.
+2026-05-16 03:28:13,881 | INFO | Gatilho inicial: verificar TOTVS habilitado.
+2026-05-16 03:28:14,589 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 03:28:17,237 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 03:28:17,300 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 03:28:33,492 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-16 03:28:33,504 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 03:29:25,849 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 03:29:25,850 | INFO | Gatilho inicial: capturar referencia TOTVS habilitado.
+2026-05-16 03:29:25,951 | INFO | Gatilho inicial: verificar TOTVS habilitado.
+2026-05-16 03:29:26,769 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 03:29:29,457 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 03:29:29,504 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 03:31:08,531 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 03:31:08,531 | INFO | Gatilho inicial: capturar referencia TOTVS habilitado.
+2026-05-16 03:31:08,633 | INFO | Gatilho inicial: verificar TOTVS habilitado.
+2026-05-16 03:31:09,343 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 03:31:12,044 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 03:31:12,051 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 03:31:28,187 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-16 03:31:28,215 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 03:34:36,941 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 03:34:36,964 | INFO | Gatilho inicial: capturar referencia TOTVS habilitado.
+2026-05-16 03:34:37,267 | INFO | Gatilho inicial: verificar TOTVS habilitado.
+2026-05-16 03:34:38,082 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 03:37:42,994 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 03:37:42,995 | INFO | Gatilho inicial: capturar referencia TOTVS habilitado.
+2026-05-16 03:37:43,096 | INFO | Gatilho inicial: verificar TOTVS habilitado.
+2026-05-16 03:37:43,806 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 03:43:39,060 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 03:43:39,080 | INFO | Gatilho inicial: capturar referencia TOTVS habilitado.
+2026-05-16 03:43:39,430 | INFO | Gatilho inicial: verificar TOTVS habilitado.
+2026-05-16 03:43:40,238 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 03:43:42,982 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 03:43:43,030 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 03:43:59,218 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-16 03:43:59,226 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 03:48:25,922 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 03:48:25,923 | INFO | Gatilho inicial: capturar referencia TOTVS habilitado.
+2026-05-16 03:48:26,024 | INFO | Gatilho inicial: verificar TOTVS habilitado.
+2026-05-16 03:48:26,733 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 03:48:29,408 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 03:48:29,443 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 03:48:45,707 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-16 03:48:45,716 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 04:06:20,549 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:06:20,569 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 04:06:30,874 | WARNING | Parada solicitada durante macro_001.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 04:10:28,300 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:10:28,335 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 04:10:38,073 | WARNING | Parada solicitada durante macro_001.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 04:11:04,768 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:11:04,814 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 04:11:13,801 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001 (macro_002).
+2026-05-16 04:11:40,142 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:11:40,163 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 04:11:42,843 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-16 04:11:42,844 | INFO | Automacao finalizada com sucesso.
+2026-05-16 04:12:42,544 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:12:42,561 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 04:12:50,809 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001 (macro_002).
+2026-05-16 04:20:07,352 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:20:07,370 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 04:20:22,198 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001 (macro_002).
+2026-05-16 04:20:36,510 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:20:36,531 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 04:20:39,227 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-16 04:20:39,230 | INFO | Automacao finalizada com sucesso.
+2026-05-16 04:20:58,131 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:20:58,151 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 04:22:20,452 | WARNING | Parada solicitada durante macro_001.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 04:22:29,809 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:22:29,831 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 04:23:12,696 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:23:22,051 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:24:32,736 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:24:32,754 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 04:24:48,798 | WARNING | Parada solicitada durante macro_004.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 04:25:25,472 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:25:25,504 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 04:26:33,699 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:26:33,728 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 04:27:00,467 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:27:00,488 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 04:27:10,595 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001 (macro_002).
+2026-05-16 04:27:25,993 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:27:26,012 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 04:27:28,693 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-16 04:27:28,703 | INFO | Automacao finalizada com sucesso.
+2026-05-16 04:28:00,194 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:28:00,237 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 04:28:02,958 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-16 04:28:02,959 | INFO | Automacao finalizada com sucesso.
+2026-05-16 04:28:18,294 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:28:18,330 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 04:29:53,984 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 04:30:02,236 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:30:02,258 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 04:30:04,920 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-16 04:30:04,922 | INFO | Automacao finalizada com sucesso.
+2026-05-16 04:30:29,829 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:30:29,855 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 04:33:22,030 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0355 e #0356 (macro_005).
+2026-05-16 04:33:30,261 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:33:30,279 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 04:35:12,523 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 04:35:12,526 | INFO | Automacao finalizada com sucesso.
+2026-05-16 04:36:37,465 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:36:37,482 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 04:36:53,547 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 04:36:53,549 | INFO | Automacao finalizada com sucesso.
+2026-05-16 04:37:25,035 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:37:25,066 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 04:38:39,434 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 04:38:46,187 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:38:56,440 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:39:01,468 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:39:51,777 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:39:51,797 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 04:41:33,034 | WARNING | Parada solicitada durante macro_004.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 04:41:58,989 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:41:59,013 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 04:42:15,092 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 04:42:15,094 | INFO | Automacao finalizada com sucesso.
+2026-05-16 04:42:37,861 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 04:42:37,909 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 04:44:44,113 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-16 04:44:44,116 | INFO | Automacao finalizada com sucesso.
+2026-05-16 05:04:01,739 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 05:04:01,756 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 05:04:04,415 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 05:04:04,419 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 05:04:09,448 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 05:04:15,663 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 05:04:15,664 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 05:04:18,355 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 05:04:18,363 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 05:04:34,495 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 05:04:34,502 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 05:05:13,299 | WARNING | Parada solicitada durante macro_003.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 05:12:44,071 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 05:12:44,092 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 05:12:46,802 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 05:12:46,851 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 05:13:02,965 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 05:13:02,977 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 05:17:09,291 | WARNING | Parada solicitada durante macro_003.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 05:17:20,358 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 05:17:20,360 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 05:17:23,026 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 05:17:23,057 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 05:17:39,186 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 05:17:39,194 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 05:19:12,439 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-16 05:19:12,444 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 05:23:49,839 | WARNING | Parada solicitada durante macro_004.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 05:36:35,328 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 05:36:35,334 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 05:36:38,016 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 05:36:38,077 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 05:36:54,195 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 05:36:54,218 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 05:38:27,264 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-16 05:38:27,294 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 05:41:15,442 | ERROR | Falha na etapa macro_004.py: Timeout esperando pixel (502,594) ficar (240, 240, 240) (tolerancia 30) em 120.0s. Contexto: macro_004 wait_pixel.
+2026-05-16 05:41:15,444 | ERROR | Automacao encerrada com erro.
+2026-05-16 05:41:15,445 | INFO | Automacao finalizada com sucesso.
+2026-05-16 05:41:33,920 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 05:41:33,922 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 05:41:36,597 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 05:41:36,603 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 05:41:52,722 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 05:41:52,729 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 05:42:51,414 | WARNING | Parada solicitada durante macro_003.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-16 05:43:11,431 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-16 05:43:11,433 | INFO | Iniciando etapa: macro_001.py
+2026-05-16 05:43:14,090 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-16 05:43:14,150 | INFO | Iniciando etapa: macro_002.py
+2026-05-16 05:43:30,179 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-16 05:43:30,185 | INFO | Iniciando etapa: macro_003.py
+2026-05-16 05:45:03,468 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-16 05:45:03,474 | INFO | Iniciando etapa: macro_004.py
+2026-05-16 05:52:05,328 | WARNING | Parada solicitada durante macro_004.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.

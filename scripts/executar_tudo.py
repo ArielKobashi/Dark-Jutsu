@@ -1,13 +1,9 @@
+import argparse
 import importlib.util
 import logging
 from pathlib import Path
 
-from controladordeatualização import (
-    ExecutionController,
-    StopRequested,
-    push_status,
-    validate_macro_comment_sequence,
-)
+from controladordeatualização import ExecutionController, StopRequested, push_status, validate_macro_comment_sequence
 
 
 def carregar_macro(path: Path):
@@ -59,14 +55,26 @@ def configurar_logger(log_path: Path) -> logging.Logger:
     return logger
 
 
-def main():
+def _resolver_macro(base: Path, macro_ref: str) -> Path:
+    macro_path = Path(macro_ref)
+    if macro_path.suffix.lower() != ".py":
+        macro_path = macro_path.with_suffix(".py")
+    if not macro_path.is_absolute():
+        macro_path = base / macro_path
+    return macro_path
+
+
+def main(macro_ref: str | None = None):
     base = Path(__file__).resolve().parent
-    macros = [
-        base / "macro_002.py",
-        base / "macro_004.py",
-        base / "macro_001.py",
-        base / "macro_003.py",
-    ]
+    if macro_ref:
+        macros = [_resolver_macro(base, macro_ref)]
+    else:
+        macros = [
+            base / "macro_001.py",
+            base / "macro_002.py",
+            base / "macro_003.py",
+            base / "macro_004.py",
+        ]
 
     logger = configurar_logger(base / "executar_tudo.log")
     controller = ExecutionController()
@@ -97,6 +105,7 @@ def main():
         try:
             executar_macro(macro)
         except StopRequested as exc:
+            logger.warning("Parada solicitada durante %s: %s", macro.name, exc)
             break
         except Exception as exc:
             logger.error("Falha na etapa %s: %s", macro.name, exc)
@@ -110,4 +119,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Executa a sequencia de macros ou uma macro isolada.")
+    parser.add_argument("macro", nargs="?", help="Nome da macro para executar isoladamente, como macro_001.py.")
+    args = parser.parse_args()
+    main(args.macro)
