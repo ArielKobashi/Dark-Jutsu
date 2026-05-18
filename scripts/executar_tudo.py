@@ -3,6 +3,7 @@ import importlib.util
 import logging
 import re
 import shutil
+import time
 from pathlib import Path
 
 from controladordeatualização import ExecutionController, StopRequested, push_status, validate_macro_comment_sequence
@@ -66,16 +67,26 @@ def _resolver_macro(base: Path, macro_ref: str) -> Path:
     return macro_path
 
 
-def _localizar_arquivo_mais_recente(pasta: Path, padrao: re.Pattern[str]) -> Path | None:
+def _localizar_arquivo_mais_recente(
+    pasta: Path,
+    padrao: re.Pattern[str],
+    started_at_epoch: float | None = None,
+) -> Path | None:
     if not pasta.exists():
         return None
     candidatos = [p for p in pasta.iterdir() if p.is_file() and padrao.match(p.name)]
+    if started_at_epoch is not None:
+        candidatos = [p for p in candidatos if p.stat().st_mtime >= started_at_epoch]
     if not candidatos:
         return None
     return max(candidatos, key=lambda p: p.stat().st_mtime)
 
 
-def preparar_planilhas_para_importacao(logger: logging.Logger, base: Path) -> dict[str, bool]:
+def preparar_planilhas_para_importacao(
+    logger: logging.Logger,
+    base: Path,
+    started_at_epoch: float,
+) -> dict[str, bool]:
     mapeamento = [
         ("mata105", "incluir.xlsx"),
         ("mata225", "Saldo Atual.xlsx"),
@@ -99,19 +110,28 @@ def preparar_planilhas_para_importacao(logger: logging.Logger, base: Path) -> di
         padrao = re.compile(rf"^{re.escape(codigo)}(?:\s*\(\d+\))?\.xlsx$", re.IGNORECASE)
         origem = None
         for pasta in pastas_origem:
-            origem = _localizar_arquivo_mais_recente(pasta, padrao)
+            origem = _localizar_arquivo_mais_recente(pasta, padrao, started_at_epoch=started_at_epoch)
             if origem is not None:
                 break
 
         if origem is None:
-            logger.warning("Nao encontrei arquivo para %s em %s.", codigo, ", ".join(str(p) for p in pastas_origem))
+            logger.error(
+                "NAO CONFORME: nao encontrei arquivo novo para %s (gerado apos inicio da execucao) em %s.",
+                codigo,
+                ", ".join(str(p) for p in pastas_origem),
+            )
             resultado[codigo] = False
             continue
 
         for destino_base in pastas_destino:
             destino = destino_base / nome_destino
             shutil.copy2(origem, destino)
-            logger.info("Planilha preparada: %s -> %s", origem.name, destino)
+            logger.info(
+                "Planilha preparada (nova): %s | mtime=%s -> %s",
+                origem.name,
+                time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(origem.stat().st_mtime)),
+                destino,
+            )
         resultado[codigo] = True
 
     return resultado
@@ -119,6 +139,7 @@ def preparar_planilhas_para_importacao(logger: logging.Logger, base: Path) -> di
 
 def main(macro_ref: str | None = None):
     base = Path(__file__).resolve().parent
+    started_at_epoch = time.time()
     if macro_ref:
         macros = [_resolver_macro(base, macro_ref)]
     else:
@@ -137,6 +158,11 @@ def main(macro_ref: str | None = None):
         "Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para "
         "(tambem P/R/S e botoes na janela). "
         "Identificador de pixel: ative no botao e use Espaco para capturar."
+    )
+    logger.info(
+        "Marco temporal de validacao criado em: %s. "
+        "Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.",
+        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(started_at_epoch)),
     )
     logger.info(
         "Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; "
@@ -175,13 +201,17 @@ def main(macro_ref: str | None = None):
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
             if macro.name.lower() == "macro_005.py":
-                mapa = preparar_planilhas_para_importacao(logger, base)
+                mapa = preparar_planilhas_para_importacao(logger, base, started_at_epoch)
                 logger.info(
                     "CONFIRMACAO: preparo planilhas apos macro final | mata105=%s | mata225=%s | mata226=%s",
                     "OK" if mapa.get("mata105") else "FALHOU",
                     "OK" if mapa.get("mata225") else "FALHOU",
                     "OK" if mapa.get("mata226") else "FALHOU",
                 )
+                if not all(mapa.get(cod, False) for cod in ("mata105", "mata225", "mata226")):
+                    raise RuntimeError(
+                        "Validacao forte falhou: nem todas as planilhas novas da execucao atual foram encontradas."
+                    )
                 logger.info(
                     "CONFIRMACAO: macro final concluida. Preparo final executado apenas apos as 5 macros."
                 )

@@ -779,8 +779,8 @@ events = [
     (41.44788098335266, 'move', {'x': 930, 'y': 674}),  # 0774
     (42.215904235839844, 'click', {'x': 930, 'y': 674, 'button': 'left', 'pressed': True}),  # 0775
     (42.327991008758545, 'click', {'x': 930, 'y': 674, 'button': 'left', 'pressed': False}),  # 0776
-    (42.360000000000000, 'wait_any_screen_text', {'texts': ['Salvar como', 'Save As', 'Nome do arquivo', 'File name', 'Nome:', 'File name:'], 'timeout': 200, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_005 wait texto salvar'}),  # 0777a
-    (42.420000000000000, 'key_down', {'key': 'm'}),  # 0778
+    (42.360000000000000, 'wait_pixel', {'x': 180, 'y': 610, 'rgb': (240, 240, 240), 'tolerance': 25, 'search_radius': 40, 'timeout': 200, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_005 wait campo nome'}),  # 0777a
+    (42.520000000000000, 'key_down', {'key': 'm'}),  # 0778
     (42.540000000000000, 'key_up', {'key': 'm'}),  # 0779
     (42.660000000000000, 'key_down', {'key': 'a'}),  # 0780
     (42.780000000000000, 'key_up', {'key': 'a'}),  # 0781

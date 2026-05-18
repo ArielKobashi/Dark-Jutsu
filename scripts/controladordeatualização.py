@@ -2001,6 +2001,73 @@ def handle_custom_event(kind: str, data: dict, controller: ExecutionController) 
                 return True
             time.sleep(interval)
 
+    if kind == "wait_window_title":
+        titles_raw = data.get("titles") or data.get("texts") or []
+        titles = [str(t) for t in titles_raw if str(t).strip()]
+        if not titles:
+            single = str(data.get("title") or data.get("text") or "Salvar como").strip()
+            titles = [single]
+        timeout = float(data.get("timeout", 0))
+        interval = float(data.get("interval", 0.2))
+        error_on_timeout = bool(data.get("error_on_timeout", False))
+        context = data.get("label") or data.get("_event_index") or "wait_window_title"
+        normalized_titles = [_normalize_screen_text(t) for t in titles if _normalize_screen_text(t)]
+        start = time.time()
+        while True:
+            controller.poll_keypress()
+            controller.wait_if_paused()
+            if controller.stop_requested:
+                raise StopRequested(controller.get_stop_message())
+            current_title = _normalize_screen_text(_get_foreground_window_title())
+            for t in normalized_titles:
+                if t and t in current_title:
+                    emit_status(f"{context}: titulo detectado: {t!r}.", level="INFO")
+                    return True
+            if timeout > 0 and (time.time() - start) >= timeout:
+                if error_on_timeout:
+                    raise RuntimeError(
+                        f"Timeout esperando titulo da janela conter um dos termos: {titles!r}."
+                    )
+                emit_status(f"{context}: timeout aguardando titulo da janela.", level="WARNING")
+                return True
+            time.sleep(interval)
+
+    if kind == "wait_native_file_dialog":
+        timeout = float(data.get("timeout", 0))
+        interval = float(data.get("interval", 0.2))
+        error_on_timeout = bool(data.get("error_on_timeout", False))
+        context = data.get("label") or data.get("_event_index") or "wait_native_file_dialog"
+        expected_class = str(data.get("class_name") or "#32770").strip()
+        title_tokens_raw = data.get("title_tokens") or ["Salvar como", "Save As"]
+        title_tokens = [_normalize_screen_text(str(t)) for t in title_tokens_raw if str(t).strip()]
+        start = time.time()
+        while True:
+            controller.poll_keypress()
+            controller.wait_if_paused()
+            if controller.stop_requested:
+                raise StopRequested(controller.get_stop_message())
+
+            cls = _get_foreground_window_class_name()
+            title = _normalize_screen_text(_get_foreground_window_title())
+            class_ok = (not expected_class) or (cls.lower() == expected_class.lower())
+            title_ok = any(tok and tok in title for tok in title_tokens) if title_tokens else True
+
+            if class_ok and title_ok:
+                emit_status(
+                    f"{context}: dialogo nativo detectado (class={cls!r}, title={title!r}).",
+                    level="INFO",
+                )
+                return True
+
+            if timeout > 0 and (time.time() - start) >= timeout:
+                if error_on_timeout:
+                    raise RuntimeError(
+                        f"Timeout aguardando dialogo nativo class={expected_class!r} com titulo contendo {title_tokens_raw!r}."
+                    )
+                emit_status(f"{context}: timeout aguardando dialogo nativo.", level="WARNING")
+                return True
+            time.sleep(interval)
+
     if kind == "wait_any_screen_text":
         tokens_raw = data.get("texts") or data.get("tokens") or []
         tokens = [str(t) for t in tokens_raw if str(t).strip()]
@@ -2201,6 +2268,19 @@ def _get_screen_size() -> tuple[int, int]:
     except Exception:
         pass
     return int(user32.GetSystemMetrics(0)), int(user32.GetSystemMetrics(1))
+
+
+def _get_foreground_window_class_name() -> str:
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return ""
+        buf = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(hwnd, buf, 256)
+        return (buf.value or "").strip()
+    except Exception:
+        return ""
 
 
 def _find_pixel_in_quadrant_centers(target_rgb: tuple, tolerance: int):

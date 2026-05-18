@@ -1042,3 +1042,106 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-05-18 04:06:54,039 | INFO | Iniciando etapa: macro_005.py
 2026-05-18 04:11:15,462 | INFO | Etapa concluida com sucesso: macro_005.py
 2026-05-18 04:11:15,465 | INFO | Automacao finalizada com sucesso.
+2026-05-18 04:55:01,644 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 04:55:01,680 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-18 04:55:01,682 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 04:55:04,338 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 04:55:04,427 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 04:55:20,499 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 04:55:20,526 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 04:56:49,929 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 04:56:49,940 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 04:59:00,509 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 04:59:00,512 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 04:59:00,513 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 05:03:04,173 | ERROR | Falha na etapa macro_005.py: Timeout esperando qualquer texto da lista aparecer na tela: ['Salvar como', 'Save As', 'Nome do arquivo', 'File name', 'Nome:', 'File name:'].
+2026-05-18 05:03:04,174 | ERROR | Automacao encerrada com erro.
+2026-05-18 05:03:04,174 | INFO | Automacao finalizada com sucesso.
+2026-05-18 05:08:52,592 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 05:08:52,611 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-18 05:08:52,613 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 05:08:55,285 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 05:08:55,332 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 05:09:11,519 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 05:09:11,541 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 05:10:41,984 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 05:10:42,007 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 05:12:50,037 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 05:12:50,043 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 05:12:50,044 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 05:14:08,496 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-18 05:14:08,540 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 05:14:08,549 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 05:14:08,557 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 05:14:08,598 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 05:14:08,603 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 05:14:08,614 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 05:14:08,658 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-18 05:14:08,668 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-18 05:14:08,684 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-18 05:14:08,684 | INFO | CONFIRMACAO: preparo planilhas apos macro final | mata105=OK | mata225=OK | mata226=OK
+2026-05-18 05:14:08,685 | INFO | CONFIRMACAO: macro final concluida. Preparo final executado apenas apos as 5 macros.
+2026-05-18 05:14:08,685 | INFO | Automacao finalizada com sucesso.
+2026-05-18 05:20:00,126 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 05:20:00,148 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-18 05:20:00,151 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 05:20:02,840 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 05:20:02,915 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 05:20:19,082 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 05:20:19,092 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 05:21:48,354 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 05:21:48,384 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 05:23:58,621 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 05:23:58,628 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 05:23:58,629 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 05:28:02,223 | ERROR | Falha na etapa macro_005.py: Timeout aguardando qualquer gatilho (texto/cor) em 200.0s.
+2026-05-18 05:28:02,223 | ERROR | Automacao encerrada com erro.
+2026-05-18 05:28:02,223 | INFO | Automacao finalizada com sucesso.
+2026-05-18 05:31:59,648 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 05:31:59,665 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-18 05:31:59,667 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 05:32:02,335 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 05:32:02,345 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 05:32:18,589 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 05:32:18,628 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 05:33:48,170 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 05:33:48,196 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 05:36:03,381 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 05:36:03,391 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 05:36:03,398 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 05:37:29,797 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-18 05:37:29,857 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 05:37:29,865 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 05:37:29,876 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 05:37:29,911 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 05:37:29,924 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 05:37:29,936 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 05:37:29,987 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-18 05:37:29,994 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-18 05:37:30,007 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-18 05:37:30,008 | INFO | CONFIRMACAO: preparo planilhas apos macro final | mata105=OK | mata225=OK | mata226=OK
+2026-05-18 05:37:30,008 | INFO | CONFIRMACAO: macro final concluida. Preparo final executado apenas apos as 5 macros.
+2026-05-18 05:37:30,008 | INFO | Automacao finalizada com sucesso.
+2026-05-18 06:04:23,181 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 06:04:23,231 | INFO | Marco temporal de validacao criado em: 2026-05-18 06:04:23. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-18 06:04:23,232 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-18 06:04:23,233 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 06:04:25,885 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 06:04:25,955 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 06:04:42,081 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 06:04:42,090 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 06:06:16,997 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 06:06:17,019 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 06:08:39,206 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 06:08:39,211 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 06:08:39,212 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 06:12:42,776 | ERROR | Falha na etapa macro_005.py: Timeout esperando qualquer texto da lista aparecer na tela: ['Salvar como', 'Save As', 'Nome do arquivo', 'File name', 'Nome:', 'File name:'].
+2026-05-18 06:12:42,776 | ERROR | Automacao encerrada com erro.
+2026-05-18 06:12:42,776 | INFO | Automacao finalizada com sucesso.
+2026-05-18 06:22:02,160 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 06:22:02,178 | INFO | Marco temporal de validacao criado em: 2026-05-18 06:22:02. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-18 06:22:02,180 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-18 06:22:02,183 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 06:22:04,869 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 06:22:04,874 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 06:22:05,584 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
