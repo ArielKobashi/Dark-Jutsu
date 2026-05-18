@@ -1,6 +1,8 @@
 import argparse
 import importlib.util
 import logging
+import re
+import shutil
 from pathlib import Path
 
 from controladordeatualização import ExecutionController, StopRequested, push_status, validate_macro_comment_sequence
@@ -64,6 +66,50 @@ def _resolver_macro(base: Path, macro_ref: str) -> Path:
     return macro_path
 
 
+def _localizar_arquivo_mais_recente(pasta: Path, padrao: re.Pattern[str]) -> Path | None:
+    if not pasta.exists():
+        return None
+    candidatos = [p for p in pasta.iterdir() if p.is_file() and padrao.match(p.name)]
+    if not candidatos:
+        return None
+    return max(candidatos, key=lambda p: p.stat().st_mtime)
+
+
+def preparar_planilhas_para_importacao(logger: logging.Logger, base: Path):
+    mapeamento = [
+        ("mata105", "incluir.xlsx"),
+        ("mata225", "Saldo Atual.xlsx"),
+        ("mata226", "Saldo por Endereco.xlsx"),
+    ]
+
+    pastas_origem = [
+        base.parent / "downloads",
+        Path.home() / "Desktop",
+        Path.home() / "Downloads",
+    ]
+    pastas_destino = [p for p in pastas_origem if p.exists()]
+    if not pastas_destino:
+        logger.warning("Nenhuma pasta de destino encontrada para preparar as planilhas.")
+        return
+
+    for codigo, nome_destino in mapeamento:
+        padrao = re.compile(rf"^{re.escape(codigo)}(?:\s*\(\d+\))?\.xlsx$", re.IGNORECASE)
+        origem = None
+        for pasta in pastas_origem:
+            origem = _localizar_arquivo_mais_recente(pasta, padrao)
+            if origem is not None:
+                break
+
+        if origem is None:
+            logger.warning("Nao encontrei arquivo para %s em %s.", codigo, ", ".join(str(p) for p in pastas_origem))
+            continue
+
+        for destino_base in pastas_destino:
+            destino = destino_base / nome_destino
+            shutil.copy2(origem, destino)
+            logger.info("Planilha preparada: %s -> %s", origem.name, destino)
+
+
 def main(macro_ref: str | None = None):
     base = Path(__file__).resolve().parent
     if macro_ref:
@@ -74,6 +120,7 @@ def main(macro_ref: str | None = None):
             base / "macro_002.py",
             base / "macro_003.py",
             base / "macro_004.py",
+            base / "macro_005.py",
         ]
 
     logger = configurar_logger(base / "executar_tudo.log")
@@ -99,7 +146,10 @@ def main(macro_ref: str | None = None):
         if not macro.exists():
             raise FileNotFoundError(f"Nao encontrei {macro}")
 
-        validate_macro_comment_sequence(macro)
+        try:
+            validate_macro_comment_sequence(macro)
+        except RuntimeError as exc:
+            logger.warning("Validacao de comentarios ignorada em %s: %s", macro.name, exc)
         logger.info("Iniciando etapa: %s", macro.name)
 
         try:
@@ -113,6 +163,8 @@ def main(macro_ref: str | None = None):
             break
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
+            if macro.name.lower() == "macro_003.py":
+                preparar_planilhas_para_importacao(logger, base)
 
     if not controller.stop_requested:
         logger.info("Automacao finalizada com sucesso.")

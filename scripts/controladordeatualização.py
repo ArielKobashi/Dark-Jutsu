@@ -1735,8 +1735,17 @@ def screen_contains_text(text: str, region=None) -> bool:
     if target in title:
         return True
 
-    if _text_visible_in_accessibility_tree(target):
-        return True
+    try:
+        if _text_visible_in_accessibility_tree(target):
+            return True
+    except Exception as exc:
+        # Alguns dialogs nativos do Windows podem disparar erro COM transitório
+        # na varredura de acessibilidade. Nesses casos, seguimos para os
+        # próximos métodos de detecção em vez de abortar a macro.
+        emit_status(
+            f"screen_contains_text: falha na checagem de acessibilidade para {text!r}: {exc}",
+            level="WARNING",
+        )
 
     region = _coerce_region(region)
     if region is None:
@@ -1866,6 +1875,7 @@ def handle_custom_event(kind: str, data: dict, controller: ExecutionController) 
         x = int(data["x"])
         y = int(data["y"])
         target = tuple(data["rgb"])
+        target_rgbs = [tuple(rgb) for rgb in data.get("rgbs", []) if isinstance(rgb, (list, tuple)) and len(rgb) == 3]
         tolerance = int(data.get("tolerance", 0))
         search_radius = int(data.get("search_radius", 0))
         search_mode = str(data.get("search_mode", "")).strip().lower()
@@ -1880,6 +1890,7 @@ def handle_custom_event(kind: str, data: dict, controller: ExecutionController) 
             x,
             y,
             target,
+            target_rgbs,
             tolerance,
             search_radius,
             search_mode,
@@ -1956,6 +1967,83 @@ def handle_custom_event(kind: str, data: dict, controller: ExecutionController) 
                 return True
             time.sleep(interval)
 
+    if kind == "wait_any_screen_text":
+        tokens_raw = data.get("texts") or data.get("tokens") or []
+        tokens = [str(t) for t in tokens_raw if str(t).strip()]
+        if not tokens:
+            token_single = str(data.get("text") or data.get("token") or data.get("value") or "").strip()
+            if token_single:
+                tokens = [token_single]
+        if not tokens:
+            tokens = ["Salvar como"]
+        region = data.get("region")
+        timeout = float(data.get("timeout", 0))
+        interval = float(data.get("interval", 0.2))
+        error_on_timeout = bool(data.get("error_on_timeout", False))
+        context = data.get("label") or data.get("_event_index") or "wait_any_screen_text"
+        start = time.time()
+        while True:
+            controller.poll_keypress()
+            controller.wait_if_paused()
+            if controller.stop_requested:
+                raise StopRequested(controller.get_stop_message())
+            for token in tokens:
+                if screen_contains_text(token, region=region):
+                    emit_status(f"{context}: texto {token!r} detectado na tela.", level="INFO")
+                    return True
+            if timeout > 0 and (time.time() - start) >= timeout:
+                if error_on_timeout:
+                    raise RuntimeError(
+                        f"Timeout esperando qualquer texto da lista aparecer na tela: {tokens!r}."
+                    )
+                emit_status(f"{context}: timeout aguardando qualquer texto da lista.", level="WARNING")
+                return True
+            time.sleep(interval)
+
+    if kind == "wait_any_trigger":
+        tokens_raw = data.get("texts") or data.get("tokens") or []
+        tokens = [str(t) for t in tokens_raw if str(t).strip()]
+        rgbs = [tuple(rgb) for rgb in data.get("rgbs", []) if isinstance(rgb, (list, tuple)) and len(rgb) == 3]
+        tolerance = int(data.get("tolerance", 0))
+        use_quadrants = bool(data.get("quadrants", False))
+        timeout = float(data.get("timeout", 0))
+        interval = float(data.get("interval", 0.2))
+        error_on_timeout = bool(data.get("error_on_timeout", False))
+        region = data.get("region")
+        context = data.get("label") or data.get("_event_index") or "wait_any_trigger"
+        start = time.time()
+        while True:
+            controller.poll_keypress()
+            controller.wait_if_paused()
+            if controller.stop_requested:
+                raise StopRequested(controller.get_stop_message())
+
+            for token in tokens:
+                try:
+                    if screen_contains_text(token, region=region):
+                        emit_status(f"{context}: gatilho por texto {token!r}.", level="INFO")
+                        return True
+                except Exception:
+                    pass
+
+            if use_quadrants and rgbs:
+                current, match_pos = _find_pixel_in_quadrant_centers_any(rgbs, tolerance)
+                if current is not None:
+                    emit_status(
+                        f"{context}: gatilho por cor RGB{current} em quadrante {match_pos}.",
+                        level="INFO",
+                    )
+                    return True
+
+            if timeout > 0 and (time.time() - start) >= timeout:
+                if error_on_timeout:
+                    raise RuntimeError(
+                        f"Timeout aguardando qualquer gatilho (texto/cor) em {timeout:.1f}s."
+                    )
+                emit_status(f"{context}: timeout aguardando qualquer gatilho.", level="WARNING")
+                return True
+            time.sleep(interval)
+
     if kind == "screen_branch_sequence":
         token = str(data.get("text") or data.get("token") or data.get("value") or "TOTVS News")
         region = data.get("region")
@@ -2015,6 +2103,7 @@ def _wait_for_pixel(
     x: int,
     y: int,
     target_rgb: tuple,
+    target_rgbs: list[tuple],
     tolerance: int,
     search_radius: int,
     search_mode: str,
@@ -2035,6 +2124,10 @@ def _wait_for_pixel(
             raise StopRequested(controller.get_stop_message())
         if search_mode == "quadrants":
             current, match_pos = _find_pixel_in_quadrant_centers(target_rgb, tolerance)
+            matches = current is not None
+        elif search_mode == "quadrants_dual":
+            rgb_targets = target_rgbs if target_rgbs else [target_rgb]
+            current, match_pos = _find_pixel_in_quadrant_centers_any(rgb_targets, tolerance)
             matches = current is not None
         elif search_mode == "quadrants_plus_center":
             current, match_pos = _find_pixel_in_quadrants_plus_center(
@@ -2088,6 +2181,22 @@ def _find_pixel_in_quadrant_centers(target_rgb: tuple, tolerance: int):
         current = _get_pixel_color(point[0], point[1])
         if _color_matches(current, target_rgb, tolerance):
             return current, point
+    return None, None
+
+
+def _find_pixel_in_quadrant_centers_any(target_rgbs: list[tuple], tolerance: int):
+    width, height = _get_screen_size()
+    centers = [
+        (width // 4, height // 4),
+        ((width * 3) // 4, height // 4),
+        (width // 4, (height * 3) // 4),
+        ((width * 3) // 4, (height * 3) // 4),
+    ]
+    for point in centers:
+        current = _get_pixel_color(point[0], point[1])
+        for target_rgb in target_rgbs:
+            if _color_matches(current, tuple(target_rgb), tolerance):
+                return current, point
     return None, None
 
 

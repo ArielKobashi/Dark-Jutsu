@@ -317,6 +317,7 @@ Usuários do Sistema
         <input type="file" id="fileInput" style="display:none" accept=".xlsx">
         <hr>
         <button onclick="atualizarBanco()">Atualizar Banco</button>
+        <button onclick="resetAtualizacaoSegura()">Reset Atualização (Backup)</button>
         <div style="margin-top:6px; font-size:10px; text-align:center;">
         Última atualização:
         <div id="lastUpdate" style="opacity:0.7;"></div>
@@ -968,12 +969,25 @@ function carregarPlanilha(tipo){
                     btn.style.background = "#3E1F8F";
                 }
             });
+
+            // Fluxo automático: quando as 3 planilhas obrigatórias estiverem
+            // carregadas no processo da macro, dispara a atualização uma vez.
+            tentarAtualizacaoAutomaticaFinal();
         };
 
         reader.readAsArrayBuffer(file);
     };
 
     input.click();
+}
+
+let __autoUpdateDisparada = false;
+function tentarAtualizacaoAutomaticaFinal() {
+    if (__autoUpdateDisparada) return;
+    const pronto = !!planilhas.incluir && !!planilhas.saldoAtual && !!planilhas.saldoEndereco;
+    if (!pronto) return;
+    __autoUpdateDisparada = true;
+    atualizarBanco();
 }
 let progressoAtual = 0;
 let intervaloProgresso;
@@ -1045,10 +1059,32 @@ async function atualizarBanco(btn) {
         dados: dados,
         dadosMortos: window.dadosMortos || [],
         ultimaAtualizacao: Date.now(),
-        atualizadoPor: window.meuNickname || "Sistema"
+        atualizadoPor: (window.meuNickname || "Sistema") + " - atualizado automaticamente",
+        atualizacaoAutomatica: true,
+        mapeamentoArquivos: {
+            mata105: "incluir.xlsx",
+            mata225: "saldo.atual.xlsx",
+            mata226: "saldo.por.endereco.xlsx"
+        }
     };
 
     try {
+        // Backup de segurança: guarda o estado atual antes de sobrescrever.
+        const snapshotAntes = await get(window.estoqueRef);
+        const backupAnterior = snapshotAntes.exists() ? snapshotAntes.val() : null;
+        window.__ultimoBackupAtualizacao = backupAnterior;
+        try {
+            localStorage.setItem(
+                "darkjutsu_ultimo_backup_atualizacao",
+                JSON.stringify({
+                    salvoEm: Date.now(),
+                    dados: backupAnterior
+                })
+            );
+        } catch (e) {
+            console.warn("Falha ao gravar backup local de atualização:", e);
+        }
+
         if (typeof window.firebaseUpdate === "function") {
             await window.firebaseUpdate(window.estoqueRef, payload);
         } else if (typeof window.firebaseSet === "function") {
@@ -1075,6 +1111,42 @@ async function atualizarBanco(btn) {
         btn.classList.remove("loadingUpdate");
         btn.innerText = "Atualizar Banco";
     }, 500);
+}
+
+async function resetAtualizacaoSegura() {
+    let backup = window.__ultimoBackupAtualizacao || null;
+    if (!backup) {
+        try {
+            const raw = localStorage.getItem("darkjutsu_ultimo_backup_atualizacao");
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                backup = parsed?.dados || null;
+            }
+        } catch (e) {
+            console.warn("Falha ao ler backup local:", e);
+        }
+    }
+
+    if (!backup) {
+        alert("Nenhum backup de atualização encontrado para reset.");
+        return;
+    }
+
+    try {
+        if (typeof window.firebaseSet === "function") {
+            await window.firebaseSet(window.estoqueRef, backup);
+        } else if (typeof window.firebaseUpdate === "function") {
+            await window.firebaseUpdate(window.estoqueRef, backup);
+        }
+        if (typeof window.mostrarNotificacao === "function") {
+            window.mostrarNotificacao("Reset de atualização concluído com sucesso.");
+        } else {
+            alert("Reset de atualização concluído com sucesso.");
+        }
+    } catch (error) {
+        console.error("Erro ao resetar atualização:", error);
+        alert("Erro ao resetar atualização. Veja o console.");
+    }
 }
 
 function atualizarEstadoHeader(){
