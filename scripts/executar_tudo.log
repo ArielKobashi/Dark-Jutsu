@@ -1020,3 +1020,25 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-05-18 03:58:24,813 | INFO | Iniciando etapa: macro_005.py
 2026-05-18 03:59:51,267 | INFO | Etapa concluida com sucesso: macro_005.py
 2026-05-18 03:59:51,268 | INFO | Automacao finalizada com sucesso.
+2026-05-18 04:02:59,485 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 04:02:59,499 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 04:03:02,201 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 04:03:02,205 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 04:03:18,406 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 04:03:18,409 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 04:04:46,505 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 04:04:46,546 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 04:04:46,552 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 04:04:46,561 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 04:04:46,584 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 04:04:46,590 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 04:04:46,597 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 04:04:46,642 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-18 04:04:46,657 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-18 04:04:46,668 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-18 04:04:46,671 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 04:06:54,030 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 04:06:54,038 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 04:06:54,039 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 04:11:15,462 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-18 04:11:15,465 | INFO | Automacao finalizada com sucesso.
