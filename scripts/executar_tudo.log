@@ -1166,3 +1166,25 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-05-18 07:09:41,051 | ERROR | Falha na etapa macro_005.py: Timeout esperando pixel (180,610) ficar (240, 240, 240) (tolerancia 25) em 200.0s. Contexto: macro_005 wait campo nome.
 2026-05-18 07:09:41,053 | ERROR | Automacao encerrada com erro.
 2026-05-18 07:09:41,054 | INFO | Automacao finalizada com sucesso.
+2026-05-18 07:24:54,578 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 07:24:54,600 | INFO | Marco temporal de validacao criado em: 2026-05-18 07:24:54. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-18 07:24:54,600 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-18 07:24:54,604 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 07:24:57,285 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 07:24:57,292 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 07:25:13,463 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 07:25:13,494 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 07:26:48,152 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 07:26:48,176 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 07:28:58,513 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 07:28:58,518 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 07:28:58,519 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 07:33:45,751 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-18 07:33:45,804 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-18 07:26:40 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 07:33:45,812 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-18 07:26:40 -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 07:33:45,821 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-18 07:26:40 -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 07:33:45,848 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-18 07:28:50 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 07:33:45,859 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-18 07:28:50 -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 07:33:45,872 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-18 07:28:50 -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 07:33:45,940 | ERROR | NAO CONFORME: nao encontrei arquivo novo para mata226 (gerado apos inicio da execucao) em C:\Users\davi.souza\Desktop\KKKKKKKK\downloads, C:\Users\davi.souza\Desktop, C:\Users\davi.souza\Downloads.
+2026-05-18 07:33:45,940 | INFO | CONFIRMACAO: preparo planilhas apos macro final | mata105=OK | mata225=OK | mata226=FALHOU
