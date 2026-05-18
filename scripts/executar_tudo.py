@@ -75,7 +75,7 @@ def _localizar_arquivo_mais_recente(pasta: Path, padrao: re.Pattern[str]) -> Pat
     return max(candidatos, key=lambda p: p.stat().st_mtime)
 
 
-def preparar_planilhas_para_importacao(logger: logging.Logger, base: Path):
+def preparar_planilhas_para_importacao(logger: logging.Logger, base: Path) -> dict[str, bool]:
     mapeamento = [
         ("mata105", "incluir.xlsx"),
         ("mata225", "Saldo Atual.xlsx"),
@@ -88,9 +88,12 @@ def preparar_planilhas_para_importacao(logger: logging.Logger, base: Path):
         Path.home() / "Downloads",
     ]
     pastas_destino = [p for p in pastas_origem if p.exists()]
+    resultado: dict[str, bool] = {}
     if not pastas_destino:
         logger.warning("Nenhuma pasta de destino encontrada para preparar as planilhas.")
-        return
+        for codigo, _ in mapeamento:
+            resultado[codigo] = False
+        return resultado
 
     for codigo, nome_destino in mapeamento:
         padrao = re.compile(rf"^{re.escape(codigo)}(?:\s*\(\d+\))?\.xlsx$", re.IGNORECASE)
@@ -102,12 +105,16 @@ def preparar_planilhas_para_importacao(logger: logging.Logger, base: Path):
 
         if origem is None:
             logger.warning("Nao encontrei arquivo para %s em %s.", codigo, ", ".join(str(p) for p in pastas_origem))
+            resultado[codigo] = False
             continue
 
         for destino_base in pastas_destino:
             destino = destino_base / nome_destino
             shutil.copy2(origem, destino)
             logger.info("Planilha preparada: %s -> %s", origem.name, destino)
+        resultado[codigo] = True
+
+    return resultado
 
 
 def main(macro_ref: str | None = None):
@@ -130,6 +137,10 @@ def main(macro_ref: str | None = None):
         "Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para "
         "(tambem P/R/S e botoes na janela). "
         "Identificador de pixel: ative no botao e use Espaco para capturar."
+    )
+    logger.info(
+        "Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; "
+        "Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco."
     )
 
     for macro in macros:
@@ -163,8 +174,17 @@ def main(macro_ref: str | None = None):
             break
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
-            if macro.name.lower() == "macro_003.py":
-                preparar_planilhas_para_importacao(logger, base)
+            if macro.name.lower() == "macro_005.py":
+                mapa = preparar_planilhas_para_importacao(logger, base)
+                logger.info(
+                    "CONFIRMACAO: preparo planilhas apos macro final | mata105=%s | mata225=%s | mata226=%s",
+                    "OK" if mapa.get("mata105") else "FALHOU",
+                    "OK" if mapa.get("mata225") else "FALHOU",
+                    "OK" if mapa.get("mata226") else "FALHOU",
+                )
+                logger.info(
+                    "CONFIRMACAO: macro final concluida. Preparo final executado apenas apos as 5 macros."
+                )
 
     if not controller.stop_requested:
         logger.info("Automacao finalizada com sucesso.")

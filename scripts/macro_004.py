@@ -690,7 +690,7 @@ events = [
     (39.719462633132935, 'move', {'x': 918, 'y': 662}),  # 0672
     (39.72754216194153, 'move', {'x': 917, 'y': 661}),  # 0673
     (39.735472679138184, 'move', {'x': 917, 'y': 660}),  # 0674
-    (39.735472679138184, 'wait_any_trigger', {'texts': ['Salvar como', 'Save As', 'Nome do arquivo', 'File name'], 'rgbs': [(255, 255, 255), (240, 240, 240)], 'tolerance': 51, 'quadrants': True, 'timeout': 200, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_004 wait trigger salvar'}),  # 0674a
+    (39.735472679138184, 'wait_any_screen_text', {'texts': ['Salvar como', 'Save As', 'Nome do arquivo', 'File name', 'Nome:', 'File name:'], 'timeout': 200, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_004 wait texto salvar'}),  # 0674a
     (40.100000000000000, 'key_down', {'key': 'm'}),  # 0675
     (40.220342493057300, 'key_up', {'key': 'm'}),  # 0676
     (40.268409824371300, 'key_down', {'key': 'a'}),  # 0677

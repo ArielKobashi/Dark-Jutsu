@@ -894,3 +894,129 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-05-18 01:45:28,772 | INFO | Iniciando etapa: macro_005.py
 2026-05-18 01:49:54,148 | INFO | Etapa concluida com sucesso: macro_005.py
 2026-05-18 01:49:54,149 | INFO | Automacao finalizada com sucesso.
+2026-05-18 03:14:52,999 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 03:14:53,026 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 03:14:55,696 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 03:14:55,759 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 03:15:11,985 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 03:15:12,020 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 03:16:35,112 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 03:16:35,190 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 03:16:35,199 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 03:16:35,203 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 03:16:35,235 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 03:16:35,241 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 03:16:35,246 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 03:16:35,289 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-18 03:16:35,295 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-18 03:16:35,305 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-18 03:16:35,308 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 03:18:41,497 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 03:18:41,521 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 03:18:41,522 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 03:23:01,605 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-18 03:23:01,607 | INFO | Automacao finalizada com sucesso.
+2026-05-18 03:28:00,785 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 03:28:00,787 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 03:28:03,443 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 03:28:03,450 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 03:28:19,626 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 03:28:19,630 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 03:29:48,585 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 03:29:48,609 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 03:29:48,613 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 03:29:48,622 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 03:29:48,645 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 03:29:48,654 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 03:29:48,659 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 03:29:48,680 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-18 03:29:48,692 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-18 03:29:48,703 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-18 03:29:48,705 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 03:32:08,136 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 03:32:08,147 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 03:32:08,147 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 03:36:11,979 | ERROR | Falha na etapa macro_005.py: Timeout aguardando qualquer gatilho (texto/cor) em 200.0s.
+2026-05-18 03:36:11,979 | ERROR | Automacao encerrada com erro.
+2026-05-18 03:36:11,980 | INFO | Automacao finalizada com sucesso.
+2026-05-18 03:42:47,231 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 03:42:47,245 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 03:42:49,900 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 03:42:49,953 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 03:43:05,810 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 03:43:05,814 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 03:44:35,274 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 03:44:35,312 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 03:44:35,319 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 03:44:35,331 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 03:44:35,366 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 03:44:35,372 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 03:44:35,384 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 03:44:35,431 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-18 03:44:35,459 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-18 03:44:35,474 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-18 03:44:35,483 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 03:48:38,818 | WARNING | Parada solicitada durante macro_004.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0674 e #0675 (macro_004).
+2026-05-18 03:48:47,769 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 03:48:47,770 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 03:48:50,405 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 03:48:50,419 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 03:48:53,350 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-18 03:48:58,144 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 03:48:58,145 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 03:49:00,807 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 03:49:00,841 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 03:49:16,937 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 03:49:16,947 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 03:50:45,858 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 03:50:45,945 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 03:50:45,952 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 03:50:45,959 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 03:50:45,991 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 03:50:46,001 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 03:50:46,008 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 03:50:46,056 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-18 03:50:46,067 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-18 03:50:46,079 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-18 03:50:46,085 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 03:51:06,251 | WARNING | Parada solicitada durante macro_004.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-18 03:51:14,672 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 03:51:14,673 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 03:51:17,303 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 03:51:17,319 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 03:51:33,467 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 03:51:33,476 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 03:53:01,920 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 03:53:01,997 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 03:53:02,002 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 03:53:02,010 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 03:53:02,030 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 03:53:02,035 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 03:53:02,043 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 03:53:02,064 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-18 03:53:02,070 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-18 03:53:02,081 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-18 03:53:02,084 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 03:53:18,692 | WARNING | Parada solicitada durante macro_004.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-18 03:54:32,904 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 03:54:32,906 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 03:54:35,532 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 03:54:35,541 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 03:54:51,695 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 03:54:51,707 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 03:56:20,467 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 03:56:20,530 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-18 03:56:20,535 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-18 03:56:20,541 | INFO | Planilha preparada: mata105.xlsx -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-18 03:56:20,563 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-18 03:56:20,567 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-18 03:56:20,576 | INFO | Planilha preparada: mata225.xlsx -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-18 03:56:20,644 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-18 03:56:20,656 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-18 03:56:20,666 | INFO | Planilha preparada: mata226.xlsx -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-18 03:56:20,672 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 03:58:24,802 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 03:58:24,812 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 03:58:24,813 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 03:59:51,267 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-18 03:59:51,268 | INFO | Automacao finalizada com sucesso.
