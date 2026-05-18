@@ -2239,12 +2239,14 @@ def _wait_for_pixel(
             )
             matches = current is not None
         elif search_radius > 0:
-            current, match_pos = _find_pixel_within_radius(x, y, target_rgb, tolerance, search_radius)
+            rgb_targets = target_rgbs if target_rgbs else [target_rgb]
+            current, match_pos = _find_any_pixel_within_radius(x, y, rgb_targets, tolerance, search_radius)
             matches = current is not None
         else:
             current = _get_pixel_color(x, y)
             match_pos = (x, y)
-            matches = _color_matches(current, target_rgb, tolerance)
+            rgb_targets = target_rgbs if target_rgbs else [target_rgb]
+            matches = any(_color_matches(current, tuple(rgb), tolerance) for rgb in rgb_targets)
         if matches == should_match:
             if matches and search_radius > 0 and match_pos is not None:
                 controller.set_locked_mouse_position(match_pos[0], match_pos[1])
@@ -2344,6 +2346,24 @@ def _find_pixel_within_radius(
             current = _get_pixel_color(x, y)
             if _color_matches(current, target_rgb, tolerance):
                 return current, (x, y)
+    return None, None
+
+
+def _find_any_pixel_within_radius(
+    center_x: int,
+    center_y: int,
+    target_rgbs: list[tuple],
+    tolerance: int,
+    radius: int,
+):
+    for dy in range(-radius, radius + 1):
+        y = center_y + dy
+        for dx in range(-radius, radius + 1):
+            x = center_x + dx
+            current = _get_pixel_color(x, y)
+            for rgb in target_rgbs:
+                if _color_matches(current, tuple(rgb), tolerance):
+                    return current, (x, y)
     return None, None
 
 

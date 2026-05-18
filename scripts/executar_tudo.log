@@ -1145,3 +1145,24 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-05-18 06:22:04,869 | INFO | Etapa concluida com sucesso: macro_001.py
 2026-05-18 06:22:04,874 | INFO | Iniciando etapa: macro_002.py
 2026-05-18 06:22:05,584 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-18 06:33:00,199 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 06:33:00,212 | INFO | Marco temporal de validacao criado em: 2026-05-18 06:33:00. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-18 06:33:00,213 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-18 06:33:00,214 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 06:33:02,876 | WARNING | Parada solicitada durante macro_001.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-18 07:00:53,619 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-18 07:00:53,638 | INFO | Marco temporal de validacao criado em: 2026-05-18 07:00:53. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-18 07:00:53,639 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-18 07:00:53,641 | INFO | Iniciando etapa: macro_001.py
+2026-05-18 07:00:56,275 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-18 07:00:56,326 | INFO | Iniciando etapa: macro_002.py
+2026-05-18 07:01:12,436 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-18 07:01:12,455 | INFO | Iniciando etapa: macro_003.py
+2026-05-18 07:02:41,957 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-18 07:02:41,979 | INFO | Iniciando etapa: macro_004.py
+2026-05-18 07:05:17,801 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-18 07:05:17,814 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-18 07:05:17,816 | INFO | Iniciando etapa: macro_005.py
+2026-05-18 07:09:41,051 | ERROR | Falha na etapa macro_005.py: Timeout esperando pixel (180,610) ficar (240, 240, 240) (tolerancia 25) em 200.0s. Contexto: macro_005 wait campo nome.
+2026-05-18 07:09:41,053 | ERROR | Automacao encerrada com erro.
+2026-05-18 07:09:41,054 | INFO | Automacao finalizada com sucesso.
