@@ -107,6 +107,15 @@ class _ControlWindow:
         )
         run_btn.pack(side="left", padx=(6, 0))
 
+        reset_dj_btn = tk.Button(
+            buttons,
+            text="Reset DJ (Ctrl+Alt+R)",
+            command=self._state.trigger_dark_jutsu_reset_shortcut,
+            width=22,
+            height=2,
+        )
+        reset_dj_btn.pack(side="left", padx=(6, 0))
+
         macro_exec_frame = tk.LabelFrame(root, text="Executar Macros Separadas", padx=8, pady=6)
         macro_exec_frame.pack(fill="x", padx=8, pady=(0, 6))
 
@@ -472,6 +481,31 @@ class _SharedState:
             self.mouse_lock_enabled = False
             self.locked_mouse_pos = None
             self._mouse_repositioning = False
+
+    def trigger_dark_jutsu_reset_shortcut(self):
+        if pynput_keyboard is None:
+            emit_status(
+                "Nao foi possivel acionar reset do Dark Jutsu: pynput keyboard indisponivel.",
+                level="WARNING",
+            )
+            return
+        try:
+            kb = pynput_keyboard.Controller()
+            kb.press(pynput_keyboard.Key.ctrl_l)
+            kb.press(pynput_keyboard.Key.alt_l)
+            kb.press("r")
+            kb.release("r")
+            kb.release(pynput_keyboard.Key.alt_l)
+            kb.release(pynput_keyboard.Key.ctrl_l)
+            emit_status(
+                "Atalho de reset enviado (Ctrl+Alt+R). Com o Dark Jutsu em foco, o rollback sera executado.",
+                level="INFO",
+            )
+        except Exception as exc:
+            emit_status(
+                f"Falha ao enviar atalho de reset do Dark Jutsu: {exc}",
+                level="WARNING",
+            )
 
     def set_locked_mouse_position(self, x: int, y: int):
         with self.lock:

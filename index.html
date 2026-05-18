@@ -317,7 +317,6 @@ Usuários do Sistema
         <input type="file" id="fileInput" style="display:none" accept=".xlsx">
         <hr>
         <button onclick="atualizarBanco()">Atualizar Banco</button>
-        <button onclick="resetAtualizacaoSegura()">Reset Atualização (Backup)</button>
         <div style="margin-top:6px; font-size:10px; text-align:center;">
         Última atualização:
         <div id="lastUpdate" style="opacity:0.7;"></div>
@@ -1148,6 +1147,15 @@ async function resetAtualizacaoSegura() {
         alert("Erro ao resetar atualização. Veja o console.");
     }
 }
+
+// Atalho para reset sem botão visual:
+// Ctrl+Alt+R aciona o rollback de atualização.
+document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey && e.altKey && (e.key === "r" || e.key === "R")) {
+        e.preventDefault();
+        resetAtualizacaoSegura();
+    }
+});
 
 function atualizarEstadoHeader(){
     let header = document.getElementById("selectAllHeader");
