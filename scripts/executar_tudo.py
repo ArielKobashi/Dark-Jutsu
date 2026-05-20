@@ -6,6 +6,7 @@ import shutil
 import time
 from pathlib import Path
 
+from automus_update import run_automus_update
 from controladordeatualização import ExecutionController, StopRequested, push_status, validate_macro_comment_sequence
 
 
@@ -136,6 +137,14 @@ def preparar_planilhas_para_importacao(
 
     return resultado
 
+def enviar_atualizacao_automus(logger: logging.Logger, base: Path):
+    config_path = base / "automus_config.json"
+    project_root = base.parent
+    logger.info(
+        "AUTOMUS: iniciando envio automatico ao Firebase sem interagir com navegador/sessao aberta."
+    )
+    run_automus_update(config_path=config_path, project_root=project_root, logger=logger)
+    logger.info("AUTOMUS: envio concluido com sucesso.")
 
 def main(macro_ref: str | None = None):
     base = Path(__file__).resolve().parent
@@ -166,7 +175,7 @@ def main(macro_ref: str | None = None):
     )
     logger.info(
         "Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; "
-        "Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco."
+        "apos a macro 005, Automus envia direto ao Firebase (sem mexer na sessao aberta do Dark Jutsu)."
     )
 
     for macro in macros:
@@ -195,26 +204,35 @@ def main(macro_ref: str | None = None):
             logger.warning("Parada solicitada durante %s: %s", macro.name, exc)
             break
         except Exception as exc:
-            logger.error("Falha na etapa %s: %s", macro.name, exc)
+            logger.exception("Falha na etapa %s: %s", macro.name, exc)
             logger.error("Automacao encerrada com erro.")
             break
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
             if macro.name.lower() == "macro_005.py":
-                mapa = preparar_planilhas_para_importacao(logger, base, started_at_epoch)
-                logger.info(
-                    "CONFIRMACAO: preparo planilhas apos macro final | mata105=%s | mata225=%s | mata226=%s",
-                    "OK" if mapa.get("mata105") else "FALHOU",
-                    "OK" if mapa.get("mata225") else "FALHOU",
-                    "OK" if mapa.get("mata226") else "FALHOU",
-                )
-                if not all(mapa.get(cod, False) for cod in ("mata105", "mata225", "mata226")):
-                    raise RuntimeError(
-                        "Validacao forte falhou: nem todas as planilhas novas da execucao atual foram encontradas."
+                try:
+                    mapa = preparar_planilhas_para_importacao(logger, base, started_at_epoch)
+                    logger.info(
+                        "CONFIRMACAO: preparo planilhas apos macro final | mata105=%s | mata225=%s | mata226=%s",
+                        "OK" if mapa.get("mata105") else "FALHOU",
+                        "OK" if mapa.get("mata225") else "FALHOU",
+                        "OK" if mapa.get("mata226") else "FALHOU",
                     )
-                logger.info(
-                    "CONFIRMACAO: macro final concluida. Preparo final executado apenas apos as 5 macros."
-                )
+                    if not all(mapa.get(cod, False) for cod in ("mata105", "mata225", "mata226")):
+                        raise RuntimeError(
+                            "Validacao forte falhou: nem todas as planilhas novas da execucao atual foram encontradas."
+                        )
+                    logger.info(
+                        "CONFIRMACAO: macro final de extracao concluida. Preparo final executado apos as 5 macros."
+                    )
+                    enviar_atualizacao_automus(logger, base)
+                    logger.info(
+                        "CONFIRMACAO: envio Firebase via Automus executado apos a macro_005 (sem automacao de navegador)."
+                    )
+                except Exception as exc:
+                    logger.exception("Falha no pos-processamento apos macro_005: %s", exc)
+                    logger.error("Automacao encerrada com erro.")
+                    break
 
     if not controller.stop_requested:
         logger.info("Automacao finalizada com sucesso.")

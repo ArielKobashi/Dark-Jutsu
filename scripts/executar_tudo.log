@@ -1259,3 +1259,36 @@ RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0
 2026-05-20 01:48:28,079 | INFO | CONFIRMACAO: preparo planilhas apos macro final | mata105=OK | mata225=OK | mata226=OK
 2026-05-20 01:48:28,079 | INFO | CONFIRMACAO: macro final concluida. Preparo final executado apenas apos as 5 macros.
 2026-05-20 01:48:28,080 | INFO | Automacao finalizada com sucesso.
+2026-05-20 02:03:38,643 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-20 02:03:38,644 | INFO | Marco temporal de validacao criado em: 2026-05-20 02:03:38. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-20 02:03:38,644 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-20 02:03:38,646 | INFO | Iniciando etapa: macro_001.py
+2026-05-20 02:03:41,339 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-20 02:03:41,387 | INFO | Iniciando etapa: macro_002.py
+2026-05-20 02:03:44,388 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.
+2026-05-20 02:04:11,387 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-20 02:04:11,405 | INFO | Marco temporal de validacao criado em: 2026-05-20 02:04:11. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-20 02:04:11,407 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; Dark Jutsu faz atualizacao automatica ao carregar incluir/saldoAtual/saldoEndereco.
+2026-05-20 02:04:11,409 | INFO | Iniciando etapa: macro_001.py
+2026-05-20 02:04:14,061 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-20 02:04:14,095 | INFO | Iniciando etapa: macro_002.py
+2026-05-20 02:04:30,156 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-20 02:04:30,160 | INFO | Iniciando etapa: macro_003.py
+2026-05-20 02:06:01,658 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-20 02:06:01,671 | INFO | Iniciando etapa: macro_004.py
+2026-05-20 02:08:17,222 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-20 02:08:17,231 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-20 02:08:17,231 | INFO | Iniciando etapa: macro_005.py
+2026-05-20 02:11:59,671 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-20 02:11:59,728 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-20 02:05:54 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-20 02:11:59,736 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-20 02:05:54 -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-20 02:11:59,743 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-20 02:05:54 -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-20 02:11:59,773 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-20 02:08:08 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-20 02:11:59,780 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-20 02:08:08 -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-20 02:11:59,791 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-20 02:08:08 -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-20 02:11:59,828 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-20 02:11:43 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-20 02:11:59,858 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-20 02:11:43 -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-20 02:11:59,867 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-20 02:11:43 -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-20 02:11:59,870 | INFO | CONFIRMACAO: preparo planilhas apos macro final | mata105=OK | mata225=OK | mata226=OK
+2026-05-20 02:11:59,871 | INFO | CONFIRMACAO: macro final concluida. Preparo final executado apenas apos as 5 macros.
+2026-05-20 02:11:59,871 | INFO | Automacao finalizada com sucesso.
