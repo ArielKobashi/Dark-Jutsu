@@ -1585,3 +1585,10 @@ Traceback (most recent call last):
     )
 RuntimeError: Timeout esperando pixel (20,224) ficar (247, 73, 73) (tolerancia 0) em 120.0s. Contexto: macro_003 #0207.
 2026-05-20 04:06:56,575 | ERROR | Automacao encerrada com erro.
+2026-05-20 04:36:11,733 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-20 04:36:11,809 | INFO | Marco temporal de validacao criado em: 2026-05-20 04:36:11. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-20 04:36:11,810 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; apos a macro 005, Automus envia direto ao Firebase (sem mexer na sessao aberta do Dark Jutsu).
+2026-05-20 04:36:11,812 | INFO | Iniciando etapa: macro_001.py
+2026-05-20 04:36:14,478 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-20 04:36:14,538 | INFO | Iniciando etapa: macro_002.py
+2026-05-20 04:36:21,378 | WARNING | Parada solicitada durante macro_002.py: Parada solicitada. Encerrando macro. Posicao atual: entre #0000 e #0001.

@@ -34,6 +34,22 @@ class POINT(ctypes.Structure):
     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
 
+def _set_window_click_through(hwnd: int, enabled: bool = True):
+    try:
+        user32 = ctypes.windll.user32
+        GWL_EXSTYLE = -20
+        WS_EX_LAYERED = 0x00080000
+        WS_EX_TRANSPARENT = 0x00000020
+        exstyle = user32.GetWindowLongW(int(hwnd), GWL_EXSTYLE)
+        if enabled:
+            exstyle |= (WS_EX_LAYERED | WS_EX_TRANSPARENT)
+        else:
+            exstyle &= ~WS_EX_TRANSPARENT
+        user32.SetWindowLongW(int(hwnd), GWL_EXSTYLE, exstyle)
+    except Exception:
+        pass
+
+
 class _ControlWindow:
     def __init__(self, state: "_SharedState"):
         self._state = state
@@ -145,9 +161,15 @@ class _ControlWindow:
 
         overlay = tk.Toplevel(root)
         overlay.title("Macro atual")
-        overlay.geometry("340x118+24+24")
+        overlay_width = 340
+        overlay_height = 118
+        screen_w = overlay.winfo_screenwidth()
+        x_top_center = max(0, int((screen_w - overlay_width) / 2))
+        y_top = 12
+        overlay.geometry(f"{overlay_width}x{overlay_height}+{x_top_center}+{y_top}")
         overlay.resizable(False, False)
         overlay.attributes("-topmost", True)
+        overlay.attributes("-alpha", 0.30)
         try:
             overlay.configure(bg="#111827")
         except Exception:
@@ -213,6 +235,8 @@ class _ControlWindow:
             height=1,
         )
         overlay_stop_btn.pack(side="left")
+        overlay.update_idletasks()
+        _set_window_click_through(overlay.winfo_id(), enabled=True)
 
         pixel_buttons = tk.Frame(root)
         pixel_buttons.pack(fill="x", padx=8, pady=(0, 4))
@@ -1199,6 +1223,71 @@ def _find_totvs_window_handle():
     return best_match
 
 
+def _find_best_window_handle(titles):
+    normalized = [_normalize_screen_text(str(t)) for t in (titles or []) if str(t).strip()]
+    normalized = [t for t in normalized if t]
+    if not normalized:
+        return _find_totvs_window_handle()
+
+    best_match = None
+    best_score = -1
+    for hwnd in _enum_visible_window_handles():
+        title_norm = _normalize_screen_text(_get_window_text(hwnd))
+        if not title_norm:
+            continue
+        score = 0
+        for token in normalized:
+            if token in title_norm:
+                score += 10
+        if "totvs" in title_norm:
+            score += 3
+        if "smartclient" in title_norm:
+            score += 5
+        if score > best_score:
+            best_score = score
+            best_match = hwnd
+
+    if best_score <= 0 and any(("totvs" in t or "smartclient" in t) for t in normalized):
+        return _find_totvs_window_handle()
+    return best_match
+
+
+def _activate_window(hwnd: int) -> bool:
+    try:
+        user32 = ctypes.windll.user32
+        SW_RESTORE = 9
+        SW_SHOW = 5
+
+        user32.ShowWindow(hwnd, SW_RESTORE if user32.IsIconic(hwnd) else SW_SHOW)
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+        user32.SetActiveWindow(hwnd)
+        user32.SetFocus(hwnd)
+        time.sleep(0.06)
+
+        current = int(user32.GetForegroundWindow() or 0)
+        if current == int(hwnd):
+            return True
+
+        # Fallback: tenta Alt+Tab uma vez para alternar e reaplica foco.
+        if pynput_keyboard is not None:
+            kb = pynput_keyboard.Controller()
+            kb.press(pynput_keyboard.Key.alt_l)
+            kb.press(pynput_keyboard.Key.tab)
+            kb.release(pynput_keyboard.Key.tab)
+            kb.release(pynput_keyboard.Key.alt_l)
+            time.sleep(0.12)
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            time.sleep(0.05)
+            current = int(user32.GetForegroundWindow() or 0)
+            return current == int(hwnd)
+
+        return False
+    except Exception:
+        return False
+
+
 def _get_accessible_dispatch(hwnd: int):
     try:
         import pythoncom
@@ -2029,6 +2118,43 @@ def handle_custom_event(kind: str, data: dict, controller: ExecutionController) 
                         f"Timeout esperando titulo da janela conter um dos termos: {titles!r}."
                     )
                 emit_status(f"{context}: timeout aguardando titulo da janela.", level="WARNING")
+                return True
+            time.sleep(interval)
+
+    if kind in ("focus_window", "focus_totvs_window"):
+        titles_raw = data.get("titles") or data.get("texts") or []
+        titles = [str(t) for t in titles_raw if str(t).strip()]
+        if not titles:
+            single = str(data.get("title") or data.get("text") or "TOTVS SmartClient HTML").strip()
+            titles = [single]
+        timeout = float(data.get("timeout", 8.0))
+        interval = float(data.get("interval", 0.2))
+        error_on_timeout = bool(data.get("error_on_timeout", True))
+        post_wait = float(data.get("post_wait", 0.2))
+        context = data.get("label") or data.get("_event_index") or kind
+
+        start = time.time()
+        while True:
+            controller.poll_keypress()
+            controller.wait_if_paused()
+            if controller.stop_requested:
+                raise StopRequested(controller.get_stop_message())
+
+            hwnd = _find_totvs_window_handle() if kind == "focus_totvs_window" else _find_best_window_handle(titles)
+            if hwnd and _activate_window(hwnd):
+                focused_title = _get_window_text(hwnd)
+                emit_status(f"{context}: foco aplicado na janela: {focused_title!r}.", level="INFO")
+                if post_wait > 0:
+                    if not sleep_with_controls(post_wait, controller):
+                        raise StopRequested(controller.get_stop_message())
+                return True
+
+            if timeout > 0 and (time.time() - start) >= timeout:
+                if error_on_timeout:
+                    raise RuntimeError(
+                        f"Timeout ao focar janela. Titulos esperados: {titles!r}."
+                    )
+                emit_status(f"{context}: timeout ao tentar focar janela.", level="WARNING")
                 return True
             time.sleep(interval)
 
