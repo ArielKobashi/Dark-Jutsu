@@ -793,6 +793,24 @@ th.col-ordenada.col-filtrada {
     isolation:isolate;
 }
 
+.roomUnreadBadge{
+    display:none;
+    min-width:18px;
+    height:16px;
+    padding:0 5px;
+    margin-top:-4px;
+    margin-bottom:2px;
+    border-radius:999px;
+    background:#0F172A;
+    border:1px solid rgba(255,255,255,0.12);
+    color:#E5EEF9;
+    font-size:9px;
+    line-height:14px;
+    text-align:center;
+    box-shadow:0 0 0 1px rgba(0,0,0,0.18) inset;
+    pointer-events:none;
+}
+
 .roomBtn{
     width:11px;
     height:11px;
@@ -1553,6 +1571,26 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     border:1px solid rgba(207,227,255,0.2);
     border-radius:999px;
     background:rgba(14,23,35,0.35);
+}
+
+.chatUnreadDivider{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:8px 0;
+    color:#F8D66D;
+    font-size:9px;
+    letter-spacing:0.3px;
+    text-transform:uppercase;
+    opacity:0.95;
+}
+
+.chatUnreadDivider::before,
+.chatUnreadDivider::after{
+    content:"";
+    flex:1;
+    height:1px;
+    background:linear-gradient(90deg, transparent, rgba(248,214,109,0.85), transparent);
 }
 
 #chatMessages{

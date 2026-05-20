@@ -355,8 +355,11 @@ Usuários do Sistema
     <div id="chatWrap">
         <div id="chatRooms">
             <button class="roomBtn room-red active" data-room="publica" title="Sala pública" aria-label="Sala pública"></button>
+            <span class="roomUnreadBadge" data-room-badge="publica" aria-live="polite"></span>
             <button class="roomBtn room-yellow" data-room="sala2" title="Sala Privada 1" aria-label="Sala Privada 1"></button>
+            <span class="roomUnreadBadge" data-room-badge="sala2" aria-live="polite"></span>
             <button class="roomBtn room-blue" data-room="sala3" title="Sala Privada 2" aria-label="Sala Privada 2"></button>
+            <span class="roomUnreadBadge" data-room-badge="sala3" aria-live="polite"></span>
         </div>
         <div id="chatBox">
             <button id="chatClearBtn" title="Limpar mensagens" onclick="limparMensagensSala()">🗑️</button>
@@ -2099,7 +2102,7 @@ function atualizarContadorCaptura(){
     magnetCount.innerText = capturados.size;
 }
 
-function enviarMensagemSistema(texto, roomId){
+function enviarMensagemSistema(texto, roomId, extra = {}){
 
     if(typeof window.getChatRef !== "function") return;
     if(typeof window.push !== "function") return;
@@ -2111,6 +2114,9 @@ function enviarMensagemSistema(texto, roomId){
         nome: "Sistema",
         texto: texto,
         tipo: "system",
+        evento: extra.evento || "",
+        sessionId: extra.sessionId || "",
+        uid: extra.uid || "",
         data: new Date().toLocaleTimeString(),
         timestamp: Date.now()
     });
@@ -2145,75 +2151,6 @@ function obterCorNickname(nome){
 
     return mapaCores[chave];
 }
-
-
-function renderChat(){
-
-    const mensagens = (window.mensagens || []).sort((a,b)=>a.timestamp-b.timestamp);
-    if(!window.meuNickname) return;
-
-    let box = document.getElementById("chatMessages");
-    box.innerHTML = "";
-
-    let ultimas = mensagens.slice(-limiteChat);
-
-    ultimas.forEach(msg => {
-
-        if(msg.texto === "__JOIN__") return;
-
-        if(msg.tipo === "system"){
-            let div = document.createElement("div");
-            div.className = "mensagem sistema";
-            div.textContent = msg.texto;
-            box.appendChild(div);
-            return;
-        }
-
-        let cor = obterCorNickname(msg.nome);
-        let souEu = msg.nome.toLowerCase() === window.meuNickname?.toLowerCase();
-
-        let div = document.createElement("div");
-        div.className = "mensagem";
-        div.style.textAlign = souEu ? "right" : "left";
-
-        div.innerHTML = `
-        <div style="
-            display:inline-flex;
-            flex-direction:column;
-            background:${cor}1A;
-            border-left:3px solid ${cor};
-            padding:3px 6px;
-            border-radius:8px;
-            max-width:170px;
-            font-size:10px;
-            line-height:1.2;
-            overflow-wrap:anywhere;
-            word-break:break-word;
-        ">
-            <span style="font-weight:bold;">
-                ${formatarNick(msg.nome)}
-            </span>
-
-            <span>
-                ${msg.texto}
-            </span>
-
-            <span style="
-                font-size:8px;
-                opacity:0.6;
-                align-self:flex-end;
-            ">
-                ${msg.data}
-            </span>
-        </div>
-        `;
-
-        box.appendChild(div);
-    });
-
-    box.scrollTop = box.scrollHeight;
-}
-
 
 document.getElementById("chatMessages").addEventListener("scroll", function(){
 
@@ -2499,6 +2436,10 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
     }
 });
 
+document.getElementById("chatInput").addEventListener("focus", function(){
+    persistirLeituraSala(salaAtual, Date.now());
+});
+
 document.getElementById("chatInput").addEventListener("input", function(){
     const texto = this.value.trim();
     if(!texto){
@@ -2514,10 +2455,20 @@ document.getElementById("chatInput").addEventListener("input", function(){
     typingIdleTimer = setTimeout(()=>{
         setDigitando(salaAtual, false);
     }, TYPING_TTL);
+    persistirLeituraSala(salaAtual, Date.now());
 });
 
 document.getElementById("chatInput").addEventListener("blur", function(){
     setDigitando(salaAtual, false);
+});
+
+document.getElementById("chatMessages").addEventListener("click", function(){
+    persistirLeituraSala(salaAtual, Date.now());
+});
+
+document.getElementById("chatBox").addEventListener("click", function(){
+    if(salaAtual === "publica" && !chatPublicUnlocked) return;
+    persistirLeituraSala(salaAtual, Date.now());
 });
 
 
@@ -3280,6 +3231,10 @@ import { setPersistence, browserSessionPersistence } from "https://www.gstatic.c
 await setPersistence(auth, browserSessionPersistence);
 
 window.logout = async function() {
+    try{
+        await encerrarSessaoChat("logout", true);
+    }catch(e){}
+    chatPublicUnlocked = false;
     await signOut(auth);
     document.getElementById("authScreen").style.display = "flex";
     if(document.getElementById("pendingScreen")){
@@ -3865,6 +3820,14 @@ onAuthStateChanged(auth, async (user) => {
     const adminPanel = document.getElementById("adminPanel");
 
     if (!user) {
+        pararMonitoramentoChat();
+        window.meuNickname = null;
+        window.meuCracha = "";
+        window.meuSetor = "";
+        chatPublicUnlocked = false;
+        chatSessionState = null;
+        lastRoomEntrySessionKey = null;
+        ultimaSalaEntrada = null;
         if(document.getElementById("pendingScreen")?.style.display !== "flex"){
             authScreen.style.display = "flex";
         }
@@ -3936,6 +3899,7 @@ onAuthStateChanged(auth, async (user) => {
 
         window.meuNickname = dadosUsuario.nickname;
         window.meuCracha = dadosUsuario.cracha || "";
+        window.meuSetor = dadosUsuario.setor || "";
         setSalaAtiva(salaAtual);
         // 🔥 ZERA CAPTURAS AO INICIAR SESSÃO
         capturados.clear();
@@ -3976,7 +3940,7 @@ onAuthStateChanged(auth, async (user) => {
 
         await carregarEstoqueInicial();
 
-        iniciarChatSePermitido();
+        await prepararChatUsuario();
 
         resetarTimer(); // 🔥 ativa controle de inatividade
 
@@ -3998,6 +3962,9 @@ function resetarTimer() {
 
     timerInatividade = setTimeout(async () => {
         alert("Sessão encerrada por inatividade.");
+        try{
+            await encerrarSessaoChat("inatividade", true);
+        }catch(e){}
         await signOut(auth);
     }, tempoLimite);
 }
@@ -4112,28 +4079,351 @@ function fecharSubPagina(){
 
 let salaAtual = "publica";
 window.salaAtual = salaAtual;
-let chatUnsub = null;
 let chatPublicUnlocked = false;
 const salasChat = [
     { id: "publica", label: "Publica", publico: true },
     { id: "sala2", label: "Sala 2", publico: false },
     { id: "sala3", label: "Sala 3", publico: false }
 ];
+const CHAT_READ_STATE_KEY = "chatReadState_v1";
+const CHAT_SESSION_KEY = "chatSession_v1";
+const chatTitleBase = document.title;
+let chatSessionState = null;
+let chatRoomUnsubs = {};
+let chatTypingRoomUnsub = null;
+let typingUsers = {};
+let typingIdleTimer = null;
+let lastTypingSent = 0;
+let roomMessages = {};
+let unreadCounts = {};
+let unreadTitleTimer = null;
+let unreadTitleFlip = false;
+let unreadTitleCount = 0;
+let lastRoomEntrySessionKey = null;
+let ultimaSalaEntrada = null;
+let readStateCache = {};
 
 function getChatRef(roomId){
     return ref(db, "chatRooms/" + roomId + "/messages");
 }
 window.getChatRef = getChatRef;
 
+function getChatReadStorageKey(uid){
+    return `${CHAT_READ_STATE_KEY}:${uid}`;
+}
+
+function getChatSessionStorageKey(uid){
+    return `${CHAT_SESSION_KEY}:${uid}`;
+}
+
+function getCurrentChatUid(){
+    return auth?.currentUser?.uid || null;
+}
+
+function getReadStateForUid(uid){
+    if(!uid) return {};
+    if(!readStateCache[uid]){
+        try{
+            readStateCache[uid] = JSON.parse(localStorage.getItem(getChatReadStorageKey(uid)) || "{}") || {};
+        }catch(e){
+            readStateCache[uid] = {};
+        }
+    }
+    return readStateCache[uid];
+}
+
+function saveReadStateForUid(uid){
+    if(!uid) return;
+    try{
+        localStorage.setItem(getChatReadStorageKey(uid), JSON.stringify(readStateCache[uid] || {}));
+    }catch(e){}
+}
+
+function loadSessionState(uid){
+    if(!uid) return null;
+    try{
+        const raw = localStorage.getItem(getChatSessionStorageKey(uid));
+        return raw ? JSON.parse(raw) : null;
+    }catch(e){
+        return null;
+    }
+}
+
+function saveSessionState(uid, state){
+    if(!uid || !state) return;
+    try{
+        localStorage.setItem(getChatSessionStorageKey(uid), JSON.stringify(state));
+    }catch(e){}
+}
+
+function clearSessionState(uid){
+    if(!uid) return;
+    try{
+        localStorage.removeItem(getChatSessionStorageKey(uid));
+    }catch(e){}
+}
+
+function gerarSessionId(){
+    try{
+        if(window.crypto?.randomUUID) return window.crypto.randomUUID();
+    }catch(e){}
+    return `sess_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizarNickChat(nome){
+    return (nome || "").toString().trim().toLowerCase();
+}
+
+function ehMensagemContabilizavel(msg){
+    if(!msg) return false;
+    if(msg.tipo === "system") return false;
+    if(msg.texto === "__JOIN__") return false;
+    return true;
+}
+
+function ehMensagemNaoLida(msg, lastSeenAt){
+    if(!ehMensagemContabilizavel(msg)) return false;
+    const ts = Number(msg.timestamp || 0);
+    if(!ts || ts <= Number(lastSeenAt || 0)) return false;
+    const meuNick = normalizarNickChat(window.meuNickname);
+    const autor = normalizarNickChat(msg.nome);
+    if(meuNick && autor && meuNick === autor) return false;
+    return true;
+}
+
+function getUltimaLeitura(roomId){
+    const uid = getCurrentChatUid();
+    if(!uid || !roomId) return 0;
+    const cached = getReadStateForUid(uid);
+    return Number(cached?.[roomId] || 0) || 0;
+}
+
+async function persistirLeituraSala(roomId, timestamp = Date.now()){
+    const uid = getCurrentChatUid();
+    if(!uid || !roomId) return;
+    const current = getReadStateForUid(uid);
+    const nextTs = Math.max(Number(current?.[roomId] || 0), Number(timestamp || 0));
+    current[roomId] = nextTs;
+    saveReadStateForUid(uid);
+    recalcularUnreadCounts();
+    try{
+        await set(ref(db, `chatReadState/${uid}/${roomId}`), nextTs);
+    }catch(e){}
+}
+
+async function carregarLeituraSalaRemota(){
+    const uid = getCurrentChatUid();
+    if(!uid) return;
+    try{
+        const snap = await get(ref(db, `chatReadState/${uid}`));
+        if(snap.exists()){
+            const remoto = snap.val() || {};
+            const local = getReadStateForUid(uid);
+            readStateCache[uid] = { ...local, ...remoto };
+            saveReadStateForUid(uid);
+        }
+    }catch(e){}
+}
+
+function atualizarTituloChat(){
+    const total = Object.values(unreadCounts || {}).reduce((acc, val)=>acc + Number(val || 0), 0);
+    unreadTitleCount = total;
+    if(total > 0){
+        if(!unreadTitleTimer){
+            unreadTitleTimer = setInterval(()=>{
+                unreadTitleFlip = !unreadTitleFlip;
+                document.title = unreadTitleFlip ? `(${unreadTitleCount}) ${chatTitleBase}` : chatTitleBase;
+            }, 1800);
+        }
+        document.title = `(${unreadTitleCount}) ${chatTitleBase}`;
+        return;
+    }
+    if(unreadTitleTimer){
+        clearInterval(unreadTitleTimer);
+        unreadTitleTimer = null;
+    }
+    unreadTitleFlip = false;
+    document.title = chatTitleBase;
+}
+
+function atualizarBadgesChat(){
+    salasChat.forEach(room=>{
+        const count = Number(unreadCounts[room.id] || 0);
+        const badge = document.querySelector(`[data-room-badge="${room.id}"]`);
+        if(!badge) return;
+        if(count > 0){
+            badge.style.display = "inline-flex";
+            badge.textContent = count > 99 ? "99+" : String(count);
+        }else{
+            badge.style.display = "none";
+            badge.textContent = "";
+        }
+    });
+    atualizarTituloChat();
+}
+
+function recalcularUnreadCounts(){
+    const uid = getCurrentChatUid();
+    if(!uid) return;
+    const next = {};
+    salasChat.forEach(room=>{
+        const msgs = roomMessages[room.id] || [];
+        const lastSeen = getUltimaLeitura(room.id);
+        next[room.id] = msgs.reduce((acc, msg)=> acc + (ehMensagemNaoLida(msg, lastSeen) ? 1 : 0), 0);
+    });
+    unreadCounts = next;
+    atualizarBadgesChat();
+}
+
+function renderChat(){
+    const mensagens = (roomMessages[salaAtual] || []).slice().sort((a,b)=>Number(a.timestamp || 0) - Number(b.timestamp || 0));
+    if(!window.meuNickname) return;
+
+    let box = document.getElementById("chatMessages");
+    if(!box) return;
+    box.innerHTML = "";
+
+    const lastSeen = getUltimaLeitura(salaAtual);
+    const unreadIndex = mensagens.findIndex(msg=>ehMensagemNaoLida(msg, lastSeen));
+    const baseLimit = Math.max(limiteChat, unreadIndex >= 0 ? (mensagens.length - unreadIndex + 3) : limiteChat);
+    let ultimas = mensagens.slice(-baseLimit);
+    let dividerInserted = false;
+
+    ultimas.forEach(msg => {
+        if(!dividerInserted && ehMensagemNaoLida(msg, lastSeen)){
+            const divider = document.createElement("div");
+            divider.className = "chatUnreadDivider";
+            divider.textContent = "Mensagens não lidas";
+            box.appendChild(divider);
+            dividerInserted = true;
+        }
+
+        if(msg.texto === "__JOIN__") return;
+
+        if(msg.tipo === "system"){
+            let div = document.createElement("div");
+            div.className = "mensagem sistema";
+            div.textContent = msg.texto;
+            box.appendChild(div);
+            return;
+        }
+
+        let cor = obterCorNickname(msg.nome);
+        let souEu = normalizarNickChat(msg.nome) === normalizarNickChat(window.meuNickname);
+
+        let div = document.createElement("div");
+        div.className = "mensagem";
+        div.style.textAlign = souEu ? "right" : "left";
+
+        div.innerHTML = `
+        <div style="
+            display:inline-block;
+            background:${souEu ? "#3B1E71" : "#1B2740"};
+            color:#F3F4F6;
+            border-left:4px solid ${cor};
+            padding:5px 7px;
+            border-radius:8px;
+            max-width:90%;
+            word-wrap:break-word;
+            box-shadow:0 2px 6px rgba(0,0,0,0.28);
+            margin:2px 0;
+        ">
+            <b style="color:${cor};">${formatarNick(msg.nome)}:</b> ${escapeHtml(msg.texto)}
+            <span style="
+                font-size:8px;
+                opacity:0.6;
+                align-self:flex-end;
+            ">
+                ${msg.data}
+            </span>
+        </div>
+        `;
+
+        box.appendChild(div);
+    });
+
+    box.scrollTop = box.scrollHeight;
+}
+
+function atualizarVistaChatAtivo(roomId = salaAtual, marcarComoVista = false){
+    if(!window.meuNickname) return;
+    const msgs = roomMessages[roomId] || [];
+    window.mensagens = msgs;
+    if(marcarComoVista){
+        persistirLeituraSala(roomId, Date.now());
+    }
+    if(roomId === "publica" && !chatPublicUnlocked){
+        atualizarGatePublico();
+        return;
+    }
+    renderChat();
+}
+
+function iniciarMonitoramentoSalas(){
+    salasChat.forEach(room=>{
+        if(chatRoomUnsubs[room.id]) return;
+        chatRoomUnsubs[room.id] = onValue(getChatRef(room.id), snapshot => {
+            let lista = [];
+            snapshot.forEach(child=>{
+                lista.push(child.val());
+            });
+            roomMessages[room.id] = lista;
+            if(room.id === salaAtual){
+                recalcularUnreadCounts();
+                atualizarVistaChatAtivo(room.id, false);
+            }else{
+                recalcularUnreadCounts();
+            }
+        });
+    });
+}
+
+function iniciarMonitoramentoTyping(roomId){
+    if(chatTypingRoomUnsub){
+        chatTypingRoomUnsub();
+        chatTypingRoomUnsub = null;
+    }
+    if(!roomId) return;
+    chatTypingRoomUnsub = onValue(getTypingRef(roomId), snapshot => {
+        typingUsers = snapshot.val() || {};
+        atualizarDigitandoUI();
+    });
+}
+
+function pararMonitoramentoChat(){
+    Object.values(chatRoomUnsubs || {}).forEach(unsub=>{
+        if(typeof unsub === "function") unsub();
+    });
+    chatRoomUnsubs = {};
+    if(chatTypingRoomUnsub){
+        chatTypingRoomUnsub();
+        chatTypingRoomUnsub = null;
+    }
+    roomMessages = {};
+    typingUsers = {};
+    unreadCounts = {};
+    window.mensagens = [];
+    atualizarBadgesChat();
+}
+
 function setSalaAtiva(roomId){
     salaAtual = roomId;
     window.salaAtual = salaAtual;
+    if(chatSessionState){
+        chatSessionState.roomId = roomId;
+        chatSessionState.updatedAt = Date.now();
+        const uid = getCurrentChatUid();
+        if(uid) saveSessionState(uid, chatSessionState);
+    }
     document.querySelectorAll(".roomBtn").forEach(btn=>{
         btn.classList.toggle("active", btn.dataset.room === roomId);
     });
     const chatBox = document.getElementById("chatBox");
     if(chatBox) chatBox.setAttribute("data-room", roomId);
     atualizarGatePublico();
+    if(window.meuNickname){
+        atualizarVistaChatAtivo(roomId, false);
+    }
 }
 
 async function verificarSenhaSala(roomId){
@@ -4144,7 +4434,9 @@ async function verificarSenhaSala(roomId){
 async function trocarSala(roomId){
     const room = salasChat.find(r=> r.id === roomId);
     if(!room) return;
-    if(!room.publico){
+    const setorUsuario = (window.meuSetor || "").toString().trim();
+    const liberadaAlmox = roomId === "sala2" && setorUsuario === "Almoxarifado";
+    if(!room.publico && !liberadaAlmox){
         const senhaDb = await verificarSenhaSala(roomId);
         if(!senhaDb){
             mostrarNotificacao("Sala sem senha definida. Procure o admin.");
@@ -4163,36 +4455,55 @@ async function trocarSala(roomId){
     }
     setDigitando(salaAtual, false);
     setSalaAtiva(roomId);
+    await persistirLeituraSala(roomId, Date.now());
     iniciarChatSePermitido();
 }
 window.trocarSala = trocarSala;
 
-let ultimaSalaEntrada = null;
-function anunciarEntradaSala(roomId){
+function anunciarEntradaSala(roomId, sessionId = null){
     if(!window.meuNickname) return;
     if(typeof window.getChatRef !== "function") return;
-    if(ultimaSalaEntrada === roomId) return;
+    const uid = getCurrentChatUid();
+    const currentSession = sessionId || chatSessionState?.sessionId || "";
+    if(lastRoomEntrySessionKey === `${roomId}:${currentSession}`) return;
+    const msgs = roomMessages[roomId] || [];
+    if(currentSession && msgs.some(msg => msg?.tipo === "system" && msg?.evento === "entrada" && msg?.sessionId === currentSession)){
+        lastRoomEntrySessionKey = `${roomId}:${currentSession}`;
+        return;
+    }
+    lastRoomEntrySessionKey = `${roomId}:${currentSession}`;
     ultimaSalaEntrada = roomId;
     const cracha = (window.meuCracha || "").toString().trim();
     const nickFmt = formatarNick(window.meuNickname || "");
     const tag = cracha ? `${nickFmt}:${cracha}` : nickFmt;
-    enviarMensagemSistema(`${tag} entrou na sala...`, roomId);
+    enviarMensagemSistema(`${tag} entrou na sala...`, roomId, {
+        evento: "entrada",
+        sessionId: currentSession,
+        uid: uid || ""
+    });
 }
 
-function anunciarSaidaSala(roomId){
+function anunciarSaidaSala(roomId, sessionId = null){
     if(!window.meuNickname) return;
     if(typeof window.getChatRef !== "function") return;
-    if(ultimaSalaEntrada !== roomId) return;
+    const uid = getCurrentChatUid();
+    const currentSession = sessionId || chatSessionState?.sessionId || "";
+    if(!currentSession && ultimaSalaEntrada !== roomId) return;
+    if(currentSession && !sessionId && ultimaSalaEntrada !== roomId) return;
+    const msgs = roomMessages[roomId] || [];
+    if(currentSession && msgs.some(msg => msg?.tipo === "system" && msg?.evento === "saida" && msg?.sessionId === currentSession)){
+        return;
+    }
     const cracha = (window.meuCracha || "").toString().trim();
     const nickFmt = formatarNick(window.meuNickname || "");
     const tag = cracha ? `${nickFmt}:${cracha}` : nickFmt;
-    enviarMensagemSistema(`${tag} saiu da sala...`, roomId);
+    enviarMensagemSistema(`${tag} saiu da sala...`, roomId, {
+        evento: "saida",
+        sessionId: currentSession,
+        uid: uid || ""
+    });
 }
 
-let typingUnsub = null;
-let typingUsers = {};
-let typingIdleTimer = null;
-let lastTypingSent = 0;
 const TYPING_TTL = 4500;
 const TYPING_THROTTLE = 1200;
 
@@ -4253,16 +4564,22 @@ function atualizarGatePublico(){
 }
 
 function iniciarChatSePermitido(){
+    iniciarMonitoramentoSalas();
     if(salaAtual === "publica" && !chatPublicUnlocked){
         atualizarGatePublico();
         return;
     }
-    iniciarChat();
+    iniciarMonitoramentoTyping(salaAtual);
+    atualizarVistaChatAtivo(salaAtual, false);
+    anunciarEntradaSala(salaAtual);
 }
 
 window.abrirSalaPublica = function(){
     chatPublicUnlocked = true;
     atualizarGatePublico();
+    iniciarMonitoramentoSalas();
+    setSalaAtiva("publica");
+    persistirLeituraSala("publica", Date.now());
     iniciarChatSePermitido();
 };
 
@@ -4315,6 +4632,7 @@ window.enviarMensagem = function() {
     });
 
     input.value = "";
+    persistirLeituraSala(salaAtual, Date.now());
 };
 
 
@@ -4365,23 +4683,58 @@ document.querySelectorAll(".roomBtn").forEach(btn=>{
     });
 });
 
-function iniciarChat(){
-    if(chatUnsub) chatUnsub();
-    if(typingUnsub) typingUnsub();
-    chatUnsub = onValue(getChatRef(salaAtual), snapshot => {
-        let lista = [];
-        snapshot.forEach(child=>{
-            lista.push(child.val());
-        });
-        window.mensagens = lista;
-        renderChat();
-    });
-    typingUnsub = onValue(getTypingRef(salaAtual), snapshot => {
-        typingUsers = snapshot.val() || {};
-        atualizarDigitandoUI();
-    });
-    anunciarEntradaSala(salaAtual);
+async function prepararChatUsuario(){
+    const uid = getCurrentChatUid();
+    if(!uid) return;
+    pararMonitoramentoChat();
+    await carregarLeituraSalaRemota();
+    const sessionAnterior = loadSessionState(uid);
+    const sessionAtual = chatSessionState?.sessionId || "";
+    if(sessionAnterior && sessionAnterior.sessionId && sessionAnterior.sessionId !== sessionAtual){
+        if(sessionAnterior.roomId && !sessionAnterior.exitLogged){
+            await anunciarSaidaSala(sessionAnterior.roomId, sessionAnterior.sessionId);
+            sessionAnterior.exitLogged = true;
+            sessionAnterior.closedAt = Date.now();
+            saveSessionState(uid, sessionAnterior);
+        }
+    }
+    chatSessionState = {
+        uid,
+        sessionId: gerarSessionId(),
+        roomId: salaAtual,
+        startedAt: Date.now(),
+        exitLogged: false,
+        closedAt: 0
+    };
+    saveSessionState(uid, chatSessionState);
+    iniciarMonitoramentoSalas();
+    iniciarChatSePermitido();
 }
+
+async function encerrarSessaoChat(motivo = "saida", emitirMensagem = true){
+    const uid = getCurrentChatUid();
+    if(!uid) return;
+    const session = chatSessionState || loadSessionState(uid);
+    if(!session || session.exitLogged) return;
+    if(emitirMensagem && session.roomId){
+        await anunciarSaidaSala(session.roomId, session.sessionId);
+    }
+    session.exitLogged = true;
+    session.closedAt = Date.now();
+    session.closeReason = motivo;
+    saveSessionState(uid, session);
+    chatSessionState = session;
+}
+
+window.encerrarSessaoChat = encerrarSessaoChat;
+
+window.addEventListener("pagehide", ()=>{
+    encerrarSessaoChat("pagehide", true);
+});
+
+window.addEventListener("beforeunload", ()=>{
+    encerrarSessaoChat("beforeunload", true);
+});
 
 
 salvarCapturados();
@@ -4395,23 +4748,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
