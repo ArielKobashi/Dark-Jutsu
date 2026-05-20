@@ -1,12 +1,17 @@
 ﻿# Atualizacao Automus
 
-Arquivos da rotina de atualizacao automatica (sem interferir na sessao do navegador):
+Estrutura consolidada da atualizacao automatica (sem interferir na sessao aberta do navegador):
 
-- automus_update.py: envia planilhas para o Firebase com backup e validacoes.
-- automus_config.json: credenciais locais (ignorado no git).
-- automus_config.json.example: modelo de configuracao.
+- `automus_update.py`: rotina principal (Firebase + backup + validacoes).
+- `automus_config.json`: credenciais locais (ignorado no git).
+- `automus_config.json.example`: modelo de configuracao.
+- `__main__.py`: entrada para execucao como modulo.
+- `executar_automus.bat`: disparo manual direto do Automus.
 
-Fluxo:
-1) executar_tudo.py roda macros 001..005
-2) prepara incluir.xlsx / Saldo Atual.xlsx / Saldo por Endereco.xlsx
-3) chama Automus para atualizar estoqueGlobal
+Fluxo padrao (com macros):
+1) `scripts/executar_tudo.py` roda macros `001..005`.
+2) prepara `incluir.xlsx`, `Saldo Atual.xlsx`, `Saldo por Endereco.xlsx`.
+3) chama `atualizacao.automus_update` para atualizar `estoqueGlobal`.
+
+Compatibilidade:
+- `scripts/automus_update.py` foi mantido como wrapper.
