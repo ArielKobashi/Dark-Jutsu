@@ -149,6 +149,7 @@ def enviar_atualizacao_automus(logger: logging.Logger, base: Path):
 def main(macro_ref: str | None = None):
     base = Path(__file__).resolve().parent
     started_at_epoch = time.time()
+    failed = False
     if macro_ref:
         macros = [_resolver_macro(base, macro_ref)]
     else:
@@ -206,6 +207,7 @@ def main(macro_ref: str | None = None):
         except Exception as exc:
             logger.exception("Falha na etapa %s: %s", macro.name, exc)
             logger.error("Automacao encerrada com erro.")
+            failed = True
             break
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
@@ -232,9 +234,10 @@ def main(macro_ref: str | None = None):
                 except Exception as exc:
                     logger.exception("Falha no pos-processamento apos macro_005: %s", exc)
                     logger.error("Automacao encerrada com erro.")
+                    failed = True
                     break
 
-    if not controller.stop_requested:
+    if not controller.stop_requested and not failed:
         logger.info("Automacao finalizada com sucesso.")
 
 

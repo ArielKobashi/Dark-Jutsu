@@ -346,19 +346,33 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
         "dados": banco,
     }
 
-    _write_local_backup(project_root, backup_payload, agora_ms, log)
+    backup_local_path = _write_local_backup(project_root, backup_payload, agora_ms, log)
 
-    log.info("AUTOMUS: gravando backup remoto de seguranca antes da atualizacao.")
-    _http_json(backup_url, method="PUT", payload=backup_payload)
-    backup_check = _http_json(backup_url, method="GET")
-    if not isinstance(backup_check, dict):
-        raise RuntimeError("NAO CONFORME: backup remoto nao pode ser conferido.")
-    if backup_check.get("salvoEm") != agora_ms or backup_check.get("hashAntes") != hash_banco_antes:
-        raise RuntimeError("NAO CONFORME: backup remoto gravou dados divergentes.")
+    backup_remoto_ok = False
+    try:
+        log.info("AUTOMUS: gravando backup remoto de seguranca antes da atualizacao.")
+        _http_json(backup_url, method="PUT", payload=backup_payload)
+        backup_check = _http_json(backup_url, method="GET")
+        if not isinstance(backup_check, dict):
+            raise RuntimeError("NAO CONFORME: backup remoto nao pode ser conferido.")
+        if backup_check.get("salvoEm") != agora_ms or backup_check.get("hashAntes") != hash_banco_antes:
+            raise RuntimeError("NAO CONFORME: backup remoto gravou dados divergentes.")
+        log.info(
+            "BACKUP_REMOTO_OK | salvoEm=%s | hashAntes=%s",
+            backup_check.get("salvoEm"),
+            backup_check.get("hashAntes"),
+        )
+        backup_remoto_ok = True
+    except Exception as exc:
+        log.warning(
+            "BACKUP_REMOTO_INDISPONIVEL | mantendo backup local como fonte de rollback | motivo=%s",
+            exc,
+        )
+
     log.info(
-        "BACKUP_REMOTO_OK | salvoEm=%s | hashAntes=%s",
-        backup_check.get("salvoEm"),
-        backup_check.get("hashAntes"),
+        "BACKUP_GARANTIA_OK | local=%s | remoto=%s",
+        backup_local_path,
+        "OK" if backup_remoto_ok else "NAO",
     )
 
     log.info("AUTOMUS: enviando atualizacao final para estoqueGlobal.")
