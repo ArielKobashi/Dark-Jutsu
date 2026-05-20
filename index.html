@@ -1060,6 +1060,7 @@ async function atualizarBanco(btn) {
         ultimaAtualizacao: Date.now(),
         atualizadoPor: (window.meuNickname || "Sistema") + " - atualizado automaticamente",
         atualizacaoAutomatica: true,
+        ultimaAtualizacaoAutomatica: Date.now(),
         mapeamentoArquivos: {
             mata105: "incluir.xlsx",
             mata225: "saldo.atual.xlsx",
@@ -1097,6 +1098,29 @@ async function atualizarBanco(btn) {
             console.warn(msg, { salvo, payload });
             if (typeof window.mostrarNotificacao === "function") {
                 window.mostrarNotificacao(msg);
+            }
+        } else {
+            const okMsg = "AUTO_UPDATE_FIREBASE_OK";
+            console.log(okMsg, {
+                ultimaAtualizacao: salvo.ultimaAtualizacao,
+                atualizadoPor: salvo.atualizadoPor,
+                atualizacaoAutomatica: !!salvo.atualizacaoAutomatica,
+                ultimaAtualizacaoAutomatica: salvo.ultimaAtualizacaoAutomatica || null
+            });
+            try {
+                localStorage.setItem(
+                    "darkjutsu_last_auto_update_ok",
+                    JSON.stringify({
+                        at: Date.now(),
+                        ultimaAtualizacao: salvo.ultimaAtualizacao,
+                        atualizadoPor: salvo.atualizadoPor
+                    })
+                );
+            } catch (e) {
+                console.warn("Falha ao salvar marcador local de auto update:", e);
+            }
+            if (typeof window.mostrarNotificacao === "function") {
+                window.mostrarNotificacao("Atualização automática concluída com sucesso.");
             }
         }
     } catch (error) {
