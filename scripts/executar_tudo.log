@@ -1401,3 +1401,117 @@ RuntimeError: HTTP 401 em https://chat-fiasul-default-rtdb.firebaseio.com/estoqu
 
 2026-05-20 03:14:58,360 | ERROR | Automacao encerrada com erro.
 2026-05-20 03:14:58,396 | INFO | Automacao finalizada com sucesso.
+2026-05-20 03:32:22,058 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-20 03:32:22,080 | INFO | Marco temporal de validacao criado em: 2026-05-20 03:32:22. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-20 03:32:22,081 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; apos a macro 005, Automus envia direto ao Firebase (sem mexer na sessao aberta do Dark Jutsu).
+2026-05-20 03:32:22,083 | INFO | Iniciando etapa: macro_001.py
+2026-05-20 03:32:24,774 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-20 03:32:24,834 | INFO | Iniciando etapa: macro_002.py
+2026-05-20 03:32:40,964 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-20 03:32:40,971 | INFO | Iniciando etapa: macro_003.py
+2026-05-20 03:34:08,117 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-20 03:34:08,125 | INFO | Iniciando etapa: macro_004.py
+2026-05-20 03:36:08,103 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-20 03:36:08,109 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-20 03:36:08,109 | INFO | Iniciando etapa: macro_005.py
+2026-05-20 03:39:39,835 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-20 03:39:39,878 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-20 03:34:01 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-20 03:39:39,889 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-20 03:34:01 -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-20 03:39:39,894 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-20 03:34:01 -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-20 03:39:39,930 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-20 03:35:59 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-20 03:39:39,943 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-20 03:35:59 -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-20 03:39:39,955 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-20 03:35:59 -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-20 03:39:39,993 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-20 03:39:24 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-20 03:39:40,006 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-20 03:39:24 -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-20 03:39:40,013 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-20 03:39:24 -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-20 03:39:40,013 | INFO | CONFIRMACAO: preparo planilhas apos macro final | mata105=OK | mata225=OK | mata226=OK
+2026-05-20 03:39:40,013 | INFO | CONFIRMACAO: macro final de extracao concluida. Preparo final executado apos as 5 macros.
+2026-05-20 03:39:40,014 | INFO | AUTOMUS: iniciando envio automatico ao Firebase sem interagir com navegador/sessao aberta.
+2026-05-20 03:39:40,022 | INFO | TEST_AUTOMUS_CONFIG_OK | config=C:\Users\davi.souza\Desktop\KKKKKKKK\scripts\automus_config.json | email=davi@sistema.com
+2026-05-20 03:39:40,027 | INFO | TEST_PLANILHAS_RESOLVIDAS_OK | incluir=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx | saldoAtual=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx | saldoEndereco=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-20 03:39:40,027 | INFO | AUTOMUS: iniciando autenticacao Firebase para envio sem navegador.
+2026-05-20 03:39:41,450 | ERROR | Falha no pos-processamento apos macro_005: HTTP 401 em https://chat-fiasul-default-rtdb.firebaseio.com/estoqueGlobal.json?auth=eyJhbGciOiJSUzI1NiIsImtpZCI6ImM5YTBjMWRlYWEyN2JjNjMyNTUzYmM4MWEyMmQ4NzY1MWM3MTMyY2IiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vY2hhdC1maWFzdWwiLCJhdWQiOiJjaGF0LWZpYXN1bCIsImF1dGhfdGltZSI6MTc3OTI1OTE4MCwidXNlcl9pZCI6ImJpWXh2Wm1rWW9UUzBiMlVzNEhWSHlXd3ZSSjMiLCJzdWIiOiJiaVl4dlpta1lvVFMwYjJVczRIVkh5V3d2UkozIiwiaWF0IjoxNzc5MjU5MTgwLCJleHAiOjE3NzkyNjI3ODAsImVtYWlsIjoiZGF2aUBzaXN0ZW1hLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJkYXZpQHNpc3RlbWEuY29tIl19LCJzaWduX2luX3Byb3ZpZGVyIjoicGFzc3dvcmQifX0.Tw-flfIoeFHyn8ppMzxTM3YhBsCd7q3koU1Ki0AT2eu9iGrZ4QhkIEvJfKJnJhZu-ODqdPetswUqOo5cA_cZnpEvHiATcDdu-UcRO4BBDR3WtxhggjOAlWsGRpNCJaDw0AmoojbnWdxq_DmUaDwq9cgQKYq14UoIPfTWRC-E4XRnlHV-1uKtzbES-Dm05MS5audqiOr-w5_JJtDSbdopewlf-6De9Y6_1EMWpMNxFtgIiA-nPT4-S6Zwf4RDw5M1uZZCwp4OSFsn_hmNKU0LUGwYSijc_sDUbSFp9f3TQ_DkcQd2nQ9aDZ0_pbjoPhXpbSrfU63qV8mPiccnDNrM1g: {
+  "error" : "Permission denied"
+}
+Traceback (most recent call last):
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\scripts\automus_update.py", line 40, in _http_json
+    with urlopen(req, timeout=timeout) as resp:
+         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\urllib\request.py", line 189, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\urllib\request.py", line 495, in open
+    response = meth(req, response)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\urllib\request.py", line 604, in http_response
+    response = self.parent.error(
+        'http', request, response, code, msg, hdrs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\urllib\request.py", line 533, in error
+    return self._call_chain(*args)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\urllib\request.py", line 466, in _call_chain
+    result = func(*args)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\urllib\request.py", line 613, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 401: Unauthorized
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\scripts\executar_tudo.py", line 230, in main
+    enviar_atualizacao_automus(logger, base)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\scripts\executar_tudo.py", line 146, in enviar_atualizacao_automus
+    run_automus_update(config_path=config_path, project_root=project_root, logger=logger)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\scripts\automus_update.py", line 294, in run_automus_update
+    snapshot = _http_json(estoque_url, method="GET")
+  File "C:\Users\davi.souza\Desktop\KKKKKKKK\scripts\automus_update.py", line 51, in _http_json
+    raise RuntimeError(f"HTTP {exc.code} em {url}: {body}") from exc
+RuntimeError: HTTP 401 em https://chat-fiasul-default-rtdb.firebaseio.com/estoqueGlobal.json?auth=eyJhbGciOiJSUzI1NiIsImtpZCI6ImM5YTBjMWRlYWEyN2JjNjMyNTUzYmM4MWEyMmQ4NzY1MWM3MTMyY2IiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vY2hhdC1maWFzdWwiLCJhdWQiOiJjaGF0LWZpYXN1bCIsImF1dGhfdGltZSI6MTc3OTI1OTE4MCwidXNlcl9pZCI6ImJpWXh2Wm1rWW9UUzBiMlVzNEhWSHlXd3ZSSjMiLCJzdWIiOiJiaVl4dlpta1lvVFMwYjJVczRIVkh5V3d2UkozIiwiaWF0IjoxNzc5MjU5MTgwLCJleHAiOjE3NzkyNjI3ODAsImVtYWlsIjoiZGF2aUBzaXN0ZW1hLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJkYXZpQHNpc3RlbWEuY29tIl19LCJzaWduX2luX3Byb3ZpZGVyIjoicGFzc3dvcmQifX0.Tw-flfIoeFHyn8ppMzxTM3YhBsCd7q3koU1Ki0AT2eu9iGrZ4QhkIEvJfKJnJhZu-ODqdPetswUqOo5cA_cZnpEvHiATcDdu-UcRO4BBDR3WtxhggjOAlWsGRpNCJaDw0AmoojbnWdxq_DmUaDwq9cgQKYq14UoIPfTWRC-E4XRnlHV-1uKtzbES-Dm05MS5audqiOr-w5_JJtDSbdopewlf-6De9Y6_1EMWpMNxFtgIiA-nPT4-S6Zwf4RDw5M1uZZCwp4OSFsn_hmNKU0LUGwYSijc_sDUbSFp9f3TQ_DkcQd2nQ9aDZ0_pbjoPhXpbSrfU63qV8mPiccnDNrM1g: {
+  "error" : "Permission denied"
+}
+
+2026-05-20 03:39:41,463 | ERROR | Automacao encerrada com erro.
+2026-05-20 03:42:41,345 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-20 03:42:41,345 | INFO | Marco temporal de validacao criado em: 2026-05-20 03:42:41. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-20 03:42:41,346 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; apos a macro 005, Automus envia direto ao Firebase (sem mexer na sessao aberta do Dark Jutsu).
+2026-05-20 03:42:41,347 | INFO | Iniciando etapa: macro_001.py
+2026-05-20 03:42:44,086 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-20 03:42:44,142 | INFO | Iniciando etapa: macro_002.py
+2026-05-20 03:43:00,270 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-20 03:43:00,279 | INFO | Iniciando etapa: macro_003.py
+2026-05-20 03:44:30,450 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-20 03:44:30,463 | INFO | Iniciando etapa: macro_004.py
+2026-05-20 03:46:40,118 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-20 03:46:40,126 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-20 03:46:40,128 | INFO | Iniciando etapa: macro_005.py
+2026-05-20 03:50:04,685 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-20 03:50:04,752 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-20 03:44:23 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-20 03:50:04,765 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-20 03:44:23 -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-20 03:50:04,771 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-20 03:44:23 -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-20 03:50:04,806 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-20 03:46:32 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-20 03:50:04,821 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-20 03:46:32 -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-20 03:50:04,834 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-20 03:46:32 -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-20 03:50:04,869 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-20 03:49:48 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-20 03:50:04,878 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-20 03:49:48 -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-20 03:50:04,888 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-20 03:49:48 -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-20 03:50:04,888 | INFO | CONFIRMACAO: preparo planilhas apos macro final | mata105=OK | mata225=OK | mata226=OK
+2026-05-20 03:50:04,889 | INFO | CONFIRMACAO: macro final de extracao concluida. Preparo final executado apos as 5 macros.
+2026-05-20 03:50:04,889 | INFO | AUTOMUS: iniciando envio automatico ao Firebase sem interagir com navegador/sessao aberta.
+2026-05-20 03:50:04,890 | INFO | TEST_AUTOMUS_CONFIG_OK | config=C:\Users\davi.souza\Desktop\KKKKKKKK\scripts\automus_config.json | email=davi@sistema.com
+2026-05-20 03:50:04,900 | INFO | TEST_PLANILHAS_RESOLVIDAS_OK | incluir=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx | saldoAtual=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx | saldoEndereco=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-20 03:50:04,901 | INFO | AUTOMUS: iniciando autenticacao Firebase para envio sem navegador.
+2026-05-20 03:50:08,566 | INFO | TEST_FIREBASE_LEITURA_OK | hashAntes=db183f1d51f5a23cda43b9de087bc60affbd33f3
+2026-05-20 03:50:16,251 | INFO | TEST_PLANILHAS_LIDAS_OK | incluir_linhas=7612 | saldoAtual_linhas=7385 | saldoEndereco_linhas=40467
+2026-05-20 03:50:16,510 | INFO | TEST_GERACAO_ITENS_OK | itensGerados=7610
+2026-05-20 03:50:17,578 | INFO | BACKUP_LOCAL_OK | arquivo=C:\Users\davi.souza\Desktop\KKKKKKKK\_backups\automus\firebase_backup_1779259816511.json | bytes=12500682
+2026-05-20 03:50:17,578 | INFO | AUTOMUS: gravando backup remoto de seguranca antes da atualizacao.
+2026-05-20 03:50:25,825 | INFO | BACKUP_REMOTO_OK | salvoEm=1779259816511 | hashAntes=db183f1d51f5a23cda43b9de087bc60affbd33f3
+2026-05-20 03:50:25,825 | INFO | BACKUP_GARANTIA_OK | local=C:\Users\davi.souza\Desktop\KKKKKKKK\_backups\automus\firebase_backup_1779259816511.json | remoto=OK
+2026-05-20 03:50:25,826 | INFO | AUTOMUS: enviando atualizacao final para estoqueGlobal.
+2026-05-20 03:50:31,068 | INFO | TEST_FIREBASE_PATCH_OK
+2026-05-20 03:50:32,879 | INFO | TEST_FIREBASE_CONSISTENCIA_OK | itensBanco=7610 | atualizacaoAutomatica=True
+2026-05-20 03:50:32,880 | INFO | AUTO_UPDATE_FIREBASE_OK | usuario=davi@sistema.com | itens=7610 | ultimaAtualizacao=1779259816511
+2026-05-20 03:50:32,921 | INFO | AUTOMUS: envio concluido com sucesso.
+2026-05-20 03:50:32,921 | INFO | CONFIRMACAO: envio Firebase via Automus executado apos a macro_005 (sem automacao de navegador).
+2026-05-20 03:50:32,923 | INFO | Automacao finalizada com sucesso.

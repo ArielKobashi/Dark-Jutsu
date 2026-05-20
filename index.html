@@ -309,14 +309,8 @@ Usuários do Sistema
 
     <hr>
     <div id="updateControls" style="display:none;">
-        <button onclick="carregarPlanilha('cooperat')">Cooperat.xlsx</button>
-        <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
-        <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
-        <button onclick="carregarPlanilha('saldoEndereco')">Saldo por Endereco.xlsx</button>
-
+        <button onclick="acionarAtualizacaoAutomusPainel(this)">Atualização Automus</button>
         <input type="file" id="fileInput" style="display:none" accept=".xlsx">
-        <hr>
-        <button onclick="atualizarBanco()">Atualizar Banco</button>
         <div style="margin-top:6px; font-size:10px; text-align:center;">
         Última atualização:
         <div id="lastUpdate" style="opacity:0.7;"></div>
@@ -942,6 +936,31 @@ function mostrarNotificacao(msg){
     setTimeout(()=>{
         box.classList.remove("show");
     },4000);
+}
+
+function acionarAtualizacaoAutomusPainel(btn){
+    const pronto = !!planilhas.incluir && !!planilhas.saldoAtual && !!planilhas.saldoEndereco;
+    if (pronto) {
+        atualizarBanco(btn);
+        return;
+    }
+
+    const batPath = "C:\\Users\\davi.souza\\Desktop\\KKKKKKKK\\executar_tudo.bat";
+    const fileUrl = "file:///" + batPath.replace(/\\/g, "/");
+    let abriu = false;
+    try {
+        const janela = window.open(fileUrl, "_blank");
+        abriu = !!janela;
+    } catch (e) {
+        abriu = false;
+    }
+
+    if (!abriu) {
+        const comando = 'C:\\Users\\davi.souza\\Desktop\\KKKKKKKK\\executar_tudo.bat';
+        alert("Não consegui abrir automaticamente.\nExecute este arquivo:\n" + comando);
+    } else if (typeof window.mostrarNotificacao === "function") {
+        window.mostrarNotificacao("Automus acionado. Se o navegador bloquear, execute o .bat manualmente.");
+    }
 }
 
 function carregarPlanilha(tipo){
@@ -3995,6 +4014,27 @@ window.estoqueRef = estoqueRef;
 window.firebaseSet = set;
 window.firebaseUpdate = update;
 
+function escapeHtml(texto) {
+    return String(texto ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function formatarTextoUltimaAtualizacao(data, usuario) {
+    const usuarioRaw = String(usuario || "Sistema");
+    if (/automus/i.test(usuarioRaw)) {
+        const usuarioSeguro = escapeHtml(usuarioRaw).replace(
+            /automus/gi,
+            '<span style="color:#50C878;font-weight:700;">$&</span>'
+        );
+        return data + " " + usuarioSeguro;
+    }
+    return data + " por " + escapeHtml(usuarioRaw);
+}
+
 // --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
 async function carregarEstoqueInicial() {
 
@@ -4022,8 +4062,8 @@ onValue(window.estoqueRef, snapshot => {
 
     const usuario = val.atualizadoPor || "Sistema";
 
-    document.getElementById("lastUpdate").innerText =
-        data + " por " + usuario;
+    document.getElementById("lastUpdate").innerHTML =
+        formatarTextoUltimaAtualizacao(data, usuario);
 
 });
 

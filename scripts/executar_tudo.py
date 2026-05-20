@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import importlib.util
 import logging
 import re
@@ -6,7 +6,7 @@ import shutil
 import time
 from pathlib import Path
 
-from automus_update import run_automus_update
+from atualizacao.automus_update import run_automus_update
 from controladordeatualização import ExecutionController, StopRequested, push_status, validate_macro_comment_sequence
 
 
@@ -138,7 +138,7 @@ def preparar_planilhas_para_importacao(
     return resultado
 
 def enviar_atualizacao_automus(logger: logging.Logger, base: Path):
-    config_path = base / "automus_config.json"
+    config_path = base / "atualizacao" / "automus_config.json"
     project_root = base.parent
     logger.info(
         "AUTOMUS: iniciando envio automatico ao Firebase sem interagir com navegador/sessao aberta."
@@ -246,3 +246,4 @@ if __name__ == "__main__":
     parser.add_argument("macro", nargs="?", help="Nome da macro para executar isoladamente, como macro_001.py.")
     args = parser.parse_args()
     main(args.macro)
+
