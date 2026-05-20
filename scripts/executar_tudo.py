@@ -92,14 +92,23 @@ def preparar_planilhas_para_importacao(
         ("mata105", "incluir.xlsx"),
         ("mata225", "Saldo Atual.xlsx"),
         ("mata226", "Saldo por Endereco.xlsx"),
+        ("levantamento0706novo", "levantamento0706novo.xlsx"),
     ]
 
     pastas_origem = [
         base.parent / "downloads",
+        Path.home() / "Desktop" / "AMBIENTE ROSA",
         Path.home() / "Desktop",
         Path.home() / "Downloads",
     ]
-    pastas_destino = [p for p in pastas_origem if p.exists()]
+    pastas_destino = [
+        p for p in [
+            base.parent / "downloads",
+            Path.home() / "Desktop",
+            Path.home() / "Downloads",
+        ]
+        if p.exists()
+    ]
     resultado: dict[str, bool] = {}
     if not pastas_destino:
         logger.warning("Nenhuma pasta de destino encontrada para preparar as planilhas.")
@@ -116,11 +125,18 @@ def preparar_planilhas_para_importacao(
                 break
 
         if origem is None:
-            logger.error(
-                "NAO CONFORME: nao encontrei arquivo novo para %s (gerado apos inicio da execucao) em %s.",
-                codigo,
-                ", ".join(str(p) for p in pastas_origem),
-            )
+            if codigo == "levantamento0706novo":
+                logger.info(
+                    "Planilha opcional nao localizada para %s em %s.",
+                    codigo,
+                    ", ".join(str(p) for p in pastas_origem),
+                )
+            else:
+                logger.error(
+                    "NAO CONFORME: nao encontrei arquivo novo para %s (gerado apos inicio da execucao) em %s.",
+                    codigo,
+                    ", ".join(str(p) for p in pastas_origem),
+                )
             resultado[codigo] = False
             continue
 

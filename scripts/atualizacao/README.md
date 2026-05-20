@@ -11,7 +11,8 @@ Estrutura consolidada da atualizacao automatica (sem interferir na sessao aberta
 Fluxo padrao (com macros):
 1) `scripts/executar_tudo.py` roda macros `001..005`.
 2) prepara `incluir.xlsx`, `Saldo Atual.xlsx`, `Saldo por Endereco.xlsx`.
-3) chama `atualizacao.automus_update` para atualizar `estoqueGlobal`.
+3) se existir, também prepara `levantamento0706novo.xlsx` para enriquecer mínimo/máximo/reposição.
+4) chama `atualizacao.automus_update` para atualizar `estoqueGlobal`.
 
 Compatibilidade:
 - `scripts/automus_update.py` foi mantido como wrapper.

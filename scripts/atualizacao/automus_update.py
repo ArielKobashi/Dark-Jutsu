@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ FILE_MAP = {
     "mata105": "incluir.xlsx",
     "mata225": "Saldo Atual.xlsx",
     "mata226": "Saldo por Endereco.xlsx",
+    "levantamento": "levantamento0706novo.xlsx",
 }
 
 
@@ -100,10 +102,33 @@ def _num(value: Any) -> float:
         return 0.0
 
 
+def _optional_num(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    txt = str(value).strip()
+    if not txt:
+        return None
+    txt = txt.replace(".", "").replace(",", ".")
+    try:
+        return float(txt)
+    except ValueError:
+        return None
+
+
 def _safe_text(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _ascii_lower(value: Any) -> str:
+    txt = _safe_text(value).lower()
+    if not txt:
+        return ""
+    normalized = unicodedata.normalize("NFKD", txt)
+    return normalized.encode("ascii", "ignore").decode("ascii")
 
 
 def _build_items(
@@ -111,6 +136,7 @@ def _build_items(
     cooperat: list[list[Any]],
     saldo_atual: list[list[Any]],
     saldo_endereco: list[list[Any]],
+    levantamento: list[list[Any]] | None,
     dados_anteriores: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     novos: list[dict[str, Any]] = []
@@ -153,6 +179,27 @@ def _build_items(
             "saldo": _num(row[8]),
         }
         enderecos_idx.setdefault(cod, []).append(ent)
+
+    levantamento_idx: dict[str, dict[str, float]] = {}
+    for row in (levantamento or [])[1:]:
+        if len(row) < 2:
+            continue
+        cod = _safe_text(row[1] if len(row) > 1 else "")
+        if not cod:
+            continue
+        cod_lower = _ascii_lower(cod)
+        if "codigo" in cod_lower or "código" in cod_lower or "item" in cod_lower:
+            continue
+        minimo = _optional_num(row[6] if len(row) > 6 else None)
+        maximo = _optional_num(row[7] if len(row) > 7 else None)
+        reposicao = _optional_num(row[8] if len(row) > 8 else None)
+        if minimo is None and maximo is None and reposicao is None:
+            continue
+        levantamento_idx[cod] = {
+            "minimo": minimo,
+            "maximo": maximo,
+            "reposicao": reposicao,
+        }
 
     prev_by_protheus: dict[str, dict[str, Any]] = {}
     prev_by_cooperat: dict[str, dict[str, Any]] = {}
@@ -208,6 +255,24 @@ def _build_items(
                 item["armazemPrincipal"] = _safe_text(validos[0].get("armazem")) or "ND"
             item["saldo"] = sum(_num(e.get("saldo")) for e in enderecos)
 
+        levantamento_item = levantamento_idx.get(protheus)
+        if levantamento_item:
+            if levantamento_item.get("minimo") is not None:
+                item["minimo"] = levantamento_item["minimo"]
+            if levantamento_item.get("maximo") is not None:
+                item["maximo"] = levantamento_item["maximo"]
+            if levantamento_item.get("reposicao") is not None:
+                item["reposicao"] = levantamento_item["reposicao"]
+
+        anterior = prev_by_protheus.get(protheus) or prev_by_cooperat.get(cooperat_cod)
+        if anterior:
+            if item.get("minimo") is None and anterior.get("minimo") is not None:
+                item["minimo"] = anterior.get("minimo")
+            if item.get("maximo") is None and anterior.get("maximo") is not None:
+                item["maximo"] = anterior.get("maximo")
+            if item.get("reposicao") is None and anterior.get("reposicao") is not None:
+                item["reposicao"] = anterior.get("reposicao")
+
         novos.append(item)
 
     return novos
@@ -216,6 +281,7 @@ def _build_items(
 def _resolve_file(base_dir: Path, filename: str) -> Path:
     candidates = [
         base_dir / "downloads" / filename,
+        Path.home() / "Desktop" / "AMBIENTE ROSA" / filename,
         Path.home() / "Desktop" / filename,
         Path.home() / "Downloads" / filename,
     ]
@@ -223,6 +289,19 @@ def _resolve_file(base_dir: Path, filename: str) -> Path:
         if c.exists() and c.is_file():
             return c
     raise FileNotFoundError(f"Arquivo nao encontrado: {filename}")
+
+
+def _resolve_optional_file(base_dir: Path, filename: str) -> Path | None:
+    candidates = [
+        base_dir / "downloads" / filename,
+        Path.home() / "Desktop" / "AMBIENTE ROSA" / filename,
+        Path.home() / "Desktop" / filename,
+        Path.home() / "Downloads" / filename,
+    ]
+    for c in candidates:
+        if c.exists() and c.is_file():
+            return c
+    return None
 
 
 def _write_local_backup(project_root: Path, backup_payload: dict[str, Any], agora_ms: int, log: logging.Logger) -> Path:
@@ -266,11 +345,13 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
     incluir_path = _resolve_file(project_root, FILE_MAP["mata105"])
     saldo_atual_path = _resolve_file(project_root, FILE_MAP["mata225"])
     saldo_endereco_path = _resolve_file(project_root, FILE_MAP["mata226"])
+    levantamento_path = _resolve_optional_file(project_root, FILE_MAP["levantamento"])
     log.info(
-        "TEST_PLANILHAS_RESOLVIDAS_OK | incluir=%s | saldoAtual=%s | saldoEndereco=%s",
+        "TEST_PLANILHAS_RESOLVIDAS_OK | incluir=%s | saldoAtual=%s | saldoEndereco=%s | levantamento=%s",
         incluir_path,
         saldo_atual_path,
         saldo_endereco_path,
+        levantamento_path or "NAO_ENCONTRADA",
     )
 
     log.info("AUTOMUS: iniciando autenticacao Firebase para envio sem navegador.")
@@ -302,18 +383,20 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
     incluir = _read_sheet(incluir_path)
     saldo_atual = _read_sheet(saldo_atual_path)
     saldo_endereco = _read_sheet(saldo_endereco_path)
+    levantamento = _read_sheet(levantamento_path) if levantamento_path else None
     log.info(
-        "TEST_PLANILHAS_LIDAS_OK | incluir_linhas=%s | saldoAtual_linhas=%s | saldoEndereco_linhas=%s",
+        "TEST_PLANILHAS_LIDAS_OK | incluir_linhas=%s | saldoAtual_linhas=%s | saldoEndereco_linhas=%s | levantamento_linhas=%s",
         len(incluir),
         len(saldo_atual),
         len(saldo_endereco),
+        len(levantamento) if levantamento else 0,
     )
     if len(incluir) < 3 or len(saldo_atual) < 2 or len(saldo_endereco) < 2:
         raise RuntimeError(
             "NAO CONFORME: uma ou mais planilhas estao vazias/incompletas para atualizacao."
         )
 
-    novos_dados = _build_items(incluir, [], saldo_atual, saldo_endereco, dados_anteriores)
+    novos_dados = _build_items(incluir, [], saldo_atual, saldo_endereco, levantamento, dados_anteriores)
     if not novos_dados:
         raise RuntimeError("NAO CONFORME: geracao de itens resultou em 0 registros.")
     log.info("TEST_GERACAO_ITENS_OK | itensGerados=%s", len(novos_dados))
@@ -331,6 +414,7 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
             "mata105": "incluir.xlsx",
             "mata225": "saldo.atual.xlsx",
             "mata226": "saldo.por.endereco.xlsx",
+            **({"levantamento": "levantamento0706novo.xlsx"} if levantamento_path else {}),
         },
         "automus": {
             "executadoEm": datetime.now().isoformat(timespec="seconds"),

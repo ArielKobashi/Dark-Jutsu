@@ -416,7 +416,8 @@ let planilhas = {
     cooperat: null,
     incluir: null,
     saldoAtual: null,
-    saldoEndereco: null
+    saldoEndereco: null,
+    levantamento: null
 };
 
 let dados = [];
@@ -436,6 +437,115 @@ function normalizarEndereco(valor){
     const texto = (valor ?? "").toString().trim();
     if(!texto) return "";
     return texto.replace(/\s+/g, " ").toUpperCase();
+}
+
+function normalizarCodigoItem(valor){
+    const texto = (valor ?? "").toString().trim();
+    return texto ? texto.toLowerCase() : "";
+}
+
+function parsePlanilhaNumero(valor){
+    if(valor === null || valor === undefined || valor === "") return null;
+    if(typeof valor === "number"){
+        return Number.isFinite(valor) ? valor : null;
+    }
+    const texto = String(valor).trim();
+    if(!texto) return null;
+    const normalizado = texto.replace(/\./g, "").replace(",", ".");
+    const numero = Number(normalizado);
+    return Number.isFinite(numero) ? numero : null;
+}
+
+function formatarNumeroPlanilha(valor){
+    const numero = parsePlanilhaNumero(valor);
+    if(numero === null){
+        return (valor === null || valor === undefined || valor === "") ? "-" : String(valor);
+    }
+    return new Intl.NumberFormat("pt-BR", {
+        maximumFractionDigits: 2
+    }).format(numero);
+}
+
+function obterStatusEstoque(item){
+    if(!item) return "";
+    const saldo = parsePlanilhaNumero(item.saldo);
+    const minimo = parsePlanilhaNumero(item.minimo);
+    const maximo = parsePlanilhaNumero(item.maximo);
+
+    if(saldo !== null && minimo !== null && saldo < minimo){
+        return "abaixo";
+    }
+
+    if(saldo !== null && maximo !== null && saldo > maximo){
+        return "acima";
+    }
+
+    return "ok";
+}
+
+function indexarLevantamentoItens(planilha){
+    const mapa = new Map();
+    if(!Array.isArray(planilha)) return mapa;
+
+    for(let i = 0; i < planilha.length; i++){
+        const row = planilha[i] || [];
+        const codigo = normalizarCodigoItem(row[1]);
+        if(!codigo) continue;
+        if(codigo.includes("codigo") || codigo.includes("código") || codigo.includes("item")) continue;
+
+        const minimo = parsePlanilhaNumero(row[6]);
+        const maximo = parsePlanilhaNumero(row[7]);
+        const reposicao = parsePlanilhaNumero(row[8]);
+
+        if(minimo === null && maximo === null && reposicao === null) continue;
+
+        mapa.set(codigo, {
+            minimo,
+            maximo,
+            reposicao
+        });
+    }
+
+    return mapa;
+}
+
+function enriquecerItensComLevantamento(lista, anteriores){
+    const itens = Array.isArray(lista) ? lista : [];
+    const mapa = indexarLevantamentoItens(planilhas.levantamento);
+    const mapaAnteriores = new Map();
+    (Array.isArray(anteriores) ? anteriores : []).forEach(item => {
+        const codigo = normalizarCodigoItem(item?.protheus);
+        if(codigo && !mapaAnteriores.has(codigo)){
+            mapaAnteriores.set(codigo, item || {});
+        }
+    });
+    return itens.map(item => {
+        const novo = {...item};
+        const codigo = normalizarCodigoItem(novo.protheus);
+        if(!codigo) return novo;
+
+        const extra = mapa.get(codigo);
+        const anterior = mapaAnteriores.get(codigo);
+        if(extra){
+            if(extra.minimo !== null) novo.minimo = extra.minimo;
+            if(extra.maximo !== null) novo.maximo = extra.maximo;
+            if(extra.reposicao !== null) novo.reposicao = extra.reposicao;
+        }
+
+        if(anterior){
+            if((novo.minimo === undefined || novo.minimo === null || novo.minimo === "") && anterior.minimo !== undefined && anterior.minimo !== null){
+                novo.minimo = anterior.minimo;
+            }
+            if((novo.maximo === undefined || novo.maximo === null || novo.maximo === "") && anterior.maximo !== undefined && anterior.maximo !== null){
+                novo.maximo = anterior.maximo;
+            }
+            if((novo.reposicao === undefined || novo.reposicao === null || novo.reposicao === "") && anterior.reposicao !== undefined && anterior.reposicao !== null){
+                novo.reposicao = anterior.reposicao;
+            }
+        }
+
+        return novo;
+    });
 }
 
 function isEnderecoValido(valor){
@@ -460,7 +570,8 @@ function findItemByKey(key){
 }
 
 window.setDados = function(novosDados){
-    dados = Array.isArray(novosDados) ? novosDados : [];
+    const anteriores = Array.isArray(dados) ? dados : [];
+    dados = enriquecerItensComLevantamento(Array.isArray(novosDados) ? novosDados : [], anteriores);
     window.dados = dados;
     aplicarTodosFiltros();
 }
@@ -984,6 +1095,10 @@ function carregarPlanilha(tipo){
 
             planilhas[tipo] = json;
 
+            if(tipo === "levantamento"){
+                window.setDados(dados);
+            }
+
             // marca botão corretamente
             document.querySelectorAll("#config button").forEach(btn=>{
                 if(btn.getAttribute("onclick")?.includes(tipo)){
@@ -1086,7 +1201,8 @@ async function atualizarBanco(btn) {
         mapeamentoArquivos: {
             mata105: "incluir.xlsx",
             mata225: "saldo.atual.xlsx",
-            mata226: "saldo.por.endereco.xlsx"
+            mata226: "saldo.por.endereco.xlsx",
+            ...(planilhas.levantamento ? { levantamento: "levantamento0706novo.xlsx" } : {})
         }
     };
 
@@ -1483,7 +1599,15 @@ function renderTabela(){
         });
 
         // SALDO
-        criarTd(row, item.saldo || "");
+        const tdSaldo = criarTd(row, formatarNumeroPlanilha(item.saldo));
+        const statusEstoque = obterStatusEstoque(item);
+        if(statusEstoque === "abaixo"){
+            tdSaldo.classList.add("estoqueAbaixoMinimo");
+            tdSaldo.title = "Saldo abaixo do mínimo";
+        }else if(statusEstoque === "acima"){
+            tdSaldo.classList.add("estoqueAcimaMaximo");
+            tdSaldo.title = "Saldo acima do máximo";
+        }
 
         row.ondblclick = ()=>{
             if(item.protheus){
@@ -2198,10 +2322,57 @@ function abrirModalSaldos(item){
                 border-radius:6px;
                 background:#1F1F2A;
             }
+            .resumoItem{
+                border:1px solid rgba(122,60,255,0.7);
+                background:rgba(122,60,255,0.12);
+            }
+            .statusChip{
+                display:inline-block;
+                margin-top:8px;
+                padding:4px 10px;
+                border-radius:999px;
+                font-size:11px;
+                font-weight:700;
+            }
+            .statusBaixo{
+                background:rgba(255,0,0,0.3);
+                color:#fff;
+            }
+            .statusAlto{
+                background:rgba(0,255,0,0.3);
+                color:#fff;
+            }
+            .statusNormal{
+                background:rgba(255,255,255,0.1);
+                color:#E6E6E6;
+            }
         </style>
     </head>
     <body>
         <h2>Saldos por Endereço</h2>
+    `;
+
+    const statusEstoque = obterStatusEstoque(item);
+    const statusTexto = statusEstoque === "abaixo"
+        ? "Abaixo do mínimo"
+        : statusEstoque === "acima"
+            ? "Acima do máximo"
+            : "Dentro da faixa";
+    const statusClasse = statusEstoque === "abaixo"
+        ? "statusBaixo"
+        : statusEstoque === "acima"
+            ? "statusAlto"
+            : "statusNormal";
+
+    html += `
+        <div class="card resumoItem">
+            <b>Código:</b> ${escapeHtml(item.protheus || "-")}<br>
+            <b>Saldo:</b> ${escapeHtml(formatarNumeroPlanilha(item.saldo))}<br>
+            <b>Mínimo:</b> ${escapeHtml(formatarNumeroPlanilha(item.minimo))}<br>
+            <b>Máximo:</b> ${escapeHtml(formatarNumeroPlanilha(item.maximo))}<br>
+            <b>Reposição:</b> ${escapeHtml(formatarNumeroPlanilha(item.reposicao))}<br>
+            <span class="statusChip ${statusClasse}">${escapeHtml(statusTexto)}</span>
+        </div>
     `;
 
     const listaEnderecos = [];
@@ -2235,10 +2406,10 @@ function abrirModalSaldos(item){
     listaEnderecos.forEach(info => {
         html += `
             <div class="card">
-                <b>Endereço:</b> ${info.endereco}<br>
-                <b>Armazém:</b> ${info.armazem}<br>
-                <b>Saldo:</b> ${info.saldo}<br>
-                <b>Origem:</b> ${info.origem || "-"}
+                <b>Endereço:</b> ${escapeHtml(info.endereco || "-")}<br>
+                <b>Armazém:</b> ${escapeHtml(info.armazem || "-")}<br>
+                <b>Saldo:</b> ${escapeHtml(formatarNumeroPlanilha(info.saldo))}<br>
+                <b>Origem:</b> ${escapeHtml(info.origem || "-")}
             </div>
         `;
     });
@@ -4748,14 +4919,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
-
-
-
-
-
 
 
 
