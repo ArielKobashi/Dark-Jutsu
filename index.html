@@ -309,8 +309,14 @@ Usuários do Sistema
 
     <hr>
     <div id="updateControls" style="display:none;">
-        <button onclick="acionarAtualizacaoAutomusPainel(this)">Atualização Automus</button>
+        <button onclick="carregarPlanilha('cooperat')">Cooperat.xlsx</button>
+        <button onclick="carregarPlanilha('incluir')">Incluir.xlsx</button>
+        <button onclick="carregarPlanilha('saldoAtual')">Saldo Atual.xlsx</button>
+        <button onclick="carregarPlanilha('saldoEndereco')">Saldo por Endereco.xlsx</button>
         <input type="file" id="fileInput" style="display:none" accept=".xlsx">
+        <hr>
+        <button onclick="atualizarBanco()">Atualizar Banco</button>
+        <button onclick="acionarAtualizacaoAutomusPainel(this)">Atualização Automus</button>
         <div style="margin-top:6px; font-size:10px; text-align:center;">
         Última atualização:
         <div id="lastUpdate" style="opacity:0.7;"></div>
@@ -4025,12 +4031,14 @@ function escapeHtml(texto) {
 
 function formatarTextoUltimaAtualizacao(data, usuario) {
     const usuarioRaw = String(usuario || "Sistema");
-    if (/automus/i.test(usuarioRaw)) {
-        const usuarioSeguro = escapeHtml(usuarioRaw).replace(
+    const lower = usuarioRaw.toLowerCase();
+    if (lower.includes("automus")) {
+        const base = escapeHtml(usuarioRaw).replace(/atualizado automaticamente via\s*/i, "").trim();
+        const usuarioSeguro = base.replace(
             /automus/gi,
-            '<span style="color:#50C878;font-weight:700;">$&</span>'
+            '<span style="color:#50C878;font-weight:700;text-shadow:0 0 6px rgba(80,200,120,0.25);">$&</span>'
         );
-        return data + " " + usuarioSeguro;
+        return data + " atualizado automaticamente via " + usuarioSeguro;
     }
     return data + " por " + escapeHtml(usuarioRaw);
 }
