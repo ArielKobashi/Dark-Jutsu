@@ -117,6 +117,13 @@ def _optional_num(value: Any) -> float | None:
         return None
 
 
+def _optional_limit_num(value: Any) -> float | None:
+    num = _optional_num(value)
+    if num is None or num == 0:
+        return None
+    return num
+
+
 def _safe_text(value: Any) -> str:
     if value is None:
         return ""
@@ -190,12 +197,13 @@ def _build_items(
         cod_lower = _ascii_lower(cod)
         if "codigo" in cod_lower or "código" in cod_lower or "item" in cod_lower:
             continue
-        minimo = _optional_num(row[6] if len(row) > 6 else None)
-        maximo = _optional_num(row[7] if len(row) > 7 else None)
+        minimo = _optional_limit_num(row[6] if len(row) > 6 else None)
+        maximo = _optional_limit_num(row[7] if len(row) > 7 else None)
         reposicao = _optional_num(row[8] if len(row) > 8 else None)
         if minimo is None and maximo is None and reposicao is None:
             continue
         estoque_minimo_idx[cod] = {
+            "temLinha": True,
             "minimo": minimo,
             "maximo": maximo,
             "reposicao": reposicao,
@@ -257,9 +265,8 @@ def _build_items(
 
         estoque_minimo_item = estoque_minimo_idx.get(protheus)
         if estoque_minimo_item:
-            if estoque_minimo_item.get("minimo") is not None:
+            if estoque_minimo_item.get("temLinha"):
                 item["minimo"] = estoque_minimo_item["minimo"]
-            if estoque_minimo_item.get("maximo") is not None:
                 item["maximo"] = estoque_minimo_item["maximo"]
             if estoque_minimo_item.get("reposicao") is not None:
                 item["reposicao"] = estoque_minimo_item["reposicao"]

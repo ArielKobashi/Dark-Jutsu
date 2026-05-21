@@ -456,6 +456,12 @@ function parsePlanilhaNumero(valor){
     return Number.isFinite(numero) ? numero : null;
 }
 
+function parseLimiteEstoque(valor){
+    const numero = parsePlanilhaNumero(valor);
+    if(numero === null || numero === 0) return null;
+    return numero;
+}
+
 function formatarNumeroPlanilha(valor){
     const numero = parsePlanilhaNumero(valor);
     if(numero === null){
@@ -493,13 +499,14 @@ function indexarEstoqueMinimoItens(planilha){
         if(!codigo) continue;
         if(codigo.includes("codigo") || codigo.includes("código") || codigo.includes("item")) continue;
 
-        const minimo = parsePlanilhaNumero(row[6]);
-        const maximo = parsePlanilhaNumero(row[7]);
+        const minimo = parseLimiteEstoque(row[6]);
+        const maximo = parseLimiteEstoque(row[7]);
         const reposicao = parsePlanilhaNumero(row[8]);
 
         if(minimo === null && maximo === null && reposicao === null) continue;
 
         mapa.set(codigo, {
+            temLinha: true,
             minimo,
             maximo,
             reposicao
@@ -527,9 +534,13 @@ function enriquecerItensComEstoqueMinimo(lista, anteriores){
         const extra = mapa.get(codigo);
         const anterior = mapaAnteriores.get(codigo);
         if(extra){
-            if(extra.minimo !== null) novo.minimo = extra.minimo;
-            if(extra.maximo !== null) novo.maximo = extra.maximo;
-            if(extra.reposicao !== null) novo.reposicao = extra.reposicao;
+            if(extra.temLinha){
+                novo.minimo = extra.minimo;
+                novo.maximo = extra.maximo;
+                if(extra.reposicao !== null){
+                    novo.reposicao = extra.reposicao;
+                }
+            }
         }
 
         if(anterior){
@@ -4950,7 +4961,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
 
 
 
