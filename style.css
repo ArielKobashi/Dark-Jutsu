@@ -1471,55 +1471,6 @@ td.estoqueAcimaMaximo{
     font-weight: 700;
 }
 
-#estoqueModal{
-    position: fixed;
-    inset: 0;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.65);
-    z-index: 70;
-}
-
-#estoqueModalBox{
-    display: none;
-}
-
-.estoqueModalBox{
-    width: min(560px, calc(100vw - 24px));
-    max-height: min(80vh, 720px);
-    overflow: auto;
-    background: #15151D;
-    border: 1px solid #7A3CFF;
-    border-radius: 12px;
-    padding: 16px;
-    color: #E6E6E6;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.55);
-}
-
-.estoqueModalTitle{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    font-size: 14px;
-    font-weight: 800;
-    color: #9A5CFF;
-    margin-bottom: 12px;
-}
-
-.estoqueModal .card{
-    background: #1F1F2A;
-}
-
-.estoqueModal .resumoItem{
-    background: rgba(122,60,255,0.12);
-}
-
-.estoqueModal .statusChip{
-    margin-top: 10px;
-}
-
 #tableContainer::-webkit-scrollbar {
     width: 4px;
 }
