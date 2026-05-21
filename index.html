@@ -401,15 +401,6 @@ Usuários do Sistema
         <div id="adminAlertActions" class="adminAlertActions"></div>
     </div>
 </div>
-<div id="estoqueModal" class="estoqueModal" style="display:none;" onclick="if(event.target === this) fecharModalEstoque();">
-    <div class="estoqueModalBox">
-        <div class="estoqueModalTitle">
-            <span id="estoqueModalTitulo">Configuração do Estoque Mínimo</span>
-            <span class="modalCloseX" onclick="fecharModalEstoque()">✖</span>
-        </div>
-        <div id="estoqueModalContent"></div>
-    </div>
-</div>
 <!-- SPLIT: vendor-xlsx.html (3rd-party lib) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <!-- /SPLIT: vendor-xlsx.html -->
@@ -2311,13 +2302,24 @@ document.getElementById("chatMessages").addEventListener("scroll", function(){
 });
 
 
-function abrirModalSaldos(item){
-    const modal = document.getElementById("estoqueModal");
-    const content = document.getElementById("estoqueModalContent");
-    const titulo = document.getElementById("estoqueModalTitulo");
-    if(!modal || !content || !titulo) return;
+let janelaSaldos = null;
+document.addEventListener("click", function(){
+    if(janelaSaldos && !janelaSaldos.closed){
+        janelaSaldos.close();
+    }
+});
 
-    titulo.textContent = "Configuração do Estoque Mínimo";
+function abrirModalSaldos(item){
+
+    if(janelaSaldos && !janelaSaldos.closed){
+        janelaSaldos.close();
+    }
+
+    janelaSaldos = window.open("", "_blank", "width=600,height=500");
+    if(!janelaSaldos){
+        alert("O navegador bloqueou a janela do modal.");
+        return;
+    }
 
     const statusEstoque = obterStatusEstoque(item);
     const statusTexto = statusEstoque === "abaixo"
@@ -2330,6 +2332,71 @@ function abrirModalSaldos(item){
         : statusEstoque === "acima"
             ? "statusAlto"
             : "statusNormal";
+
+    let html = `
+    <!DOCTYPE html>
+    <html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <title>Configuração do Estoque Mínimo</title>
+        <style>
+            body{
+                background:#15151D;
+                color:#E6E6E6;
+                font-family:Arial;
+                padding:15px;
+            }
+            h2{
+                text-align:center;
+                color:#9A5CFF;
+            }
+            .subtitle{
+                text-align:center;
+                font-size:12px;
+                opacity:0.75;
+                margin-top:-4px;
+                margin-bottom:12px;
+            }
+            .card{
+                border:1px solid #7A3CFF;
+                padding:10px;
+                margin-bottom:10px;
+                border-radius:6px;
+                background:#1F1F2A;
+            }
+            .resumoItem{
+                border:1px solid rgba(122,60,255,0.7);
+                background:rgba(122,60,255,0.12);
+            }
+            .statusChip{
+                display:inline-block;
+                margin-top:8px;
+                padding:4px 10px;
+                border-radius:999px;
+                font-size:11px;
+                font-weight:700;
+            }
+            .statusBaixo{
+                background:rgba(255,0,0,0.3);
+                color:#fff;
+            }
+            .statusAlto{
+                background:rgba(0,255,0,0.3);
+                color:#fff;
+            }
+            .statusNormal{
+                background:rgba(255,255,255,0.1);
+                color:#E6E6E6;
+            }
+            .metaItem{
+                margin-bottom:4px;
+            }
+        </style>
+    </head>
+    <body>
+        <h2>Configuração do Estoque Mínimo</h2>
+        <div class="subtitle">Código, mínimo, máximo, reposição e saldo do item</div>
+    `;
 
     const listaEnderecos = [];
     (item.enderecos || []).forEach(info => {
@@ -2355,7 +2422,7 @@ function abrirModalSaldos(item){
         }
     }
 
-    let html = `
+    html += `
         <div class="card resumoItem">
             <div class="metaItem"><b>Código:</b> ${escapeHtml(item.protheus || "-")}</div>
             <div class="metaItem"><b>Saldo:</b> ${escapeHtml(formatarNumeroPlanilha(item.saldo))}</div>
@@ -2381,13 +2448,11 @@ function abrirModalSaldos(item){
         `;
     });
 
-    content.innerHTML = html;
-    modal.style.display = "flex";
-}
+    html += `</body></html>`;
 
-function fecharModalEstoque(){
-    const modal = document.getElementById("estoqueModal");
-    if(modal) modal.style.display = "none";
+    janelaSaldos.document.open();
+    janelaSaldos.document.write(html);
+    janelaSaldos.document.close();
 }
 
 function abrirSubPagina(){
@@ -4890,8 +4955,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
 
 
 
