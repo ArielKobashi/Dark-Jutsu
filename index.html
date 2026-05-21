@@ -417,7 +417,7 @@ let planilhas = {
     incluir: null,
     saldoAtual: null,
     saldoEndereco: null,
-    levantamento: null
+    estoque_minimo: null
 };
 
 let dados = [];
@@ -483,7 +483,7 @@ function obterStatusEstoque(item){
     return "ok";
 }
 
-function indexarLevantamentoItens(planilha){
+function indexarEstoqueMinimoItens(planilha){
     const mapa = new Map();
     if(!Array.isArray(planilha)) return mapa;
 
@@ -509,9 +509,9 @@ function indexarLevantamentoItens(planilha){
     return mapa;
 }
 
-function enriquecerItensComLevantamento(lista, anteriores){
+function enriquecerItensComEstoqueMinimo(lista, anteriores){
     const itens = Array.isArray(lista) ? lista : [];
-    const mapa = indexarLevantamentoItens(planilhas.levantamento);
+    const mapa = indexarEstoqueMinimoItens(planilhas.estoque_minimo);
     const mapaAnteriores = new Map();
     (Array.isArray(anteriores) ? anteriores : []).forEach(item => {
         const codigo = normalizarCodigoItem(item?.protheus);
@@ -571,7 +571,7 @@ function findItemByKey(key){
 
 window.setDados = function(novosDados){
     const anteriores = Array.isArray(dados) ? dados : [];
-    dados = enriquecerItensComLevantamento(Array.isArray(novosDados) ? novosDados : [], anteriores);
+    dados = enriquecerItensComEstoqueMinimo(Array.isArray(novosDados) ? novosDados : [], anteriores);
     window.dados = dados;
     aplicarTodosFiltros();
 }
@@ -1095,7 +1095,7 @@ function carregarPlanilha(tipo){
 
             planilhas[tipo] = json;
 
-            if(tipo === "levantamento"){
+            if(tipo === "estoque_minimo"){
                 window.setDados(dados);
             }
 
@@ -1202,7 +1202,7 @@ async function atualizarBanco(btn) {
             mata105: "incluir.xlsx",
             mata225: "saldo.atual.xlsx",
             mata226: "saldo.por.endereco.xlsx",
-            ...(planilhas.levantamento ? { levantamento: "levantamento0706novo.xlsx" } : {})
+            ...(planilhas.estoque_minimo ? { estoque_minimo: "estoque_minimo.xlsx" } : {})
         }
     };
 
@@ -2303,7 +2303,7 @@ function abrirModalSaldos(item){
     let html = `
     <html>
     <head>
-        <title>Saldos por Endereço</title>
+        <title>Configuração do Estoque Mínimo</title>
         <style>
             body{
                 background:#15151D;
@@ -2314,6 +2314,13 @@ function abrirModalSaldos(item){
             h2{
                 text-align:center;
                 color:#9A5CFF;
+            }
+            .subtitle{
+                text-align:center;
+                font-size:12px;
+                opacity:0.75;
+                margin-top:-4px;
+                margin-bottom:12px;
             }
             .card{
                 border:1px solid #7A3CFF;
@@ -2346,10 +2353,14 @@ function abrirModalSaldos(item){
                 background:rgba(255,255,255,0.1);
                 color:#E6E6E6;
             }
+            .metaItem{
+                margin-bottom:4px;
+            }
         </style>
     </head>
     <body>
-        <h2>Saldos por Endereço</h2>
+        <h2>Configuração do Estoque Mínimo</h2>
+        <div class="subtitle">Código, mínimo, máximo, reposição e saldo do item</div>
     `;
 
     const statusEstoque = obterStatusEstoque(item);
@@ -2366,11 +2377,11 @@ function abrirModalSaldos(item){
 
     html += `
         <div class="card resumoItem">
-            <b>Código:</b> ${escapeHtml(item.protheus || "-")}<br>
-            <b>Saldo:</b> ${escapeHtml(formatarNumeroPlanilha(item.saldo))}<br>
-            <b>Mínimo:</b> ${escapeHtml(formatarNumeroPlanilha(item.minimo))}<br>
-            <b>Máximo:</b> ${escapeHtml(formatarNumeroPlanilha(item.maximo))}<br>
-            <b>Reposição:</b> ${escapeHtml(formatarNumeroPlanilha(item.reposicao))}<br>
+            <div class="metaItem"><b>Código:</b> ${escapeHtml(item.protheus || "-")}</div>
+            <div class="metaItem"><b>Saldo:</b> ${escapeHtml(formatarNumeroPlanilha(item.saldo))}</div>
+            <div class="metaItem"><b>Mínimo:</b> ${escapeHtml(formatarNumeroPlanilha(item.minimo))}</div>
+            <div class="metaItem"><b>Máximo:</b> ${escapeHtml(formatarNumeroPlanilha(item.maximo))}</div>
+            <div class="metaItem"><b>Reposição:</b> ${escapeHtml(formatarNumeroPlanilha(item.reposicao))}</div>
             <span class="statusChip ${statusClasse}">${escapeHtml(statusTexto)}</span>
         </div>
     `;
@@ -4919,9 +4930,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
 
 
 

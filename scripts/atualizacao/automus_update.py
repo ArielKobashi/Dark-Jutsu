@@ -17,7 +17,7 @@ FILE_MAP = {
     "mata105": "incluir.xlsx",
     "mata225": "Saldo Atual.xlsx",
     "mata226": "Saldo por Endereco.xlsx",
-    "levantamento": "levantamento0706novo.xlsx",
+    "estoque_minimo": "estoque_minimo.xlsx",
 }
 
 
@@ -136,7 +136,7 @@ def _build_items(
     cooperat: list[list[Any]],
     saldo_atual: list[list[Any]],
     saldo_endereco: list[list[Any]],
-    levantamento: list[list[Any]] | None,
+    estoque_minimo: list[list[Any]] | None,
     dados_anteriores: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     novos: list[dict[str, Any]] = []
@@ -180,8 +180,8 @@ def _build_items(
         }
         enderecos_idx.setdefault(cod, []).append(ent)
 
-    levantamento_idx: dict[str, dict[str, float]] = {}
-    for row in (levantamento or [])[1:]:
+    estoque_minimo_idx: dict[str, dict[str, float]] = {}
+    for row in (estoque_minimo or [])[1:]:
         if len(row) < 2:
             continue
         cod = _safe_text(row[1] if len(row) > 1 else "")
@@ -195,7 +195,7 @@ def _build_items(
         reposicao = _optional_num(row[8] if len(row) > 8 else None)
         if minimo is None and maximo is None and reposicao is None:
             continue
-        levantamento_idx[cod] = {
+        estoque_minimo_idx[cod] = {
             "minimo": minimo,
             "maximo": maximo,
             "reposicao": reposicao,
@@ -255,14 +255,14 @@ def _build_items(
                 item["armazemPrincipal"] = _safe_text(validos[0].get("armazem")) or "ND"
             item["saldo"] = sum(_num(e.get("saldo")) for e in enderecos)
 
-        levantamento_item = levantamento_idx.get(protheus)
-        if levantamento_item:
-            if levantamento_item.get("minimo") is not None:
-                item["minimo"] = levantamento_item["minimo"]
-            if levantamento_item.get("maximo") is not None:
-                item["maximo"] = levantamento_item["maximo"]
-            if levantamento_item.get("reposicao") is not None:
-                item["reposicao"] = levantamento_item["reposicao"]
+        estoque_minimo_item = estoque_minimo_idx.get(protheus)
+        if estoque_minimo_item:
+            if estoque_minimo_item.get("minimo") is not None:
+                item["minimo"] = estoque_minimo_item["minimo"]
+            if estoque_minimo_item.get("maximo") is not None:
+                item["maximo"] = estoque_minimo_item["maximo"]
+            if estoque_minimo_item.get("reposicao") is not None:
+                item["reposicao"] = estoque_minimo_item["reposicao"]
 
         anterior = prev_by_protheus.get(protheus) or prev_by_cooperat.get(cooperat_cod)
         if anterior:
@@ -345,13 +345,13 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
     incluir_path = _resolve_file(project_root, FILE_MAP["mata105"])
     saldo_atual_path = _resolve_file(project_root, FILE_MAP["mata225"])
     saldo_endereco_path = _resolve_file(project_root, FILE_MAP["mata226"])
-    levantamento_path = _resolve_optional_file(project_root, FILE_MAP["levantamento"])
+    estoque_minimo_path = _resolve_optional_file(project_root, FILE_MAP["estoque_minimo"])
     log.info(
-        "TEST_PLANILHAS_RESOLVIDAS_OK | incluir=%s | saldoAtual=%s | saldoEndereco=%s | levantamento=%s",
+        "TEST_PLANILHAS_RESOLVIDAS_OK | incluir=%s | saldoAtual=%s | saldoEndereco=%s | estoque_minimo=%s",
         incluir_path,
         saldo_atual_path,
         saldo_endereco_path,
-        levantamento_path or "NAO_ENCONTRADA",
+        estoque_minimo_path or "NAO_ENCONTRADA",
     )
 
     log.info("AUTOMUS: iniciando autenticacao Firebase para envio sem navegador.")
@@ -383,20 +383,20 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
     incluir = _read_sheet(incluir_path)
     saldo_atual = _read_sheet(saldo_atual_path)
     saldo_endereco = _read_sheet(saldo_endereco_path)
-    levantamento = _read_sheet(levantamento_path) if levantamento_path else None
+    estoque_minimo = _read_sheet(estoque_minimo_path) if estoque_minimo_path else None
     log.info(
-        "TEST_PLANILHAS_LIDAS_OK | incluir_linhas=%s | saldoAtual_linhas=%s | saldoEndereco_linhas=%s | levantamento_linhas=%s",
+        "TEST_PLANILHAS_LIDAS_OK | incluir_linhas=%s | saldoAtual_linhas=%s | saldoEndereco_linhas=%s | estoque_minimo_linhas=%s",
         len(incluir),
         len(saldo_atual),
         len(saldo_endereco),
-        len(levantamento) if levantamento else 0,
+        len(estoque_minimo) if estoque_minimo else 0,
     )
     if len(incluir) < 3 or len(saldo_atual) < 2 or len(saldo_endereco) < 2:
         raise RuntimeError(
             "NAO CONFORME: uma ou mais planilhas estao vazias/incompletas para atualizacao."
         )
 
-    novos_dados = _build_items(incluir, [], saldo_atual, saldo_endereco, levantamento, dados_anteriores)
+    novos_dados = _build_items(incluir, [], saldo_atual, saldo_endereco, estoque_minimo, dados_anteriores)
     if not novos_dados:
         raise RuntimeError("NAO CONFORME: geracao de itens resultou em 0 registros.")
     log.info("TEST_GERACAO_ITENS_OK | itensGerados=%s", len(novos_dados))
@@ -414,7 +414,7 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
             "mata105": "incluir.xlsx",
             "mata225": "saldo.atual.xlsx",
             "mata226": "saldo.por.endereco.xlsx",
-            **({"levantamento": "levantamento0706novo.xlsx"} if levantamento_path else {}),
+            **({"estoque_minimo": "estoque_minimo.xlsx"} if estoque_minimo_path else {}),
         },
         "automus": {
             "executadoEm": datetime.now().isoformat(timespec="seconds"),

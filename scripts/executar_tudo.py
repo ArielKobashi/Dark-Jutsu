@@ -92,7 +92,7 @@ def preparar_planilhas_para_importacao(
         ("mata105", "incluir.xlsx"),
         ("mata225", "Saldo Atual.xlsx"),
         ("mata226", "Saldo por Endereco.xlsx"),
-        ("levantamento0706novo", "levantamento0706novo.xlsx"),
+        ("estoque_minimo", "estoque_minimo.xlsx"),
     ]
 
     pastas_origem = [
@@ -125,7 +125,7 @@ def preparar_planilhas_para_importacao(
                 break
 
         if origem is None:
-            if codigo == "levantamento0706novo":
+            if codigo == "estoque_minimo":
                 logger.info(
                     "Planilha opcional nao localizada para %s em %s.",
                     codigo,
