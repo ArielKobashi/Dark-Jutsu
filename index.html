@@ -1117,6 +1117,23 @@ function carregarPlanilha(tipo){
     input.click();
 }
 
+async function carregarEstoqueMinimoPadrao(){
+    try{
+        const response = await fetch("downloads/estoque_minimo.xlsx", { cache: "no-store" });
+        if(!response.ok) return false;
+        const data = await response.arrayBuffer();
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        planilhas.estoque_minimo = json;
+        window.setDados(dados);
+        return true;
+    }catch(e){
+        console.warn("Nao foi possivel carregar estoque_minimo automaticamente:", e);
+        return false;
+    }
+}
+
 let __autoUpdateDisparada = false;
 function tentarAtualizacaoAutomaticaFinal() {
     if (__autoUpdateDisparada) return;
@@ -2301,8 +2318,10 @@ function abrirModalSaldos(item){
     janelaSaldos = window.open("", "_blank", "width=600,height=500");
 
     let html = `
-    <html>
+    <!DOCTYPE html>
+    <html lang="pt-br">
     <head>
+        <meta charset="UTF-8">
         <title>Configuração do Estoque Mínimo</title>
         <style>
             body{
@@ -2427,6 +2446,7 @@ function abrirModalSaldos(item){
 
     html += `</body></html>`;
 
+    janelaSaldos.document.open();
     janelaSaldos.document.write(html);
     janelaSaldos.document.close();
 }
@@ -4121,6 +4141,7 @@ onAuthStateChanged(auth, async (user) => {
         iniciarProgresso();
 
         await carregarEstoqueInicial();
+        await carregarEstoqueMinimoPadrao();
 
         await prepararChatUsuario();
 
@@ -4930,8 +4951,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
 
 
 
