@@ -2315,6 +2315,12 @@ document.getElementById("chatMessages").addEventListener("scroll", function(){
 
 let janelaSaldos = null;
 
+document.addEventListener("click", function(){
+    if(janelaSaldos && !janelaSaldos.closed){
+        janelaSaldos.close();
+    }
+});
+
 function abrirModalSaldos(item){
 
     if(janelaSaldos && !janelaSaldos.closed){
@@ -4961,8 +4967,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
 
 
 
