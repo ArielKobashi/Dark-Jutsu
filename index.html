@@ -3401,77 +3401,103 @@ function normalizarNumeroFaladoContagem(texto){
     return reconheceu ? total : null;
 }
 
+let contagemEscutaAte = 0;
+let contagemReiniciando = false;
+
 function iniciarEscutaContagem(){
     if(!contagemNarradorAtivo || !contagemLocutorAtivo) return;
+
     const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if(!Reconhecimento || contagemEscutando) return;
-    pararEscutaContagem();
+    if(!Reconhecimento) return;
+
+    if(contagemEscutando || contagemReiniciando) return;
+
+    contagemEscutaAte = Date.now() + 30000; // tempo total: 30 segundos
+
+    iniciarCicloEscutaContagem();
+}
+
+function iniciarCicloEscutaContagem(){
+    if(!contagemNarradorAtivo || !contagemLocutorAtivo) return;
+    if(Date.now() >= contagemEscutaAte) {
+        pararEscutaContagem();
+        return;
+    }
+
+    const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+
     try{
         const rec = new Reconhecimento();
+
         contagemReconhecimento = rec;
         contagemEscutando = true;
+
         rec.lang = "pt-BR";
-        rec.interimResults = false;
-        rec.maxAlternatives = 3;
+        rec.interimResults = true;
+        rec.continuous = false;
+        rec.maxAlternatives = 5;
+
+        atualizarStatusEscutaContagem("Ouvindo quantidade...");
+
         rec.onresult = (event) => {
-            const alternativas = Array.from(event.results?.[0] || []).map(r => r.transcript);
-            const texto = alternativas.join(" ");
+            let texto = "";
+
+            for(let i = event.resultIndex; i < event.results.length; i++){
+                texto += event.results[i][0].transcript + " ";
+            }
+
             const numero = normalizarNumeroFaladoContagem(texto);
+
             if(numero !== null && Number.isFinite(numero) && numero >= 0){
                 preencherContagemRapida(numero, true);
-            }else{
-                mostrarNotificacao("Nao entendi a quantidade. Toque no numero.");
+                pararEscutaContagem();
             }
         };
-        rec.onerror = () => {};
+
+        rec.onerror = (e) => {
+            console.warn("Erro na escuta:", e.error);
+        };
+
         rec.onend = () => {
-            if(contagemEscutaTimer){
-                clearTimeout(contagemEscutaTimer);
-                contagemEscutaTimer = null;
-            }
             contagemEscutando = false;
             contagemReconhecimento = null;
+
+            if(Date.now() < contagemEscutaAte && contagemNarradorAtivo && contagemLocutorAtivo){
+                contagemReiniciando = true;
+
+                setTimeout(() => {
+                    contagemReiniciando = false;
+                    iniciarCicloEscutaContagem();
+                }, 700);
+            }
         };
-        contagemEscutaAte = Date.now() + 15000;
 
-    rec.onend = () => {
-        if(contagemEscutaTimer){
-            clearTimeout(contagemEscutaTimer);
-            contagemEscutaTimer = null;
-        }
+        rec.start();
 
-        contagemEscutando = false;
-        contagemReconhecimento = null;
-
-        if(
-            contagemNarradorAtivo &&
-            contagemLocutorAtivo &&
-            Date.now() < contagemEscutaAte
-        ){
-            setTimeout(iniciarEscutaContagem, 250);
-        }
-    };
-
-    rec.start();
-    atualizarStatusEscutaContagem("Ouvindo quantidade...");
-    contagemEscutaTimer = setTimeout(()=>pararEscutaContagem(), 15000);
-        }catch(e){
+    }catch(e){
         contagemEscutando = false;
         contagemReconhecimento = null;
     }
 }
 
 function pararEscutaContagem(){
+    contagemEscutaAte = 0;
+    contagemReiniciando = false;
+
     if(contagemEscutaTimer){
         clearTimeout(contagemEscutaTimer);
         contagemEscutaTimer = null;
     }
+
     if(contagemReconhecimento){
         try{ contagemReconhecimento.stop(); }catch(e){}
         try{ contagemReconhecimento.abort(); }catch(e){}
     }
+
     contagemEscutando = false;
     contagemReconhecimento = null;
+
+    atualizarStatusEscutaContagem("");
 }
 
 function valorInputContagem(){
