@@ -813,13 +813,6 @@ th.col-ordenada.col-filtrada {
     gap:6px;
 }
 
-#etiquetaCustomSize{
-    display:none;
-    grid-template-columns:1fr 1fr;
-    gap:6px;
-    margin-top:7px;
-}
-
 #etiquetasPanel input[type="text"],
 #etiquetasPanel textarea{
     width:100%;

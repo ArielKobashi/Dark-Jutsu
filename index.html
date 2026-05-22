@@ -329,11 +329,8 @@ Usuários do Sistema
         <div class="etiquetasSizeRow" role="radiogroup" aria-label="Tamanho da etiqueta">
             <label><input type="radio" name="etiquetaTamanho" value="7" checked> 7 cm</label>
             <label><input type="radio" name="etiquetaTamanho" value="5"> 5 cm</label>
-            <label><input type="radio" name="etiquetaTamanho" value="p"> Personalizado</label>
-        </div>
-        <div id="etiquetaCustomSize">
-            <input type="text" id="etiquetaLargura" inputmode="decimal" placeholder="Largura cm">
-            <input type="text" id="etiquetaAltura" inputmode="decimal" placeholder="Altura cm">
+            <label><input type="radio" name="etiquetaTamanho" value="10"> 10 cm</label>
+            <label><input type="radio" name="etiquetaTamanho" value="15"> 15 cm</label>
         </div>
         <textarea id="etiquetaCodigos" rows="3" placeholder="Códigos separados por vírgula"></textarea>
         <div class="etiquetasActions">
@@ -1304,23 +1301,87 @@ async function carregarEstoqueMinimoPadrao(){
 
 let etiquetaMata105Cache = null;
 let etiquetaLogoCache = null;
+const ETIQUETA_DPI = 300;
+const ETIQUETA_COR = "#283285";
+const ETIQUETA_ESCALA = 2;
+const ETIQUETA_MOLDES = {
+    "5": {
+        nome: "5cm",
+        w: 5.0,
+        h: 1.6,
+        fonte_desc: 6,
+        fonte_codigo_pt: 10,
+        fonte_cod_antigo: 6,
+        logo_fator: 0.19,
+        espaco_entre_linhas: 2,
+        espaco_cod_novo_topo: 0.05,
+        espaco_desc_topo: 0.45,
+        espaco_cod_antigo_topo: 0.999,
+        espessura_borda: 8
+    },
+    "7": {
+        nome: "7cm",
+        w: 7.01,
+        h: 2.09,
+        fonte_desc: 8,
+        fonte_codigo_pt: 14.5,
+        fonte_cod_antigo: 7,
+        logo_fator: 0.25,
+        espaco_entre_linhas: 3,
+        espaco_cod_novo_topo: 0,
+        espaco_desc_topo: 0.55,
+        espaco_cod_antigo_topo: 1.260,
+        espessura_borda: 13
+    },
+    "10": {
+        nome: "10cm",
+        w: 10.01,
+        h: 2.8,
+        fonte_desc: 12,
+        fonte_codigo_pt: 16,
+        fonte_cod_antigo: 11,
+        logo_fator: 0.45,
+        espaco_entre_linhas: 1.0,
+        espaco_cod_novo_topo: 0.0005,
+        espaco_desc_topo: 0.55,
+        espaco_cod_antigo_topo: 1.599,
+        espessura_borda: 12
+    },
+    "15": {
+        nome: "15cm",
+        w: 15.01,
+        h: 4.2,
+        fonte_desc: 17,
+        fonte_codigo_pt: 22,
+        fonte_cod_antigo: 16,
+        logo_fator: 0.6,
+        espaco_entre_linhas: 3,
+        espaco_cod_novo_topo: 0.10,
+        espaco_desc_topo: 0.9,
+        espaco_cod_antigo_topo: 2.520,
+        espessura_borda: 16
+    }
+};
 
 function cmParaPxEtiqueta(cm){
-    return Math.round(Number(cm) * 300 / 2.54);
+    return Math.trunc(Number(cm) * ETIQUETA_DPI / 2.54);
 }
 
 function formatarCodigoAntigoEtiqueta(codigo){
-    const texto = String(codigo ?? "").trim();
-    if(texto.length === 3) return `${texto.slice(0,2)}.${texto.slice(2)}`;
-    if(texto.length === 4) return `${texto.slice(0,3)}.${texto.slice(3)}`;
-    if(texto.length === 5) return `${texto.slice(0,1)}.${texto.slice(1,4)}.${texto.slice(4)}`;
-    if(texto.length === 6) return `${texto.slice(0,2)}.${texto.slice(2,5)}.${texto.slice(5)}`;
-    return texto;
+    if(!codigo) return null;
+    const numeros = String(codigo).replace(/\D/g, "").slice(0, 6);
+    if(numeros.length < 3) return null;
+    if(numeros.length === 3) return `${numeros.slice(0,2)}.${numeros.slice(2)}`;
+    if(numeros.length === 4) return `${numeros.slice(0,3)}.${numeros.slice(3)}`;
+    if(numeros.length === 5) return `${numeros[0]}.${numeros.slice(1,4)}.${numeros[4]}`;
+    if(numeros.length === 6) return `${numeros.slice(0,2)}.${numeros.slice(2,5)}.${numeros[5]}`;
+    return null;
 }
 
-function parseCmEtiqueta(valor){
-    const numero = Number(String(valor || "").trim().replace(",", "."));
-    return Number.isFinite(numero) && numero > 0 ? numero : null;
+function codigoAntigoValidoEtiqueta(valor){
+    const texto = String(valor ?? "").trim();
+    if(!texto || ["nan", "none", "0"].includes(texto.toLowerCase())) return "";
+    return texto;
 }
 
 async function carregarFontesEtiquetas(){
@@ -1377,73 +1438,110 @@ function buscarItemMata105(linhas, codigo){
     return null;
 }
 
-function desenharTextoCentralEtiqueta(ctx, texto, y, font, cor){
+function alturaFonteEtiqueta(ctx, font){
     ctx.font = font;
-    ctx.fillStyle = cor;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillText(String(texto || ""), ctx.canvas.width / 2, y);
-    const metrics = ctx.measureText(String(texto || ""));
-    return (metrics.actualBoundingBoxDescent || 0) + (metrics.actualBoundingBoxAscent || 0);
+    const bbox = ctx.measureText("Ag");
+    return Math.ceil((bbox.actualBoundingBoxAscent || 0) + (bbox.actualBoundingBoxDescent || 0));
 }
 
-async function criarBlobEtiqueta(item, larguraCm, alturaCm){
+function medirTextoEtiqueta(ctx, texto, font){
+    ctx.font = font;
+    const metrics = ctx.measureText(String(texto || ""));
+    return {
+        width: metrics.width,
+        height: Math.ceil((metrics.actualBoundingBoxAscent || 0) + (metrics.actualBoundingBoxDescent || 0))
+    };
+}
+
+async function criarBlobEtiqueta(item, cfg){
     await carregarFontesEtiquetas();
     const logo = await carregarLogoEtiqueta();
-    const largura = cmParaPxEtiqueta(larguraCm);
-    const altura = cmParaPxEtiqueta(alturaCm);
-    const canvas = document.createElement("canvas");
-    canvas.width = largura;
-    canvas.height = altura;
-    const ctx = canvas.getContext("2d");
-    const cor = "#283285";
-    const borda = 13;
 
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, largura, altura);
-    ctx.strokeStyle = cor;
-    ctx.lineWidth = borda;
-    ctx.strokeRect(borda / 2, borda / 2, largura - borda, altura - borda);
+    const w = cmParaPxEtiqueta(cfg.w);
+    const h = cmParaPxEtiqueta(cfg.h);
+    const canvasHd = document.createElement("canvas");
+    canvasHd.width = w * ETIQUETA_ESCALA;
+    canvasHd.height = h * ETIQUETA_ESCALA;
+    const ctx = canvasHd.getContext("2d");
+    const centroX = canvasHd.width / 2;
+    const espBorda = Math.trunc((cfg.espessura_borda || 3) * ETIQUETA_ESCALA);
 
-    const centroX = largura / 2;
-    const topoMoldura = borda;
-    const baseMoldura = altura - borda;
-    const fonteCod = `${Math.round(13.5 * 300 / 72)}px OswaldEtiqueta, Arial, sans-serif`;
-    const fonteTxt = `${Math.round(8 * 300 / 72)}px OswaldEtiqueta, Arial, sans-serif`;
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvasHd.width, canvasHd.height);
+    ctx.strokeStyle = ETIQUETA_COR;
+    ctx.lineWidth = espBorda;
+    ctx.strokeRect(0, 0, canvasHd.width - 1, canvasHd.height - 1);
+    ctx.fillStyle = ETIQUETA_COR;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
 
-    const yCodNovo = topoMoldura - 6;
-    const hCodNovo = desenharTextoCentralEtiqueta(ctx, item.protheus, yCodNovo, fonteCod, cor);
-    const yDesc = yCodNovo + hCodNovo + 6 + cmParaPxEtiqueta(0.1);
-    const hDesc = desenharTextoCentralEtiqueta(ctx, item.descricao, yDesc + cmParaPxEtiqueta(0.02), fonteTxt, cor);
-    const fimDesc = yDesc + hDesc;
+    const fonteDesc = `${Math.trunc(cfg.fonte_desc * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
+    const fonteCodigo = `${Math.trunc(cfg.fonte_codigo_pt * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
+    const fonteAntigo = `${Math.trunc(cfg.fonte_cod_antigo * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
+    const larguraUtil = canvasHd.width - 2 * espBorda;
 
-    let yLogo = baseMoldura;
-    if(logo){
-        const fator = (largura * 0.35) / logo.width;
-        const logoW = Math.max(1, Math.round((logo.width * fator) / 2));
-        const logoH = Math.max(1, Math.round((logo.height * fator) / 2));
-        yLogo = baseMoldura - logoH - 1;
-        ctx.drawImage(logo, centroX - logoW / 2, yLogo, logoW, logoH);
+    const yCodNovo = Math.trunc(cmParaPxEtiqueta(cfg.espaco_cod_novo_topo || 0) * ETIQUETA_ESCALA);
+    const bboxCod = medirTextoEtiqueta(ctx, item.protheus, fonteCodigo);
+    ctx.font = fonteCodigo;
+    ctx.fillText(item.protheus, centroX - bboxCod.width / 2, yCodNovo);
+
+    const yDesc = Math.trunc(cmParaPxEtiqueta(cfg.espaco_desc_topo || 0) * ETIQUETA_ESCALA);
+    const palavras = String(item.descricao || "").split(/\s+/).filter(Boolean);
+    const linhas = [];
+    let linha = "";
+    for(const palavra of palavras){
+        const teste = linha ? `${linha} ${palavra}` : palavra;
+        if(medirTextoEtiqueta(ctx, teste, fonteDesc).width <= larguraUtil){
+            linha = teste;
+        }else{
+            if(linha) linhas.push(linha);
+            linha = palavra;
+        }
+    }
+    if(linha) linhas.push(linha);
+
+    const alturaLinha = alturaFonteEtiqueta(ctx, fonteDesc);
+    const espacoEntre = Math.trunc((cfg.espaco_entre_linhas ?? 3) * ETIQUETA_ESCALA);
+    const alturaBloco = (alturaLinha * 2) + espacoEntre;
+    let yAtual = linhas.length === 1 ? yDesc + Math.trunc((alturaBloco - alturaLinha) / 2) : yDesc;
+    ctx.font = fonteDesc;
+    for(const texto of linhas){
+        const bbox = medirTextoEtiqueta(ctx, texto, fonteDesc);
+        ctx.fillText(texto, centroX - bbox.width / 2, yAtual);
+        yAtual += bbox.height + espacoEntre;
     }
 
-    const cooperat = `COOPERAT: ${formatarCodigoAntigoEtiqueta(item.cooperat)}`;
-    ctx.font = fonteTxt;
-    const metrics = ctx.measureText(cooperat);
-    const hAntigo = (metrics.actualBoundingBoxDescent || 0) + (metrics.actualBoundingBoxAscent || 0);
-    const yAntigo = fimDesc + (yLogo - fimDesc - hAntigo) / 2 + 1;
-    desenharTextoCentralEtiqueta(ctx, cooperat, yAntigo, fonteTxt, cor);
+    const codAntigo = codigoAntigoValidoEtiqueta(item.cooperat);
+    const codAntigoFmt = formatarCodigoAntigoEtiqueta(codAntigo);
+    if(codAntigoFmt){
+        const textoAntigo = `COOPERAT: ${codAntigoFmt}`;
+        const yCodAntigo = Math.trunc(cmParaPxEtiqueta(cfg.espaco_cod_antigo_topo || 0) * ETIQUETA_ESCALA);
+        const bbox = medirTextoEtiqueta(ctx, textoAntigo, fonteAntigo);
+        ctx.font = fonteAntigo;
+        ctx.fillText(textoAntigo, centroX - bbox.width / 2, yCodAntigo);
+    }
+
+    if(logo){
+        const fator = (cfg.logo_fator || 1) * ETIQUETA_ESCALA;
+        const logoW = Math.trunc(logo.width * fator);
+        const logoH = Math.trunc(logo.height * fator);
+        ctx.drawImage(logo, centroX - logoW / 2, canvasHd.height - espBorda - logoH, logoW, logoH);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const finalCtx = canvas.getContext("2d");
+    finalCtx.imageSmoothingEnabled = true;
+    finalCtx.imageSmoothingQuality = "high";
+    finalCtx.drawImage(canvasHd, 0, 0, w, h);
 
     return await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
 }
 
 function getTamanhoEtiquetaSelecionado(){
     const escolha = document.querySelector("input[name='etiquetaTamanho']:checked")?.value || "7";
-    if(escolha === "5") return { largura: 5.0, altura: 1.48 };
-    if(escolha === "7") return { largura: 7.01, altura: 2.09 };
-    const largura = parseCmEtiqueta(document.getElementById("etiquetaLargura")?.value);
-    const altura = parseCmEtiqueta(document.getElementById("etiquetaAltura")?.value);
-    if(!largura || !altura) throw new Error("Informe largura e altura válidas.");
-    return { largura, altura };
+    return ETIQUETA_MOLDES[escolha] || ETIQUETA_MOLDES["7"];
 }
 
 function setEtiquetasStatus(msg){
@@ -1466,7 +1564,7 @@ async function baixarEtiquetas(){
         if(typeof JSZip === "undefined"){
             throw new Error("Compactador não carregado. Verifique a conexão e tente novamente.");
         }
-        const { largura, altura } = getTamanhoEtiquetaSelecionado();
+        const cfg = getTamanhoEtiquetaSelecionado();
         const codigos = (document.getElementById("etiquetaCodigos")?.value || "")
             .split(/[,\n;]/)
             .map(c => c.trim())
@@ -1486,7 +1584,7 @@ async function baixarEtiquetas(){
                 continue;
             }
             setEtiquetasStatus(`Gerando ${i + 1}/${codigos.length}: ${item.protheus}`);
-            const blob = await criarBlobEtiqueta(item, largura, altura);
+            const blob = await criarBlobEtiqueta(item, cfg);
             zip.file(`${item.protheus}.png`, blob);
         }
 
@@ -1495,7 +1593,7 @@ async function baixarEtiquetas(){
 
         zip.file("resumo.txt", [
             `Etiquetas geradas: ${total}`,
-            `Tamanho: ${largura}cm x ${altura}cm`,
+            `Tamanho: ${cfg.nome}`,
             naoEncontrados.length ? `Não encontrados: ${naoEncontrados.join(", ")}` : "Todos os códigos foram encontrados."
         ].join("\n"));
 
@@ -1504,7 +1602,7 @@ async function baixarEtiquetas(){
         const url = URL.createObjectURL(pacote);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `etiquetas_fiasul_${String(largura).replace(".", "_")}cm.zip`;
+        a.download = `etiquetas_fiasul_${cfg.nome}.zip`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -1516,13 +1614,6 @@ async function baixarEtiquetas(){
     }
 }
 window.baixarEtiquetas = baixarEtiquetas;
-
-document.querySelectorAll("input[name='etiquetaTamanho']").forEach(input=>{
-    input.addEventListener("change", ()=>{
-        const custom = document.getElementById("etiquetaCustomSize");
-        if(custom) custom.style.display = document.querySelector("input[name='etiquetaTamanho']:checked")?.value === "p" ? "grid" : "none";
-    });
-});
 
 document.getElementById("etiquetaPlanilhaInput")?.addEventListener("change", function(e){
     const file = e.target.files?.[0];
