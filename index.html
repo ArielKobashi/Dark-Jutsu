@@ -4816,8 +4816,14 @@ function normalizarNickChat(nome){
 
 function ehMensagemContabilizavel(msg){
     if(!msg) return false;
-    if(msg.tipo === "system") return false;
-    if(msg.texto === "__JOIN__") return false;
+    const tipo = (msg.tipo || "").toString().toLowerCase();
+    const evento = (msg.evento || "").toString().toLowerCase();
+    const texto = (msg.texto || "").toString().trim();
+    const nome = normalizarNickChat(msg.nome);
+    if(tipo === "system") return false;
+    if(evento === "entrada" || evento === "saida") return false;
+    if(texto === "__JOIN__") return false;
+    if(nome === "sistema" && / entrou na sala\.\.\.$| saiu da sala\.\.\.$/i.test(texto)) return false;
     return true;
 }
 
