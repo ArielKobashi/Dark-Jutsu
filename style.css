@@ -868,8 +868,24 @@ th.col-ordenada.col-filtrada {
     box-sizing:border-box;
 }
 
-#etiquetaCodigos{
+.etiquetaInputWrap{
+    display:grid;
+    grid-template-columns:1fr 32px;
+    gap:6px;
     margin-top:8px;
+}
+
+.etiquetaTrashBtn{
+    min-width:32px;
+    height:32px;
+    align-self:start;
+    border:1px solid #2D3A52;
+    background:#172033;
+    color:#E6F0FF;
+    border-radius:6px;
+    cursor:pointer;
+    padding:0;
+    line-height:1;
 }
 
 .etiquetasActions{

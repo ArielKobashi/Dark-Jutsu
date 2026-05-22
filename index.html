@@ -337,7 +337,10 @@ Usuários do Sistema
                 <label><input type="radio" name="etiquetaTamanho" value="10"> 10 cm</label>
                 <label><input type="radio" name="etiquetaTamanho" value="15"> 15 cm</label>
             </div>
-            <textarea id="etiquetaCodigos" rows="3" placeholder="Códigos separados por vírgula"></textarea>
+            <div class="etiquetaInputWrap">
+                <textarea id="etiquetaCodigos" rows="3" placeholder="Códigos separados por vírgula"></textarea>
+                <button type="button" class="etiquetaTrashBtn" onclick="limparCodigosEtiquetas()" title="Limpar códigos" aria-label="Limpar códigos">🗑️</button>
+            </div>
             <div class="etiquetasActions">
                 <button type="button" onclick="baixarEtiquetas()">Baixar pacote</button>
                 <button type="button" onclick="selecionadosParaEtiquetas()">Usar selecionados</button>
@@ -1319,7 +1322,7 @@ const ETIQUETA_MOLDES = {
         fonte_cod_antigo: 6,
         logo_fator: 0.19,
         espaco_entre_linhas: 2,
-        espaco_cod_novo_topo: 0.05,
+        espaco_cod_novo_topo: 0.11,
         espaco_desc_topo: 0.45,
         espaco_cod_antigo_topo: 0.999,
         espessura_borda: 8
@@ -1333,7 +1336,7 @@ const ETIQUETA_MOLDES = {
         fonte_cod_antigo: 7,
         logo_fator: 0.25,
         espaco_entre_linhas: 3,
-        espaco_cod_novo_topo: 0,
+        espaco_cod_novo_topo: 0.10,
         espaco_desc_topo: 0.55,
         espaco_cod_antigo_topo: 1.260,
         espessura_borda: 13
@@ -1347,7 +1350,7 @@ const ETIQUETA_MOLDES = {
         fonte_cod_antigo: 11,
         logo_fator: 0.45,
         espaco_entre_linhas: 1.0,
-        espaco_cod_novo_topo: 0.0005,
+        espaco_cod_novo_topo: 0.10,
         espaco_desc_topo: 0.55,
         espaco_cod_antigo_topo: 1.599,
         espessura_borda: 12
@@ -1361,7 +1364,7 @@ const ETIQUETA_MOLDES = {
         fonte_cod_antigo: 16,
         logo_fator: 0.6,
         espaco_entre_linhas: 3,
-        espaco_cod_novo_topo: 0.10,
+        espaco_cod_novo_topo: 0.16,
         espaco_desc_topo: 0.9,
         espaco_cod_antigo_topo: 2.520,
         espessura_borda: 16
@@ -1522,13 +1525,11 @@ async function criarBlobEtiqueta(item, cfg){
 
     const codAntigo = codigoAntigoValidoEtiqueta(item.cooperat);
     const codAntigoFmt = formatarCodigoAntigoEtiqueta(codAntigo);
-    if(codAntigoFmt){
-        const textoAntigo = `COOPERAT: ${codAntigoFmt}`;
-        const yCodAntigo = Math.trunc(cmParaPxEtiqueta(cfg.espaco_cod_antigo_topo || 0) * ETIQUETA_ESCALA);
-        const bbox = medirTextoEtiqueta(ctx, textoAntigo, fonteAntigo);
-        ctx.font = fonteAntigo;
-        ctx.fillText(textoAntigo, centroX - bbox.width / 2, yCodAntigo);
-    }
+    const textoAntigo = `COOPERAT: ${codAntigoFmt || ""}`;
+    const yCodAntigo = Math.trunc(cmParaPxEtiqueta(cfg.espaco_cod_antigo_topo || 0) * ETIQUETA_ESCALA);
+    const bboxAntigo = medirTextoEtiqueta(ctx, textoAntigo, fonteAntigo);
+    ctx.font = fonteAntigo;
+    ctx.fillText(textoAntigo, centroX - bboxAntigo.width / 2, yCodAntigo);
 
     if(logo){
         const fator = (cfg.logo_fator || 1) * ETIQUETA_ESCALA;
@@ -1573,21 +1574,40 @@ window.toggleEtiquetasPanel = toggleEtiquetasPanel;
 
 function selecionadosParaEtiquetas(){
     toggleEtiquetasPanel(true);
-    const codigos = Array.from(selecionados || []).map(key=>{
+    const novos = Array.from(selecionados || []).map(key=>{
         const item = findItemByKey(key);
         return item?.protheus || item?.cooperat || key;
     }).filter(Boolean);
-    document.getElementById("etiquetaCodigos").value = codigos.join(", ");
-    setEtiquetasStatus(`${codigos.length} código(s) carregado(s) dos selecionados.`);
+    const input = document.getElementById("etiquetaCodigos");
+    const atuais = (input?.value || "")
+        .split(/[,\n;]/)
+        .map(c => c.trim())
+        .filter(Boolean);
+    const acumulados = [];
+    const vistos = new Set();
+    [...atuais, ...novos].forEach(codigo=>{
+        const chave = codigo.toLowerCase();
+        if(vistos.has(chave)) return;
+        vistos.add(chave);
+        acumulados.push(codigo);
+    });
+    if(input) input.value = acumulados.join(", ");
+    setEtiquetasStatus(`${novos.length} selecionado(s) adicionados. Total: ${acumulados.length}.`);
 }
 window.selecionadosParaEtiquetas = selecionadosParaEtiquetas;
+
+function limparCodigosEtiquetas(){
+    const input = document.getElementById("etiquetaCodigos");
+    if(input) input.value = "";
+    setEtiquetasStatus("Códigos limpos.");
+}
+window.limparCodigosEtiquetas = limparCodigosEtiquetas;
 
 async function baixarEtiquetas(){
     try{
         if(typeof JSZip === "undefined"){
             throw new Error("Compactador não carregado. Verifique a conexão e tente novamente.");
         }
-        const cfg = getTamanhoEtiquetaSelecionado();
         const codigos = (document.getElementById("etiquetaCodigos")?.value || "")
             .split(/[,\n;]/)
             .map(c => c.trim())
@@ -1598,25 +1618,40 @@ async function baixarEtiquetas(){
         const linhas = await carregarMata105Etiquetas();
         const zip = new JSZip();
         const naoEncontrados = [];
+        const itens = [];
+        const vistosItens = new Set();
 
-        for(let i = 0; i < codigos.length; i++){
-            const codigo = codigos[i];
+        for(const codigo of codigos){
             const item = buscarItemMata105(linhas, codigo);
             if(!item){
                 naoEncontrados.push(codigo);
                 continue;
             }
-            setEtiquetasStatus(`Gerando ${i + 1}/${codigos.length}: ${item.protheus}`);
-            const blob = await criarBlobEtiqueta(item, cfg);
-            zip.file(`${item.protheus}.png`, blob);
+            const chave = String(item.protheus || codigo).toLowerCase();
+            if(vistosItens.has(chave)) continue;
+            vistosItens.add(chave);
+            itens.push(item);
         }
 
-        const total = Object.keys(zip.files).length;
-        if(!total) throw new Error("Nenhum código informado foi encontrado na mata105.");
+        if(!itens.length) throw new Error("Nenhum código informado foi encontrado na mata105.");
+
+        const moldes = Object.values(ETIQUETA_MOLDES);
+        let geradas = 0;
+        for(const cfg of moldes){
+            const pasta = zip.folder(cfg.nome);
+            for(let i = 0; i < itens.length; i++){
+                const item = itens[i];
+                setEtiquetasStatus(`Gerando ${cfg.nome} ${i + 1}/${itens.length}: ${item.protheus}`);
+                const blob = await criarBlobEtiqueta(item, cfg);
+                pasta.file(`${item.protheus}.png`, blob);
+                geradas++;
+            }
+        }
 
         zip.file("resumo.txt", [
-            `Etiquetas geradas: ${total}`,
-            `Tamanho: ${cfg.nome}`,
+            `Etiquetas geradas: ${geradas}`,
+            `Itens: ${itens.length}`,
+            "Pastas: 5cm, 7cm, 10cm, 15cm",
             naoEncontrados.length ? `Não encontrados: ${naoEncontrados.join(", ")}` : "Todos os códigos foram encontrados."
         ].join("\n"));
 
@@ -1625,7 +1660,7 @@ async function baixarEtiquetas(){
         const url = URL.createObjectURL(pacote);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `etiquetas_fiasul_${cfg.nome}.zip`;
+        a.download = "etiquetas.zip";
         document.body.appendChild(a);
         a.click();
         a.remove();
