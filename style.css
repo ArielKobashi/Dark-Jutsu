@@ -1051,6 +1051,50 @@ th.col-ordenada.col-filtrada {
     transform:translateY(0);
 }
 
+.saldoHistoricoCell{
+    position:relative;
+}
+
+.saldoHistoricoTooltip{
+    position:absolute;
+    left:50%;
+    bottom:calc(100% + 7px);
+    min-width:132px;
+    transform:translate(-50%, 6px);
+    opacity:0;
+    pointer-events:none;
+    z-index:20;
+    padding:7px;
+    border:1px solid rgba(207,227,255,0.22);
+    border-radius:8px;
+    background:rgba(8,13,20,0.96);
+    box-shadow:0 12px 28px rgba(0,0,0,0.45);
+    transition:opacity 0.16s ease, transform 0.16s ease;
+}
+
+.saldoHistoricoCell:hover .saldoHistoricoTooltip{
+    opacity:1;
+    transform:translate(-50%, 0);
+}
+
+.saldoHistoricoLinha{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    color:#CFE3FF;
+    font-size:10px;
+    line-height:1.45;
+    white-space:nowrap;
+}
+
+.saldoHistoricoLinha strong.entrada{
+    color:#86EFAC;
+}
+
+.saldoHistoricoLinha strong.saida{
+    color:#FCA5A5;
+}
+
 /* SOLICITACOES */
 
 #configSubPage .solicitacaoItem{

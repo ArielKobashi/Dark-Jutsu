@@ -138,6 +138,58 @@ def _ajuste_key(item_key: str) -> str:
     return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
 
+def _item_key(item: dict[str, Any]) -> str:
+    return _safe_text(item.get("protheusKey") or item.get("protheus"))
+
+
+def _atualizar_historico_saldo(
+    novos: list[dict[str, Any]],
+    anteriores: list[dict[str, Any]],
+    historico_atual: dict[str, Any],
+    agora_ms: int,
+) -> dict[str, Any]:
+    anterior_por_key: dict[str, dict[str, Any]] = {}
+    for item in anteriores:
+        if not isinstance(item, dict):
+            continue
+        key = _item_key(item)
+        if key and key not in anterior_por_key:
+            anterior_por_key[key] = item
+
+    historico = dict(historico_atual or {})
+    data_txt = datetime.fromtimestamp(agora_ms / 1000).strftime("%d/%m/%Y")
+
+    for item in novos:
+        if not isinstance(item, dict):
+            continue
+        key = _item_key(item)
+        if not key or key not in anterior_por_key:
+            continue
+        saldo_anterior = _optional_num(anterior_por_key[key].get("saldo"))
+        saldo_atual = _optional_num(item.get("saldo"))
+        if saldo_anterior is None or saldo_atual is None:
+            continue
+        delta = saldo_atual - saldo_anterior
+        if not delta:
+            continue
+        hist_key = _ajuste_key(key)
+        lista = historico.get(hist_key) if isinstance(historico.get(hist_key), list) else []
+        lista = list(lista)
+        lista.append(
+            {
+                "data": data_txt,
+                "timestamp": agora_ms,
+                "delta": delta,
+                "tipo": "entrada" if delta > 0 else "saida",
+                "saldoAnterior": saldo_anterior,
+                "saldoAtual": saldo_atual,
+            }
+        )
+        historico[hist_key] = lista[-80:]
+
+    return historico
+
+
 def _safe_text(value: Any) -> str:
     if value is None:
         return ""
@@ -413,6 +465,7 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
     dados_anteriores = banco.get("dados") if isinstance(banco.get("dados"), list) else []
     dados_mortos = banco.get("dadosMortos") if isinstance(banco.get("dadosMortos"), list) else []
     ajustes_itens = banco.get("ajustesItens") if isinstance(banco.get("ajustesItens"), dict) else {}
+    historico_saldo = banco.get("historicoSaldo") if isinstance(banco.get("historicoSaldo"), dict) else {}
 
     incluir = _read_sheet(incluir_path)
     saldo_atual = _read_sheet(saldo_atual_path)
@@ -444,11 +497,18 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
     log.info("TEST_GERACAO_ITENS_OK | itensGerados=%s", len(novos_dados))
 
     agora_ms = int(time.time() * 1000)
+    historico_saldo = _atualizar_historico_saldo(
+        novos_dados,
+        dados_anteriores,
+        historico_saldo,
+        agora_ms,
+    )
 
     payload = {
         "dados": novos_dados,
         "dadosMortos": dados_mortos,
         "ajustesItens": ajustes_itens,
+        "historicoSaldo": historico_saldo,
         "ultimaAtualizacao": agora_ms,
         "atualizadoPor": updated_by,
         "atualizacaoAutomatica": True,

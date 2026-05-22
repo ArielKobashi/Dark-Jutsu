@@ -475,6 +475,7 @@ let dadosMortos = [];
 window.dadosMortos = dadosMortos;
 let visiveis = [];
 let ajustesItensEstoque = {};
+let historicoSaldoEstoque = {};
 var privateRoomGateState = null;
 
 function getItemKey(item){
@@ -522,6 +523,61 @@ function formatarNumeroPlanilha(valor){
     return new Intl.NumberFormat("pt-BR", {
         maximumFractionDigits: 2
     }).format(numero);
+}
+
+function formatarDeltaSaldo(valor){
+    const numero = parsePlanilhaNumero(valor);
+    if(numero === null) return "";
+    const abs = formatarNumeroPlanilha(Math.abs(numero));
+    return `${numero > 0 ? "+" : "-"}${abs}`;
+}
+
+function formatarDataHistoricoSaldo(timestamp = Date.now()){
+    return new Date(timestamp).toLocaleDateString("pt-BR");
+}
+
+function getHistoricoSaldoItem(itemOrKey){
+    const key = typeof itemOrKey === "string" ? itemOrKey : getItemKey(itemOrKey);
+    const chave = chaveAjusteItem(key);
+    return Array.isArray(historicoSaldoEstoque?.[chave]) ? historicoSaldoEstoque[chave] : [];
+}
+
+function definirHistoricoSaldo(novosItens, itensAnteriores, historicoAtual = historicoSaldoEstoque){
+    const anteriorPorKey = new Map();
+    (Array.isArray(itensAnteriores) ? itensAnteriores : []).forEach(item=>{
+        const key = getItemKey(item);
+        if(key && !anteriorPorKey.has(key)){
+            anteriorPorKey.set(key, item);
+        }
+    });
+
+    const historico = { ...(historicoAtual || {}) };
+    const agora = Date.now();
+    const dataTexto = formatarDataHistoricoSaldo(agora);
+
+    (Array.isArray(novosItens) ? novosItens : []).forEach(item=>{
+        const key = getItemKey(item);
+        if(!key || !anteriorPorKey.has(key)) return;
+        const saldoAnterior = parsePlanilhaNumero(anteriorPorKey.get(key)?.saldo);
+        const saldoAtual = parsePlanilhaNumero(item?.saldo);
+        if(saldoAnterior === null || saldoAtual === null) return;
+        const delta = saldoAtual - saldoAnterior;
+        if(!delta) return;
+
+        const chave = chaveAjusteItem(key);
+        const lista = Array.isArray(historico[chave]) ? [...historico[chave]] : [];
+        lista.push({
+            data: dataTexto,
+            timestamp: agora,
+            delta,
+            tipo: delta > 0 ? "entrada" : "saida",
+            saldoAnterior,
+            saldoAtual
+        });
+        historico[chave] = lista.slice(-80);
+    });
+
+    return historico;
 }
 
 function calcularReposicaoMedia(minimo, maximo){
@@ -1524,20 +1580,21 @@ async function criarBlobEtiqueta(item, cfg){
         yAtual += bbox.height + espacoEntre;
     }
 
-    const codAntigo = codigoAntigoValidoEtiqueta(item.cooperat);
-    const codAntigoFmt = formatarCodigoAntigoEtiqueta(codAntigo);
-    const textoAntigo = `COOPERAT: ${codAntigoFmt || ""}`;
-    const yCodAntigo = Math.trunc(cmParaPxEtiqueta(cfg.espaco_cod_antigo_topo || 0) * ETIQUETA_ESCALA);
-    const bboxAntigo = medirTextoEtiqueta(ctx, textoAntigo, fonteAntigo);
-    ctx.font = fonteAntigo;
-    ctx.fillText(textoAntigo, centroX - bboxAntigo.width / 2, yCodAntigo);
-
     if(logo){
         const fator = (cfg.logo_fator || 1) * ETIQUETA_ESCALA;
         const logoW = Math.trunc(logo.width * fator);
         const logoH = Math.trunc(logo.height * fator);
         ctx.drawImage(logo, centroX - logoW / 2, canvasHd.height - espBorda - logoH, logoW, logoH);
     }
+
+    const codAntigo = codigoAntigoValidoEtiqueta(item.cooperat);
+    const codAntigoFmt = formatarCodigoAntigoEtiqueta(codAntigo);
+    const textoAntigo = `COOPERAT: ${codAntigoFmt || ""}`;
+    const yCodAntigo = Math.trunc(cmParaPxEtiqueta(cfg.espaco_cod_antigo_topo || 0) * ETIQUETA_ESCALA);
+    const bboxAntigo = medirTextoEtiqueta(ctx, textoAntigo, fonteAntigo);
+    ctx.font = fonteAntigo;
+    ctx.fillStyle = ETIQUETA_COR;
+    ctx.fillText(textoAntigo, centroX - bboxAntigo.width / 2, yCodAntigo);
 
     const canvas = document.createElement("canvas");
     canvas.width = w;
@@ -1786,6 +1843,7 @@ async function atualizarBanco(btn) {
     let saldoAtual = planilhas.saldoAtual || [];
     let saldoEndereco = planilhas.saldoEndereco || [];
     let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereco, false);
+    historicoSaldoEstoque = definirHistoricoSaldo(novosDados, dados, historicoSaldoEstoque);
 
     window.setDados(novosDados);
     window.dadosMortos = Array.isArray(dadosMortos) ? dadosMortos : [];
@@ -1794,6 +1852,7 @@ async function atualizarBanco(btn) {
         dados: dados,
         dadosMortos: window.dadosMortos || [],
         ajustesItens: ajustesItensEstoque || {},
+        historicoSaldo: historicoSaldoEstoque || {},
         ultimaAtualizacao: Date.now(),
         atualizadoPor: (window.meuNickname || "Sistema") + " - atualizado automaticamente",
         atualizacaoAutomatica: true,
@@ -1940,6 +1999,34 @@ function criarTd(row, valor){
     td.textContent = valor ?? "";
     row.appendChild(td);
     return td;
+}
+
+function criarTooltipHistoricoSaldo(td, item){
+    const historico = getHistoricoSaldoItem(item).slice(-8).reverse();
+    if(!historico.length){
+        td.title = "Sem histórico de entrada/saída de saldo.";
+        return;
+    }
+    const esc = (texto) => String(texto ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const linhas = historico.map(h => `${h.data}: ${formatarDeltaSaldo(h.delta)}`);
+    td.title = linhas.join("\n");
+    td.classList.add("saldoHistoricoCell");
+
+    const tooltip = document.createElement("div");
+    tooltip.className = "saldoHistoricoTooltip";
+    tooltip.innerHTML = historico.map(h => `
+        <div class="saldoHistoricoLinha">
+            <span>${esc(h.data)}</span>
+            <strong class="${Number(h.delta) >= 0 ? "entrada" : "saida"}">${esc(formatarDeltaSaldo(h.delta))}</strong>
+        </div>
+    `).join("");
+    td.appendChild(tooltip);
 }
 
 let dragSelectActive = false;
@@ -2200,6 +2287,7 @@ function renderTabela(){
 
         // SALDO
         const tdSaldo = criarTd(row, formatarNumeroPlanilha(item.saldo));
+        criarTooltipHistoricoSaldo(tdSaldo, item);
         const statusEstoque = obterStatusEstoque(item);
         if(statusEstoque === "abaixo"){
             tdSaldo.classList.add("estoqueAbaixoMinimo");
@@ -2879,12 +2967,14 @@ function enviarMensagemSistema(texto, roomId, extra = {}){
     const targetRoom = roomId || window.salaAtual;
     const chatRef = window.getChatRef(targetRoom);
     if(!chatRef) return;
+    const clientEventId = extra.clientEventId || `evt_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     const mensagem = {
         nome: "Sistema",
         texto: texto,
         tipo: "system",
         evento: extra.evento || "",
         sessionId: extra.sessionId || "",
+        clientEventId: clientEventId,
         uid: extra.uid || "",
         data: new Date().toLocaleTimeString(),
         timestamp: Date.now()
@@ -2892,6 +2982,31 @@ function enviarMensagemSistema(texto, roomId, extra = {}){
 
     window.push(chatRef, mensagem);
     return mensagem;
+}
+
+function adicionarMensagemLocalChat(roomId, mensagem){
+    if(!roomId || !mensagem) return;
+    const lista = roomMessages[roomId] || [];
+    if(mensagem.clientEventId && lista.some(msg => msg?.clientEventId === mensagem.clientEventId)){
+        return;
+    }
+    roomMessages[roomId] = [...lista, mensagem];
+    if(roomId === salaAtual){
+        atualizarVistaChatAtivo(roomId, false);
+    }
+}
+
+function dedupeMensagensChat(lista){
+    const vistos = new Set();
+    return (Array.isArray(lista) ? lista : []).filter(msg=>{
+        if(!msg) return false;
+        const id = msg.clientEventId || msg._key || "";
+        if(id){
+            if(vistos.has(id)) return false;
+            vistos.add(id);
+        }
+        return true;
+    });
 }
 
 /* ===== CORES POR NICKNAME ===== */
@@ -2975,6 +3090,7 @@ function abrirModalSaldos(item){
             ? `${temMinimo ? `Mínimo ${esc(formatarNumeroPlanilha(minimoValor))}` : "Sem mínimo"} · ${temMaximo ? `Máximo ${esc(formatarNumeroPlanilha(maximoValor))}` : "Sem máximo"}`
             : "Este item não possui faixa configurada na planilha de estoque mínimo.";
         const itemKey = getItemKey(itemSeguro);
+        const historicoSaldo = getHistoricoSaldoItem(itemKey).slice(-20).reverse();
         const itemKeyEncoded = encodeURIComponent(itemKey);
         const minimoInputValor = minimoValor === null ? "" : String(minimoValor).replace(".", ",");
         const maximoInputValor = maximoValor === null ? "" : String(maximoValor).replace(".", ",");
@@ -3045,6 +3161,16 @@ function abrirModalSaldos(item){
                 </div>
             </article>
         `).join("");
+
+        const historicoSaldoHtml = historicoSaldo.length
+            ? historicoSaldo.map(h => `
+                <article class="historyRow">
+                    <span>${esc(h.data || formatarDataHistoricoSaldo(h.timestamp))}</span>
+                    <strong class="${Number(h.delta) >= 0 ? "entrada" : "saida"}">${esc(formatarDeltaSaldo(h.delta))}</strong>
+                    <small>${esc(h.tipo === "entrada" ? "Entrada" : "Saída")} · ${esc(formatarNumeroPlanilha(h.saldoAnterior))} → ${esc(formatarNumeroPlanilha(h.saldoAtual))}</small>
+                </article>
+            `).join("")
+            : `<div class="emptyState">Nenhuma entrada ou saída de saldo registrada para este item.</div>`;
 
         const html = `<!doctype html>
 <html lang="pt-br">
@@ -3338,6 +3464,38 @@ function abrirModalSaldos(item){
             flex-direction:column;
             gap:12px;
         }
+        .historyList{
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+        }
+        .historyRow{
+            display:grid;
+            grid-template-columns:96px 64px 1fr;
+            gap:10px;
+            align-items:center;
+            padding:11px 12px;
+            border:1px solid var(--line);
+            border-radius:14px;
+            background:rgba(255,255,255,.045);
+        }
+        .historyRow span{
+            color:var(--text);
+            font-size:13px;
+            font-weight:800;
+        }
+        .historyRow strong{
+            font-size:14px;
+            font-weight:900;
+            text-align:right;
+        }
+        .historyRow strong.entrada{color:#b9ffd2}
+        .historyRow strong.saida{color:#ffd0d6}
+        .historyRow small{
+            color:var(--muted);
+            font-size:12px;
+            line-height:1.35;
+        }
         .addressCard{
             position:relative;
             padding:16px;
@@ -3414,6 +3572,8 @@ function abrirModalSaldos(item){
             .originTag,.countBadge,.pill{white-space:normal;}
             .editGrid{grid-template-columns:1fr;}
             .editActions{align-items:flex-start; flex-direction:column;}
+            .historyRow{grid-template-columns:1fr; gap:4px;}
+            .historyRow strong{text-align:left;}
         }
     </style>
 </head>
@@ -3491,6 +3651,16 @@ function abrirModalSaldos(item){
                 ? `<div class="emptyState">Nenhum endereço foi encontrado para este item no momento.</div>`
                 : `<div class="addressList">${enderecosHtml}</div>`
             }
+        </section>
+
+        <section class="section">
+            <div class="sectionHeader">
+                <div>
+                    <h2>Histórico de saldo</h2>
+                    <p>Entradas e saídas calculadas pela diferença de saldo entre uma atualização e a atualização anterior.</p>
+                </div>
+            </div>
+            <div class="historyList">${historicoSaldoHtml}</div>
         </section>
     </div>
 </body>
@@ -5328,6 +5498,7 @@ async function carregarEstoqueInicial() {
             const banco = snapshot.val();
 
             ajustesItensEstoque = banco.ajustesItens || {};
+            historicoSaldoEstoque = banco.historicoSaldo || {};
             dadosMortos = Array.isArray(banco.dadosMortos) ? banco.dadosMortos : [];
             dadosMortos = dadosMortos.map(item => aplicarAjusteManualItem({...item}));
             window.dadosMortos = dadosMortos;
@@ -5342,6 +5513,7 @@ onValue(window.estoqueRef, snapshot => {
     if(window.__estoqueSyncToken !== syncToken){
         window.__estoqueSyncToken = syncToken;
         ajustesItensEstoque = val.ajustesItens || {};
+        historicoSaldoEstoque = val.historicoSaldo || {};
         dadosMortos = Array.isArray(val.dadosMortos) ? val.dadosMortos.map(item => aplicarAjusteManualItem({...item})) : [];
         window.dadosMortos = dadosMortos;
         if(Array.isArray(val.dados)){
@@ -5367,6 +5539,7 @@ onValue(window.estoqueRef, snapshot => {
             // 🔥 PRIMEIRA VEZ → NÃO EXISTE NADA
             dadosMortos = [];
             ajustesItensEstoque = {};
+            historicoSaldoEstoque = {};
             window.dadosMortos = dadosMortos;
             window.setDados([]);
 
@@ -5693,9 +5866,10 @@ function iniciarMonitoramentoSalas(){
         chatRoomUnsubs[room.id] = onValue(getChatRef(room.id), snapshot => {
             let lista = [];
             snapshot.forEach(child=>{
-                lista.push(child.val());
+                const msg = child.val() || {};
+                lista.push({ ...msg, _key: child.key });
             });
-            roomMessages[room.id] = lista;
+            roomMessages[room.id] = dedupeMensagensChat(lista);
             if(room.id === salaAtual){
                 recalcularUnreadCounts();
                 atualizarVistaChatAtivo(room.id, false);
@@ -5877,10 +6051,7 @@ function anunciarEntradaSala(roomId, sessionId = null){
         sessionId: currentSession,
         uid: uid || ""
     });
-    if(mensagem && roomId === salaAtual){
-        roomMessages[roomId] = [...(roomMessages[roomId] || []), mensagem];
-        atualizarVistaChatAtivo(roomId, false);
-    }
+    adicionarMensagemLocalChat(roomId, mensagem);
 }
 
 function anunciarSaidaSala(roomId, sessionId = null){
@@ -5902,10 +6073,7 @@ function anunciarSaidaSala(roomId, sessionId = null){
     if(!sessionId && salaEntradaRegistrada === roomId){
         salaEntradaRegistrada = null;
     }
-    if(mensagem && roomId === salaAtual){
-        roomMessages[roomId] = [...(roomMessages[roomId] || []), mensagem];
-        atualizarVistaChatAtivo(roomId, false);
-    }
+    adicionarMensagemLocalChat(roomId, mensagem);
 }
 
 const TYPING_TTL = 4500;
