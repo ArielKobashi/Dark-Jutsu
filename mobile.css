@@ -179,6 +179,14 @@
         border-radius: 8px;
     }
 
+    #btnContagem {
+        margin-top: 8px;
+        min-height: 44px;
+        padding: 12px;
+        font-size: 13px;
+        border-radius: 8px;
+    }
+
     body.mobile-config-open::before {
         content: "";
         position: fixed;
@@ -361,6 +369,213 @@
         font-size: 16px;
         text-align: center;
     }
+
+    #contagemScreen {
+        position: fixed;
+        z-index: 80;
+        height: 100dvh;
+        min-height: 100vh;
+        overflow: hidden;
+    }
+
+    #contagemHeader {
+        padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+        min-height: 48px;
+    }
+
+    .contagemBackBtn,
+    .contagemRelBtn {
+        min-width: 48px;
+        height: 40px;
+        font-size: 13px;
+    }
+
+    #contagemMaquinaLabel {
+        font-size: 15px;
+    }
+
+    #contagemProgresso {
+        font-size: 11px;
+    }
+
+    #contagemMachineSelect {
+        padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+        gap: 12px;
+    }
+
+    .contagemMachineIntro strong {
+        font-size: 17px;
+    }
+
+    .contagemMachineIntro span {
+        font-size: 12px;
+        line-height: 1.35;
+    }
+
+    #contagemMachineGrid {
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+    }
+
+    .contagemMachineCard {
+        min-height: 112px;
+        border-radius: 14px;
+        padding: 12px;
+    }
+
+    .contagemMachineCard strong {
+        font-size: 24px;
+    }
+
+    .contagemMachineCard span {
+        font-size: 13px;
+    }
+
+    #contagemMaquinasBar {
+        padding: 7px 8px;
+        gap: 6px;
+    }
+
+    .contagemMaqBtn {
+        min-height: 34px;
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+
+    #contagemCardArea {
+        align-items: stretch;
+        padding: 8px 42px;
+        overflow: hidden;
+    }
+
+    #contagemCardTrack {
+        max-width: none;
+        height: 100%;
+        display: flex;
+        align-items: stretch;
+    }
+
+    #contagemCard {
+        width: 100%;
+        justify-content: space-between;
+        gap: 6px;
+        padding: 10px;
+        border-radius: 12px;
+        box-shadow: none;
+    }
+
+    #contagemCardEndereco {
+        font-size: 20px;
+        line-height: 1.1;
+    }
+
+    #contagemCardDescricao {
+        min-height: 36px;
+        max-height: 48px;
+        overflow: hidden;
+        font-size: 12px;
+        line-height: 1.25;
+    }
+
+    #contagemCardCodigos {
+        gap: 5px;
+    }
+
+    #contagemCardProtheus,
+    #contagemCardCooperat {
+        padding: 3px 7px;
+        font-size: 10px;
+    }
+
+    #contagemCardSaldoSistema {
+        font-size: 11px;
+    }
+
+    #contagemInput {
+        height: 54px;
+        padding: 6px 10px;
+        font-size: 34px;
+        border-radius: 10px;
+    }
+
+    #contagemInputStatus {
+        min-height: 13px;
+        font-size: 10px;
+    }
+
+    #contagemQuickPad {
+        gap: 6px;
+    }
+
+    #contagemQuickPad button {
+        min-height: 42px;
+        padding: 6px;
+        border-radius: 9px;
+        font-size: 18px;
+    }
+
+    #contagemQuickPad button.op {
+        min-height: 38px;
+        font-size: 15px;
+    }
+
+    #contagemQuickPad button.zero,
+    #contagemQuickPad button.ok {
+        min-height: 44px;
+        font-size: 12px;
+    }
+
+    #contagemQuickPad button.ok {
+        font-size: 14px;
+    }
+
+    .contagemNavBtn {
+        width: 34px;
+        height: 64px;
+        font-size: 30px;
+        border-radius: 9px;
+    }
+
+    .contagemNavLeft {
+        left: 4px;
+    }
+
+    .contagemNavRight {
+        right: 4px;
+    }
+
+    #contagemFooter {
+        padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+        gap: 8px;
+    }
+
+    #contagemFooterInfo {
+        font-size: 11px;
+    }
+
+    #btnFinalizarContagem {
+        min-height: 40px;
+        padding: 8px 12px;
+        font-size: 12px;
+        border-radius: 9px;
+    }
+
+    #contagemRelatorioModal {
+        position: fixed;
+        z-index: 90;
+    }
+
+    #contagemRelatorioBox {
+        max-height: 92dvh;
+        border-radius: 14px 14px 0 0;
+    }
+
+    .contagemRelRow {
+        grid-template-columns: 1fr 1.2fr 54px 54px 58px;
+        gap: 5px;
+        padding: 7px 9px;
+        font-size: 10px;
+    }
 }
 
 .toggleGrid{
@@ -400,6 +615,23 @@
     #logoutBtn {
         width: 28px;
         height: 28px;
+    }
+
+    #contagemMachineGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .contagemMachineCard {
+        min-height: 88px;
+    }
+
+    #contagemCardArea {
+        padding-left: 36px;
+        padding-right: 36px;
+    }
+
+    #contagemQuickPad button {
+        min-height: 40px;
     }
 }
 

@@ -23,7 +23,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 - Filtro de saldo fora da faixa minima/maxima.
 - Captura de itens pelo modo magnet.
 - Relatorio imprimivel dos itens selecionados.
-- Tela de contagem de estoque por maquina/endereco, com rascunho local, divergencias e exportacao XLSX.
+- Tela de contagem de estoque por maquina/endereco, limitada aos armazens 04 e 05, com rascunho local, botoes rapidos, divergencias e exportacao XLSX.
 - Modal de perfil do item com saldo, endereco, minimo, maximo e reposicao.
 - Edicao item a item de minimo e maximo dentro do modal.
 - Reposicao calculada automaticamente pela media entre minimo e maximo.

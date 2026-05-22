@@ -217,7 +217,7 @@ xmlns="http://www.w3.org/2000/svg">
 <!-- SPLIT: contagem.html (contagem de estoque) -->
 <div id="contagemScreen" style="display:none;">
     <div id="contagemHeader">
-        <button class="contagemBackBtn" onclick="fecharContagem()" title="Voltar">&larr;</button>
+        <button class="contagemBackBtn" onclick="voltarContagem()" title="Voltar">&larr;</button>
         <div id="contagemHeaderInfo">
             <span id="contagemMaquinaLabel">Maquina</span>
             <span id="contagemProgresso">0 / 0</span>
@@ -226,6 +226,14 @@ xmlns="http://www.w3.org/2000/svg">
     </div>
 
     <div id="contagemMaquinasBar"></div>
+
+    <div id="contagemMachineSelect">
+        <div class="contagemMachineIntro">
+            <strong>Escolha a maquina</strong>
+            <span>Os itens entram em ordem de endereco dentro da maquina escolhida.</span>
+        </div>
+        <div id="contagemMachineGrid"></div>
+    </div>
 
     <div id="contagemCardArea">
         <div id="contagemCardTrack">
@@ -239,8 +247,27 @@ xmlns="http://www.w3.org/2000/svg">
                 <div id="contagemCardSaldoSistema">
                     Saldo sistema: <strong id="contagemCardSaldo"></strong>
                 </div>
-                <input id="contagemInput" type="number" inputmode="decimal" placeholder="Quantidade contada" min="0" autocomplete="off">
+                <input id="contagemInput" type="text" inputmode="none" placeholder="Quantidade contada" autocomplete="off" readonly>
                 <div id="contagemInputStatus"></div>
+                <div id="contagemQuickPad" aria-label="Preenchimento rapido">
+                    <button type="button" class="op" onclick="ajustarContagemAtual(-1)">-1</button>
+                    <button type="button" class="op" onclick="ajustarContagemAtual(1)">+1</button>
+                    <button type="button" class="op" onclick="ajustarContagemAtual(5)">+5</button>
+                    <button type="button" onclick="digitarContagemRapida('7')">7</button>
+                    <button type="button" onclick="digitarContagemRapida('8')">8</button>
+                    <button type="button" onclick="digitarContagemRapida('9')">9</button>
+                    <button type="button" onclick="digitarContagemRapida('4')">4</button>
+                    <button type="button" onclick="digitarContagemRapida('5')">5</button>
+                    <button type="button" onclick="digitarContagemRapida('6')">6</button>
+                    <button type="button" onclick="digitarContagemRapida('1')">1</button>
+                    <button type="button" onclick="digitarContagemRapida('2')">2</button>
+                    <button type="button" onclick="digitarContagemRapida('3')">3</button>
+                    <button type="button" onclick="limparContagemAtual()">Limpar</button>
+                    <button type="button" onclick="digitarContagemRapida('0')">0</button>
+                    <button type="button" onclick="apagarDigitoContagem()">Apagar</button>
+                    <button type="button" class="zero primary" onclick="preencherContagemRapida(0, true)">Zero e proximo</button>
+                    <button type="button" class="ok primary" onclick="contagemProximo()">OK / Proximo</button>
+                </div>
             </div>
         </div>
 
@@ -2866,19 +2893,61 @@ function carregarRascunhoContagem(){
 }
 
 function itemKeyContagem(item){
+    if(item?.contagemKey) return item.contagemKey;
     if(typeof getItemKey === "function") return getItemKey(item);
     return item?.protheusKey || item?.protheus || item?.cooperat || "";
 }
 
+function codigoArmazemContagem(valor){
+    const texto = String(valor ?? "").trim();
+    const match = texto.match(/\d+/);
+    return match ? String(parseInt(match[0], 10)) : texto;
+}
+
+function armazemPermitidoContagem(valor){
+    const codigo = codigoArmazemContagem(valor);
+    return codigo === "4" || codigo === "5";
+}
+
+function criarLinhasContagemPermitidas(itens){
+    const linhas = [];
+    itens.forEach(item => {
+        if(!item || (!item.protheus && !item.cooperat)) return;
+        const baseKey = (typeof getItemKey === "function" ? getItemKey(item) : (item.protheusKey || item.protheus || item.cooperat || ""));
+        const enderecos = Array.isArray(item.enderecos) ? item.enderecos : [];
+        if(enderecos.length){
+            enderecos.forEach((end, idx) => {
+                if(!armazemPermitidoContagem(end?.armazem)) return;
+                const endereco = (end?.endereco || "").toString().trim() || item.enderecoPrincipal || "Sem Endereco";
+                const armazem = (end?.armazem || "").toString().trim();
+                linhas.push({
+                    ...item,
+                    armazemPrincipal: armazem,
+                    enderecoPrincipal: endereco,
+                    saldo: end?.saldo ?? item.saldo,
+                    contagemBaseKey: baseKey,
+                    contagemKey: [baseKey, codigoArmazemContagem(armazem), endereco, idx].join("||")
+                });
+            });
+            return;
+        }
+        if(!armazemPermitidoContagem(item.armazemPrincipal)) return;
+        linhas.push({
+            ...item,
+            contagemBaseKey: baseKey,
+            contagemKey: [baseKey, codigoArmazemContagem(item.armazemPrincipal), item.enderecoPrincipal || "Sem Endereco"].join("||")
+        });
+    });
+    return linhas;
+}
+
 function abrirContagem(){
     const itens = Array.isArray(window.dados) ? window.dados : [];
-    contagemItens = itens
-        .filter(item => item && (item.protheus || item.cooperat))
-        .map(item => ({ ...item }))
+    contagemItens = criarLinhasContagemPermitidas(itens)
         .sort(compararItensContagem);
 
     if(!contagemItens.length){
-        mostrarNotificacao("Carregue os dados antes de iniciar a contagem.");
+        mostrarNotificacao("Nenhum item dos armazens 04 e 05 encontrado para contagem.");
         return;
     }
 
@@ -2886,13 +2955,14 @@ function abrirContagem(){
     const maquinas = new Set();
     contagemItens.forEach(item => maquinas.add(parsearEnderecoContagem(item.enderecoPrincipal).maquina));
     contagemMaquinas = Array.from(maquinas);
-    contagemMaquinaAtual = contagemMaquinas[0] || "";
-    selecionarMaquinaContagem(contagemMaquinaAtual, false);
+    contagemMaquinaAtual = "";
+    contagemItensMaquina = [];
+    contagemIndice = 0;
     renderizarMaquinasContagem();
+    mostrarSelecaoMaquinaContagem();
 
     document.getElementById("contagemScreen").style.display = "flex";
     document.getElementById("main").style.display = "none";
-    setTimeout(() => document.getElementById("contagemInput")?.focus({ preventScroll:true }), 80);
 }
 
 function fecharContagem(){
@@ -2901,19 +2971,73 @@ function fecharContagem(){
     document.getElementById("main").style.display = "";
 }
 
+function voltarContagem(){
+    const cardArea = document.getElementById("contagemCardArea");
+    if(cardArea && cardArea.style.display !== "none"){
+        salvarAtualContagem();
+        renderizarMaquinasContagem();
+        mostrarSelecaoMaquinaContagem();
+        return;
+    }
+    fecharContagem();
+}
+
 function renderizarMaquinasContagem(){
     const bar = document.getElementById("contagemMaquinasBar");
+    const grid = document.getElementById("contagemMachineGrid");
     if(!bar) return;
     bar.innerHTML = "";
+    if(grid) grid.innerHTML = "";
     contagemMaquinas.forEach(maquina => {
         const itensMaq = contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquina);
         const contados = itensMaq.filter(item => contagemValores[itemKeyContagem(item)] !== undefined).length;
+        const textoProgresso = `${contados}/${itensMaq.length}`;
+
         const btn = document.createElement("button");
         btn.className = "contagemMaqBtn" + (maquina === contagemMaquinaAtual ? " ativa" : "");
-        btn.innerHTML = `${escapeHtml(maquina)}<span class="contagemMaqBtnBadge">${contados}/${itensMaq.length}</span>`;
+        btn.innerHTML = `${escapeHtml(maquina)}<span class="contagemMaqBtnBadge">${textoProgresso}</span>`;
         btn.onclick = () => selecionarMaquinaContagem(maquina, true);
         bar.appendChild(btn);
+
+        if(grid){
+            const card = document.createElement("button");
+            card.type = "button";
+            card.className = "contagemMachineCard" + (contados === itensMaq.length ? " completa" : "");
+            card.innerHTML = `
+                <strong>${escapeHtml(maquina)}</strong>
+                <span>${textoProgresso} contados</span>
+                <small>${itensMaq.length} itens em ordem de endereco</small>
+            `;
+            card.onclick = () => selecionarMaquinaContagem(maquina, true);
+            grid.appendChild(card);
+        }
     });
+}
+
+function mostrarSelecaoMaquinaContagem(){
+    const selector = document.getElementById("contagemMachineSelect");
+    const cardArea = document.getElementById("contagemCardArea");
+    const footer = document.getElementById("contagemFooter");
+    const bar = document.getElementById("contagemMaquinasBar");
+    if(selector) selector.style.display = "flex";
+    if(cardArea) cardArea.style.display = "none";
+    if(footer) footer.style.display = "none";
+    if(bar) bar.style.display = "none";
+    const label = document.getElementById("contagemMaquinaLabel");
+    const progresso = document.getElementById("contagemProgresso");
+    if(label) label.textContent = "Contagem";
+    if(progresso) progresso.textContent = `${contagemMaquinas.length} maquinas`;
+}
+
+function mostrarCardContagem(){
+    const selector = document.getElementById("contagemMachineSelect");
+    const cardArea = document.getElementById("contagemCardArea");
+    const footer = document.getElementById("contagemFooter");
+    const bar = document.getElementById("contagemMaquinasBar");
+    if(selector) selector.style.display = "none";
+    if(cardArea) cardArea.style.display = "flex";
+    if(footer) footer.style.display = "flex";
+    if(bar) bar.style.display = "flex";
 }
 
 function selecionarMaquinaContagem(maquina, atualizarBar){
@@ -2922,6 +3046,7 @@ function selecionarMaquinaContagem(maquina, atualizarBar){
     const primeiroPendente = contagemItensMaquina.findIndex(item => contagemValores[itemKeyContagem(item)] === undefined);
     contagemIndice = primeiroPendente >= 0 ? primeiroPendente : 0;
     if(atualizarBar) renderizarMaquinasContagem();
+    mostrarCardContagem();
     renderizarCardContagem();
 }
 
@@ -2953,9 +3078,76 @@ function renderizarCardContagem(){
 }
 
 function atualizarFooterContagem(){
-    const contados = Object.keys(contagemValores).filter(key => contagemItens.some(item => itemKeyContagem(item) === key)).length;
-    document.getElementById("contagemContados").textContent = `${contados} contados`;
-    document.getElementById("contagemRestantes").textContent = `${Math.max(contagemItens.length - contados, 0)} restantes`;
+    const base = contagemItensMaquina.length ? contagemItensMaquina : contagemItens;
+    const contadosMaquina = base.filter(item => contagemValores[itemKeyContagem(item)] !== undefined).length;
+    document.getElementById("contagemContados").textContent = `${contadosMaquina}/${base.length} nesta maquina`;
+    document.getElementById("contagemRestantes").textContent = `${Math.max(base.length - contadosMaquina, 0)} restantes`;
+}
+
+function valorInputContagem(){
+    const input = document.getElementById("contagemInput");
+    const valor = Number((input?.value || "0").toString().replace(",", "."));
+    return Number.isFinite(valor) ? valor : 0;
+}
+
+function preencherContagemRapida(valor, avancar = false){
+    const input = document.getElementById("contagemInput");
+    if(!input) return;
+    input.value = valor;
+    salvarAtualContagem();
+    renderizarMaquinasContagem();
+    atualizarFooterContagem();
+    if(avancar){
+        contagemProximo();
+    }else{
+        input.focus({ preventScroll:true });
+    }
+}
+
+function digitarContagemRapida(digito){
+    const input = document.getElementById("contagemInput");
+    if(!input) return;
+    const atual = input.value.toString();
+    if(atual.length >= 6) return;
+    input.value = atual === "0" ? String(digito) : atual + String(digito);
+    salvarAtualContagem();
+    renderizarMaquinasContagem();
+    atualizarFooterContagem();
+}
+
+function apagarDigitoContagem(){
+    const input = document.getElementById("contagemInput");
+    if(!input) return;
+    input.value = input.value.toString().slice(0, -1);
+    salvarAtualContagem();
+    renderizarMaquinasContagem();
+    atualizarFooterContagem();
+    const status = document.getElementById("contagemInputStatus");
+    if(status){
+        status.textContent = input.value ? "Contado" : "Aguardando contagem";
+        status.classList.toggle("contado", !!input.value);
+    }
+}
+
+function ajustarContagemAtual(delta){
+    const input = document.getElementById("contagemInput");
+    if(!input) return;
+    const proximo = Math.max(0, valorInputContagem() + Number(delta || 0));
+    input.value = proximo;
+    salvarAtualContagem();
+    renderizarMaquinasContagem();
+    atualizarFooterContagem();
+    input.focus({ preventScroll:true });
+}
+
+function limparContagemAtual(){
+    const input = document.getElementById("contagemInput");
+    if(!input) return;
+    input.value = "";
+    salvarAtualContagem();
+    renderizarMaquinasContagem();
+    atualizarFooterContagem();
+    renderizarCardContagem();
 }
 
 function salvarAtualContagem(){
@@ -3039,6 +3231,7 @@ async function finalizarContagem(){
             protheus:item.protheus || "",
             cooperat:item.cooperat || "",
             descricao:item.descricao || "",
+            armazem:item.armazemPrincipal || "",
             endereco:item.enderecoPrincipal || "",
             saldoSistema:parsePlanilhaNumero(item.saldo),
             contado:contagemValores[key]
@@ -3185,8 +3378,14 @@ function exportarRelatorioContagemXlsx(){
 
 window.abrirContagem = abrirContagem;
 window.fecharContagem = fecharContagem;
+window.voltarContagem = voltarContagem;
 window.contagemProximo = contagemProximo;
 window.contagemAnterior = contagemAnterior;
+window.preencherContagemRapida = preencherContagemRapida;
+window.digitarContagemRapida = digitarContagemRapida;
+window.apagarDigitoContagem = apagarDigitoContagem;
+window.ajustarContagemAtual = ajustarContagemAtual;
+window.limparContagemAtual = limparContagemAtual;
 window.finalizarContagem = finalizarContagem;
 window.abrirRelatorioContagem = abrirRelatorioContagem;
 window.fecharRelatorioContagem = fecharRelatorioContagem;

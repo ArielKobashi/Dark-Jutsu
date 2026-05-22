@@ -2210,6 +2210,73 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     display:none;
 }
 
+#contagemMachineSelect{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    overflow:auto;
+    padding:18px;
+}
+
+.contagemMachineIntro{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    color:#D1FAE5;
+}
+
+.contagemMachineIntro strong{
+    font-size:18px;
+}
+
+.contagemMachineIntro span{
+    color:#8FB8A0;
+    font-size:13px;
+}
+
+#contagemMachineGrid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(135px, 1fr));
+    gap:10px;
+}
+
+.contagemMachineCard{
+    min-height:96px;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    justify-content:center;
+    gap:5px;
+    border:1px solid rgba(134,239,172,0.28);
+    border-radius:14px;
+    background:rgba(15,35,22,0.82);
+    color:#D1FAE5;
+    padding:13px;
+    text-align:left;
+    cursor:pointer;
+}
+
+.contagemMachineCard strong{
+    font-size:22px;
+    color:#86EFAC;
+}
+
+.contagemMachineCard span{
+    font-size:14px;
+    font-weight:800;
+}
+
+.contagemMachineCard small{
+    color:#8FB8A0;
+    font-size:11px;
+}
+
+.contagemMachineCard.completa{
+    border-color:rgba(59,130,246,0.36);
+    background:rgba(15,32,55,0.82);
+}
+
 .contagemMaqBtn{
     flex-shrink:0;
     border:1px solid rgba(74,222,128,0.28);
@@ -2352,6 +2419,47 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 
 #contagemInputStatus.contado{
     color:#86EFAC;
+}
+
+#contagemQuickPad{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:8px;
+}
+
+#contagemQuickPad button{
+    min-height:46px;
+    border:1px solid rgba(134,239,172,0.28);
+    border-radius:11px;
+    background:rgba(6,78,59,0.72);
+    color:#ECFDF5;
+    font-size:18px;
+    font-weight:900;
+    cursor:pointer;
+}
+
+#contagemQuickPad button.wide{
+    grid-column:span 1;
+    font-size:13px;
+    background:rgba(31,41,55,0.92);
+}
+
+#contagemQuickPad button.op{
+    background:rgba(22,101,52,0.86);
+}
+
+#contagemQuickPad button.primary{
+    background:#16A34A;
+}
+
+#contagemQuickPad button.zero{
+    grid-column:span 1;
+    font-size:13px;
+}
+
+#contagemQuickPad button.ok{
+    grid-column:span 2;
+    font-size:15px;
 }
 
 .contagemNavBtn{
