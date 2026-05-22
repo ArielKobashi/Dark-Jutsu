@@ -2869,9 +2869,25 @@ function abrirModalSaldos(item){
     </body>
     </html>`;
 
-    janelaSaldos.document.open();
-    janelaSaldos.document.write(html);
-    janelaSaldos.document.close();
+    try{
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const blobUrl = URL.createObjectURL(blob);
+        janelaSaldos.location.href = blobUrl;
+        setTimeout(()=>{
+            try{
+                URL.revokeObjectURL(blobUrl);
+            }catch(e){}
+        }, 5000);
+    }catch(err){
+        try{
+            janelaSaldos.document.open();
+            janelaSaldos.document.write(html);
+            janelaSaldos.document.close();
+        }catch(err2){
+            console.error("Falha ao renderizar o modal de saldos:", err2 || err);
+            alert("Não foi possível abrir o modal de saldos.");
+        }
+    }
     janelaSaldos.focus();
 }
 
