@@ -92,7 +92,7 @@ display:none;
 }
 #btnRelatorio{
     width:100%;
-    margin-top:6px;
+    margin:0;
     padding:10px;
     font-size:14px;
 }
@@ -102,11 +102,12 @@ display:none;
     grid-template-columns:1fr 1fr;
     gap:8px;
     flex-shrink:0;
+    margin-top:6px;
 }
 
 #btnContagem{
     width:100%;
-    margin-top:6px;
+    margin:0;
     padding:10px;
     font-size:14px;
     background:#166534;
