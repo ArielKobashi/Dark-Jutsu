@@ -170,6 +170,13 @@
 
                     <th data-col="saldo">
                         <div class="headerContent">
+                            <button
+                                type="button"
+                                id="btnFiltroSaldoExtremos"
+                                class="saldoExtremosBtn"
+                                title="Mostrar apenas itens fora da faixa"
+                                aria-pressed="false"
+                            >!</button>
                             <span class="titulo">Saldo</span>
                             <span class="setas">
                                 <span class="setaUp">▲</span>
@@ -493,6 +500,20 @@ function obterStatusEstoque(item){
     }
 
     return "ok";
+}
+
+function obterPrioridadeSaldoExtremos(item, asc){
+    const status = obterStatusEstoque(item);
+
+    if(status === "acima"){
+        return asc ? 0 : 1;
+    }
+
+    if(status === "abaixo"){
+        return asc ? 1 : 0;
+    }
+
+    return 2;
 }
 
 function indexarEstoqueMinimoItens(planilha){
@@ -2064,6 +2085,7 @@ function gerarRelatorio(){
 /* ====== PESQUISA INDIVIDUAL POR COLUNA ====== */
 
 let filtrosColuna = {};
+let filtroSaldoExtremosAtivo = false;
 
 document.querySelectorAll("th[data-col]").forEach(th => {
 
@@ -2133,6 +2155,21 @@ document.querySelectorAll(".setaDown").forEach(seta=>{
     });
 });
 
+const btnFiltroSaldoExtremos = document.getElementById("btnFiltroSaldoExtremos");
+if(btnFiltroSaldoExtremos){
+    btnFiltroSaldoExtremos.addEventListener("click", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        filtroSaldoExtremosAtivo = !filtroSaldoExtremosAtivo;
+        aplicarTodosFiltros();
+    });
+
+    btnFiltroSaldoExtremos.addEventListener("dblclick", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+    });
+}
+
 let ordensAtivas = [];
 
 function ordenar(col, direcao){
@@ -2149,6 +2186,14 @@ function ordenar(col, direcao){
 
     } else {
         ordensAtivas.push({col, asc: direcao});
+    }
+
+    if(filtroSaldoExtremosAtivo && col === "saldo"){
+        const indiceSaldo = ordensAtivas.findIndex(o => o.col === "saldo");
+        if(indiceSaldo > 0){
+            const [ordenacaoSaldo] = ordensAtivas.splice(indiceSaldo, 1);
+            ordensAtivas.unshift(ordenacaoSaldo);
+        }
     }
 
     aplicarOrdenacao();
@@ -2172,6 +2217,20 @@ function atualizarVisualHeaders(){
         }
     });
 
+    const thSaldo = document.querySelector('th[data-col="saldo"]');
+    if(thSaldo){
+        thSaldo.classList.toggle("saldo-extremos-ativo", filtroSaldoExtremosAtivo);
+    }
+
+    const btnFiltro = document.getElementById("btnFiltroSaldoExtremos");
+    if(btnFiltro){
+        btnFiltro.classList.toggle("ativo", filtroSaldoExtremosAtivo);
+        btnFiltro.setAttribute("aria-pressed", filtroSaldoExtremosAtivo ? "true" : "false");
+        btnFiltro.title = filtroSaldoExtremosAtivo
+            ? "Mostrando apenas itens fora da faixa. Clique para voltar ao normal."
+            : "Mostrar apenas itens fora da faixa";
+    }
+
 }
 
 function aplicarOrdenacao(){
@@ -2194,6 +2253,15 @@ function aplicarOrdenacao(){
             else{
                 v1 = a[ordem.col];
                 v2 = b[ordem.col];
+            }
+
+            if(ordem.col === "saldo" && filtroSaldoExtremosAtivo){
+                const prioridadeA = obterPrioridadeSaldoExtremos(a, ordem.asc);
+                const prioridadeB = obterPrioridadeSaldoExtremos(b, ordem.asc);
+
+                if(prioridadeA !== prioridadeB){
+                    return prioridadeA - prioridadeB;
+                }
             }
 
             if(v1 === undefined) v1 = "";
@@ -2900,6 +2968,13 @@ function aplicarTodosFiltros(){
     visiveis = baseDados.filter(item => {
 
         if (!item) return false;
+
+        if(filtroSaldoExtremosAtivo){
+            const statusEstoque = obterStatusEstoque(item);
+            if(statusEstoque === "ok"){
+                return false;
+            }
+        }
 
         /* ===== FILTRO PESQUISA GERAL ===== */
 
