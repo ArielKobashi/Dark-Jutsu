@@ -2316,130 +2316,129 @@ document.getElementById("chatMessages").addEventListener("scroll", function(){
 let janelaSaldos = null;
 
 function abrirModalSaldos(item){
+    let html = "";
+    try{
+        const itemSeguro = (item && typeof item === "object") ? item : {};
 
-    if(janelaSaldos && !janelaSaldos.closed){
-        janelaSaldos.close();
-    }
+        if(janelaSaldos && !janelaSaldos.closed){
+            janelaSaldos.close();
+        }
 
-    janelaSaldos = window.open("", "_blank", "width=920,height=760");
-    if(!janelaSaldos){
-        alert("O navegador bloqueou a janela do modal.");
-        return;
-    }
+        const statusEstoque = obterStatusEstoque(itemSeguro);
+        const temMinimo = itemSeguro?.minimo !== null && itemSeguro?.minimo !== undefined && itemSeguro?.minimo !== "";
+        const temMaximo = itemSeguro?.maximo !== null && itemSeguro?.maximo !== undefined && itemSeguro?.maximo !== "";
+        const temFaixa = temMinimo || temMaximo;
+        const statusTexto = statusEstoque === "abaixo"
+            ? "Abaixo do mínimo"
+            : statusEstoque === "acima"
+                ? "Acima do máximo"
+                : temFaixa
+                    ? "Dentro da faixa"
+                    : "Sem faixa configurada";
+        const statusClasse = statusEstoque === "abaixo"
+            ? "statusBaixo"
+            : statusEstoque === "acima"
+                ? "statusAlto"
+                : "statusNormal";
+        const saldoTexto = formatarNumeroPlanilha(itemSeguro.saldo);
+        const minimoTexto = temMinimo ? formatarNumeroPlanilha(itemSeguro.minimo) : "Sem mínimo";
+        const maximoTexto = temMaximo ? formatarNumeroPlanilha(itemSeguro.maximo) : "Sem máximo";
+        const reposicaoTexto = (itemSeguro.reposicao === null || itemSeguro.reposicao === undefined || itemSeguro.reposicao === "")
+            ? "Não informada"
+            : formatarNumeroPlanilha(itemSeguro.reposicao);
+        const faixaTexto = temFaixa
+            ? `${temMinimo ? `Mínimo ${minimoTexto}` : "Sem mínimo"} · ${temMaximo ? `Máximo ${maximoTexto}` : "Sem máximo"}`
+            : "Este item não possui faixa definida na planilha de estoque mínimo.";
+        const enderecosBase = Array.isArray(itemSeguro.enderecos) ? itemSeguro.enderecos : [];
+        const totalEnderecos = enderecosBase.length;
 
-    const statusEstoque = obterStatusEstoque(item);
-    const temMinimo = item?.minimo !== null && item?.minimo !== undefined && item?.minimo !== "";
-    const temMaximo = item?.maximo !== null && item?.maximo !== undefined && item?.maximo !== "";
-    const temFaixa = temMinimo || temMaximo;
-    const statusTexto = statusEstoque === "abaixo"
-        ? "Abaixo do mínimo"
-        : statusEstoque === "acima"
-            ? "Acima do máximo"
-            : temFaixa
-                ? "Dentro da faixa"
-                : "Sem faixa configurada";
-    const statusClasse = statusEstoque === "abaixo"
-        ? "statusBaixo"
-        : statusEstoque === "acima"
-            ? "statusAlto"
-            : "statusNormal";
-    const saldoTexto = formatarNumeroPlanilha(item.saldo);
-    const minimoTexto = temMinimo ? formatarNumeroPlanilha(item.minimo) : "Sem mínimo";
-    const maximoTexto = temMaximo ? formatarNumeroPlanilha(item.maximo) : "Sem máximo";
-    const reposicaoTexto = (item.reposicao === null || item.reposicao === undefined || item.reposicao === "")
-        ? "Não informada"
-        : formatarNumeroPlanilha(item.reposicao);
-    const faixaTexto = temFaixa
-        ? `${temMinimo ? `Mínimo ${minimoTexto}` : "Sem mínimo"} · ${temMaximo ? `Máximo ${maximoTexto}` : "Sem máximo"}`
-        : "Este item não possui faixa definida na planilha de estoque mínimo.";
-    const totalEnderecos = Array.isArray(item.enderecos) ? item.enderecos.length : 0;
-
-    const listaEnderecos = [];
-    (item.enderecos || []).forEach(info => {
-        listaEnderecos.push({
-            endereco: info.endereco,
-            armazem: info.armazem,
-            saldo: info.saldo,
-            origem: "Saldo Endereço"
-        });
-    });
-
-    const enderecoCooperat = (item.enderecoPrincipal ?? "").toString().trim();
-    if(isEnderecoValido(enderecoCooperat)){
-        const normCooperat = normalizarEndereco(enderecoCooperat);
-        const jaExiste = listaEnderecos.some(l => normalizarEndereco(l?.endereco) === normCooperat);
-        if(!jaExiste){
+        const listaEnderecos = [];
+        enderecosBase.forEach(info => {
+            const infoSeguro = (info && typeof info === "object") ? info : {};
             listaEnderecos.push({
-                endereco: enderecoCooperat,
-                armazem: "Cooperat",
-                saldo: "-",
-                origem: "Cooperat"
+                endereco: infoSeguro.endereco,
+                armazem: infoSeguro.armazem,
+                saldo: infoSeguro.saldo,
+                origem: "Saldo Endereço"
             });
-        }
-    }
+        });
 
-    const resumoCards = [
-        {
-            titulo: "Saldo atual",
-            valor: saldoTexto,
-            detalhe: "Saldo consolidado do item",
-            classe: "metricSaldo"
-        },
-        {
-            titulo: "Mínimo",
-            valor: minimoTexto,
-            detalhe: "Limite inferior configurado",
-            classe: "metricMinimo"
-        },
-        {
-            titulo: "Máximo",
-            valor: maximoTexto,
-            detalhe: "Limite superior configurado",
-            classe: "metricMaximo"
-        },
-        {
-            titulo: "Reposição",
-            valor: reposicaoTexto,
-            detalhe: "Quantidade sugerida para reposição",
-            classe: "metricReposicao"
-        },
-        {
-            titulo: "Endereços",
-            valor: String(totalEnderecos),
-            detalhe: "Localizações vinculadas ao item",
-            classe: "metricEnderecos"
-        },
-        {
-            titulo: "Faixa",
-            valor: temFaixa ? "Configurada" : "Sem faixa",
-            detalhe: faixaTexto,
-            classe: "metricFaixa"
+        const enderecoCooperat = (itemSeguro.enderecoPrincipal ?? "").toString().trim();
+        if(isEnderecoValido(enderecoCooperat)){
+            const normCooperat = normalizarEndereco(enderecoCooperat);
+            const jaExiste = listaEnderecos.some(l => normalizarEndereco(l?.endereco) === normCooperat);
+            if(!jaExiste){
+                listaEnderecos.push({
+                    endereco: enderecoCooperat,
+                    armazem: "Cooperat",
+                    saldo: "-",
+                    origem: "Cooperat"
+                });
+            }
         }
-    ].map(card => `
-        <article class="metricCard ${card.classe}">
-            <span class="metricLabel">${escapeHtml(card.titulo)}</span>
-            <strong class="metricValue">${escapeHtml(card.valor)}</strong>
-            <span class="metricHelp">${escapeHtml(card.detalhe)}</span>
-        </article>
-    `).join("");
 
-    const blocosEnderecos = listaEnderecos.map(info => `
-        <article class="enderecoCard">
-            <div class="enderecoHeader">
-                <div class="enderecoMain">
-                    <span class="enderecoLabel">Endereço</span>
-                    <div class="enderecoValue">${escapeHtml(info.endereco || "-")}</div>
+        const resumoCards = [
+            {
+                titulo: "Saldo atual",
+                valor: saldoTexto,
+                detalhe: "Saldo consolidado do item",
+                classe: "metricSaldo"
+            },
+            {
+                titulo: "Mínimo",
+                valor: minimoTexto,
+                detalhe: "Limite inferior configurado",
+                classe: "metricMinimo"
+            },
+            {
+                titulo: "Máximo",
+                valor: maximoTexto,
+                detalhe: "Limite superior configurado",
+                classe: "metricMaximo"
+            },
+            {
+                titulo: "Reposição",
+                valor: reposicaoTexto,
+                detalhe: "Quantidade sugerida para reposição",
+                classe: "metricReposicao"
+            },
+            {
+                titulo: "Endereços",
+                valor: String(totalEnderecos),
+                detalhe: "Localizações vinculadas ao item",
+                classe: "metricEnderecos"
+            },
+            {
+                titulo: "Faixa",
+                valor: temFaixa ? "Configurada" : "Sem faixa",
+                detalhe: faixaTexto,
+                classe: "metricFaixa"
+            }
+        ].map(card => `
+            <article class="metricCard ${card.classe}">
+                <span class="metricLabel">${escapeHtml(card.titulo)}</span>
+                <strong class="metricValue">${escapeHtml(card.valor)}</strong>
+                <span class="metricHelp">${escapeHtml(card.detalhe)}</span>
+            </article>
+        `).join("");
+
+        const blocosEnderecos = listaEnderecos.map(info => `
+            <article class="enderecoCard">
+                <div class="enderecoHeader">
+                    <div class="enderecoMain">
+                        <span class="enderecoLabel">Endereço</span>
+                        <div class="enderecoValue">${escapeHtml(info.endereco || "-")}</div>
+                    </div>
+                    <span class="enderecoOrigem">${escapeHtml(info.origem || "-")}</span>
                 </div>
-                <span class="enderecoOrigem">${escapeHtml(info.origem || "-")}</span>
-            </div>
-            <div class="chipRow">
-                <span class="infoChip">Armazém: ${escapeHtml(info.armazem || "-")}</span>
-                <span class="infoChip">Saldo: ${escapeHtml(formatarNumeroPlanilha(info.saldo))}</span>
-            </div>
-        </article>
-    `).join("");
+                <div class="chipRow">
+                    <span class="infoChip">Armazém: ${escapeHtml(info.armazem || "-")}</span>
+                    <span class="infoChip">Saldo: ${escapeHtml(formatarNumeroPlanilha(info.saldo))}</span>
+                </div>
+            </article>
+        `).join("");
 
-    let html = `
+        html = `
     <!DOCTYPE html>
     <html lang="pt-br">
     <head>
@@ -2869,26 +2868,35 @@ function abrirModalSaldos(item){
     </body>
     </html>`;
 
-    try{
-        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-        const blobUrl = URL.createObjectURL(blob);
-        janelaSaldos.location.href = blobUrl;
-        setTimeout(()=>{
-            try{
-                URL.revokeObjectURL(blobUrl);
-            }catch(e){}
-        }, 5000);
-    }catch(err){
-        try{
+        const dataUrl = "data:text/html;charset=utf-8," + encodeURIComponent(html);
+        janelaSaldos = window.open(dataUrl, "_blank", "width=920,height=760");
+        if(!janelaSaldos){
+            janelaSaldos = window.open("", "_blank", "width=920,height=760");
+            if(!janelaSaldos){
+                alert("O navegador bloqueou a janela do modal.");
+                return;
+            }
             janelaSaldos.document.open();
             janelaSaldos.document.write(html);
             janelaSaldos.document.close();
-        }catch(err2){
-            console.error("Falha ao renderizar o modal de saldos:", err2 || err);
+        }
+        janelaSaldos.focus();
+    }catch(err){
+        console.error("Falha ao montar o modal de saldos:", err);
+        if(janelaSaldos && !janelaSaldos.closed){
+            try{
+                janelaSaldos.document.open();
+                janelaSaldos.document.write(`<!doctype html><html lang="pt-br"><head><meta charset="UTF-8"><title>Erro ao abrir modal</title><style>body{font-family:Arial,sans-serif;background:#15151d;color:#fff;padding:24px;}</style></head><body><h2>Não foi possível montar o modal</h2><pre>${escapeHtml(err?.message || String(err))}</pre></body></html>`);
+                janelaSaldos.document.close();
+                janelaSaldos.focus();
+            }catch(err2){
+                console.error("Falha ao renderizar o erro do modal de saldos:", err2 || err);
+                alert("Não foi possível abrir o modal de saldos.");
+            }
+        }else{
             alert("Não foi possível abrir o modal de saldos.");
         }
     }
-    janelaSaldos.focus();
 }
 
 function abrirSubPagina(){
@@ -4632,6 +4640,7 @@ function escapeHtml(texto) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+window.escapeHtml = escapeHtml;
 
 function formatarTextoUltimaAtualizacao(data, usuario) {
     const usuarioRaw = String(usuario || "Sistema");
