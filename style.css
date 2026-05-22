@@ -97,6 +97,13 @@ display:none;
     font-size:14px;
 }
 
+#mainActions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    flex-shrink:0;
+}
+
 #btnContagem{
     width:100%;
     margin-top:6px;

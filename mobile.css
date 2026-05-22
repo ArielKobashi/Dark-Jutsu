@@ -142,6 +142,17 @@
         width: 100%;
     }
 
+    #mainActions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        flex: 0 0 auto;
+        padding-top: 8px;
+        background: #15151D;
+        position: relative;
+        z-index: 12;
+    }
+
     table {
         font-size: 12px;
         min-width: 720px;
@@ -173,18 +184,23 @@
     }
 
     #btnRelatorio {
-        margin-top: 8px;
+        margin: 0;
         padding: 12px;
         font-size: 12px;
         border-radius: 8px;
+        min-width: 0;
     }
 
     #btnContagem {
-        margin-top: 8px;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        margin: 0;
         min-height: 44px;
         padding: 12px;
         font-size: 13px;
         border-radius: 8px;
+        min-width: 0;
     }
 
     body.mobile-config-open::before {
