@@ -2998,7 +2998,7 @@ function adicionarMensagemLocalChat(roomId, mensagem){
 
     roomMessages[roomId] = [...lista, mensagem];
 
-    if(roomId === salaAtual){
+    if(roomId === salaAtual && typeof atualizarVistaChatAtivo === "function"){
         atualizarVistaChatAtivo(roomId, false);
     }
 }
@@ -5911,9 +5911,13 @@ function pararMonitoramentoChat(){
         chatTypingRoomUnsub();
         chatTypingRoomUnsub = null;
     }
-    roomMessages = {};
+    
     typingUsers = {};
-    unreadCounts = {};
+    window.roomMessages = {};
+    roomMessages = window.roomMessages;
+
+    window.unreadCounts = {};
+    unreadCounts = window.unreadCounts;
     window.mensagens = [];
     atualizarBadgesChat();
 }
