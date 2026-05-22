@@ -324,6 +324,27 @@ Usuários do Sistema
         </div>
     </div>
 
+    <div id="etiquetasPanel">
+        <div class="etiquetasTitle">Etiquetas Fiasul</div>
+        <div class="etiquetasSizeRow" role="radiogroup" aria-label="Tamanho da etiqueta">
+            <label><input type="radio" name="etiquetaTamanho" value="7" checked> 7 cm</label>
+            <label><input type="radio" name="etiquetaTamanho" value="5"> 5 cm</label>
+            <label><input type="radio" name="etiquetaTamanho" value="p"> Personalizado</label>
+        </div>
+        <div id="etiquetaCustomSize">
+            <input type="text" id="etiquetaLargura" inputmode="decimal" placeholder="Largura cm">
+            <input type="text" id="etiquetaAltura" inputmode="decimal" placeholder="Altura cm">
+        </div>
+        <textarea id="etiquetaCodigos" rows="3" placeholder="Códigos separados por vírgula"></textarea>
+        <div class="etiquetasActions">
+            <button type="button" onclick="baixarEtiquetas()">Baixar pacote</button>
+            <button type="button" onclick="selecionadosParaEtiquetas()">Usar selecionados</button>
+        </div>
+        <input type="file" id="etiquetaPlanilhaInput" accept=".xlsx" style="display:none">
+        <button type="button" class="etiquetaPlanilhaBtn" onclick="document.getElementById('etiquetaPlanilhaInput').click()">Trocar mata105</button>
+        <div id="etiquetasStatus"></div>
+    </div>
+
 
     <hr>
     <div class="toggleGrid">
@@ -427,6 +448,7 @@ Usuários do Sistema
 </div>
 <!-- SPLIT: vendor-xlsx.html (3rd-party lib) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <!-- /SPLIT: vendor-xlsx.html -->
 
 <!-- SPLIT: app-core.js (ui + estoque + admin logic) -->
@@ -1279,6 +1301,242 @@ async function carregarEstoqueMinimoPadrao(){
         return false;
     }
 }
+
+let etiquetaMata105Cache = null;
+let etiquetaLogoCache = null;
+
+function cmParaPxEtiqueta(cm){
+    return Math.round(Number(cm) * 300 / 2.54);
+}
+
+function formatarCodigoAntigoEtiqueta(codigo){
+    const texto = String(codigo ?? "").trim();
+    if(texto.length === 3) return `${texto.slice(0,2)}.${texto.slice(2)}`;
+    if(texto.length === 4) return `${texto.slice(0,3)}.${texto.slice(3)}`;
+    if(texto.length === 5) return `${texto.slice(0,1)}.${texto.slice(1,4)}.${texto.slice(4)}`;
+    if(texto.length === 6) return `${texto.slice(0,2)}.${texto.slice(2,5)}.${texto.slice(5)}`;
+    return texto;
+}
+
+function parseCmEtiqueta(valor){
+    const numero = Number(String(valor || "").trim().replace(",", "."));
+    return Number.isFinite(numero) && numero > 0 ? numero : null;
+}
+
+async function carregarFontesEtiquetas(){
+    if(document.fonts && !window.__fontesEtiquetasCarregadas){
+        const regular = new FontFace("OswaldEtiqueta", "url(downloads/Oswald-Regular.ttf)");
+        const bold = new FontFace("OswaldEtiquetaBold", "url(downloads/Oswald-Bold.ttf)");
+        await Promise.all([regular.load(), bold.load()]);
+        document.fonts.add(regular);
+        document.fonts.add(bold);
+        window.__fontesEtiquetasCarregadas = true;
+    }
+}
+
+async function carregarLogoEtiqueta(){
+    if(etiquetaLogoCache) return etiquetaLogoCache;
+    etiquetaLogoCache = await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = "downloads/etiquetas_logo.png";
+    });
+    return etiquetaLogoCache;
+}
+
+async function carregarMata105Etiquetas(){
+    if(etiquetaMata105Cache) return etiquetaMata105Cache;
+    if(Array.isArray(planilhas.incluir)){
+        etiquetaMata105Cache = planilhas.incluir;
+        return etiquetaMata105Cache;
+    }
+    const response = await fetch("downloads/incluir.xlsx", { cache: "no-store" });
+    if(!response.ok) throw new Error("Não foi possível carregar a mata105.");
+    const data = await response.arrayBuffer();
+    const workbook = XLSX.read(data, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    etiquetaMata105Cache = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    return etiquetaMata105Cache;
+}
+
+function buscarItemMata105(linhas, codigo){
+    const alvo = String(codigo || "").trim().toLowerCase();
+    if(!alvo) return null;
+    for(const row of linhas || []){
+        const cooperat = String(row?.[0] ?? "").trim();
+        const protheus = String(row?.[1] ?? "").trim();
+        const descricao = String(row?.[2] ?? "").trim();
+        if(!cooperat || !protheus) continue;
+        const header = `${cooperat} ${protheus} ${descricao}`.toLowerCase();
+        if(header.includes("cooperat") || header.includes("protheus") || header.includes("descri")) continue;
+        if(cooperat.toLowerCase() === alvo || protheus.toLowerCase() === alvo){
+            return { cooperat, protheus, descricao: descricao || "-" };
+        }
+    }
+    return null;
+}
+
+function desenharTextoCentralEtiqueta(ctx, texto, y, font, cor){
+    ctx.font = font;
+    ctx.fillStyle = cor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(String(texto || ""), ctx.canvas.width / 2, y);
+    const metrics = ctx.measureText(String(texto || ""));
+    return (metrics.actualBoundingBoxDescent || 0) + (metrics.actualBoundingBoxAscent || 0);
+}
+
+async function criarBlobEtiqueta(item, larguraCm, alturaCm){
+    await carregarFontesEtiquetas();
+    const logo = await carregarLogoEtiqueta();
+    const largura = cmParaPxEtiqueta(larguraCm);
+    const altura = cmParaPxEtiqueta(alturaCm);
+    const canvas = document.createElement("canvas");
+    canvas.width = largura;
+    canvas.height = altura;
+    const ctx = canvas.getContext("2d");
+    const cor = "#283285";
+    const borda = 13;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, largura, altura);
+    ctx.strokeStyle = cor;
+    ctx.lineWidth = borda;
+    ctx.strokeRect(borda / 2, borda / 2, largura - borda, altura - borda);
+
+    const centroX = largura / 2;
+    const topoMoldura = borda;
+    const baseMoldura = altura - borda;
+    const fonteCod = `${Math.round(13.5 * 300 / 72)}px OswaldEtiqueta, Arial, sans-serif`;
+    const fonteTxt = `${Math.round(8 * 300 / 72)}px OswaldEtiqueta, Arial, sans-serif`;
+
+    const yCodNovo = topoMoldura - 6;
+    const hCodNovo = desenharTextoCentralEtiqueta(ctx, item.protheus, yCodNovo, fonteCod, cor);
+    const yDesc = yCodNovo + hCodNovo + 6 + cmParaPxEtiqueta(0.1);
+    const hDesc = desenharTextoCentralEtiqueta(ctx, item.descricao, yDesc + cmParaPxEtiqueta(0.02), fonteTxt, cor);
+    const fimDesc = yDesc + hDesc;
+
+    let yLogo = baseMoldura;
+    if(logo){
+        const fator = (largura * 0.35) / logo.width;
+        const logoW = Math.max(1, Math.round((logo.width * fator) / 2));
+        const logoH = Math.max(1, Math.round((logo.height * fator) / 2));
+        yLogo = baseMoldura - logoH - 1;
+        ctx.drawImage(logo, centroX - logoW / 2, yLogo, logoW, logoH);
+    }
+
+    const cooperat = `COOPERAT: ${formatarCodigoAntigoEtiqueta(item.cooperat)}`;
+    ctx.font = fonteTxt;
+    const metrics = ctx.measureText(cooperat);
+    const hAntigo = (metrics.actualBoundingBoxDescent || 0) + (metrics.actualBoundingBoxAscent || 0);
+    const yAntigo = fimDesc + (yLogo - fimDesc - hAntigo) / 2 + 1;
+    desenharTextoCentralEtiqueta(ctx, cooperat, yAntigo, fonteTxt, cor);
+
+    return await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+}
+
+function getTamanhoEtiquetaSelecionado(){
+    const escolha = document.querySelector("input[name='etiquetaTamanho']:checked")?.value || "7";
+    if(escolha === "5") return { largura: 5.0, altura: 1.48 };
+    if(escolha === "7") return { largura: 7.01, altura: 2.09 };
+    const largura = parseCmEtiqueta(document.getElementById("etiquetaLargura")?.value);
+    const altura = parseCmEtiqueta(document.getElementById("etiquetaAltura")?.value);
+    if(!largura || !altura) throw new Error("Informe largura e altura válidas.");
+    return { largura, altura };
+}
+
+function setEtiquetasStatus(msg){
+    const el = document.getElementById("etiquetasStatus");
+    if(el) el.textContent = msg || "";
+}
+
+function selecionadosParaEtiquetas(){
+    const codigos = Array.from(selecionados || []).map(key=>{
+        const item = findItemByKey(key);
+        return item?.protheus || item?.cooperat || key;
+    }).filter(Boolean);
+    document.getElementById("etiquetaCodigos").value = codigos.join(", ");
+    setEtiquetasStatus(`${codigos.length} código(s) carregado(s) dos selecionados.`);
+}
+window.selecionadosParaEtiquetas = selecionadosParaEtiquetas;
+
+async function baixarEtiquetas(){
+    try{
+        if(typeof JSZip === "undefined"){
+            throw new Error("Compactador não carregado. Verifique a conexão e tente novamente.");
+        }
+        const { largura, altura } = getTamanhoEtiquetaSelecionado();
+        const codigos = (document.getElementById("etiquetaCodigos")?.value || "")
+            .split(/[,\n;]/)
+            .map(c => c.trim())
+            .filter(Boolean);
+        if(!codigos.length) throw new Error("Informe ao menos um código.");
+
+        setEtiquetasStatus("Carregando mata105...");
+        const linhas = await carregarMata105Etiquetas();
+        const zip = new JSZip();
+        const naoEncontrados = [];
+
+        for(let i = 0; i < codigos.length; i++){
+            const codigo = codigos[i];
+            const item = buscarItemMata105(linhas, codigo);
+            if(!item){
+                naoEncontrados.push(codigo);
+                continue;
+            }
+            setEtiquetasStatus(`Gerando ${i + 1}/${codigos.length}: ${item.protheus}`);
+            const blob = await criarBlobEtiqueta(item, largura, altura);
+            zip.file(`${item.protheus}.png`, blob);
+        }
+
+        const total = Object.keys(zip.files).length;
+        if(!total) throw new Error("Nenhum código informado foi encontrado na mata105.");
+
+        zip.file("resumo.txt", [
+            `Etiquetas geradas: ${total}`,
+            `Tamanho: ${largura}cm x ${altura}cm`,
+            naoEncontrados.length ? `Não encontrados: ${naoEncontrados.join(", ")}` : "Todos os códigos foram encontrados."
+        ].join("\n"));
+
+        setEtiquetasStatus("Compactando etiquetas...");
+        const pacote = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+        const url = URL.createObjectURL(pacote);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `etiquetas_fiasul_${String(largura).replace(".", "_")}cm.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url), 1000);
+        setEtiquetasStatus(naoEncontrados.length ? `Baixado. Não encontrados: ${naoEncontrados.join(", ")}` : "Pacote baixado.");
+    }catch(e){
+        console.error("Falha ao gerar etiquetas:", e);
+        setEtiquetasStatus(e?.message || "Erro ao gerar etiquetas.");
+    }
+}
+window.baixarEtiquetas = baixarEtiquetas;
+
+document.querySelectorAll("input[name='etiquetaTamanho']").forEach(input=>{
+    input.addEventListener("change", ()=>{
+        const custom = document.getElementById("etiquetaCustomSize");
+        if(custom) custom.style.display = document.querySelector("input[name='etiquetaTamanho']:checked")?.value === "p" ? "grid" : "none";
+    });
+});
+
+document.getElementById("etiquetaPlanilhaInput")?.addEventListener("change", function(e){
+    const file = e.target.files?.[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt){
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        etiquetaMata105Cache = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        setEtiquetasStatus("mata105 carregada para etiquetas.");
+    };
+    reader.readAsArrayBuffer(file);
+});
 
 let __autoUpdateDisparada = false;
 function tentarAtualizacaoAutomaticaFinal() {

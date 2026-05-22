@@ -784,6 +784,87 @@ th.col-ordenada.col-filtrada {
     border-radius:10px;
 }
 
+#etiquetasPanel{
+    margin:10px 0;
+    padding:10px;
+    border:1px solid #223044;
+    border-radius:8px;
+    background:#111B27;
+}
+
+.etiquetasTitle{
+    color:#CFE3FF;
+    font-size:12px;
+    font-weight:800;
+    margin-bottom:8px;
+}
+
+.etiquetasSizeRow{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:5px;
+    font-size:11px;
+    color:#D7E5F8;
+}
+
+.etiquetasSizeRow label{
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+
+#etiquetaCustomSize{
+    display:none;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+    margin-top:7px;
+}
+
+#etiquetasPanel input[type="text"],
+#etiquetasPanel textarea{
+    width:100%;
+    border:1px solid #223044;
+    border-radius:6px;
+    background:#0B121A;
+    color:#E6F0FF;
+    padding:7px;
+    font-size:11px;
+    resize:vertical;
+    box-sizing:border-box;
+}
+
+#etiquetaCodigos{
+    margin-top:8px;
+}
+
+.etiquetasActions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+    margin-top:8px;
+}
+
+#etiquetasPanel button{
+    border-radius:6px;
+    padding:8px 6px;
+    font-size:11px;
+}
+
+.etiquetaPlanilhaBtn{
+    width:100%;
+    margin-top:6px;
+    background:#172033;
+    border:1px solid #2D3A52;
+}
+
+#etiquetasStatus{
+    min-height:14px;
+    margin-top:7px;
+    color:#9FB5D1;
+    font-size:10px;
+    line-height:1.35;
+}
+
 /* ===== CHAT ===== */
 
 #chatBox{
