@@ -2174,6 +2174,37 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     backdrop-filter:blur(10px);
 }
 
+#contagemVoiceControls{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    padding:8px 10px;
+    border-bottom:1px solid rgba(74,222,128,0.13);
+    background:rgba(7,18,12,0.55);
+}
+
+#contagemVoiceControls button{
+    margin:0;
+    border:1px solid rgba(134,239,172,0.24);
+    border-radius:10px;
+    background:rgba(31,41,55,0.86);
+    color:#D1FAE5;
+    font-size:12px;
+    font-weight:800;
+    padding:8px 10px;
+}
+
+#contagemVoiceControls button.active{
+    background:#15803D;
+    border-color:#86EFAC;
+    color:#FFFFFF;
+}
+
+#contagemVoiceControls button:disabled{
+    opacity:0.45;
+    cursor:not-allowed;
+}
+
 .contagemBackBtn,
 .contagemRelBtn{
     min-width:42px;
@@ -2357,10 +2388,44 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 
 #contagemCardEndereco{
     text-align:center;
-    font-size:22px;
+    font-size:18px;
     font-weight:900;
-    color:#86EFAC;
+    color:#A7F3D0;
     letter-spacing:1px;
+}
+
+#contagemEnderecoDestaque{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+}
+
+#contagemEnderecoDestaque div{
+    border:1px solid rgba(134,239,172,0.34);
+    border-radius:14px;
+    background:linear-gradient(180deg, rgba(22,163,74,0.2), rgba(6,78,59,0.28));
+    padding:10px 8px;
+    text-align:center;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+#contagemEnderecoDestaque span{
+    display:block;
+    color:#8FB8A0;
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+}
+
+#contagemEnderecoDestaque strong{
+    display:block;
+    color:#FFFFFF;
+    font-size:42px;
+    line-height:1;
+    font-weight:950;
+    letter-spacing:0;
+    margin-top:4px;
 }
 
 #contagemCardDescricao{

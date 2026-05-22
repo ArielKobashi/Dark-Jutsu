@@ -226,6 +226,10 @@ xmlns="http://www.w3.org/2000/svg">
         </div>
         <button class="contagemRelBtn" onclick="abrirRelatorioContagem()" title="Relatorio">Rel</button>
     </div>
+    <div id="contagemVoiceControls">
+        <button type="button" id="contagemNarradorBtn" onclick="toggleNarradorContagem()">Narrador: off</button>
+        <button type="button" id="contagemLocutorBtn" onclick="toggleLocutorContagem()">Locutor: off</button>
+    </div>
 
     <div id="contagemMaquinasBar"></div>
 
@@ -241,6 +245,16 @@ xmlns="http://www.w3.org/2000/svg">
         <div id="contagemCardTrack">
             <div id="contagemCard">
                 <div id="contagemCardEndereco"></div>
+                <div id="contagemEnderecoDestaque">
+                    <div>
+                        <span>Prateleira</span>
+                        <strong id="contagemCardPrateleira">-</strong>
+                    </div>
+                    <div>
+                        <span>Caixa</span>
+                        <strong id="contagemCardCaixa">-</strong>
+                    </div>
+                </div>
                 <div id="contagemCardDescricao"></div>
                 <div id="contagemCardCodigos">
                     <span id="contagemCardProtheus"></span>
@@ -267,7 +281,7 @@ xmlns="http://www.w3.org/2000/svg">
                     <button type="button" onclick="limparContagemAtual()">Limpar</button>
                     <button type="button" onclick="digitarContagemRapida('0')">0</button>
                     <button type="button" onclick="apagarDigitoContagem()">Apagar</button>
-                    <button type="button" class="zero primary" onclick="preencherContagemRapida(0, true)">Zero e proximo</button>
+                    <button type="button" class="zero primary" onclick="preencherSaldoSistemaContagem(true)">Certo e proximo</button>
                     <button type="button" class="ok primary" onclick="contagemProximo()">OK / Proximo</button>
                 </div>
             </div>
@@ -2844,6 +2858,11 @@ let contagemValores = {};
 let contagemSwipeStartX = 0;
 let contagemSwipeActive = false;
 let relContagens = {};
+let contagemUltimoEnderecoFalado = "";
+let contagemNarradorAtivo = localStorage.getItem("contagemNarradorAtivo") === "1";
+let contagemLocutorAtivo = localStorage.getItem("contagemLocutorAtivo") === "1";
+let contagemReconhecimento = null;
+let contagemEscutando = false;
 
 function parsearEnderecoContagem(endereco){
     const raw = (endereco || "").toString().trim().toUpperCase();
@@ -2880,6 +2899,11 @@ function chaveRascunhoContagem(){
     return `contagemRascunho:${uid}`;
 }
 
+function chaveSessaoContagem(){
+    const uid = window.auth?.currentUser?.uid || window.meuNickname || "local";
+    return `contagemSessao:${uid}`;
+}
+
 function salvarRascunhoContagem(){
     try{
         localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
@@ -2892,6 +2916,31 @@ function carregarRascunhoContagem(){
     }catch(e){
         return {};
     }
+}
+
+function carregarSessaoContagem(){
+    try{
+        return JSON.parse(localStorage.getItem(chaveSessaoContagem()) || "{}") || {};
+    }catch(e){
+        return {};
+    }
+}
+
+function salvarSessaoContagem(extra = {}){
+    try{
+        const atual = carregarSessaoContagem();
+        localStorage.setItem(chaveSessaoContagem(), JSON.stringify({
+            ...atual,
+            maquina: contagemMaquinaAtual || atual.maquina || "",
+            indice: Number.isFinite(contagemIndice) ? contagemIndice : (atual.indice || 0),
+            updatedAt: Date.now(),
+            ...extra
+        }));
+    }catch(e){}
+}
+
+function marcarContagemAberta(aberta){
+    salvarSessaoContagem({ aberta: !!aberta });
 }
 
 function itemKeyContagem(item){
@@ -2954,6 +3003,7 @@ function abrirContagem(){
     }
 
     contagemValores = carregarRascunhoContagem();
+    const sessao = carregarSessaoContagem();
     const maquinas = new Set();
     contagemItens.forEach(item => maquinas.add(parsearEnderecoContagem(item.enderecoPrincipal).maquina));
     contagemMaquinas = Array.from(maquinas);
@@ -2962,15 +3012,35 @@ function abrirContagem(){
     contagemIndice = 0;
     renderizarMaquinasContagem();
     mostrarSelecaoMaquinaContagem();
+    atualizarBotoesVozContagem();
 
     document.getElementById("contagemScreen").style.display = "flex";
     document.getElementById("main").style.display = "none";
+    marcarContagemAberta(true);
+
+    if(sessao.maquina && contagemMaquinas.includes(sessao.maquina)){
+        selecionarMaquinaContagem(sessao.maquina, true, Number(sessao.indice || 0));
+    }
 }
 
 function fecharContagem(){
     salvarAtualContagem();
+    marcarContagemAberta(false);
+    pararEscutaContagem();
+    try{ window.speechSynthesis?.cancel(); }catch(e){}
     document.getElementById("contagemScreen").style.display = "none";
     document.getElementById("main").style.display = "";
+}
+
+function tentarRetomarContagemPendente(){
+    const sessao = carregarSessaoContagem();
+    if(!sessao.aberta) return;
+    const idade = Date.now() - Number(sessao.updatedAt || 0);
+    if(idade > 1000 * 60 * 60 * 18){
+        salvarSessaoContagem({ aberta:false });
+        return;
+    }
+    setTimeout(()=>abrirContagem(), 80);
 }
 
 function voltarContagem(){
@@ -3040,29 +3110,75 @@ function mostrarCardContagem(){
     if(cardArea) cardArea.style.display = "flex";
     if(footer) footer.style.display = "flex";
     if(bar) bar.style.display = "flex";
+    atualizarBotoesVozContagem();
 }
 
-function selecionarMaquinaContagem(maquina, atualizarBar){
+function atualizarBotoesVozContagem(){
+    const narrador = document.getElementById("contagemNarradorBtn");
+    const locutor = document.getElementById("contagemLocutorBtn");
+    if(narrador){
+        narrador.textContent = `Narrador: ${contagemNarradorAtivo ? "on" : "off"}`;
+        narrador.classList.toggle("active", contagemNarradorAtivo);
+    }
+    if(locutor){
+        const suportado = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+        locutor.textContent = `Locutor: ${contagemLocutorAtivo ? "on" : "off"}`;
+        locutor.classList.toggle("active", contagemLocutorAtivo);
+        locutor.disabled = !suportado;
+        locutor.title = suportado ? "Escutar quantidade depois do narrador" : "Microfone por voz nao suportado neste navegador";
+    }
+}
+
+function toggleNarradorContagem(){
+    contagemNarradorAtivo = !contagemNarradorAtivo;
+    localStorage.setItem("contagemNarradorAtivo", contagemNarradorAtivo ? "1" : "0");
+    if(!contagemNarradorAtivo){
+        try{ window.speechSynthesis?.cancel(); }catch(e){}
+        pararEscutaContagem();
+    }
+    atualizarBotoesVozContagem();
+}
+
+function toggleLocutorContagem(){
+    const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!Reconhecimento){
+        mostrarNotificacao("Reconhecimento de voz nao suportado neste navegador.");
+        return;
+    }
+    contagemLocutorAtivo = !contagemLocutorAtivo;
+    localStorage.setItem("contagemLocutorAtivo", contagemLocutorAtivo ? "1" : "0");
+    if(!contagemLocutorAtivo) pararEscutaContagem();
+    atualizarBotoesVozContagem();
+}
+
+function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null){
     contagemMaquinaAtual = maquina;
     contagemItensMaquina = contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquina);
     const primeiroPendente = contagemItensMaquina.findIndex(item => contagemValores[itemKeyContagem(item)] === undefined);
-    contagemIndice = primeiroPendente >= 0 ? primeiroPendente : 0;
+    if(Number.isFinite(indicePreferido)){
+        contagemIndice = Math.max(0, Math.min(Number(indicePreferido), Math.max(contagemItensMaquina.length - 1, 0)));
+    }else{
+        contagemIndice = primeiroPendente >= 0 ? primeiroPendente : 0;
+    }
+    contagemUltimoEnderecoFalado = "";
     if(atualizarBar) renderizarMaquinasContagem();
     mostrarCardContagem();
+    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
     renderizarCardContagem();
 }
 
 function renderizarCardContagem(){
     const item = contagemItensMaquina[contagemIndice];
     const total = contagemItensMaquina.length;
-    const progresso = document.getElementById("contagemProgresso");
-    if(progresso) progresso.textContent = total ? `${contagemIndice + 1} / ${total}` : "0 / 0";
     const label = document.getElementById("contagemMaquinaLabel");
     if(label) label.textContent = contagemMaquinaAtual || "Maquina";
     if(!item) return;
 
-    const endereco = parsearEnderecoContagem(item.enderecoPrincipal).enderecoOriginal;
+    const infoEndereco = parsearEnderecoContagem(item.enderecoPrincipal);
+    const endereco = infoEndereco.enderecoOriginal;
     document.getElementById("contagemCardEndereco").textContent = endereco || "SEM ENDERECO";
+    document.getElementById("contagemCardPrateleira").textContent = infoEndereco.prateleira || "-";
+    document.getElementById("contagemCardCaixa").textContent = infoEndereco.caixa ? String(infoEndereco.caixa) : "-";
     document.getElementById("contagemCardDescricao").textContent = item.descricao || "";
     document.getElementById("contagemCardProtheus").textContent = item.protheus || "-";
     document.getElementById("contagemCardCooperat").textContent = item.cooperat || "-";
@@ -3075,15 +3191,124 @@ function renderizarCardContagem(){
     const status = document.getElementById("contagemInputStatus");
     status.textContent = valorSalvo !== undefined ? "Contado" : "Aguardando contagem";
     status.classList.toggle("contado", valorSalvo !== undefined);
-    atualizarFooterContagem();
+    atualizarProgressoContagem();
+    falarEnderecoContagem(infoEndereco, item);
+    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
     setTimeout(() => input.focus({ preventScroll:true }), 60);
 }
 
-function atualizarFooterContagem(){
+function obterResumoContagemMaquina(){
     const base = contagemItensMaquina.length ? contagemItensMaquina : contagemItens;
     const contadosMaquina = base.filter(item => contagemValores[itemKeyContagem(item)] !== undefined).length;
-    document.getElementById("contagemContados").textContent = `${contadosMaquina}/${base.length} nesta maquina`;
-    document.getElementById("contagemRestantes").textContent = `${Math.max(base.length - contadosMaquina, 0)} restantes`;
+    return {
+        total: base.length,
+        contados: contadosMaquina,
+        restantes: Math.max(base.length - contadosMaquina, 0)
+    };
+}
+
+function atualizarProgressoContagem(){
+    const resumo = obterResumoContagemMaquina();
+    const progresso = document.getElementById("contagemProgresso");
+    if(progresso){
+        const posicao = contagemItensMaquina.length ? `${contagemIndice + 1}/${contagemItensMaquina.length}` : "0/0";
+        progresso.textContent = `${posicao} - ${resumo.contados}/${resumo.total} contados`;
+    }
+    document.getElementById("contagemContados").textContent = `${resumo.contados}/${resumo.total} contados`;
+    document.getElementById("contagemRestantes").textContent = `${resumo.restantes} faltam`;
+}
+
+function atualizarFooterContagem(){
+    atualizarProgressoContagem();
+}
+
+function falarEnderecoContagem(infoEndereco, item){
+    if(!contagemNarradorAtivo) return;
+    if(!("speechSynthesis" in window)) return;
+    const key = itemKeyContagem(item);
+    if(!key || contagemUltimoEnderecoFalado === key) return;
+    const prateleira = (infoEndereco.prateleira || "").toString().trim();
+    const caixa = infoEndereco.caixa ? String(infoEndereco.caixa) : "";
+    if(!prateleira && !caixa) return;
+    contagemUltimoEnderecoFalado = key;
+    const texto = `${prateleira || "sem prateleira"} ${caixa}`.trim();
+    try{
+        window.speechSynthesis.cancel();
+        const fala = new SpeechSynthesisUtterance(texto);
+        fala.lang = "pt-BR";
+        fala.rate = 0.95;
+        fala.pitch = 1;
+        fala.onend = () => iniciarEscutaContagem();
+        window.speechSynthesis.speak(fala);
+    }catch(e){}
+}
+
+function normalizarNumeroFaladoContagem(texto){
+    const raw = String(texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const direto = raw.match(/-?\d+(?:[,.]\d+)?/);
+    if(direto) return Number(direto[0].replace(",", "."));
+    const mapa = {
+        "zero":0, "um":1, "uma":1, "dois":2, "duas":2, "tres":3, "quatro":4, "cinco":5,
+        "seis":6, "sete":7, "oito":8, "nove":9, "dez":10, "onze":11, "doze":12,
+        "treze":13, "quatorze":14, "catorze":14, "quinze":15, "dezesseis":16,
+        "dezessete":17, "dezoito":18, "dezenove":19, "vinte":20, "trinta":30,
+        "quarenta":40, "cinquenta":50, "sessenta":60, "setenta":70, "oitenta":80,
+        "noventa":90, "cem":100, "cento":100
+    };
+    const tokens = raw.split(/\s+|-/).filter(t => t && t !== "e");
+    if(!tokens.length) return null;
+    let total = 0;
+    let reconheceu = false;
+    tokens.forEach(token => {
+        if(mapa[token] !== undefined){
+            total += mapa[token];
+            reconheceu = true;
+        }
+    });
+    return reconheceu ? total : null;
+}
+
+function iniciarEscutaContagem(){
+    if(!contagemNarradorAtivo || !contagemLocutorAtivo) return;
+    const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!Reconhecimento || contagemEscutando) return;
+    pararEscutaContagem();
+    try{
+        const rec = new Reconhecimento();
+        contagemReconhecimento = rec;
+        contagemEscutando = true;
+        rec.lang = "pt-BR";
+        rec.interimResults = false;
+        rec.maxAlternatives = 3;
+        rec.onresult = (event) => {
+            const alternativas = Array.from(event.results?.[0] || []).map(r => r.transcript);
+            const texto = alternativas.join(" ");
+            const numero = normalizarNumeroFaladoContagem(texto);
+            if(numero !== null && Number.isFinite(numero) && numero >= 0){
+                preencherContagemRapida(numero, true);
+            }else{
+                mostrarNotificacao("Nao entendi a quantidade. Toque no numero.");
+            }
+        };
+        rec.onerror = () => {};
+        rec.onend = () => {
+            contagemEscutando = false;
+            contagemReconhecimento = null;
+        };
+        rec.start();
+    }catch(e){
+        contagemEscutando = false;
+        contagemReconhecimento = null;
+    }
+}
+
+function pararEscutaContagem(){
+    if(contagemReconhecimento){
+        try{ contagemReconhecimento.stop(); }catch(e){}
+        try{ contagemReconhecimento.abort(); }catch(e){}
+    }
+    contagemEscutando = false;
+    contagemReconhecimento = null;
 }
 
 function valorInputContagem(){
@@ -3104,6 +3329,12 @@ function preencherContagemRapida(valor, avancar = false){
     }else{
         input.focus({ preventScroll:true });
     }
+}
+
+function preencherSaldoSistemaContagem(avancar = false){
+    const item = contagemItensMaquina[contagemIndice];
+    const saldo = parsePlanilhaNumero(item?.saldo);
+    preencherContagemRapida(saldo === null ? 0 : saldo, avancar);
 }
 
 function digitarContagemRapida(digito){
@@ -3165,6 +3396,8 @@ function salvarAtualContagem(){
         if(Number.isFinite(valor) && valor >= 0) contagemValores[key] = valor;
     }
     salvarRascunhoContagem();
+    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
+    atualizarProgressoContagem();
 }
 
 function animarContagem(direcao, callback){
@@ -3188,6 +3421,7 @@ function contagemProximo(){
                 return;
             }
         }
+        salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
         renderizarMaquinasContagem();
         renderizarCardContagem();
     });
@@ -3206,6 +3440,7 @@ function contagemAnterior(){
                 contagemIndice = Math.max(contagemItensMaquina.length - 1, 0);
             }
         }
+        salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
         renderizarMaquinasContagem();
         renderizarCardContagem();
     });
@@ -3244,6 +3479,7 @@ async function finalizarContagem(){
         const baseRef = window.ref(window.db, `contagens/${data}/${chaveFirebaseContagem(nick)}`);
         await window.push(baseRef, payload);
         localStorage.removeItem(chaveRascunhoContagem());
+        localStorage.removeItem(chaveSessaoContagem());
         contagemValores = {};
         mostrarNotificacao(`Contagem salva: ${itensContados.length} itens.`);
         fecharContagem();
@@ -3384,10 +3620,13 @@ window.voltarContagem = voltarContagem;
 window.contagemProximo = contagemProximo;
 window.contagemAnterior = contagemAnterior;
 window.preencherContagemRapida = preencherContagemRapida;
+window.preencherSaldoSistemaContagem = preencherSaldoSistemaContagem;
 window.digitarContagemRapida = digitarContagemRapida;
 window.apagarDigitoContagem = apagarDigitoContagem;
 window.ajustarContagemAtual = ajustarContagemAtual;
 window.limparContagemAtual = limparContagemAtual;
+window.toggleNarradorContagem = toggleNarradorContagem;
+window.toggleLocutorContagem = toggleLocutorContagem;
 window.finalizarContagem = finalizarContagem;
 window.abrirRelatorioContagem = abrirRelatorioContagem;
 window.fecharRelatorioContagem = fecharRelatorioContagem;
@@ -6111,7 +6350,10 @@ onAuthStateChanged(auth, async (user) => {
         if(isMobileLayout()){
             finalizarProgresso();
             carregarDadosSistema()
-                .then(()=>prepararChatUsuario())
+                .then(()=>{
+                    tentarRetomarContagemPendente();
+                    return prepararChatUsuario();
+                })
                 .catch(error => {
                     console.error("Erro ao carregar dados em segundo plano:", error);
                     if(typeof mostrarNotificacao === "function"){
@@ -6120,6 +6362,7 @@ onAuthStateChanged(auth, async (user) => {
                 });
         }else{
             await carregarDadosSistema();
+            tentarRetomarContagemPendente();
             await prepararChatUsuario();
             finalizarProgresso();
         }
