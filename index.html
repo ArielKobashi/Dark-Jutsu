@@ -401,6 +401,12 @@ Usuários do Sistema
         <div id="adminAlertActions" class="adminAlertActions"></div>
     </div>
 </div>
+<div id="perfilItemModal" class="perfilItemModal" aria-hidden="true">
+    <div class="perfilItemModalBackdrop" onclick="fecharModalPerfilItem()"></div>
+    <div class="perfilItemModalDialog" role="dialog" aria-modal="true" aria-label="Perfil do item">
+        <iframe id="perfilItemModalFrame" title="Perfil do item"></iframe>
+    </div>
+</div>
 <!-- SPLIT: vendor-xlsx.html (3rd-party lib) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <!-- /SPLIT: vendor-xlsx.html -->
@@ -475,8 +481,8 @@ function formatarNumeroPlanilha(valor){
 function obterStatusEstoque(item){
     if(!item) return "";
     const saldo = parsePlanilhaNumero(item.saldo);
-    const minimo = parsePlanilhaNumero(item.minimo);
-    const maximo = parsePlanilhaNumero(item.maximo);
+    const minimo = parseLimiteEstoque(item.minimo);
+    const maximo = parseLimiteEstoque(item.maximo);
 
     if(saldo !== null && minimo !== null && saldo < minimo){
         return "abaixo";
@@ -2225,7 +2231,6 @@ let limiteChat = 15;
 
 
 
-
 const magnetIcon = document.getElementById("magnetIcon");
 
 magnetIcon.addEventListener("click", function(){
@@ -2312,22 +2317,31 @@ document.getElementById("chatMessages").addEventListener("scroll", function(){
     }
 });
 
-
-let janelaSaldos = null;
-
 function abrirModalSaldos(item){
-    let html = "";
     try{
         const itemSeguro = (item && typeof item === "object") ? item : {};
 
-        if(janelaSaldos && !janelaSaldos.closed){
-            janelaSaldos.close();
-        }
+        const esc = (texto) => String(texto ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
 
-        const statusEstoque = obterStatusEstoque(itemSeguro);
-        const temMinimo = itemSeguro?.minimo !== null && itemSeguro?.minimo !== undefined && itemSeguro?.minimo !== "";
-        const temMaximo = itemSeguro?.maximo !== null && itemSeguro?.maximo !== undefined && itemSeguro?.maximo !== "";
+        const saldoValor = parsePlanilhaNumero(itemSeguro.saldo);
+        const minimoValor = parseLimiteEstoque(itemSeguro.minimo);
+        const maximoValor = parseLimiteEstoque(itemSeguro.maximo);
+        const reposicaoValor = parsePlanilhaNumero(itemSeguro.reposicao);
+        const temMinimo = minimoValor !== null;
+        const temMaximo = maximoValor !== null;
         const temFaixa = temMinimo || temMaximo;
+
+        const statusEstoque = saldoValor !== null && temMinimo && saldoValor < minimoValor
+            ? "abaixo"
+            : saldoValor !== null && temMaximo && saldoValor > maximoValor
+                ? "acima"
+                : "ok";
+
         const statusTexto = statusEstoque === "abaixo"
             ? "Abaixo do mínimo"
             : statusEstoque === "acima"
@@ -2335,569 +2349,468 @@ function abrirModalSaldos(item){
                 : temFaixa
                     ? "Dentro da faixa"
                     : "Sem faixa configurada";
+
         const statusClasse = statusEstoque === "abaixo"
             ? "statusBaixo"
             : statusEstoque === "acima"
                 ? "statusAlto"
                 : "statusNormal";
-        const saldoTexto = formatarNumeroPlanilha(itemSeguro.saldo);
-        const minimoTexto = temMinimo ? formatarNumeroPlanilha(itemSeguro.minimo) : "Sem mínimo";
-        const maximoTexto = temMaximo ? formatarNumeroPlanilha(itemSeguro.maximo) : "Sem máximo";
-        const reposicaoTexto = (itemSeguro.reposicao === null || itemSeguro.reposicao === undefined || itemSeguro.reposicao === "")
-            ? "Não informada"
-            : formatarNumeroPlanilha(itemSeguro.reposicao);
+
         const faixaTexto = temFaixa
-            ? `${temMinimo ? `Mínimo ${minimoTexto}` : "Sem mínimo"} · ${temMaximo ? `Máximo ${maximoTexto}` : "Sem máximo"}`
-            : "Este item não possui faixa definida na planilha de estoque mínimo.";
-        const enderecosBase = Array.isArray(itemSeguro.enderecos) ? itemSeguro.enderecos : [];
-        const totalEnderecos = enderecosBase.length;
+            ? `${temMinimo ? `Mínimo ${esc(formatarNumeroPlanilha(minimoValor))}` : "Sem mínimo"} · ${temMaximo ? `Máximo ${esc(formatarNumeroPlanilha(maximoValor))}` : "Sem máximo"}`
+            : "Este item não possui faixa configurada na planilha de estoque mínimo.";
 
+        const enderecosOriginais = Array.isArray(itemSeguro.enderecos) ? itemSeguro.enderecos : [];
         const listaEnderecos = [];
-        enderecosBase.forEach(info => {
-            const infoSeguro = (info && typeof info === "object") ? info : {};
-            listaEnderecos.push({
-                endereco: infoSeguro.endereco,
-                armazem: infoSeguro.armazem,
-                saldo: infoSeguro.saldo,
-                origem: "Saldo Endereço"
-            });
-        });
-
-        const enderecoCooperat = (itemSeguro.enderecoPrincipal ?? "").toString().trim();
-        if(isEnderecoValido(enderecoCooperat)){
-            const normCooperat = normalizarEndereco(enderecoCooperat);
-            const jaExiste = listaEnderecos.some(l => normalizarEndereco(l?.endereco) === normCooperat);
-            if(!jaExiste){
+        const chavesEnderecos = new Set();
+        const adicionarEndereco = (info, origemPadrao) => {
+            const obj = (info && typeof info === "object") ? info : {};
+            const endereco = (obj.endereco ?? "").toString().trim();
+            if(!isEnderecoValido(endereco)) return;
+            const chave = normalizarEndereco(endereco);
+            if(!chavesEnderecos.has(chave)){
+                chavesEnderecos.add(chave);
                 listaEnderecos.push({
-                    endereco: enderecoCooperat,
-                    armazem: "Cooperat",
-                    saldo: "-",
-                    origem: "Cooperat"
+                    endereco,
+                    armazem: (obj.armazem ?? "").toString().trim() || "ND",
+                    saldo: obj.saldo,
+                    origem: (obj.origem ?? origemPadrao ?? "Item").toString().trim() || "Item"
                 });
             }
-        }
+        };
 
-        const resumoCards = [
-            {
-                titulo: "Saldo atual",
-                valor: saldoTexto,
-                detalhe: "Saldo consolidado do item",
-                classe: "metricSaldo"
-            },
-            {
-                titulo: "Mínimo",
-                valor: minimoTexto,
-                detalhe: "Limite inferior configurado",
-                classe: "metricMinimo"
-            },
-            {
-                titulo: "Máximo",
-                valor: maximoTexto,
-                detalhe: "Limite superior configurado",
-                classe: "metricMaximo"
-            },
-            {
-                titulo: "Reposição",
-                valor: reposicaoTexto,
-                detalhe: "Quantidade sugerida para reposição",
-                classe: "metricReposicao"
-            },
-            {
-                titulo: "Endereços",
-                valor: String(totalEnderecos),
-                detalhe: "Localizações vinculadas ao item",
-                classe: "metricEnderecos"
-            },
-            {
-                titulo: "Faixa",
-                valor: temFaixa ? "Configurada" : "Sem faixa",
-                detalhe: faixaTexto,
-                classe: "metricFaixa"
-            }
-        ].map(card => `
-            <article class="metricCard ${card.classe}">
-                <span class="metricLabel">${escapeHtml(card.titulo)}</span>
-                <strong class="metricValue">${escapeHtml(card.valor)}</strong>
-                <span class="metricHelp">${escapeHtml(card.detalhe)}</span>
+        enderecosOriginais.forEach(end => adicionarEndereco(end, "Saldo por endereço"));
+        adicionarEndereco({
+            endereco: itemSeguro.enderecoPrincipal,
+            armazem: itemSeguro.armazemPrincipal,
+            saldo: itemSeguro.saldo,
+            origem: "Principal"
+        }, "Principal");
+
+        const cards = [
+            { titulo: "Protheus", valor: itemSeguro.protheus || "-", ajuda: "Código principal do item", classe: "cardCodigo" },
+            { titulo: "Cooperat", valor: itemSeguro.cooperat || "-", ajuda: "Código usado para cruzar com a planilha de estoque mínimo", classe: "cardCodigo" },
+            { titulo: "Descrição", valor: itemSeguro.descricao || "-", ajuda: "Descrição do item selecionado", classe: "cardDescricao" },
+            { titulo: "Armazém principal", valor: itemSeguro.armazemPrincipal || "-", ajuda: "Primeiro armazém encontrado para o item", classe: "cardArmazem" },
+            { titulo: "Endereço principal", valor: itemSeguro.enderecoPrincipal || "Sem endereço", ajuda: "Endereço mostrado na tabela principal", classe: "cardEndereco" },
+            { titulo: "Saldo atual", valor: formatarNumeroPlanilha(itemSeguro.saldo), ajuda: "Saldo consolidado", classe: "cardSaldo" },
+            { titulo: "Mínimo", valor: temMinimo ? formatarNumeroPlanilha(minimoValor) : "Sem mínimo", ajuda: "Limite inferior da planilha", classe: "cardMinimo" },
+            { titulo: "Máximo", valor: temMaximo ? formatarNumeroPlanilha(maximoValor) : "Sem máximo", ajuda: "Limite superior da planilha", classe: "cardMaximo" },
+            { titulo: "Reposição", valor: reposicaoValor === null ? "Não informada" : formatarNumeroPlanilha(reposicaoValor), ajuda: "Quantidade sugerida para reposição", classe: "cardReposicao" },
+            { titulo: "Endereços", valor: String(listaEnderecos.length), ajuda: "Locais vinculados ao item", classe: "cardEnderecos" }
+        ];
+
+        const cardsHtml = cards.map(card => `
+            <article class="card ${card.classe}">
+                <span class="cardTitle">${esc(card.titulo)}</span>
+                <strong class="cardValue">${esc(card.valor)}</strong>
+                <span class="cardHelp">${esc(card.ajuda)}</span>
             </article>
         `).join("");
 
-        const blocosEnderecos = listaEnderecos.map(info => `
-            <article class="enderecoCard">
-                <div class="enderecoHeader">
-                    <div class="enderecoMain">
-                        <span class="enderecoLabel">Endereço</span>
-                        <div class="enderecoValue">${escapeHtml(info.endereco || "-")}</div>
+        const enderecosHtml = listaEnderecos.map(info => `
+            <article class="addressCard">
+                <div class="addressTop">
+                    <div>
+                        <span class="label">Endereço</span>
+                        <div class="addressValue">${esc(info.endereco || "-")}</div>
                     </div>
-                    <span class="enderecoOrigem">${escapeHtml(info.origem || "-")}</span>
+                    <span class="originTag">${esc(info.origem || "-")}</span>
                 </div>
                 <div class="chipRow">
-                    <span class="infoChip">Armazém: ${escapeHtml(info.armazem || "-")}</span>
-                    <span class="infoChip">Saldo: ${escapeHtml(formatarNumeroPlanilha(info.saldo))}</span>
+                    <span class="chip">Armazém: ${esc(info.armazem || "-")}</span>
+                    <span class="chip">Saldo: ${esc(formatarNumeroPlanilha(info.saldo))}</span>
                 </div>
             </article>
         `).join("");
 
-        html = `
-    <!DOCTYPE html>
-    <html lang="pt-br">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Detalhes do Estoque do Item</title>
-        <style>
-            :root{
-                color-scheme: dark;
-                --bg-1:#0d1020;
-                --bg-2:#16192c;
-                --bg-3:#1d2240;
-                --line:rgba(255,255,255,0.08);
-                --text:#edf0ff;
-                --muted:rgba(237,240,255,0.72);
-                --accent:#9a5cff;
-                --accent-strong:#bf9bff;
-                --shadow:0 18px 45px rgba(0,0,0,0.35);
-            }
-            *{
-                box-sizing:border-box;
-            }
-            html,body{
-                margin:0;
-                min-height:100%;
-            }
-            body{
-                font-family: "Segoe UI", Arial, sans-serif;
-                background:
-                    radial-gradient(circle at top left, rgba(154,92,255,0.26), transparent 34%),
-                    radial-gradient(circle at top right, rgba(0,201,255,0.15), transparent 30%),
-                    linear-gradient(180deg, var(--bg-1), var(--bg-2) 45%, var(--bg-3));
-                color:var(--text);
-                overflow-y:auto;
-            }
-            .page{
-                width:min(980px, calc(100% - 28px));
-                margin:0 auto;
-                padding:18px 0 24px;
-            }
-            .hero{
-                display:flex;
-                justify-content:space-between;
-                gap:16px;
-                align-items:flex-start;
-                padding:20px 22px;
-                border:1px solid rgba(255,255,255,0.08);
-                border-radius:22px;
-                background:linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
-                box-shadow:var(--shadow);
-                backdrop-filter:blur(8px);
-            }
-            .eyebrow{
-                color:var(--accent-strong);
-                text-transform:uppercase;
-                letter-spacing:.14em;
-                font-size:11px;
-                font-weight:700;
-                margin-bottom:8px;
-            }
-            h1{
-                margin:0;
-                font-size:28px;
-                line-height:1.05;
-            }
-            .hero p{
-                margin:10px 0 0;
-                color:var(--muted);
-                max-width:680px;
-                font-size:13px;
-                line-height:1.55;
-            }
-            .heroActions{
-                display:flex;
-                align-items:flex-start;
-                gap:10px;
-                flex-wrap:wrap;
-                justify-content:flex-end;
-            }
-            .statusChip{
-                display:inline-flex;
-                align-items:center;
-                justify-content:center;
-                min-height:38px;
-                padding:0 14px;
-                border-radius:999px;
-                font-size:12px;
-                font-weight:700;
-                border:1px solid transparent;
-                white-space:nowrap;
-            }
-            .statusBaixo{
-                background:rgba(255,71,71,0.22);
-                border-color:rgba(255,71,71,0.35);
-                color:#ffd2d2;
-            }
-            .statusAlto{
-                background:rgba(60,214,120,0.20);
-                border-color:rgba(60,214,120,0.35);
-                color:#d7ffe5;
-            }
-            .statusNormal{
-                background:rgba(255,255,255,0.08);
-                border-color:rgba(255,255,255,0.12);
-                color:var(--text);
-            }
-            .closeBtn{
-                border:1px solid rgba(255,255,255,0.12);
-                background:rgba(255,255,255,0.06);
-                color:var(--text);
-                border-radius:12px;
-                padding:10px 14px;
-                cursor:pointer;
-                font-weight:700;
-                transition:transform .15s ease, background .15s ease, border-color .15s ease;
-            }
-            .closeBtn:hover{
-                transform:translateY(-1px);
-                background:rgba(255,255,255,0.11);
-                border-color:rgba(255,255,255,0.20);
-            }
-            .panel{
-                margin-top:16px;
-                padding:18px;
-                border:1px solid rgba(255,255,255,0.08);
-                border-radius:22px;
-                background:rgba(10,12,24,0.52);
-                box-shadow:var(--shadow);
-                backdrop-filter:blur(8px);
-            }
-            .panelHeader{
-                display:flex;
-                justify-content:space-between;
-                gap:12px;
-                align-items:flex-start;
-                margin-bottom:14px;
-            }
-            .panelHeader h2{
-                margin:0;
-                font-size:18px;
-            }
-            .panelHeader p{
-                margin:6px 0 0;
-                color:var(--muted);
-                font-size:13px;
-                line-height:1.5;
-            }
-            .codePill{
-                display:inline-flex;
-                align-items:center;
-                gap:8px;
-                padding:9px 12px;
-                border-radius:999px;
-                background:rgba(154,92,255,0.16);
-                border:1px solid rgba(154,92,255,0.30);
-                color:#f4eaff;
-                font-size:12px;
-                font-weight:700;
-                white-space:nowrap;
-            }
-            .summaryBanner{
-                margin-top:16px;
-                padding:15px 16px;
-                border-radius:18px;
-                border:1px solid rgba(255,255,255,0.08);
-                background:linear-gradient(135deg, rgba(154,92,255,0.18), rgba(255,255,255,0.04));
-            }
-            .summaryBannerTitle{
-                font-size:11px;
-                letter-spacing:.12em;
-                text-transform:uppercase;
-                color:var(--accent-strong);
-                margin-bottom:6px;
-                font-weight:700;
-            }
-            .summaryBannerValue{
-                font-size:15px;
-                font-weight:700;
-                line-height:1.45;
-            }
-            .summaryBannerHint{
-                margin-top:6px;
-                color:var(--muted);
-                font-size:12px;
-                line-height:1.45;
-            }
-            .metricsGrid{
-                margin-top:16px;
-                display:grid;
-                grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
-                gap:12px;
-            }
-            .metricCard{
-                padding:14px;
-                border-radius:18px;
-                background:rgba(255,255,255,0.05);
-                border:1px solid rgba(255,255,255,0.08);
-                box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
-                min-height:118px;
-            }
-            .metricCard.metricSaldo{
-                border-color:rgba(154,92,255,0.22);
-                background:linear-gradient(180deg, rgba(154,92,255,0.18), rgba(255,255,255,0.04));
-            }
-            .metricCard.metricMinimo{
-                border-color:rgba(255,120,120,0.20);
-            }
-            .metricCard.metricMaximo{
-                border-color:rgba(86,194,255,0.20);
-            }
-            .metricCard.metricReposicao{
-                border-color:rgba(255,194,72,0.18);
-            }
-            .metricCard.metricEnderecos{
-                border-color:rgba(58,214,136,0.18);
-            }
-            .metricCard.metricFaixa{
-                border-color:rgba(255,255,255,0.12);
-            }
-            .metricLabel{
-                display:block;
-                font-size:11px;
-                letter-spacing:.12em;
-                text-transform:uppercase;
-                color:var(--muted);
-                margin-bottom:10px;
-                font-weight:700;
-            }
-            .metricValue{
-                display:block;
-                font-size:24px;
-                line-height:1.1;
-                font-weight:800;
-                color:var(--text);
-                word-break:break-word;
-            }
-            .metricHelp{
-                display:block;
-                margin-top:10px;
-                color:var(--muted);
-                font-size:12px;
-                line-height:1.45;
-            }
-            .section{
-                margin-top:18px;
-            }
-            .sectionHeader{
-                display:flex;
-                justify-content:space-between;
-                gap:12px;
-                align-items:center;
-                margin-bottom:12px;
-            }
-            .sectionHeader h3{
-                margin:0;
-                font-size:17px;
-            }
-            .countBadge{
-                display:inline-flex;
-                align-items:center;
-                padding:8px 12px;
-                border-radius:999px;
-                background:rgba(255,255,255,0.08);
-                border:1px solid rgba(255,255,255,0.10);
-                color:var(--text);
-                font-size:12px;
-                font-weight:700;
-                white-space:nowrap;
-            }
-            .addressList{
-                display:flex;
-                flex-direction:column;
-                gap:12px;
-            }
-            .enderecoCard{
-                position:relative;
-                overflow:hidden;
-                padding:16px 16px 15px;
-                border-radius:18px;
-                background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
-                border:1px solid rgba(255,255,255,0.08);
-            }
-            .enderecoCard::before{
-                content:"";
-                position:absolute;
-                inset:0 auto 0 0;
-                width:4px;
-                background:linear-gradient(180deg, var(--accent), rgba(154,92,255,0.08));
-            }
-            .enderecoHeader{
-                display:flex;
-                justify-content:space-between;
-                gap:12px;
-                align-items:flex-start;
-                margin-bottom:12px;
-            }
-            .enderecoLabel{
-                display:block;
-                font-size:11px;
-                letter-spacing:.12em;
-                text-transform:uppercase;
-                color:var(--muted);
-                margin-bottom:6px;
-                font-weight:700;
-            }
-            .enderecoValue{
-                font-size:15px;
-                font-weight:800;
-                line-height:1.35;
-                word-break:break-word;
-            }
-            .enderecoOrigem{
-                display:inline-flex;
-                align-items:center;
-                padding:7px 10px;
-                border-radius:999px;
-                background:rgba(154,92,255,0.14);
-                border:1px solid rgba(154,92,255,0.22);
-                color:#eadcff;
-                font-size:11px;
-                font-weight:700;
-                white-space:nowrap;
-            }
-            .chipRow{
-                display:flex;
-                flex-wrap:wrap;
-                gap:8px;
-            }
-            .infoChip{
-                display:inline-flex;
-                align-items:center;
-                padding:7px 10px;
-                border-radius:999px;
-                background:rgba(255,255,255,0.06);
-                border:1px solid rgba(255,255,255,0.08);
-                color:var(--text);
-                font-size:12px;
-                font-weight:600;
-            }
-            .emptyState{
-                padding:18px;
-                border-radius:18px;
-                border:1px dashed rgba(255,255,255,0.12);
-                background:rgba(255,255,255,0.03);
-                color:var(--muted);
-                text-align:center;
-                line-height:1.6;
-            }
-            @media (max-width: 720px){
-                .page{
-                    width:min(100%, calc(100% - 16px));
-                    padding-top:8px;
-                }
-                .hero,
-                .panel{
-                    padding:16px;
-                    border-radius:18px;
-                }
-                .hero{
-                    flex-direction:column;
-                }
-                .heroActions{
-                    justify-content:flex-start;
-                }
-                h1{
-                    font-size:24px;
-                }
-                .panelHeader,
-                .sectionHeader,
-                .enderecoHeader{
-                    flex-direction:column;
-                    align-items:flex-start;
-                }
-                .codePill,
-                .countBadge,
-                .enderecoOrigem{
-                    white-space:normal;
-                }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="page">
-            <header class="hero">
-                <div>
-                    <div class="eyebrow">Detalhes do item</div>
-                    <h1>Resumo do estoque e endereços</h1>
-                    <p>Visualização rápida da faixa mínima e máxima, reposição sugerida, saldo total e os endereços vinculados ao item selecionado.</p>
-                </div>
-                <div class="heroActions">
-                    <span class="statusChip ${statusClasse}">${escapeHtml(statusTexto)}</span>
-                    <button class="closeBtn" type="button" onclick="window.close()">Fechar janela</button>
-                </div>
-            </header>
-
-            <section class="panel">
-                <div class="panelHeader">
-                    <div>
-                        <h2>Visão geral</h2>
-                        <p>${escapeHtml(faixaTexto)}</p>
-                    </div>
-                    <span class="codePill">Cooperat ${escapeHtml(item.cooperat || "-")}</span>
-                </div>
-
-                <div class="summaryBanner ${statusClasse}">
-                    <div class="summaryBannerTitle">Situação atual</div>
-                    <div class="summaryBannerValue">${escapeHtml(statusTexto)}</div>
-                    <div class="summaryBannerHint">Quando mínimo ou máximo estiverem zerados na planilha, o sistema trata como ausência de limite.</div>
-                </div>
-
-                <div class="metricsGrid">
-                    ${resumoCards}
-                </div>
-            </section>
-
-            <section class="section">
-                <div class="sectionHeader">
-                    <h3>Endereços vinculados</h3>
-                    <span class="countBadge">${totalEnderecos} registro${totalEnderecos === 1 ? "" : "s"}</span>
-                </div>
-                ${listaEnderecos.length === 0
-                    ? `<div class="emptyState">Nenhum endereço foi encontrado para este item no momento.</div>`
-                    : `<div class="addressList">${blocosEnderecos}</div>`
-                }
-            </section>
-        </div>
-    </body>
-    </html>`;
-
-        const dataUrl = "data:text/html;charset=utf-8," + encodeURIComponent(html);
-        janelaSaldos = window.open(dataUrl, "_blank", "width=920,height=760");
-        if(!janelaSaldos){
-            janelaSaldos = window.open("", "_blank", "width=920,height=760");
-            if(!janelaSaldos){
-                alert("O navegador bloqueou a janela do modal.");
-                return;
-            }
-            janelaSaldos.document.open();
-            janelaSaldos.document.write(html);
-            janelaSaldos.document.close();
+        const html = `<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Perfil do item</title>
+    <style>
+        :root{
+            color-scheme: dark;
+            --bg:#0b0f1a;
+            --panel:#141a2b;
+            --panel-2:#1a2033;
+            --line:rgba(255,255,255,.08);
+            --text:#edf1ff;
+            --muted:rgba(237,241,255,.72);
+            --accent:#8f5bff;
+            --accent-2:#43c8ff;
+            --good:#3ad67a;
+            --bad:#ff5d6c;
+            --shadow:0 18px 48px rgba(0,0,0,.38);
         }
-        janelaSaldos.focus();
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{
+            font-family: "Segoe UI", Arial, sans-serif;
+            color:var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(143,91,255,.24), transparent 32%),
+                radial-gradient(circle at top right, rgba(67,200,255,.16), transparent 30%),
+                linear-gradient(180deg, var(--bg), #111626 52%, #151b2d);
+        }
+        .shell{
+            width:min(1040px, calc(100% - 28px));
+            margin:0 auto;
+            padding:18px 0 24px;
+        }
+        .hero{
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            gap:16px;
+            padding:20px 22px;
+            border:1px solid var(--line);
+            border-radius:22px;
+            background:linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+            box-shadow:var(--shadow);
+            backdrop-filter:blur(10px);
+        }
+        .eyebrow{
+            display:inline-block;
+            margin-bottom:8px;
+            color:var(--accent-2);
+            font-size:11px;
+            font-weight:800;
+            letter-spacing:.14em;
+            text-transform:uppercase;
+        }
+        h1{
+            margin:0;
+            font-size:28px;
+            line-height:1.1;
+        }
+        .subtitle{
+            margin:10px 0 0;
+            color:var(--muted);
+            font-size:13px;
+            line-height:1.5;
+            max-width:720px;
+        }
+        .metaRow{
+            display:flex;
+            flex-wrap:wrap;
+            gap:8px;
+            margin-top:14px;
+        }
+        .pill,
+        .statusBadge,
+        .originTag,
+        .chip,
+        .countBadge{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:999px;
+            border:1px solid var(--line);
+            white-space:nowrap;
+        }
+        .pill{
+            padding:8px 12px;
+            background:rgba(255,255,255,.05);
+            color:var(--text);
+            font-size:12px;
+            font-weight:700;
+        }
+        .heroActions{
+            display:flex;
+            align-items:flex-start;
+            gap:10px;
+            flex-wrap:wrap;
+            justify-content:flex-end;
+        }
+        .statusBadge{
+            min-height:38px;
+            padding:0 14px;
+            font-size:12px;
+            font-weight:800;
+        }
+        .statusBaixo{background:rgba(255,93,108,.22); border-color:rgba(255,93,108,.34); color:#ffd7db;}
+        .statusAlto{background:rgba(58,214,122,.18); border-color:rgba(58,214,122,.34); color:#dbffea;}
+        .statusNormal{background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.12); color:var(--text);}
+        .closeBtn{
+            border:1px solid rgba(255,255,255,.12);
+            background:rgba(255,255,255,.06);
+            color:var(--text);
+            border-radius:12px;
+            padding:10px 14px;
+            cursor:pointer;
+            font-weight:800;
+        }
+        .section{
+            margin-top:16px;
+            padding:18px;
+            border:1px solid var(--line);
+            border-radius:22px;
+            background:rgba(10,13,24,.54);
+            box-shadow:var(--shadow);
+            backdrop-filter:blur(10px);
+        }
+        .sectionHeader{
+            display:flex;
+            justify-content:space-between;
+            gap:12px;
+            align-items:flex-start;
+            margin-bottom:14px;
+        }
+        .sectionHeader h2{
+            margin:0;
+            font-size:18px;
+        }
+        .sectionHeader p{
+            margin:6px 0 0;
+            color:var(--muted);
+            font-size:13px;
+            line-height:1.45;
+        }
+        .countBadge{
+            padding:8px 12px;
+            background:rgba(255,255,255,.06);
+            color:var(--text);
+            font-size:12px;
+            font-weight:800;
+        }
+        .cardGrid{
+            display:grid;
+            grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+            gap:12px;
+        }
+        .card{
+            padding:14px;
+            border-radius:18px;
+            border:1px solid var(--line);
+            background:rgba(255,255,255,.05);
+            min-height:122px;
+        }
+        .cardSaldo{background:linear-gradient(180deg, rgba(143,91,255,.18), rgba(255,255,255,.04)); border-color:rgba(143,91,255,.28)}
+        .cardMinimo{border-color:rgba(255,93,108,.22)}
+        .cardMaximo{border-color:rgba(67,200,255,.22)}
+        .cardReposicao{border-color:rgba(255,194,72,.18)}
+        .cardEnderecos{border-color:rgba(58,214,122,.18)}
+        .cardTitle{
+            display:block;
+            font-size:11px;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+            color:var(--muted);
+            margin-bottom:10px;
+            font-weight:800;
+        }
+        .cardValue{
+            display:block;
+            font-size:22px;
+            line-height:1.08;
+            font-weight:900;
+            word-break:break-word;
+        }
+        .cardHelp{
+            display:block;
+            margin-top:10px;
+            color:var(--muted);
+            font-size:12px;
+            line-height:1.45;
+        }
+        .banner{
+            margin-top:14px;
+            padding:15px 16px;
+            border-radius:18px;
+            border:1px solid var(--line);
+            background:linear-gradient(135deg, rgba(143,91,255,.16), rgba(255,255,255,.04));
+        }
+        .bannerTitle{
+            font-size:11px;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+            color:var(--accent-2);
+            font-weight:800;
+            margin-bottom:6px;
+        }
+        .bannerValue{
+            font-size:15px;
+            font-weight:900;
+            line-height:1.45;
+        }
+        .bannerHelp{
+            margin-top:6px;
+            color:var(--muted);
+            font-size:12px;
+            line-height:1.45;
+        }
+        .addressList{
+            display:flex;
+            flex-direction:column;
+            gap:12px;
+        }
+        .addressCard{
+            position:relative;
+            padding:16px;
+            border-radius:18px;
+            background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+            border:1px solid var(--line);
+            overflow:hidden;
+        }
+        .addressCard::before{
+            content:"";
+            position:absolute;
+            inset:0 auto 0 0;
+            width:4px;
+            background:linear-gradient(180deg, var(--accent), rgba(143,91,255,.08));
+        }
+        .addressTop{
+            display:flex;
+            justify-content:space-between;
+            gap:12px;
+            align-items:flex-start;
+            margin-bottom:12px;
+        }
+        .label{
+            display:block;
+            margin-bottom:6px;
+            color:var(--muted);
+            font-size:11px;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+            font-weight:800;
+        }
+        .addressValue{
+            font-size:15px;
+            font-weight:900;
+            line-height:1.35;
+            word-break:break-word;
+        }
+        .originTag{
+            padding:7px 10px;
+            background:rgba(143,91,255,.16);
+            border-color:rgba(143,91,255,.28);
+            color:#efe7ff;
+            font-size:11px;
+            font-weight:800;
+        }
+        .chipRow{
+            display:flex;
+            flex-wrap:wrap;
+            gap:8px;
+        }
+        .chip{
+            padding:7px 10px;
+            background:rgba(255,255,255,.06);
+            color:var(--text);
+            font-size:12px;
+            font-weight:700;
+        }
+        .emptyState{
+            padding:18px;
+            border-radius:18px;
+            border:1px dashed rgba(255,255,255,.14);
+            background:rgba(255,255,255,.03);
+            color:var(--muted);
+            text-align:center;
+            line-height:1.6;
+        }
+        @media (max-width:720px){
+            .shell{width:min(100%, calc(100% - 16px)); padding-top:8px;}
+            .hero,.section{padding:16px; border-radius:18px;}
+            .hero{flex-direction:column;}
+            .heroActions{justify-content:flex-start;}
+            h1{font-size:24px;}
+            .sectionHeader,.addressTop{flex-direction:column; align-items:flex-start;}
+            .originTag,.countBadge,.pill{white-space:normal;}
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <header class="hero">
+            <div>
+                <div class="eyebrow">Perfil do item</div>
+                <h1>${esc(itemSeguro.descricao || "Item sem descrição")}</h1>
+                <p class="subtitle">Resumo do saldo e dos endereços vinculados ao item selecionado. A faixa mínima e máxima vem da planilha de estoque mínimo, usando o código Cooperat para o cruzamento.</p>
+                <div class="metaRow">
+                    <span class="pill">Protheus ${esc(itemSeguro.protheus || "-")}</span>
+                    <span class="pill">Cooperat ${esc(itemSeguro.cooperat || "-")}</span>
+                </div>
+            </div>
+            <div class="heroActions">
+                <span class="statusBadge ${statusClasse}">${esc(statusTexto)}</span>
+                <button class="closeBtn" type="button" onclick="parent.fecharModalPerfilItem()">Fechar janela</button>
+            </div>
+        </header>
+
+        <section class="section">
+            <div class="sectionHeader">
+                <div>
+                    <h2>Resumo do estoque</h2>
+                    <p>${esc(faixaTexto)}</p>
+                </div>
+                <span class="countBadge">${listaEnderecos.length} endereço${listaEnderecos.length === 1 ? "" : "s"}</span>
+            </div>
+            <div class="cardGrid">
+                ${cardsHtml}
+            </div>
+            <div class="banner ${statusClasse}">
+                <div class="bannerTitle">Situação atual</div>
+                <div class="bannerValue">${esc(statusTexto)}</div>
+                <div class="bannerHelp">Quando mínimo ou máximo for 0 na planilha, o sistema trata como ausência de limite.</div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="sectionHeader">
+                <div>
+                    <h2>Endereços vinculados</h2>
+                    <p>Lista de endereços encontrados para o item, incluindo o endereço principal e os saldos por local.</p>
+                </div>
+            </div>
+            ${listaEnderecos.length === 0
+                ? `<div class="emptyState">Nenhum endereço foi encontrado para este item no momento.</div>`
+                : `<div class="addressList">${enderecosHtml}</div>`
+            }
+        </section>
+    </div>
+</body>
+</html>`;
+
+        const modal = document.getElementById("perfilItemModal");
+        const frame = document.getElementById("perfilItemModalFrame");
+        if(!modal || !frame){
+            alert("O modal do perfil do item não está disponível na página.");
+            return;
+        }
+
+        frame.srcdoc = html;
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
     }catch(err){
         console.error("Falha ao montar o modal de saldos:", err);
-        if(janelaSaldos && !janelaSaldos.closed){
-            try{
-                janelaSaldos.document.open();
-                janelaSaldos.document.write(`<!doctype html><html lang="pt-br"><head><meta charset="UTF-8"><title>Erro ao abrir modal</title><style>body{font-family:Arial,sans-serif;background:#15151d;color:#fff;padding:24px;}</style></head><body><h2>Não foi possível montar o modal</h2><pre>${escapeHtml(err?.message || String(err))}</pre></body></html>`);
-                janelaSaldos.document.close();
-                janelaSaldos.focus();
-            }catch(err2){
-                console.error("Falha ao renderizar o erro do modal de saldos:", err2 || err);
-                alert("Não foi possível abrir o modal de saldos.");
-            }
-        }else{
-            alert("Não foi possível abrir o modal de saldos.");
-        }
+        alert("Não foi possível abrir o modal de saldos.");
     }
 }
+
+function fecharModalPerfilItem(){
+    const modal = document.getElementById("perfilItemModal");
+    const frame = document.getElementById("perfilItemModalFrame");
+    if(frame){
+        frame.srcdoc = "";
+    }
+    if(modal){
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+window.fecharModalPerfilItem = fecharModalPerfilItem;
+
+document.addEventListener("keydown", function(e){
+    if(e.key === "Escape"){
+        fecharModalPerfilItem();
+    }
+});
 
 function abrirSubPagina(){
 
