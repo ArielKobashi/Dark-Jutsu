@@ -1,4 +1,5 @@
 import argparse
+import base64
 import hashlib
 import json
 import logging
@@ -124,6 +125,19 @@ def _optional_limit_num(value: Any) -> float | None:
     return num
 
 
+def _reposicao_media(minimo: Any, maximo: Any) -> float | None:
+    min_num = _optional_limit_num(minimo)
+    max_num = _optional_limit_num(maximo)
+    if min_num is None or max_num is None:
+        return None
+    return (min_num + max_num) / 2
+
+
+def _ajuste_key(item_key: str) -> str:
+    raw = item_key.encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
 def _safe_text(value: Any) -> str:
     if value is None:
         return ""
@@ -145,6 +159,7 @@ def _build_items(
     saldo_endereco: list[list[Any]],
     estoque_minimo: list[list[Any]] | None,
     dados_anteriores: list[dict[str, Any]],
+    ajustes_itens: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     novos: list[dict[str, Any]] = []
 
@@ -199,7 +214,7 @@ def _build_items(
             continue
         minimo = _optional_limit_num(row[6] if len(row) > 6 else None)
         maximo = _optional_limit_num(row[7] if len(row) > 7 else None)
-        reposicao = _optional_num(row[8] if len(row) > 8 else None)
+        reposicao = _reposicao_media(minimo, maximo)
         if minimo is None and maximo is None and reposicao is None:
             continue
         estoque_minimo_idx[cooperat_cod] = {
@@ -277,8 +292,19 @@ def _build_items(
                 item["minimo"] = anterior.get("minimo")
             if item.get("maximo") is None and anterior.get("maximo") is not None:
                 item["maximo"] = anterior.get("maximo")
-            if item.get("reposicao") is None and anterior.get("reposicao") is not None:
-                item["reposicao"] = anterior.get("reposicao")
+
+        ajuste = (ajustes_itens or {}).get(_ajuste_key(protheus))
+        if isinstance(ajuste, dict):
+            if "minimo" in ajuste:
+                item["minimo"] = _optional_limit_num(ajuste.get("minimo"))
+            if "maximo" in ajuste:
+                item["maximo"] = _optional_limit_num(ajuste.get("maximo"))
+
+        reposicao_final = _reposicao_media(item.get("minimo"), item.get("maximo"))
+        if reposicao_final is None:
+            item.pop("reposicao", None)
+        else:
+            item["reposicao"] = reposicao_final
 
         novos.append(item)
 
@@ -386,6 +412,7 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
 
     dados_anteriores = banco.get("dados") if isinstance(banco.get("dados"), list) else []
     dados_mortos = banco.get("dadosMortos") if isinstance(banco.get("dadosMortos"), list) else []
+    ajustes_itens = banco.get("ajustesItens") if isinstance(banco.get("ajustesItens"), dict) else {}
 
     incluir = _read_sheet(incluir_path)
     saldo_atual = _read_sheet(saldo_atual_path)
@@ -403,7 +430,15 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
             "NAO CONFORME: uma ou mais planilhas estao vazias/incompletas para atualizacao."
         )
 
-    novos_dados = _build_items(incluir, [], saldo_atual, saldo_endereco, estoque_minimo, dados_anteriores)
+    novos_dados = _build_items(
+        incluir,
+        [],
+        saldo_atual,
+        saldo_endereco,
+        estoque_minimo,
+        dados_anteriores,
+        ajustes_itens,
+    )
     if not novos_dados:
         raise RuntimeError("NAO CONFORME: geracao de itens resultou em 0 registros.")
     log.info("TEST_GERACAO_ITENS_OK | itensGerados=%s", len(novos_dados))
@@ -413,6 +448,7 @@ def run_automus_update(config_path: Path, project_root: Path, logger: logging.Lo
     payload = {
         "dados": novos_dados,
         "dadosMortos": dados_mortos,
+        "ajustesItens": ajustes_itens,
         "ultimaAtualizacao": agora_ms,
         "atualizadoPor": updated_by,
         "atualizacaoAutomatica": True,

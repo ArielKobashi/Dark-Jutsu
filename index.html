@@ -448,6 +448,7 @@ let dados = [];
 let dadosMortos = [];
 window.dadosMortos = dadosMortos;
 let visiveis = [];
+let ajustesItensEstoque = {};
 
 function getItemKey(item){
     return (item && (item.protheusKey || item.protheus)) ? (item.protheusKey || item.protheus) : "";
@@ -496,6 +497,43 @@ function formatarNumeroPlanilha(valor){
     }).format(numero);
 }
 
+function calcularReposicaoMedia(minimo, maximo){
+    const min = parseLimiteEstoque(minimo);
+    const max = parseLimiteEstoque(maximo);
+    if(min === null || max === null) return null;
+    return (min + max) / 2;
+}
+
+function chaveAjusteItem(itemOrKey){
+    const key = typeof itemOrKey === "string" ? itemOrKey : getItemKey(itemOrKey);
+    try{
+        return btoa(unescape(encodeURIComponent(key || ""))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }catch(e){
+        return (key || "").toString().replace(/[^A-Za-z0-9_-]/g, "_");
+    }
+}
+
+function aplicarReposicaoCalculada(item){
+    if(!item) return item;
+    const reposicao = calcularReposicaoMedia(item.minimo, item.maximo);
+    if(reposicao === null){
+        delete item.reposicao;
+    }else{
+        item.reposicao = reposicao;
+    }
+    return item;
+}
+
+function aplicarAjusteManualItem(item){
+    if(!item) return item;
+    const ajuste = ajustesItensEstoque?.[chaveAjusteItem(item)];
+    if(ajuste){
+        if(ajuste.minimo !== undefined) item.minimo = ajuste.minimo;
+        if(ajuste.maximo !== undefined) item.maximo = ajuste.maximo;
+    }
+    return aplicarReposicaoCalculada(item);
+}
+
 function obterStatusEstoque(item){
     if(!item) return "";
     const saldo = parsePlanilhaNumero(item.saldo);
@@ -539,7 +577,7 @@ function indexarEstoqueMinimoItens(planilha){
 
         const minimo = parseLimiteEstoque(row[6]);
         const maximo = parseLimiteEstoque(row[7]);
-        const reposicao = parsePlanilhaNumero(row[8]);
+        const reposicao = calcularReposicaoMedia(minimo, maximo);
 
         if(minimo === null && maximo === null && reposicao === null) continue;
 
@@ -567,7 +605,7 @@ function enriquecerItensComEstoqueMinimo(lista, anteriores){
     return itens.map(item => {
         const novo = {...item};
         const codigo = normalizarCodigoItem(novo.cooperat);
-        if(!codigo) return novo;
+        if(!codigo) return aplicarAjusteManualItem(novo);
 
         const extra = mapa.get(codigo);
         const anterior = mapaAnteriores.get(codigo);
@@ -575,9 +613,7 @@ function enriquecerItensComEstoqueMinimo(lista, anteriores){
             if(extra.temLinha){
                 novo.minimo = extra.minimo;
                 novo.maximo = extra.maximo;
-                if(extra.reposicao !== null){
-                    novo.reposicao = extra.reposicao;
-                }
+                novo.reposicao = extra.reposicao;
             }
         }
 
@@ -588,12 +624,9 @@ function enriquecerItensComEstoqueMinimo(lista, anteriores){
             if((novo.maximo === undefined || novo.maximo === null || novo.maximo === "") && anterior.maximo !== undefined && anterior.maximo !== null){
                 novo.maximo = anterior.maximo;
             }
-            if((novo.reposicao === undefined || novo.reposicao === null || novo.reposicao === "") && anterior.reposicao !== undefined && anterior.reposicao !== null){
-                novo.reposicao = anterior.reposicao;
-            }
         }
 
-        return novo;
+        return aplicarAjusteManualItem(novo);
     });
 }
 
@@ -617,6 +650,70 @@ function isEnderecoValido(valor){
 function findItemByKey(key){
     return getBaseDadosTodos().find(d => getItemKey(d) === key);
 }
+
+async function salvarAjusteEstoqueItem(itemKey, minimoRaw, maximoRaw){
+    const item = findItemByKey(itemKey);
+    if(!item){
+        return { ok:false, mensagem:"Item não encontrado." };
+    }
+
+    const minimo = parseLimiteEstoque(minimoRaw);
+    const maximo = parseLimiteEstoque(maximoRaw);
+    const reposicao = calcularReposicaoMedia(minimo, maximo);
+    const ajusteKey = chaveAjusteItem(itemKey);
+    const ajuste = {
+        itemKey: itemKey || "",
+        protheus: item.protheus || "",
+        cooperat: item.cooperat || "",
+        minimo: minimo === null ? "" : minimo,
+        maximo: maximo === null ? "" : maximo,
+        reposicao: reposicao === null ? "" : reposicao,
+        atualizadoEm: Date.now(),
+        atualizadoPor: window.meuNickname || "Sistema"
+    };
+
+    ajustesItensEstoque[ajusteKey] = ajuste;
+    item.minimo = ajuste.minimo;
+    item.maximo = ajuste.maximo;
+    aplicarReposicaoCalculada(item);
+
+    if(item.morto){
+        dadosMortos = (dadosMortos || []).map(d => getItemKey(d) === itemKey ? item : d);
+        window.dadosMortos = dadosMortos;
+    }else{
+        dados = (dados || []).map(d => getItemKey(d) === itemKey ? item : d);
+        window.dados = dados;
+    }
+    aplicarTodosFiltros();
+
+    try{
+        const payload = {
+            [`ajustesItens/${ajusteKey}`]: ajuste,
+            dados: dados || [],
+            dadosMortos: dadosMortos || [],
+            ultimaAtualizacao: Date.now(),
+            atualizadoPor: window.meuNickname || "Sistema"
+        };
+        if(typeof window.firebaseUpdate === "function" && typeof window.ref === "function" && window.db){
+            await window.firebaseUpdate(window.ref(window.db, "estoqueGlobal"), payload);
+        }else{
+            throw new Error("Firebase ainda não está pronto.");
+        }
+        if(typeof mostrarNotificacao === "function"){
+            mostrarNotificacao("Limites do item salvos.");
+        }
+        return {
+            ok:true,
+            minimo: ajuste.minimo,
+            maximo: ajuste.maximo,
+            reposicao: ajuste.reposicao
+        };
+    }catch(e){
+        console.error("Falha ao salvar ajuste do item:", e);
+        return { ok:false, mensagem:e?.code || e?.message || "Erro ao salvar." };
+    }
+}
+window.salvarAjusteEstoqueItem = salvarAjusteEstoqueItem;
 
 window.setDados = function(novosDados){
     const anteriores = Array.isArray(dados) ? dados : [];
@@ -1260,6 +1357,7 @@ async function atualizarBanco(btn) {
     const payload = {
         dados: dados,
         dadosMortos: window.dadosMortos || [],
+        ajustesItens: ajustesItensEstoque || {},
         ultimaAtualizacao: Date.now(),
         atualizadoPor: (window.meuNickname || "Sistema") + " - atualizado automaticamente",
         atualizacaoAutomatica: true,
@@ -2412,9 +2510,9 @@ function abrirModalSaldos(item){
         const saldoValor = parsePlanilhaNumero(itemSeguro.saldo);
         const minimoValor = parseLimiteEstoque(itemSeguro.minimo);
         const maximoValor = parseLimiteEstoque(itemSeguro.maximo);
-        const reposicaoValor = parsePlanilhaNumero(itemSeguro.reposicao);
         const temMinimo = minimoValor !== null;
         const temMaximo = maximoValor !== null;
+        const reposicaoValor = calcularReposicaoMedia(minimoValor, maximoValor);
         const temFaixa = temMinimo || temMaximo;
 
         const statusEstoque = saldoValor !== null && temMinimo && saldoValor < minimoValor
@@ -2440,6 +2538,13 @@ function abrirModalSaldos(item){
         const faixaTexto = temFaixa
             ? `${temMinimo ? `Mínimo ${esc(formatarNumeroPlanilha(minimoValor))}` : "Sem mínimo"} · ${temMaximo ? `Máximo ${esc(formatarNumeroPlanilha(maximoValor))}` : "Sem máximo"}`
             : "Este item não possui faixa configurada na planilha de estoque mínimo.";
+        const itemKey = getItemKey(itemSeguro);
+        const itemKeyEncoded = encodeURIComponent(itemKey);
+        const minimoInputValor = minimoValor === null ? "" : String(minimoValor).replace(".", ",");
+        const maximoInputValor = maximoValor === null ? "" : String(maximoValor).replace(".", ",");
+        const reposicaoPreview = reposicaoValor === null ? "Informe mínimo e máximo" : formatarNumeroPlanilha(reposicaoValor);
+        const recalcularReposicaoAttr = 'const p=(v)=>{v=(v||"").trim().replace(/\\./g,"").replace(",",".");const n=Number(v);return Number.isFinite(n)&&n!==0?n:null};const a=p(document.getElementById("editMinimo").value);const b=p(document.getElementById("editMaximo").value);document.getElementById("reposicaoPreview").textContent=(a===null||b===null)?"Informe mínimo e máximo":new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format((a+b)/2);';
+        const salvarAjusteAttr = `const b=this;b.disabled=true;b.textContent="Salvando...";parent.salvarAjusteEstoqueItem(decodeURIComponent("${itemKeyEncoded}"),document.getElementById("editMinimo").value,document.getElementById("editMaximo").value).then(r=>{const s=document.getElementById("editStatus");if(r&&r.ok){s.textContent="Salvo.";s.className="editStatus ok";document.getElementById("reposicaoPreview").textContent=r.reposicao===""?"Informe mínimo e máximo":new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(Number(r.reposicao));}else{s.textContent=(r&&r.mensagem)||"Erro ao salvar.";s.className="editStatus erro";}}).finally(()=>{b.disabled=false;b.textContent="Salvar limites";});`;
 
         const enderecosOriginais = Array.isArray(itemSeguro.enderecos) ? itemSeguro.enderecos : [];
         const listaEnderecos = [];
@@ -2723,6 +2828,75 @@ function abrirModalSaldos(item){
             font-size:12px;
             line-height:1.45;
         }
+        .editGrid{
+            display:grid;
+            grid-template-columns:repeat(3, minmax(0, 1fr));
+            gap:12px;
+            align-items:end;
+        }
+        .editField{
+            display:flex;
+            flex-direction:column;
+            gap:7px;
+        }
+        .editField label{
+            color:var(--muted);
+            font-size:11px;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+            font-weight:800;
+        }
+        .editField input,
+        .readonlyValue{
+            width:100%;
+            min-height:38px;
+            border-radius:12px;
+            border:1px solid var(--line);
+            background:rgba(255,255,255,.06);
+            color:var(--text);
+            padding:9px 11px;
+            font-size:15px;
+            font-weight:800;
+        }
+        .editField input:focus{
+            outline:2px solid rgba(67,200,255,.28);
+            border-color:rgba(67,200,255,.42);
+        }
+        .readonlyValue{
+            display:flex;
+            align-items:center;
+            color:#fff1c2;
+            background:rgba(255,194,72,.09);
+            border-color:rgba(255,194,72,.2);
+        }
+        .editActions{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-top:12px;
+        }
+        .saveBtn{
+            border:1px solid rgba(67,200,255,.32);
+            background:linear-gradient(135deg, rgba(67,200,255,.28), rgba(143,91,255,.32));
+            color:var(--text);
+            border-radius:12px;
+            padding:10px 14px;
+            cursor:pointer;
+            font-weight:900;
+        }
+        .saveBtn:disabled{
+            opacity:.65;
+            cursor:wait;
+        }
+        .editStatus{
+            min-height:18px;
+            color:var(--muted);
+            font-size:12px;
+            font-weight:800;
+        }
+        .editStatus.ok{color:#b9ffd2}
+        .editStatus.erro{color:#ffd0d6}
         .addressList{
             display:flex;
             flex-direction:column;
@@ -2802,6 +2976,8 @@ function abrirModalSaldos(item){
             h1{font-size:24px;}
             .sectionHeader,.addressTop{flex-direction:column; align-items:flex-start;}
             .originTag,.countBadge,.pill{white-space:normal;}
+            .editGrid{grid-template-columns:1fr;}
+            .editActions{align-items:flex-start; flex-direction:column;}
         }
     </style>
 </head>
@@ -2838,6 +3014,33 @@ function abrirModalSaldos(item){
                 <div class="bannerTitle">Situação atual</div>
                 <div class="bannerValue">${esc(statusTexto)}</div>
                 <div class="bannerHelp">Quando mínimo ou máximo for 0 na planilha, o sistema trata como ausência de limite.</div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="sectionHeader">
+                <div>
+                    <h2>Editar limites</h2>
+                    <p>Os valores salvos aqui ficam mantidos no sistema após novas atualizações. Reposição é calculada automaticamente pela média entre mínimo e máximo.</p>
+                </div>
+            </div>
+            <div class="editGrid">
+                <div class="editField">
+                    <label for="editMinimo">Mínimo</label>
+                    <input id="editMinimo" type="text" inputmode="decimal" value="${esc(minimoInputValor)}" placeholder="Sem mínimo" oninput='${recalcularReposicaoAttr}'>
+                </div>
+                <div class="editField">
+                    <label for="editMaximo">Máximo</label>
+                    <input id="editMaximo" type="text" inputmode="decimal" value="${esc(maximoInputValor)}" placeholder="Sem máximo" oninput='${recalcularReposicaoAttr}'>
+                </div>
+                <div class="editField">
+                    <label>Reposição</label>
+                    <div class="readonlyValue" id="reposicaoPreview">${esc(reposicaoPreview)}</div>
+                </div>
+            </div>
+            <div class="editActions">
+                <div id="editStatus" class="editStatus"></div>
+                <button class="saveBtn" type="button" onclick='${salvarAjusteAttr}'>Salvar limites</button>
             </div>
         </section>
 
@@ -3323,7 +3526,7 @@ function importarDadosMortos(btn){
                     novosMortos.push(item);
                 });
 
-                dadosMortos = novosMortos;
+                dadosMortos = novosMortos.map(item => aplicarAjusteManualItem(item));
                 window.dadosMortos = dadosMortos;
                 aplicarTodosFiltros();
 
@@ -4687,7 +4890,9 @@ async function carregarEstoqueInicial() {
 
             const banco = snapshot.val();
 
+            ajustesItensEstoque = banco.ajustesItens || {};
             dadosMortos = Array.isArray(banco.dadosMortos) ? banco.dadosMortos : [];
+            dadosMortos = dadosMortos.map(item => aplicarAjusteManualItem({...item}));
             window.dadosMortos = dadosMortos;
             window.setDados(banco.dados || []);
 
@@ -4695,6 +4900,17 @@ onValue(window.estoqueRef, snapshot => {
 
     const val = snapshot.val();
     if(!val) return;
+
+    const syncToken = val.ultimaAtualizacao || 0;
+    if(window.__estoqueSyncToken !== syncToken){
+        window.__estoqueSyncToken = syncToken;
+        ajustesItensEstoque = val.ajustesItens || {};
+        dadosMortos = Array.isArray(val.dadosMortos) ? val.dadosMortos.map(item => aplicarAjusteManualItem({...item})) : [];
+        window.dadosMortos = dadosMortos;
+        if(Array.isArray(val.dados)){
+            window.setDados(val.dados);
+        }
+    }
 
     const data = val.ultimaAtualizacao
         ? new Date(val.ultimaAtualizacao).toLocaleString()
@@ -4713,6 +4929,7 @@ onValue(window.estoqueRef, snapshot => {
 
             // 🔥 PRIMEIRA VEZ → NÃO EXISTE NADA
             dadosMortos = [];
+            ajustesItensEstoque = {};
             window.dadosMortos = dadosMortos;
             window.setDados([]);
 
