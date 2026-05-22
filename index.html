@@ -1309,6 +1309,7 @@ async function carregarEstoqueMinimoPadrao(){
 
 let etiquetaMata105Cache = null;
 let etiquetaLogoCache = null;
+let etiquetaCodigosPorTamanho = { "5": "", "7": "", "10": "", "15": "" };
 const ETIQUETA_DPI = 300;
 const ETIQUETA_COR = "#283285";
 const ETIQUETA_ESCALA = 2;
@@ -1554,6 +1555,29 @@ function getTamanhoEtiquetaSelecionado(){
     return ETIQUETA_MOLDES[escolha] || ETIQUETA_MOLDES["7"];
 }
 
+function getEtiquetaTamanhoAtual(){
+    return document.querySelector("input[name='etiquetaTamanho']:checked")?.value || "7";
+}
+
+function parseCodigosEtiquetasTexto(texto){
+    return String(texto || "")
+        .split(/[,\n;]/)
+        .map(c => c.trim())
+        .filter(Boolean);
+}
+
+function salvarCodigosEtiquetaAtual(){
+    const tamanho = getEtiquetaTamanhoAtual();
+    const input = document.getElementById("etiquetaCodigos");
+    etiquetaCodigosPorTamanho[tamanho] = input?.value || "";
+}
+
+function carregarCodigosEtiquetaAtual(){
+    const tamanho = getEtiquetaTamanhoAtual();
+    const input = document.getElementById("etiquetaCodigos");
+    if(input) input.value = etiquetaCodigosPorTamanho[tamanho] || "";
+}
+
 function setEtiquetasStatus(msg){
     const el = document.getElementById("etiquetasStatus");
     if(el) el.textContent = msg || "";
@@ -1574,15 +1598,14 @@ window.toggleEtiquetasPanel = toggleEtiquetasPanel;
 
 function selecionadosParaEtiquetas(){
     toggleEtiquetasPanel(true);
+    salvarCodigosEtiquetaAtual();
+    const tamanho = getEtiquetaTamanhoAtual();
     const novos = Array.from(selecionados || []).map(key=>{
         const item = findItemByKey(key);
         return item?.protheus || item?.cooperat || key;
     }).filter(Boolean);
     const input = document.getElementById("etiquetaCodigos");
-    const atuais = (input?.value || "")
-        .split(/[,\n;]/)
-        .map(c => c.trim())
-        .filter(Boolean);
+    const atuais = parseCodigosEtiquetasTexto(etiquetaCodigosPorTamanho[tamanho] || input?.value || "");
     const acumulados = [];
     const vistos = new Set();
     [...atuais, ...novos].forEach(codigo=>{
@@ -1592,14 +1615,17 @@ function selecionadosParaEtiquetas(){
         acumulados.push(codigo);
     });
     if(input) input.value = acumulados.join(", ");
+    etiquetaCodigosPorTamanho[tamanho] = input?.value || "";
     setEtiquetasStatus(`${novos.length} selecionado(s) adicionados. Total: ${acumulados.length}.`);
 }
 window.selecionadosParaEtiquetas = selecionadosParaEtiquetas;
 
 function limparCodigosEtiquetas(){
+    const tamanho = getEtiquetaTamanhoAtual();
     const input = document.getElementById("etiquetaCodigos");
     if(input) input.value = "";
-    setEtiquetasStatus("Códigos limpos.");
+    etiquetaCodigosPorTamanho[tamanho] = "";
+    setEtiquetasStatus(`Códigos de ${ETIQUETA_MOLDES[tamanho]?.nome || tamanho} limpos.`);
 }
 window.limparCodigosEtiquetas = limparCodigosEtiquetas;
 
@@ -1608,37 +1634,38 @@ async function baixarEtiquetas(){
         if(typeof JSZip === "undefined"){
             throw new Error("Compactador não carregado. Verifique a conexão e tente novamente.");
         }
-        const codigos = (document.getElementById("etiquetaCodigos")?.value || "")
-            .split(/[,\n;]/)
-            .map(c => c.trim())
-            .filter(Boolean);
-        if(!codigos.length) throw new Error("Informe ao menos um código.");
+        salvarCodigosEtiquetaAtual();
+        const codigosPorTamanho = Object.fromEntries(
+            Object.keys(ETIQUETA_MOLDES).map(tamanho => [tamanho, parseCodigosEtiquetasTexto(etiquetaCodigosPorTamanho[tamanho])])
+        );
+        const totalInformados = Object.values(codigosPorTamanho).reduce((acc, lista)=>acc + lista.length, 0);
+        if(!totalInformados) throw new Error("Informe ao menos um código.");
 
         setEtiquetasStatus("Carregando mata105 nativa...");
         const linhas = await carregarMata105Etiquetas();
         const zip = new JSZip();
-        const naoEncontrados = [];
-        const itens = [];
-        const vistosItens = new Set();
-
-        for(const codigo of codigos){
-            const item = buscarItemMata105(linhas, codigo);
-            if(!item){
-                naoEncontrados.push(codigo);
-                continue;
-            }
-            const chave = String(item.protheus || codigo).toLowerCase();
-            if(vistosItens.has(chave)) continue;
-            vistosItens.add(chave);
-            itens.push(item);
-        }
-
-        if(!itens.length) throw new Error("Nenhum código informado foi encontrado na mata105.");
-
-        const moldes = Object.values(ETIQUETA_MOLDES);
+        const naoEncontrados = {};
         let geradas = 0;
-        for(const cfg of moldes){
+        for(const [tamanho, cfg] of Object.entries(ETIQUETA_MOLDES)){
+            const codigos = codigosPorTamanho[tamanho] || [];
+            if(!codigos.length) continue;
             const pasta = zip.folder(cfg.nome);
+            const itens = [];
+            const vistosItens = new Set();
+            naoEncontrados[cfg.nome] = [];
+
+            for(const codigo of codigos){
+                const item = buscarItemMata105(linhas, codigo);
+                if(!item){
+                    naoEncontrados[cfg.nome].push(codigo);
+                    continue;
+                }
+                const chave = String(item.protheus || codigo).toLowerCase();
+                if(vistosItens.has(chave)) continue;
+                vistosItens.add(chave);
+                itens.push(item);
+            }
+
             for(let i = 0; i < itens.length; i++){
                 const item = itens[i];
                 setEtiquetasStatus(`Gerando ${cfg.nome} ${i + 1}/${itens.length}: ${item.protheus}`);
@@ -1648,11 +1675,16 @@ async function baixarEtiquetas(){
             }
         }
 
+        if(!geradas) throw new Error("Nenhum código informado foi encontrado na mata105.");
+
+        const naoEncontradosLinhas = Object.entries(naoEncontrados)
+            .filter(([, lista]) => lista.length)
+            .map(([nome, lista]) => `${nome}: ${lista.join(", ")}`);
+
         zip.file("resumo.txt", [
             `Etiquetas geradas: ${geradas}`,
-            `Itens: ${itens.length}`,
             "Pastas: 5cm, 7cm, 10cm, 15cm",
-            naoEncontrados.length ? `Não encontrados: ${naoEncontrados.join(", ")}` : "Todos os códigos foram encontrados."
+            naoEncontradosLinhas.length ? `Não encontrados:\n${naoEncontradosLinhas.join("\n")}` : "Todos os códigos foram encontrados."
         ].join("\n"));
 
         setEtiquetasStatus("Compactando etiquetas...");
@@ -1665,13 +1697,24 @@ async function baixarEtiquetas(){
         a.click();
         a.remove();
         setTimeout(()=>URL.revokeObjectURL(url), 1000);
-        setEtiquetasStatus(naoEncontrados.length ? `Baixado. Não encontrados: ${naoEncontrados.join(", ")}` : "Pacote baixado.");
+        setEtiquetasStatus(naoEncontradosLinhas.length ? "Baixado com alguns códigos não encontrados." : "Pacote baixado.");
     }catch(e){
         console.error("Falha ao gerar etiquetas:", e);
         setEtiquetasStatus(e?.message || "Erro ao gerar etiquetas.");
     }
 }
 window.baixarEtiquetas = baixarEtiquetas;
+
+document.querySelectorAll("input[name='etiquetaTamanho']").forEach(input=>{
+    input.addEventListener("change", (e)=>{
+        if(e.target.checked){
+            carregarCodigosEtiquetaAtual();
+            setEtiquetasStatus(`Lista ${ETIQUETA_MOLDES[e.target.value]?.nome || ""} aberta.`);
+        }
+    });
+});
+
+document.getElementById("etiquetaCodigos")?.addEventListener("input", salvarCodigosEtiquetaAtual);
 
 let __autoUpdateDisparada = false;
 function tentarAtualizacaoAutomaticaFinal() {
@@ -5088,6 +5131,7 @@ onAuthStateChanged(auth, async (user) => {
         chatSessionState = null;
         lastRoomEntrySessionKey = null;
         ultimaSalaEntrada = null;
+        salaEntradaRegistrada = null;
         if(document.getElementById("pendingScreen")?.style.display !== "flex"){
             authScreen.style.display = "flex";
         }
@@ -5377,6 +5421,7 @@ let unreadTitleFlip = false;
 let unreadTitleCount = 0;
 let lastRoomEntrySessionKey = null;
 let ultimaSalaEntrada = null;
+let salaEntradaRegistrada = null;
 let readStateCache = {};
 privateRoomGateState = null;
 
@@ -5818,14 +5863,12 @@ function anunciarEntradaSala(roomId, sessionId = null){
     if(typeof window.getChatRef !== "function") return;
     const uid = getCurrentChatUid();
     const currentSession = sessionId || chatSessionState?.sessionId || "";
-    if(lastRoomEntrySessionKey === `${roomId}:${currentSession}`) return;
-    const msgs = roomMessages[roomId] || [];
-    if(currentSession && msgs.some(msg => msg?.tipo === "system" && msg?.evento === "entrada" && msg?.sessionId === currentSession)){
-        lastRoomEntrySessionKey = `${roomId}:${currentSession}`;
+    if(!sessionId && salaEntradaRegistrada === roomId){
         return;
     }
     lastRoomEntrySessionKey = `${roomId}:${currentSession}`;
     ultimaSalaEntrada = roomId;
+    salaEntradaRegistrada = roomId;
     const cracha = (window.meuCracha || "").toString().trim();
     const nickFmt = formatarNick(window.meuNickname || "");
     const tag = cracha ? `${nickFmt}:${cracha}` : nickFmt;
@@ -5845,20 +5888,24 @@ function anunciarSaidaSala(roomId, sessionId = null){
     if(typeof window.getChatRef !== "function") return;
     const uid = getCurrentChatUid();
     const currentSession = sessionId || chatSessionState?.sessionId || "";
-    if(!currentSession && ultimaSalaEntrada !== roomId) return;
-    if(currentSession && !sessionId && ultimaSalaEntrada !== roomId) return;
-    const msgs = roomMessages[roomId] || [];
-    if(currentSession && msgs.some(msg => msg?.tipo === "system" && msg?.evento === "saida" && msg?.sessionId === currentSession)){
+    if(!sessionId && salaEntradaRegistrada !== roomId){
         return;
     }
     const cracha = (window.meuCracha || "").toString().trim();
     const nickFmt = formatarNick(window.meuNickname || "");
     const tag = cracha ? `${nickFmt}:${cracha}` : nickFmt;
-    enviarMensagemSistema(`${tag} saiu da sala...`, roomId, {
+    const mensagem = enviarMensagemSistema(`${tag} saiu da sala...`, roomId, {
         evento: "saida",
         sessionId: currentSession,
         uid: uid || ""
     });
+    if(!sessionId && salaEntradaRegistrada === roomId){
+        salaEntradaRegistrada = null;
+    }
+    if(mensagem && roomId === salaAtual){
+        roomMessages[roomId] = [...(roomMessages[roomId] || []), mensagem];
+        atualizarVistaChatAtivo(roomId, false);
+    }
 }
 
 const TYPING_TTL = 4500;
@@ -6050,6 +6097,7 @@ async function prepararChatUsuario(){
     const uid = getCurrentChatUid();
     if(!uid) return;
     pararMonitoramentoChat();
+    salaEntradaRegistrada = null;
     await carregarLeituraSalaRemota();
     const sessionAnterior = loadSessionState(uid);
     const sessionAtual = chatSessionState?.sessionId || "";

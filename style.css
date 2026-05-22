@@ -870,14 +870,15 @@ th.col-ordenada.col-filtrada {
 
 .etiquetaInputWrap{
     display:grid;
-    grid-template-columns:1fr 32px;
+    grid-template-columns:1fr 16px;
     gap:6px;
     margin-top:8px;
 }
 
 .etiquetaTrashBtn{
-    min-width:32px;
-    height:32px;
+    min-width:16px;
+    width:16px;
+    height:16px;
     align-self:start;
     border:1px solid #2D3A52;
     background:#172033;
@@ -885,6 +886,7 @@ th.col-ordenada.col-filtrada {
     border-radius:6px;
     cursor:pointer;
     padding:0;
+    font-size:9px;
     line-height:1;
 }
 
