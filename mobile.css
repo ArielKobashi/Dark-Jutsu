@@ -121,7 +121,7 @@
 
     #main {
         flex: 1 1 auto;
-        padding: 10px 8px 6px 8px;
+        padding: 10px 8px 64px 8px;
         min-height: 0;
         overflow: hidden;
     }
@@ -146,11 +146,26 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
-        flex: 0 0 auto;
-        padding-top: 8px;
-        background: #15151D;
-        position: relative;
-        z-index: 12;
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        bottom: calc(8px + env(safe-area-inset-bottom));
+        z-index: 33;
+        padding: 7px;
+        border: 1px solid rgba(122, 60, 255, 0.22);
+        border-radius: 12px;
+        background: rgba(12, 12, 18, 0.94);
+        box-shadow: 0 -8px 22px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    body.auth-open #mainActions,
+    body.loading-open #mainActions,
+    body.pending-open #mainActions,
+    body.cadastro-open #mainActions,
+    body.mobile-config-open #mainActions {
+        display: none !important;
     }
 
     table {

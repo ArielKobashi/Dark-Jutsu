@@ -7,7 +7,7 @@
 <title>Dark-Jutsu</title>
 <link rel="icon" href="logo-tab.png">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="mobile.css?v=6">
+<link rel="stylesheet" href="mobile.css?v=7">
 <!-- /SPLIT: head.html -->
 
 </head>
@@ -6101,15 +6101,28 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         iniciarProgresso();
-
-        await carregarEstoqueInicial();
-        await carregarEstoqueMinimoPadrao();
-
-        await prepararChatUsuario();
-
         resetarTimer(); // 🔥 ativa controle de inatividade
 
-        finalizarProgresso();
+        const carregarDadosSistema = async () => {
+            await carregarEstoqueInicial();
+            await carregarEstoqueMinimoPadrao();
+        };
+
+        if(isMobileLayout()){
+            finalizarProgresso();
+            carregarDadosSistema()
+                .then(()=>prepararChatUsuario())
+                .catch(error => {
+                    console.error("Erro ao carregar dados em segundo plano:", error);
+                    if(typeof mostrarNotificacao === "function"){
+                        mostrarNotificacao("Ainda carregando dados. Se demorar, recarregue a página.");
+                    }
+                });
+        }else{
+            await carregarDadosSistema();
+            await prepararChatUsuario();
+            finalizarProgresso();
+        }
 
     } catch (error) {
         console.error("Erro ao validar usuário:", error);
