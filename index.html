@@ -3432,10 +3432,30 @@ function iniciarEscutaContagem(){
             contagemEscutando = false;
             contagemReconhecimento = null;
         };
-        rec.start();
-        atualizarStatusEscutaContagem("Ouvindo quantidade...");
-        contagemEscutaTimer = setTimeout(()=>pararEscutaContagem(), 15000);
-    }catch(e){
+        contagemEscutaAte = Date.now() + 15000;
+
+    rec.onend = () => {
+        if(contagemEscutaTimer){
+            clearTimeout(contagemEscutaTimer);
+            contagemEscutaTimer = null;
+        }
+
+        contagemEscutando = false;
+        contagemReconhecimento = null;
+
+        if(
+            contagemNarradorAtivo &&
+            contagemLocutorAtivo &&
+            Date.now() < contagemEscutaAte
+        ){
+            setTimeout(iniciarEscutaContagem, 250);
+        }
+    };
+
+    rec.start();
+    atualizarStatusEscutaContagem("Ouvindo quantidade...");
+    contagemEscutaTimer = setTimeout(()=>pararEscutaContagem(), 15000);
+        }catch(e){
         contagemEscutando = false;
         contagemReconhecimento = null;
     }
