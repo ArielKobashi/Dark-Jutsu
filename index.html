@@ -472,6 +472,7 @@ let dadosMortos = [];
 window.dadosMortos = dadosMortos;
 let visiveis = [];
 let ajustesItensEstoque = {};
+var privateRoomGateState = null;
 
 function getItemKey(item){
     return (item && (item.protheusKey || item.protheus)) ? (item.protheusKey || item.protheus) : "";
@@ -1426,16 +1427,20 @@ async function carregarMata105Etiquetas(){
 }
 
 function buscarItemMata105(linhas, codigo){
-    const alvo = String(codigo || "").trim().toLowerCase();
+    const normalizarBusca = (valor) => String(valor ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[.\-/_\s]/g, "");
+    const alvo = normalizarBusca(codigo);
     if(!alvo) return null;
     for(const row of linhas || []){
         const cooperat = String(row?.[0] ?? "").trim();
         const protheus = String(row?.[1] ?? "").trim();
         const descricao = String(row?.[2] ?? "").trim();
-        if(!cooperat || !protheus) continue;
+        if(!protheus) continue;
         const header = `${cooperat} ${protheus} ${descricao}`.toLowerCase();
         if(header.includes("cooperat") || header.includes("protheus") || header.includes("descri")) continue;
-        if(cooperat.toLowerCase() === alvo || protheus.toLowerCase() === alvo){
+        if(normalizarBusca(cooperat) === alvo || normalizarBusca(protheus) === alvo){
             return { cooperat, protheus, descricao: descricao || "-" };
         }
     }
@@ -5338,7 +5343,7 @@ let unreadTitleCount = 0;
 let lastRoomEntrySessionKey = null;
 let ultimaSalaEntrada = null;
 let readStateCache = {};
-let privateRoomGateState = null;
+privateRoomGateState = null;
 
 function getChatRef(roomId){
     return ref(db, "chatRooms/" + roomId + "/messages");
