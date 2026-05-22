@@ -6043,6 +6043,14 @@ function anunciarEntradaSala(roomId, sessionId = null){
     lastRoomEntrySessionKey = `${roomId}:${currentSession}`;
     ultimaSalaEntrada = roomId;
     salaEntradaRegistrada = roomId;
+    if(!sessionId && chatSessionState){
+        chatSessionState.hasEnteredChat = true;
+        chatSessionState.enteredRoomId = roomId;
+        chatSessionState.roomId = roomId;
+        chatSessionState.updatedAt = Date.now();
+        const currentUid = getCurrentChatUid();
+        if(currentUid) saveSessionState(currentUid, chatSessionState);
+    }
     const cracha = (window.meuCracha || "").toString().trim();
     const nickFmt = formatarNick(window.meuNickname || "");
     const tag = cracha ? `${nickFmt}:${cracha}` : nickFmt;
@@ -6072,6 +6080,13 @@ function anunciarSaidaSala(roomId, sessionId = null){
     });
     if(!sessionId && salaEntradaRegistrada === roomId){
         salaEntradaRegistrada = null;
+    }
+    if(!sessionId && chatSessionState?.enteredRoomId === roomId){
+        chatSessionState.hasEnteredChat = false;
+        chatSessionState.enteredRoomId = "";
+        chatSessionState.updatedAt = Date.now();
+        const currentUid = getCurrentChatUid();
+        if(currentUid) saveSessionState(currentUid, chatSessionState);
     }
     adicionarMensagemLocalChat(roomId, mensagem);
 }
@@ -6270,8 +6285,9 @@ async function prepararChatUsuario(){
     const sessionAnterior = loadSessionState(uid);
     const sessionAtual = chatSessionState?.sessionId || "";
     if(sessionAnterior && sessionAnterior.sessionId && sessionAnterior.sessionId !== sessionAtual){
-        if(sessionAnterior.roomId && !sessionAnterior.exitLogged){
-            await anunciarSaidaSala(sessionAnterior.roomId, sessionAnterior.sessionId);
+        const salaComEntrada = sessionAnterior.enteredRoomId || (sessionAnterior.hasEnteredChat ? sessionAnterior.roomId : "");
+        if(salaComEntrada && !sessionAnterior.exitLogged){
+            await anunciarSaidaSala(salaComEntrada, sessionAnterior.sessionId);
             sessionAnterior.exitLogged = true;
             sessionAnterior.closedAt = Date.now();
             saveSessionState(uid, sessionAnterior);
@@ -6281,6 +6297,8 @@ async function prepararChatUsuario(){
         uid,
         sessionId: gerarSessionId(),
         roomId: salaAtual,
+        enteredRoomId: "",
+        hasEnteredChat: false,
         startedAt: Date.now(),
         exitLogged: false,
         closedAt: 0
@@ -6295,8 +6313,9 @@ async function encerrarSessaoChat(motivo = "saida", emitirMensagem = true){
     if(!uid) return;
     const session = chatSessionState || loadSessionState(uid);
     if(!session || session.exitLogged) return;
-    if(emitirMensagem && session.roomId){
-        await anunciarSaidaSala(session.roomId, session.sessionId);
+    const salaComEntrada = session.enteredRoomId || (session.hasEnteredChat ? session.roomId : "");
+    if(emitirMensagem && salaComEntrada){
+        await anunciarSaidaSala(salaComEntrada, session.sessionId);
     }
     session.exitLogged = true;
     session.closedAt = Date.now();
