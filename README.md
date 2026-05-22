@@ -4,7 +4,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 
 ## Estrutura
 
-- `index.html` - aplicacao principal, Firebase, tabela de estoque, chat, painel admin, relatorios, editor de limites e gerador de etiquetas.
+- `index.html` - aplicacao principal, Firebase, tabela de estoque, chat, painel admin, relatorios, contagem, editor de limites e gerador de etiquetas.
 - `style.css` - estilos desktop da aplicacao.
 - `mobile.css` - ajustes responsivos/mobile.
 - `downloads/` - planilhas e assets usados pelo sistema:
@@ -23,6 +23,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 - Filtro de saldo fora da faixa minima/maxima.
 - Captura de itens pelo modo magnet.
 - Relatorio imprimivel dos itens selecionados.
+- Tela de contagem de estoque por maquina/endereco, com rascunho local, divergencias e exportacao XLSX.
 - Modal de perfil do item com saldo, endereco, minimo, maximo e reposicao.
 - Edicao item a item de minimo e maximo dentro do modal.
 - Reposicao calculada automaticamente pela media entre minimo e maximo.
@@ -90,6 +91,7 @@ Pontos importantes das regras:
 - `chatReadState/$uid` precisa permitir leitura/escrita apenas para o proprio usuario.
 - `chatRooms/$room/typing/$uid` precisa permitir escrita apenas para o proprio usuario.
 - `chatRooms/$room/messages` precisa permitir leitura/escrita para usuarios autenticados.
+- `contagens` precisa permitir leitura/escrita para usuarios autenticados para salvar e consultar contagens.
 
 ## Etiquetas
 

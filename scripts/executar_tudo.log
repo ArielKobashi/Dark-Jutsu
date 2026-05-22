@@ -1660,3 +1660,50 @@ RuntimeError: Timeout ao focar janela. Titulos esperados: ['TOTVS SmartClient HT
 2026-05-21 23:59:11,660 | INFO | AUTOMUS: envio concluido com sucesso.
 2026-05-21 23:59:11,661 | INFO | CONFIRMACAO: envio Firebase via Automus executado apos a macro_005 (sem automacao de navegador).
 2026-05-21 23:59:11,661 | INFO | Automacao finalizada com sucesso.
+2026-05-22 02:34:01,154 | INFO | Automacao iniciada. Controles: F8 pausa, F9 retoma, F10 para (tambem P/R/S e botoes na janela). Identificador de pixel: ative no botao e use Espaco para capturar.
+2026-05-22 02:34:01,172 | INFO | Marco temporal de validacao criado em: 2026-05-22 02:34:01. Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.
+2026-05-22 02:34:01,173 | INFO | Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; apos a macro 005, Automus envia direto ao Firebase (sem mexer na sessao aberta do Dark Jutsu).
+2026-05-22 02:34:01,189 | INFO | Iniciando etapa: macro_001.py
+2026-05-22 02:34:01,986 | INFO | Etapa concluida com sucesso: macro_001.py
+2026-05-22 02:34:02,005 | INFO | Iniciando etapa: macro_002.py
+2026-05-22 02:34:17,968 | INFO | Etapa concluida com sucesso: macro_002.py
+2026-05-22 02:34:17,979 | INFO | Iniciando etapa: macro_003.py
+2026-05-22 02:35:41,925 | INFO | Etapa concluida com sucesso: macro_003.py
+2026-05-22 02:35:41,932 | INFO | Iniciando etapa: macro_004.py
+2026-05-22 02:38:06,041 | INFO | Etapa concluida com sucesso: macro_004.py
+2026-05-22 02:38:06,049 | WARNING | Validacao de comentarios ignorada em macro_005.py: Comentarios fora de sequencia em macro_005.py:783. Esperado #0777, encontrado #0778.
+2026-05-22 02:38:06,049 | INFO | Iniciando etapa: macro_005.py
+2026-05-22 02:42:36,171 | INFO | Etapa concluida com sucesso: macro_005.py
+2026-05-22 02:42:36,322 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-22 02:35:35 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx
+2026-05-22 02:42:36,331 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-22 02:35:35 -> C:\Users\davi.souza\Desktop\incluir.xlsx
+2026-05-22 02:42:36,356 | INFO | Planilha preparada (nova): mata105.xlsx | mtime=2026-05-22 02:35:35 -> C:\Users\davi.souza\Downloads\incluir.xlsx
+2026-05-22 02:42:36,448 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-22 02:37:57 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx
+2026-05-22 02:42:36,463 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-22 02:37:57 -> C:\Users\davi.souza\Desktop\Saldo Atual.xlsx
+2026-05-22 02:42:36,480 | INFO | Planilha preparada (nova): mata225.xlsx | mtime=2026-05-22 02:37:57 -> C:\Users\davi.souza\Downloads\Saldo Atual.xlsx
+2026-05-22 02:42:36,547 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-22 02:42:20 -> C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx
+2026-05-22 02:42:36,562 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-22 02:42:20 -> C:\Users\davi.souza\Desktop\Saldo por Endereco.xlsx
+2026-05-22 02:42:36,611 | INFO | Planilha preparada (nova): mata226.xlsx | mtime=2026-05-22 02:42:20 -> C:\Users\davi.souza\Downloads\Saldo por Endereco.xlsx
+2026-05-22 02:42:36,823 | INFO | Planilha opcional nao localizada para estoque_minimo em C:\Users\davi.souza\Desktop\KKKKKKKK\downloads, C:\Users\davi.souza\Desktop\AMBIENTE ROSA, C:\Users\davi.souza\Desktop, C:\Users\davi.souza\Downloads.
+2026-05-22 02:42:36,823 | INFO | CONFIRMACAO: preparo planilhas apos macro final | mata105=OK | mata225=OK | mata226=OK
+2026-05-22 02:42:36,824 | INFO | CONFIRMACAO: macro final de extracao concluida. Preparo final executado apos as 5 macros.
+2026-05-22 02:42:36,824 | INFO | AUTOMUS: iniciando envio automatico ao Firebase sem interagir com navegador/sessao aberta.
+2026-05-22 02:42:36,825 | INFO | TEST_AUTOMUS_CONFIG_OK | config=C:\Users\davi.souza\Desktop\KKKKKKKK\scripts\atualizacao\automus_config.json | email=davi@sistema.com
+2026-05-22 02:42:36,838 | INFO | TEST_PLANILHAS_RESOLVIDAS_OK | incluir=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\incluir.xlsx | saldoAtual=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo Atual.xlsx | saldoEndereco=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\Saldo por Endereco.xlsx | estoque_minimo=C:\Users\davi.souza\Desktop\KKKKKKKK\downloads\estoque_minimo.xlsx
+2026-05-22 02:42:36,838 | INFO | AUTOMUS: iniciando autenticacao Firebase para envio sem navegador.
+2026-05-22 02:42:39,691 | INFO | TEST_FIREBASE_LEITURA_OK | hashAntes=e59309684a451314b250443124d1f74764602d0f
+2026-05-22 02:42:45,715 | INFO | TEST_PLANILHAS_LIDAS_OK | incluir_linhas=7619 | saldoAtual_linhas=7421 | saldoEndereco_linhas=39662 | estoque_minimo_linhas=13682
+2026-05-22 02:42:45,947 | INFO | TEST_GERACAO_ITENS_OK | itensGerados=7617
+2026-05-22 02:42:46,479 | INFO | BACKUP_LOCAL_OK | arquivo=C:\Users\davi.souza\Desktop\KKKKKKKK\_backups\automus\firebase_backup_1779428565948.json | bytes=9450400
+2026-05-22 02:42:46,480 | INFO | AUTOMUS: gravando backup remoto de seguranca antes da atualizacao.
+2026-05-22 02:42:50,371 | WARNING | BACKUP_REMOTO_INDISPONIVEL | mantendo backup local como fonte de rollback | motivo=HTTP 400 em https://chat-fiasul-default-rtdb.firebaseio.com/estoqueGlobalBackups/automus_last.json?auth=eyJhbGciOiJSUzI1NiIsImtpZCI6ImM5YTBjMWRlYWEyN2JjNjMyNTUzYmM4MWEyMmQ4NzY1MWM3MTMyY2IiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vY2hhdC1maWFzdWwiLCJhdWQiOiJjaGF0LWZpYXN1bCIsImF1dGhfdGltZSI6MTc3OTQyODU1NywidXNlcl9pZCI6ImJpWXh2Wm1rWW9UUzBiMlVzNEhWSHlXd3ZSSjMiLCJzdWIiOiJiaVl4dlpta1lvVFMwYjJVczRIVkh5V3d2UkozIiwiaWF0IjoxNzc5NDI4NTU3LCJleHAiOjE3Nzk0MzIxNTcsImVtYWlsIjoiZGF2aUBzaXN0ZW1hLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJkYXZpQHNpc3RlbWEuY29tIl19LCJzaWduX2luX3Byb3ZpZGVyIjoicGFzc3dvcmQifX0.VyiDoVJ4gkpvbEbLgFJCGZICQP90tnXF9yJ7GMjMomK4egIHtZ_BieuTulL_XJd3bVSHBqtQeQiHE7yN3BiTOnZjCZOYVjhP1gxUAYx1UTu6wgxF5-xB_vkkjxTgLFB0z3JN7qqNaaxL99IyCuBWtLdeFZ71xpiccjPBOAFBZ4ooVJj_2jxUBYncjuCRYma1tAJftyWz2W4TGw29Qz14VzQB9jPPVSGDmvieSA373aF1vm_JmvaffELkIskHELwJwVw5xKq0ZdSNKc8CKAMdokWtidGbZfm-musuoPW_JhQIkqUg4AeJIOrH0_hVRYaEufh4-M3ur6uedJl8a5Q85Q: {
+  "error" : "Data to write exceeds the maximum size that can be modified with a single request."
+}
+
+2026-05-22 02:42:50,372 | INFO | BACKUP_GARANTIA_OK | local=C:\Users\davi.souza\Desktop\KKKKKKKK\_backups\automus\firebase_backup_1779428565948.json | remoto=NAO
+2026-05-22 02:42:50,372 | INFO | AUTOMUS: enviando atualizacao final para estoqueGlobal.
+2026-05-22 02:42:54,526 | INFO | TEST_FIREBASE_PATCH_OK
+2026-05-22 02:42:56,111 | INFO | TEST_FIREBASE_CONSISTENCIA_OK | itensBanco=7617 | atualizacaoAutomatica=True
+2026-05-22 02:42:56,112 | INFO | AUTO_UPDATE_FIREBASE_OK | usuario=davi@sistema.com | itens=7617 | ultimaAtualizacao=1779428565948
+2026-05-22 02:42:56,148 | INFO | AUTOMUS: envio concluido com sucesso.
+2026-05-22 02:42:56,148 | INFO | CONFIRMACAO: envio Firebase via Automus executado apos a macro_005 (sem automacao de navegador).
+2026-05-22 02:42:56,148 | INFO | Automacao finalizada com sucesso.

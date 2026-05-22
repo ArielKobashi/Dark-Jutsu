@@ -209,9 +209,75 @@ xmlns="http://www.w3.org/2000/svg">
 </div>
 
 <button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relatério</button>
+<button id="btnContagem" onclick="abrirContagem()">Contagem</button>
 
 </div> <!-- FECHA #main -->
 <!-- /SPLIT: main.html -->
+
+<!-- SPLIT: contagem.html (contagem de estoque) -->
+<div id="contagemScreen" style="display:none;">
+    <div id="contagemHeader">
+        <button class="contagemBackBtn" onclick="fecharContagem()" title="Voltar">&larr;</button>
+        <div id="contagemHeaderInfo">
+            <span id="contagemMaquinaLabel">Maquina</span>
+            <span id="contagemProgresso">0 / 0</span>
+        </div>
+        <button class="contagemRelBtn" onclick="abrirRelatorioContagem()" title="Relatorio">Rel</button>
+    </div>
+
+    <div id="contagemMaquinasBar"></div>
+
+    <div id="contagemCardArea">
+        <div id="contagemCardTrack">
+            <div id="contagemCard">
+                <div id="contagemCardEndereco"></div>
+                <div id="contagemCardDescricao"></div>
+                <div id="contagemCardCodigos">
+                    <span id="contagemCardProtheus"></span>
+                    <span id="contagemCardCooperat"></span>
+                </div>
+                <div id="contagemCardSaldoSistema">
+                    Saldo sistema: <strong id="contagemCardSaldo"></strong>
+                </div>
+                <input id="contagemInput" type="number" inputmode="decimal" placeholder="Quantidade contada" min="0" autocomplete="off">
+                <div id="contagemInputStatus"></div>
+            </div>
+        </div>
+
+        <button id="contagemBtnAnterior" class="contagemNavBtn contagemNavLeft" onclick="contagemAnterior()" title="Anterior">&lsaquo;</button>
+        <button id="contagemBtnProximo" class="contagemNavBtn contagemNavRight" onclick="contagemProximo()" title="Proximo">&rsaquo;</button>
+    </div>
+
+    <div id="contagemFooter">
+        <div id="contagemFooterInfo">
+            <span id="contagemContados">0 contados</span>
+            <span id="contagemRestantes">0 restantes</span>
+        </div>
+        <button id="btnFinalizarContagem" onclick="finalizarContagem()">Finalizar Contagem</button>
+    </div>
+</div>
+
+<div id="contagemRelatorioModal" style="display:none;">
+    <div id="contagemRelatorioBox">
+        <div id="contagemRelatorioHeader">
+            <span>Relatorio de Divergencia</span>
+            <button onclick="fecharRelatorioContagem()" title="Fechar">x</button>
+        </div>
+        <div id="contagemRelatorioFiltros">
+            <label>
+                <input type="checkbox" id="contagemFiltroSoDivergentes" checked>
+                So divergentes
+            </label>
+            <select id="contagemFiltroData"></select>
+            <select id="contagemFiltroUsuario"></select>
+        </div>
+        <div id="contagemRelatorioTabela"></div>
+        <div id="contagemRelatorioRodape">
+            <button onclick="exportarRelatorioContagemXlsx()">Exportar XLSX</button>
+        </div>
+    </div>
+</div>
+<!-- /SPLIT: contagem.html -->
 
 <!-- SPLIT: config-panel.html (right sidebar) -->
 <div id="config">
@@ -477,6 +543,30 @@ let visiveis = [];
 let ajustesItensEstoque = {};
 let historicoSaldoEstoque = {};
 var privateRoomGateState = null;
+var salaAtual = window.salaAtual || "publica";
+var roomMessages = window.roomMessages || {};
+var chatPublicUnlocked = window.chatPublicUnlocked || false;
+var lastTypingSent = 0;
+var typingIdleTimer = null;
+var TYPING_TTL = 4500;
+var TYPING_THROTTLE = 1200;
+window.salaAtual = salaAtual;
+window.roomMessages = roomMessages;
+window.chatPublicUnlocked = chatPublicUnlocked;
+
+function persistirLeituraSala(roomId, timestamp = Date.now()){
+    if(typeof window.persistirLeituraSala === "function" && window.persistirLeituraSala !== persistirLeituraSala){
+        return window.persistirLeituraSala(roomId, timestamp);
+    }
+    return Promise.resolve();
+}
+
+function setDigitando(roomId, ativo){
+    if(typeof window.setDigitando === "function" && window.setDigitando !== setDigitando){
+        return window.setDigitando(roomId, ativo);
+    }
+    return Promise.resolve();
+}
 
 function getItemKey(item){
     return (item && (item.protheusKey || item.protheus)) ? (item.protheusKey || item.protheus) : "";
@@ -2714,6 +2804,394 @@ function gerarRelatorio(){
 
 }
 
+/* ====== CONTAGEM DE ESTOQUE ====== */
+
+let contagemItens = [];
+let contagemMaquinas = [];
+let contagemMaquinaAtual = "";
+let contagemItensMaquina = [];
+let contagemIndice = 0;
+let contagemValores = {};
+let contagemSwipeStartX = 0;
+let contagemSwipeActive = false;
+let relContagens = {};
+
+function parsearEnderecoContagem(endereco){
+    const raw = (endereco || "").toString().trim().toUpperCase();
+    if(!raw || raw === "SEM ENDERECO" || raw === "SEM ENDEREÇO"){
+        return { maquina:"SEM ENDERECO", prateleira:"", caixa:0, enderecoOriginal:raw || "SEM ENDERECO" };
+    }
+    const partes = raw.split("/");
+    const maquina = partes[0] ? partes[0].substring(0, 4) : "????";
+    const prateleira = partes[1] ? partes[1].replace(/[^A-Z]/g, "") : "";
+    const caixa = parseInt((partes[2] || "").replace(/[^0-9]/g, ""), 10) || 0;
+    return { maquina, prateleira, caixa, enderecoOriginal:raw };
+}
+
+function compararItensContagem(a, b){
+    const ea = parsearEnderecoContagem(a.enderecoPrincipal);
+    const eb = parsearEnderecoContagem(b.enderecoPrincipal);
+    if(ea.maquina !== eb.maquina) return ea.maquina.localeCompare(eb.maquina, "pt-BR", { numeric:true });
+    if(ea.prateleira !== eb.prateleira) return ea.prateleira.localeCompare(eb.prateleira, "pt-BR", { numeric:true });
+    if(ea.caixa !== eb.caixa) return ea.caixa - eb.caixa;
+    return (a.descricao || "").localeCompare(b.descricao || "", "pt-BR");
+}
+
+function dataContagemHoje(){
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function chaveFirebaseContagem(valor){
+    return String(valor || "sem_chave").replace(/[.#$/\[\]]/g, "_");
+}
+
+function chaveRascunhoContagem(){
+    const uid = window.auth?.currentUser?.uid || window.meuNickname || "local";
+    return `contagemRascunho:${uid}`;
+}
+
+function salvarRascunhoContagem(){
+    try{
+        localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
+    }catch(e){}
+}
+
+function carregarRascunhoContagem(){
+    try{
+        return JSON.parse(localStorage.getItem(chaveRascunhoContagem()) || "{}") || {};
+    }catch(e){
+        return {};
+    }
+}
+
+function itemKeyContagem(item){
+    if(typeof getItemKey === "function") return getItemKey(item);
+    return item?.protheusKey || item?.protheus || item?.cooperat || "";
+}
+
+function abrirContagem(){
+    const itens = Array.isArray(window.dados) ? window.dados : [];
+    contagemItens = itens
+        .filter(item => item && (item.protheus || item.cooperat))
+        .map(item => ({ ...item }))
+        .sort(compararItensContagem);
+
+    if(!contagemItens.length){
+        mostrarNotificacao("Carregue os dados antes de iniciar a contagem.");
+        return;
+    }
+
+    contagemValores = carregarRascunhoContagem();
+    const maquinas = new Set();
+    contagemItens.forEach(item => maquinas.add(parsearEnderecoContagem(item.enderecoPrincipal).maquina));
+    contagemMaquinas = Array.from(maquinas);
+    contagemMaquinaAtual = contagemMaquinas[0] || "";
+    selecionarMaquinaContagem(contagemMaquinaAtual, false);
+    renderizarMaquinasContagem();
+
+    document.getElementById("contagemScreen").style.display = "flex";
+    document.getElementById("main").style.display = "none";
+    setTimeout(() => document.getElementById("contagemInput")?.focus({ preventScroll:true }), 80);
+}
+
+function fecharContagem(){
+    salvarAtualContagem();
+    document.getElementById("contagemScreen").style.display = "none";
+    document.getElementById("main").style.display = "";
+}
+
+function renderizarMaquinasContagem(){
+    const bar = document.getElementById("contagemMaquinasBar");
+    if(!bar) return;
+    bar.innerHTML = "";
+    contagemMaquinas.forEach(maquina => {
+        const itensMaq = contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquina);
+        const contados = itensMaq.filter(item => contagemValores[itemKeyContagem(item)] !== undefined).length;
+        const btn = document.createElement("button");
+        btn.className = "contagemMaqBtn" + (maquina === contagemMaquinaAtual ? " ativa" : "");
+        btn.innerHTML = `${escapeHtml(maquina)}<span class="contagemMaqBtnBadge">${contados}/${itensMaq.length}</span>`;
+        btn.onclick = () => selecionarMaquinaContagem(maquina, true);
+        bar.appendChild(btn);
+    });
+}
+
+function selecionarMaquinaContagem(maquina, atualizarBar){
+    contagemMaquinaAtual = maquina;
+    contagemItensMaquina = contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquina);
+    const primeiroPendente = contagemItensMaquina.findIndex(item => contagemValores[itemKeyContagem(item)] === undefined);
+    contagemIndice = primeiroPendente >= 0 ? primeiroPendente : 0;
+    if(atualizarBar) renderizarMaquinasContagem();
+    renderizarCardContagem();
+}
+
+function renderizarCardContagem(){
+    const item = contagemItensMaquina[contagemIndice];
+    const total = contagemItensMaquina.length;
+    const progresso = document.getElementById("contagemProgresso");
+    if(progresso) progresso.textContent = total ? `${contagemIndice + 1} / ${total}` : "0 / 0";
+    const label = document.getElementById("contagemMaquinaLabel");
+    if(label) label.textContent = contagemMaquinaAtual || "Maquina";
+    if(!item) return;
+
+    const endereco = parsearEnderecoContagem(item.enderecoPrincipal).enderecoOriginal;
+    document.getElementById("contagemCardEndereco").textContent = endereco || "SEM ENDERECO";
+    document.getElementById("contagemCardDescricao").textContent = item.descricao || "";
+    document.getElementById("contagemCardProtheus").textContent = item.protheus || "-";
+    document.getElementById("contagemCardCooperat").textContent = item.cooperat || "-";
+    document.getElementById("contagemCardSaldo").textContent = formatarNumeroPlanilha(item.saldo);
+
+    const key = itemKeyContagem(item);
+    const valorSalvo = contagemValores[key];
+    const input = document.getElementById("contagemInput");
+    input.value = valorSalvo !== undefined ? valorSalvo : "";
+    const status = document.getElementById("contagemInputStatus");
+    status.textContent = valorSalvo !== undefined ? "Contado" : "Aguardando contagem";
+    status.classList.toggle("contado", valorSalvo !== undefined);
+    atualizarFooterContagem();
+    setTimeout(() => input.focus({ preventScroll:true }), 60);
+}
+
+function atualizarFooterContagem(){
+    const contados = Object.keys(contagemValores).filter(key => contagemItens.some(item => itemKeyContagem(item) === key)).length;
+    document.getElementById("contagemContados").textContent = `${contados} contados`;
+    document.getElementById("contagemRestantes").textContent = `${Math.max(contagemItens.length - contados, 0)} restantes`;
+}
+
+function salvarAtualContagem(){
+    const item = contagemItensMaquina[contagemIndice];
+    const input = document.getElementById("contagemInput");
+    if(!item || !input) return;
+    const raw = input.value.toString().trim();
+    const key = itemKeyContagem(item);
+    if(raw === ""){
+        delete contagemValores[key];
+    }else{
+        const valor = Number(raw.replace(",", "."));
+        if(Number.isFinite(valor) && valor >= 0) contagemValores[key] = valor;
+    }
+    salvarRascunhoContagem();
+}
+
+function animarContagem(direcao, callback){
+    const card = document.getElementById("contagemCard");
+    card.classList.add(direcao === "left" ? "swipe-left" : "swipe-right");
+    setTimeout(() => {
+        card.classList.remove("swipe-left", "swipe-right");
+        callback();
+    }, 180);
+}
+
+function contagemProximo(){
+    salvarAtualContagem();
+    animarContagem("left", () => {
+        if(contagemIndice < contagemItensMaquina.length - 1){
+            contagemIndice++;
+        }else{
+            const idx = contagemMaquinas.indexOf(contagemMaquinaAtual);
+            if(idx >= 0 && idx < contagemMaquinas.length - 1){
+                selecionarMaquinaContagem(contagemMaquinas[idx + 1], true);
+                return;
+            }
+        }
+        renderizarMaquinasContagem();
+        renderizarCardContagem();
+    });
+}
+
+function contagemAnterior(){
+    salvarAtualContagem();
+    animarContagem("right", () => {
+        if(contagemIndice > 0){
+            contagemIndice--;
+        }else{
+            const idx = contagemMaquinas.indexOf(contagemMaquinaAtual);
+            if(idx > 0){
+                contagemMaquinaAtual = contagemMaquinas[idx - 1];
+                contagemItensMaquina = contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === contagemMaquinaAtual);
+                contagemIndice = Math.max(contagemItensMaquina.length - 1, 0);
+            }
+        }
+        renderizarMaquinasContagem();
+        renderizarCardContagem();
+    });
+}
+
+async function finalizarContagem(){
+    salvarAtualContagem();
+    const itensContados = contagemItens.filter(item => contagemValores[itemKeyContagem(item)] !== undefined);
+    if(!itensContados.length){
+        mostrarNotificacao("Nenhum item foi contado ainda.");
+        return;
+    }
+    const nick = window.meuNickname || "desconhecido";
+    const data = dataContagemHoje();
+    const payload = {
+        usuario:nick,
+        data,
+        timestamp:Date.now(),
+        totalItens:contagemItens.length,
+        itens:{}
+    };
+    itensContados.forEach(item => {
+        const key = itemKeyContagem(item);
+        payload.itens[chaveFirebaseContagem(key)] = {
+            protheus:item.protheus || "",
+            cooperat:item.cooperat || "",
+            descricao:item.descricao || "",
+            endereco:item.enderecoPrincipal || "",
+            saldoSistema:parsePlanilhaNumero(item.saldo),
+            contado:contagemValores[key]
+        };
+    });
+    if(!confirm(`Finalizar contagem?\n\nContados: ${itensContados.length} de ${contagemItens.length} itens.`)) return;
+    try{
+        const baseRef = window.ref(window.db, `contagens/${data}/${chaveFirebaseContagem(nick)}`);
+        await window.push(baseRef, payload);
+        localStorage.removeItem(chaveRascunhoContagem());
+        contagemValores = {};
+        mostrarNotificacao(`Contagem salva: ${itensContados.length} itens.`);
+        fecharContagem();
+    }catch(e){
+        console.error("Erro ao salvar contagem:", e);
+        mostrarNotificacao("Erro ao salvar contagem. Verifique as regras do Firebase.");
+    }
+}
+
+function coletarLinhasRelatorioContagem(){
+    const linhas = [];
+    Object.entries(relContagens || {}).forEach(([data, porUsuario]) => {
+        Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
+            const lista = registros?.itens ? [registros] : Object.values(registros || {});
+            lista.forEach(registro => {
+                if(!registro?.itens) return;
+                Object.values(registro.itens).forEach(item => {
+                    const saldo = parsePlanilhaNumero(item.saldoSistema);
+                    const contado = parsePlanilhaNumero(item.contado);
+                    const diverge = saldo !== null && contado !== null && saldo !== contado;
+                    linhas.push({ data, usuario:registro.usuario || usuarioKey, item, saldo, contado, diverge });
+                });
+            });
+        });
+    });
+    return linhas;
+}
+
+async function abrirRelatorioContagem(){
+    document.getElementById("contagemRelatorioModal").style.display = "flex";
+    document.getElementById("contagemRelatorioTabela").innerHTML = "<p class='contagemEmpty'>Carregando...</p>";
+    try{
+        const snap = await window.get(window.ref(window.db, "contagens"));
+        relContagens = snap.exists() ? snap.val() : {};
+        popularFiltrosRelatorioContagem();
+        renderizarRelatorioContagem();
+    }catch(e){
+        console.error("Erro ao carregar contagens:", e);
+        document.getElementById("contagemRelatorioTabela").innerHTML = "<p class='contagemEmpty erro'>Erro ao carregar contagens.</p>";
+    }
+}
+
+function fecharRelatorioContagem(){
+    document.getElementById("contagemRelatorioModal").style.display = "none";
+}
+
+function popularFiltrosRelatorioContagem(){
+    const linhas = coletarLinhasRelatorioContagem();
+    const datas = [...new Set(linhas.map(l => l.data))].sort().reverse();
+    const usuarios = [...new Set(linhas.map(l => l.usuario))].sort();
+    document.getElementById("contagemFiltroData").innerHTML = "<option value=''>Todas as datas</option>" + datas.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+    document.getElementById("contagemFiltroUsuario").innerHTML = "<option value=''>Todos usuarios</option>" + usuarios.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join("");
+    document.getElementById("contagemFiltroData").onchange = renderizarRelatorioContagem;
+    document.getElementById("contagemFiltroUsuario").onchange = renderizarRelatorioContagem;
+    document.getElementById("contagemFiltroSoDivergentes").onchange = renderizarRelatorioContagem;
+}
+
+function renderizarRelatorioContagem(){
+    const soDivergentes = document.getElementById("contagemFiltroSoDivergentes").checked;
+    const dataFiltro = document.getElementById("contagemFiltroData").value;
+    const usuarioFiltro = document.getElementById("contagemFiltroUsuario").value;
+    const linhas = coletarLinhasRelatorioContagem().filter(l => {
+        if(soDivergentes && !l.diverge) return false;
+        if(dataFiltro && l.data !== dataFiltro) return false;
+        if(usuarioFiltro && l.usuario !== usuarioFiltro) return false;
+        return true;
+    });
+    if(!linhas.length){
+        document.getElementById("contagemRelatorioTabela").innerHTML = "<p class='contagemEmpty'>Nenhum registro encontrado.</p>";
+        return;
+    }
+    const html = `
+        <div class="contagemRelRow header">
+            <span>Endereco</span><span>Descricao</span><span>Sistema</span><span>Contado</span><span>Status</span>
+        </div>
+        ${linhas.map(l => `
+            <div class="contagemRelRow${l.diverge ? " divergente" : ""}">
+                <span>${escapeHtml(l.item.endereco || "-")}<small>${escapeHtml(l.data)} - ${escapeHtml(l.usuario)}</small></span>
+                <span>${escapeHtml(l.item.descricao || "-")}</span>
+                <span>${l.saldo ?? "-"}</span>
+                <span>${l.contado ?? "-"}</span>
+                <span><b class="${l.diverge ? "contagemRelDivTag" : "contagemRelOkTag"}">${l.diverge ? "DIVER" : "OK"}</b></span>
+            </div>
+        `).join("")}`;
+    document.getElementById("contagemRelatorioTabela").innerHTML = html;
+}
+
+function exportarRelatorioContagemXlsx(){
+    if(typeof XLSX === "undefined"){
+        mostrarNotificacao("Biblioteca XLSX nao encontrada.");
+        return;
+    }
+    const linhas = coletarLinhasRelatorioContagem().map(l => ({
+        Data:l.data,
+        Usuario:l.usuario,
+        Endereco:l.item.endereco || "",
+        Protheus:l.item.protheus || "",
+        Cooperat:l.item.cooperat || "",
+        Descricao:l.item.descricao || "",
+        SaldoSistema:l.saldo ?? "",
+        Contado:l.contado ?? "",
+        Status:l.diverge ? "DIVERGENTE" : "OK"
+    }));
+    const ws = XLSX.utils.json_to_sheet(linhas);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Divergencias");
+    XLSX.writeFile(wb, `divergencias_contagem_${dataContagemHoje()}.xlsx`);
+}
+
+(function iniciarEventosContagem(){
+    const area = document.getElementById("contagemCardArea");
+    if(area){
+        area.addEventListener("touchstart", e => {
+            if(document.getElementById("contagemScreen").style.display === "none") return;
+            contagemSwipeStartX = e.touches[0].clientX;
+            contagemSwipeActive = true;
+        }, { passive:true });
+        area.addEventListener("touchend", e => {
+            if(!contagemSwipeActive) return;
+            contagemSwipeActive = false;
+            const dx = e.changedTouches[0].clientX - contagemSwipeStartX;
+            if(Math.abs(dx) > 50) dx < 0 ? contagemProximo() : contagemAnterior();
+        }, { passive:true });
+    }
+    document.addEventListener("keydown", e => {
+        const screen = document.getElementById("contagemScreen");
+        if(!screen || screen.style.display === "none") return;
+        if(e.key === "Enter"){
+            e.preventDefault();
+            contagemProximo();
+        }
+    });
+})();
+
+window.abrirContagem = abrirContagem;
+window.fecharContagem = fecharContagem;
+window.contagemProximo = contagemProximo;
+window.contagemAnterior = contagemAnterior;
+window.finalizarContagem = finalizarContagem;
+window.abrirRelatorioContagem = abrirRelatorioContagem;
+window.fecharRelatorioContagem = fecharRelatorioContagem;
+window.exportarRelatorioContagemXlsx = exportarRelatorioContagemXlsx;
+
 
 /* ====== PESQUISA INDIVIDUAL POR COLUNA ====== */
 
@@ -2998,8 +3476,8 @@ function adicionarMensagemLocalChat(roomId, mensagem){
 
     roomMessages[roomId] = [...lista, mensagem];
 
-    if(roomId === salaAtual && typeof atualizarVistaChatAtivo === "function"){
-        atualizarVistaChatAtivo(roomId, false);
+    if(roomId === window.salaAtual && typeof window.atualizarVistaChatAtivo === "function"){
+        window.atualizarVistaChatAtivo(roomId, false);
     }
 }
 
@@ -4715,6 +5193,7 @@ window.logout = async function() {
         await encerrarSessaoChat("logout", true);
     }catch(e){}
     chatPublicUnlocked = false;
+    window.chatPublicUnlocked = chatPublicUnlocked;
     await signOut(auth);
     document.getElementById("authScreen").style.display = "flex";
     if(document.getElementById("pendingScreen")){
@@ -5305,6 +5784,7 @@ onAuthStateChanged(auth, async (user) => {
         window.meuCracha = "";
         window.meuSetor = "";
         chatPublicUnlocked = false;
+        window.chatPublicUnlocked = chatPublicUnlocked;
         chatSessionState = null;
         lastRoomEntrySessionKey = null;
         ultimaSalaEntrada = null;
@@ -5408,9 +5888,11 @@ onAuthStateChanged(auth, async (user) => {
             if (adminBtn) adminBtn.style.display = "flex";
             iniciarSolicitacoesAdmin(); // 🔥 AQUI
             iniciarListaUsuarios();
-            await rebuildNicknamesSimple();
-            await rebuildNicknamesAuth();
-            await rebuildNicknamesSolic();
+            Promise.allSettled([
+                rebuildNicknamesSimple(),
+                rebuildNicknamesAuth(),
+                rebuildNicknamesSolic()
+            ]).catch(e => console.warn("Falha ao reconstruir indices de nicknames:", e));
             if (adminPanel) adminPanel.style.display = "block";
         } else {
             if (adminBtn) adminBtn.style.display = "none";
@@ -5577,9 +6059,10 @@ function fecharSubPagina(){
 // --- LÓGICA DO CHAT EM TEMPO REAL ---
 
 
-let salaAtual = "publica";
+salaAtual = window.salaAtual || "publica";
 window.salaAtual = salaAtual;
-let chatPublicUnlocked = false;
+chatPublicUnlocked = window.chatPublicUnlocked || false;
+window.chatPublicUnlocked = chatPublicUnlocked;
 const salasChat = [
     { id: "publica", label: "Publica", publico: true },
     { id: "sala2", label: "Sala 2", publico: false },
@@ -5592,8 +6075,8 @@ let chatSessionState = null;
 let chatRoomUnsubs = {};
 let chatTypingRoomUnsub = null;
 let typingUsers = {};
-let typingIdleTimer = null;
-let lastTypingSent = 0;
+typingIdleTimer = null;
+lastTypingSent = 0;
 window.roomMessages = window.roomMessages || {};
 window.unreadCounts = window.unreadCounts || {};
 
@@ -5721,6 +6204,7 @@ async function persistirLeituraSala(roomId, timestamp = Date.now()){
         await set(ref(db, `chatReadState/${uid}/${roomId}`), nextTs);
     }catch(e){}
 }
+window.persistirLeituraSala = persistirLeituraSala;
 
 async function carregarLeituraSalaRemota(){
     const uid = getCurrentChatUid();
@@ -5869,6 +6353,7 @@ function atualizarVistaChatAtivo(roomId = salaAtual, marcarComoVista = false){
     }
     renderChat();
 }
+window.atualizarVistaChatAtivo = atualizarVistaChatAtivo;
 
 function iniciarMonitoramentoSalas(){
     salasChat.forEach(room=>{
@@ -5986,7 +6471,10 @@ function fecharGateSalaPrivada(){
     privateRoomGateState = null;
     const input = document.getElementById("chatPrivatePassword");
     const erro = document.getElementById("chatPrivateGateError");
-    if(input) input.value = "";
+    if(input){
+        input.blur();
+        input.value = "";
+    }
     if(erro) erro.textContent = "";
     atualizarGatePrivado();
 }
@@ -6105,8 +6593,8 @@ function anunciarSaidaSala(roomId, sessionId = null){
     adicionarMensagemLocalChat(roomId, mensagem);
 }
 
-const TYPING_TTL = 4500;
-const TYPING_THROTTLE = 1200;
+TYPING_TTL = 4500;
+TYPING_THROTTLE = 1200;
 
 function getTypingRef(roomId){
     return ref(db, "chatRooms/" + roomId + "/typing");
@@ -6127,6 +6615,7 @@ function setDigitando(roomId, ativo){
         ts: Date.now()
     });
 }
+window.setDigitando = setDigitando;
 
 function atualizarDigitandoUI(){
     const el = document.getElementById("chatTyping");
@@ -6182,6 +6671,7 @@ function iniciarChatSePermitido(){
 window.abrirSalaPublica = function(){
     fecharGateSalaPrivada();
     chatPublicUnlocked = true;
+    window.chatPublicUnlocked = chatPublicUnlocked;
     atualizarGatePublico();
     iniciarMonitoramentoSalas();
     setSalaAtiva("publica");
