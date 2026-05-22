@@ -324,22 +324,26 @@ Usuários do Sistema
         </div>
     </div>
 
-    <div id="etiquetasPanel">
-        <div class="etiquetasTitle">Etiquetas Fiasul</div>
-        <div class="etiquetasSizeRow" role="radiogroup" aria-label="Tamanho da etiqueta">
-            <label><input type="radio" name="etiquetaTamanho" value="7" checked> 7 cm</label>
-            <label><input type="radio" name="etiquetaTamanho" value="5"> 5 cm</label>
-            <label><input type="radio" name="etiquetaTamanho" value="10"> 10 cm</label>
-            <label><input type="radio" name="etiquetaTamanho" value="15"> 15 cm</label>
+    <div id="etiquetasPanel" class="collapsed">
+        <button type="button" id="etiquetasToggle" onclick="toggleEtiquetasPanel()" aria-expanded="false">
+            Etiquetas Fiasul
+            <span>▾</span>
+        </button>
+        <div id="etiquetasContent" aria-hidden="true">
+            <div class="etiquetasTitle">Gerador de etiquetas</div>
+            <div class="etiquetasSizeRow" role="radiogroup" aria-label="Tamanho da etiqueta">
+                <label><input type="radio" name="etiquetaTamanho" value="7" checked> 7 cm</label>
+                <label><input type="radio" name="etiquetaTamanho" value="5"> 5 cm</label>
+                <label><input type="radio" name="etiquetaTamanho" value="10"> 10 cm</label>
+                <label><input type="radio" name="etiquetaTamanho" value="15"> 15 cm</label>
+            </div>
+            <textarea id="etiquetaCodigos" rows="3" placeholder="Códigos separados por vírgula"></textarea>
+            <div class="etiquetasActions">
+                <button type="button" onclick="baixarEtiquetas()">Baixar pacote</button>
+                <button type="button" onclick="selecionadosParaEtiquetas()">Usar selecionados</button>
+            </div>
+            <div id="etiquetasStatus"></div>
         </div>
-        <textarea id="etiquetaCodigos" rows="3" placeholder="Códigos separados por vírgula"></textarea>
-        <div class="etiquetasActions">
-            <button type="button" onclick="baixarEtiquetas()">Baixar pacote</button>
-            <button type="button" onclick="selecionadosParaEtiquetas()">Usar selecionados</button>
-        </div>
-        <input type="file" id="etiquetaPlanilhaInput" accept=".xlsx" style="display:none">
-        <button type="button" class="etiquetaPlanilhaBtn" onclick="document.getElementById('etiquetaPlanilhaInput').click()">Trocar mata105</button>
-        <div id="etiquetasStatus"></div>
     </div>
 
 
@@ -1549,7 +1553,21 @@ function setEtiquetasStatus(msg){
     if(el) el.textContent = msg || "";
 }
 
+function toggleEtiquetasPanel(forceOpen = null){
+    const panel = document.getElementById("etiquetasPanel");
+    const toggle = document.getElementById("etiquetasToggle");
+    const content = document.getElementById("etiquetasContent");
+    if(!panel) return;
+    const abrir = forceOpen === null ? !panel.classList.contains("open") : !!forceOpen;
+    panel.classList.toggle("open", abrir);
+    panel.classList.toggle("collapsed", !abrir);
+    if(toggle) toggle.setAttribute("aria-expanded", abrir ? "true" : "false");
+    if(content) content.setAttribute("aria-hidden", abrir ? "false" : "true");
+}
+window.toggleEtiquetasPanel = toggleEtiquetasPanel;
+
 function selecionadosParaEtiquetas(){
+    toggleEtiquetasPanel(true);
     const codigos = Array.from(selecionados || []).map(key=>{
         const item = findItemByKey(key);
         return item?.protheus || item?.cooperat || key;
@@ -1571,7 +1589,7 @@ async function baixarEtiquetas(){
             .filter(Boolean);
         if(!codigos.length) throw new Error("Informe ao menos um código.");
 
-        setEtiquetasStatus("Carregando mata105...");
+        setEtiquetasStatus("Carregando mata105 nativa...");
         const linhas = await carregarMata105Etiquetas();
         const zip = new JSZip();
         const naoEncontrados = [];
@@ -1614,20 +1632,6 @@ async function baixarEtiquetas(){
     }
 }
 window.baixarEtiquetas = baixarEtiquetas;
-
-document.getElementById("etiquetaPlanilhaInput")?.addEventListener("change", function(e){
-    const file = e.target.files?.[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = function(evt){
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        etiquetaMata105Cache = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-        setEtiquetasStatus("mata105 carregada para etiquetas.");
-    };
-    reader.readAsArrayBuffer(file);
-});
 
 let __autoUpdateDisparada = false;
 function tentarAtualizacaoAutomaticaFinal() {

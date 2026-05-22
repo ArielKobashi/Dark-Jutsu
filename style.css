@@ -786,10 +786,52 @@ th.col-ordenada.col-filtrada {
 
 #etiquetasPanel{
     margin:10px 0;
-    padding:10px;
+    padding:0;
     border:1px solid #223044;
     border-radius:8px;
     background:#111B27;
+    overflow:hidden;
+}
+
+#etiquetasToggle{
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    border:0;
+    border-radius:0;
+    background:linear-gradient(135deg,#172033,#111B27);
+    color:#CFE3FF;
+    padding:10px;
+    font-size:12px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+#etiquetasToggle span{
+    transition:transform 0.25s ease;
+}
+
+#etiquetasPanel.open #etiquetasToggle span{
+    transform:rotate(180deg);
+}
+
+#etiquetasContent{
+    max-height:360px;
+    opacity:1;
+    transform:translateY(0);
+    padding:10px;
+    transition:max-height 0.32s ease, opacity 0.22s ease, transform 0.32s ease, padding 0.32s ease;
+}
+
+#etiquetasPanel.collapsed #etiquetasContent{
+    max-height:0;
+    opacity:0;
+    transform:translateY(-8px);
+    padding-top:0;
+    padding-bottom:0;
+    pointer-events:none;
 }
 
 .etiquetasTitle{
@@ -841,13 +883,6 @@ th.col-ordenada.col-filtrada {
     border-radius:6px;
     padding:8px 6px;
     font-size:11px;
-}
-
-.etiquetaPlanilhaBtn{
-    width:100%;
-    margin-top:6px;
-    background:#172033;
-    border:1px solid #2D3A52;
 }
 
 #etiquetasStatus{
