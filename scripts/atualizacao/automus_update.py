@@ -191,10 +191,10 @@ def _build_items(
     for row in (estoque_minimo or [])[1:]:
         if len(row) < 2:
             continue
-        cod = _safe_text(row[1] if len(row) > 1 else "")
-        if not cod:
+        cooperat_cod = _safe_text(row[1] if len(row) > 1 else "")
+        if not cooperat_cod:
             continue
-        cod_lower = _ascii_lower(cod)
+        cod_lower = _ascii_lower(cooperat_cod)
         if "codigo" in cod_lower or "código" in cod_lower or "item" in cod_lower:
             continue
         minimo = _optional_limit_num(row[6] if len(row) > 6 else None)
@@ -202,7 +202,7 @@ def _build_items(
         reposicao = _optional_num(row[8] if len(row) > 8 else None)
         if minimo is None and maximo is None and reposicao is None:
             continue
-        estoque_minimo_idx[cod] = {
+        estoque_minimo_idx[cooperat_cod] = {
             "temLinha": True,
             "minimo": minimo,
             "maximo": maximo,
@@ -263,7 +263,7 @@ def _build_items(
                 item["armazemPrincipal"] = _safe_text(validos[0].get("armazem")) or "ND"
             item["saldo"] = sum(_num(e.get("saldo")) for e in enderecos)
 
-        estoque_minimo_item = estoque_minimo_idx.get(protheus)
+        estoque_minimo_item = estoque_minimo_idx.get(cooperat_cod)
         if estoque_minimo_item:
             if estoque_minimo_item.get("temLinha"):
                 item["minimo"] = estoque_minimo_item["minimo"]
