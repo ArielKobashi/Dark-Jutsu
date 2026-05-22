@@ -374,6 +374,17 @@ Usuários do Sistema
             <div id="chatPublicGate" role="button" aria-label="Abrir sala pública" onclick="abrirSalaPublica()">
                 <span>Toque para abrir a sala pública</span>
             </div>
+            <div id="chatPrivateGate" aria-hidden="true">
+                <div class="chatPrivateGateBox">
+                    <div class="chatPrivateGateTitle" id="chatPrivateGateTitle">Sala privada</div>
+                    <input type="password" id="chatPrivatePassword" inputmode="numeric" autocomplete="off" placeholder="Senha da sala">
+                    <div id="chatPrivateGateError"></div>
+                    <div class="chatPrivateGateActions">
+                        <button type="button" onclick="cancelarEntradaSalaPrivada()">Cancelar</button>
+                        <button type="button" onclick="confirmarEntradaSalaPrivada()">Entrar</button>
+                    </div>
+                </div>
+            </div>
 
             <div id="chatInputArea">
                 <input type="text" id="chatInput" placeholder="Digite uma mensagem...">
@@ -2334,8 +2345,7 @@ function enviarMensagemSistema(texto, roomId, extra = {}){
     const targetRoom = roomId || window.salaAtual;
     const chatRef = window.getChatRef(targetRoom);
     if(!chatRef) return;
-
-    window.push(chatRef, {
+    const mensagem = {
         nome: "Sistema",
         texto: texto,
         tipo: "system",
@@ -2344,7 +2354,10 @@ function enviarMensagemSistema(texto, roomId, extra = {}){
         uid: extra.uid || "",
         data: new Date().toLocaleTimeString(),
         timestamp: Date.now()
-    });
+    };
+
+    window.push(chatRef, mensagem);
+    return mensagem;
 }
 
 /* ===== CORES POR NICKNAME ===== */
@@ -3074,11 +3087,22 @@ document.getElementById("chatInput").addEventListener("keydown", function(e){
     }
 });
 
+document.getElementById("chatPrivatePassword").addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+        confirmarEntradaSalaPrivada();
+    }
+    if(e.key === "Escape"){
+        cancelarEntradaSalaPrivada();
+    }
+});
+
 document.getElementById("chatInput").addEventListener("focus", function(){
+    if(privateRoomGateState && privateRoomGateState.roomId === salaAtual) return;
     persistirLeituraSala(salaAtual, Date.now());
 });
 
 document.getElementById("chatInput").addEventListener("input", function(){
+    if(privateRoomGateState && privateRoomGateState.roomId === salaAtual) return;
     const texto = this.value.trim();
     if(!texto){
         setDigitando(salaAtual, false);
@@ -3101,10 +3125,12 @@ document.getElementById("chatInput").addEventListener("blur", function(){
 });
 
 document.getElementById("chatMessages").addEventListener("click", function(){
+    if(privateRoomGateState && privateRoomGateState.roomId === salaAtual) return;
     persistirLeituraSala(salaAtual, Date.now());
 });
 
 document.getElementById("chatBox").addEventListener("click", function(){
+    if(privateRoomGateState && privateRoomGateState.roomId === salaAtual) return;
     if(salaAtual === "publica" && !chatPublicUnlocked) return;
     persistirLeituraSala(salaAtual, Date.now());
 });
@@ -4742,6 +4768,7 @@ let unreadTitleCount = 0;
 let lastRoomEntrySessionKey = null;
 let ultimaSalaEntrada = null;
 let readStateCache = {};
+let privateRoomGateState = null;
 
 function getChatRef(roomId){
     return ref(db, "chatRooms/" + roomId + "/messages");
@@ -5067,6 +5094,7 @@ function setSalaAtiva(roomId){
     const chatBox = document.getElementById("chatBox");
     if(chatBox) chatBox.setAttribute("data-room", roomId);
     atualizarGatePublico();
+    atualizarGatePrivado();
     if(window.meuNickname){
         atualizarVistaChatAtivo(roomId, false);
     }
@@ -5076,6 +5104,79 @@ async function verificarSenhaSala(roomId){
     const snap = await get(ref(db, "chatRooms/" + roomId + "/senha"));
     return snap.exists() ? String(snap.val()) : "";
 }
+
+function getSalaChatLabel(roomId){
+    const room = salasChat.find(r=> r.id === roomId);
+    return room ? room.label : "Sala privada";
+}
+
+function atualizarGatePrivado(){
+    const gate = document.getElementById("chatPrivateGate");
+    if(!gate) return;
+    const ativo = !!privateRoomGateState && privateRoomGateState.roomId === salaAtual;
+    gate.style.display = ativo ? "flex" : "none";
+    gate.setAttribute("aria-hidden", ativo ? "false" : "true");
+    const title = document.getElementById("chatPrivateGateTitle");
+    if(title && ativo){
+        title.textContent = getSalaChatLabel(privateRoomGateState.roomId);
+    }
+}
+
+function abrirGateSalaPrivada(roomId, origemRoomId, senhaDb){
+    privateRoomGateState = {
+        roomId,
+        origemRoomId,
+        senhaDb: String(senhaDb || "")
+    };
+    setDigitando(origemRoomId, false);
+    setSalaAtiva(roomId);
+    const erro = document.getElementById("chatPrivateGateError");
+    const input = document.getElementById("chatPrivatePassword");
+    if(erro) erro.textContent = "";
+    if(input){
+        input.value = "";
+        setTimeout(()=> input.focus(), 50);
+    }
+}
+
+function fecharGateSalaPrivada(){
+    privateRoomGateState = null;
+    const input = document.getElementById("chatPrivatePassword");
+    const erro = document.getElementById("chatPrivateGateError");
+    if(input) input.value = "";
+    if(erro) erro.textContent = "";
+    atualizarGatePrivado();
+}
+
+window.cancelarEntradaSalaPrivada = function(){
+    const origem = privateRoomGateState?.origemRoomId || "publica";
+    fecharGateSalaPrivada();
+    setSalaAtiva(origem);
+    iniciarChatSePermitido();
+};
+
+window.confirmarEntradaSalaPrivada = async function(){
+    if(!privateRoomGateState) return;
+    const input = document.getElementById("chatPrivatePassword");
+    const erro = document.getElementById("chatPrivateGateError");
+    const senha = (input?.value || "").trim();
+    if(String(senha) !== String(privateRoomGateState.senhaDb)){
+        if(erro) erro.textContent = "Senha incorreta.";
+        if(input){
+            input.select();
+            input.focus();
+        }
+        return;
+    }
+    const roomId = privateRoomGateState.roomId;
+    const origem = privateRoomGateState.origemRoomId;
+    fecharGateSalaPrivada();
+    if(origem && origem !== roomId){
+        anunciarSaidaSala(origem);
+    }
+    await persistirLeituraSala(roomId, Date.now());
+    iniciarChatSePermitido();
+};
 
 async function trocarSala(roomId){
     const room = salasChat.find(r=> r.id === roomId);
@@ -5088,12 +5189,8 @@ async function trocarSala(roomId){
             mostrarNotificacao("Sala sem senha definida. Procure o admin.");
             return;
         }
-        const senha = prompt("Digite a senha da sala:");
-        if(senha === null) return;
-        if(String(senha) !== String(senhaDb)){
-            mostrarNotificacao("Senha incorreta.");
-            return;
-        }
+        abrirGateSalaPrivada(roomId, salaAtual, senhaDb);
+        return;
     }
     const salaOrigem = salaAtual;
     if(salaOrigem && salaOrigem !== roomId){
@@ -5122,11 +5219,15 @@ function anunciarEntradaSala(roomId, sessionId = null){
     const cracha = (window.meuCracha || "").toString().trim();
     const nickFmt = formatarNick(window.meuNickname || "");
     const tag = cracha ? `${nickFmt}:${cracha}` : nickFmt;
-    enviarMensagemSistema(`${tag} entrou na sala...`, roomId, {
+    const mensagem = enviarMensagemSistema(`${tag} entrou na sala...`, roomId, {
         evento: "entrada",
         sessionId: currentSession,
         uid: uid || ""
     });
+    if(mensagem && roomId === salaAtual){
+        roomMessages[roomId] = [...(roomMessages[roomId] || []), mensagem];
+        atualizarVistaChatAtivo(roomId, false);
+    }
 }
 
 function anunciarSaidaSala(roomId, sessionId = null){
@@ -5211,6 +5312,10 @@ function atualizarGatePublico(){
 
 function iniciarChatSePermitido(){
     iniciarMonitoramentoSalas();
+    if(privateRoomGateState && privateRoomGateState.roomId === salaAtual){
+        atualizarGatePrivado();
+        return;
+    }
     if(salaAtual === "publica" && !chatPublicUnlocked){
         atualizarGatePublico();
         return;
@@ -5221,6 +5326,7 @@ function iniciarChatSePermitido(){
 }
 
 window.abrirSalaPublica = function(){
+    fecharGateSalaPrivada();
     chatPublicUnlocked = true;
     atualizarGatePublico();
     iniciarMonitoramentoSalas();
@@ -5259,6 +5365,7 @@ window.limparMensagensSala = limparMensagensSala;
 
 // Sobrescreve a função de enviar chat para usar Firebase
 window.enviarMensagem = function() {
+    if(privateRoomGateState && privateRoomGateState.roomId === salaAtual) return;
     let input = document.getElementById("chatInput");
     let texto = input.value.trim();
     

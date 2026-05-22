@@ -1608,38 +1608,84 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 /* ===== CHAT MODERNO ===== */
 
 #chatBox{
-    background:var(--chat-wallpaper, linear-gradient(180deg,#0E1723,#0B121A));
-    border:1px solid #223044;
-    box-shadow:0 6px 20px rgba(0,0,0,0.35);
+    --room-accent:rgba(91,140,255,0.42);
+    --room-accent-soft:rgba(91,140,255,0.12);
+    --chat-wallpaper:
+        linear-gradient(145deg, rgba(255,255,255,0.045), transparent 34%),
+        linear-gradient(215deg, var(--room-accent-soft), transparent 46%),
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 14px),
+        linear-gradient(180deg,#101A25,#071018 72%);
+    background:var(--chat-wallpaper);
+    border:1px solid rgba(148,163,184,0.18);
+    box-shadow:
+        0 12px 30px rgba(0,0,0,0.42),
+        inset 0 1px 0 rgba(255,255,255,0.06),
+        inset 0 0 0 1px rgba(255,255,255,0.025);
+}
+
+#chatBox::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:
+        linear-gradient(90deg, transparent, rgba(255,255,255,0.035), transparent),
+        repeating-linear-gradient(90deg, transparent 0 26px, rgba(255,255,255,0.028) 26px 27px);
+    opacity:0.65;
+    pointer-events:none;
+    z-index:0;
 }
 
 #chatBox[data-room="publica"]{
+    --room-accent:rgba(248,113,113,0.45);
+    --room-accent-soft:rgba(248,113,113,0.14);
     --chat-wallpaper:
-        radial-gradient(120% 80% at 80% 10%, rgba(239,68,68,0.18), transparent 60%),
-        radial-gradient(120% 80% at 10% 90%, rgba(239,68,68,0.12), transparent 65%),
-        linear-gradient(180deg, #1E0C0C, #100808);
+        linear-gradient(145deg, rgba(255,235,235,0.07), transparent 35%),
+        linear-gradient(215deg, rgba(239,68,68,0.16), transparent 48%),
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 14px),
+        linear-gradient(180deg, #201014, #0D080B 72%);
 }
 
 #chatBox[data-room="sala2"]{
+    --room-accent:rgba(251,191,36,0.5);
+    --room-accent-soft:rgba(251,191,36,0.14);
     --chat-wallpaper:
-        radial-gradient(120% 80% at 80% 10%, rgba(245,158,11,0.18), transparent 60%),
-        radial-gradient(120% 80% at 10% 90%, rgba(245,158,11,0.12), transparent 65%),
-        linear-gradient(180deg, #1A1405, #0E0B06);
+        linear-gradient(145deg, rgba(255,247,214,0.08), transparent 35%),
+        linear-gradient(215deg, rgba(245,158,11,0.16), transparent 48%),
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 14px),
+        linear-gradient(180deg, #1D1708, #0D0B07 72%);
 }
 
 #chatBox[data-room="sala3"]{
+    --room-accent:rgba(96,165,250,0.5);
+    --room-accent-soft:rgba(20,184,166,0.12);
     --chat-wallpaper:
-        radial-gradient(120% 80% at 80% 10%, rgba(59,130,246,0.2), transparent 60%),
-        radial-gradient(120% 80% at 10% 90%, rgba(59,130,246,0.12), transparent 65%),
-        linear-gradient(180deg, #0A1424, #070D16);
+        linear-gradient(145deg, rgba(219,234,254,0.075), transparent 35%),
+        linear-gradient(215deg, rgba(20,184,166,0.14), transparent 48%),
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 14px),
+        linear-gradient(180deg, #0A1724, #061017 72%);
 }
 
 #chatMessages{
-    background:rgba(6,8,12,0.35);
+    position:relative;
+    z-index:1;
+    background:
+        linear-gradient(180deg, rgba(6,8,12,0.2), rgba(6,8,12,0.42)),
+        rgba(6,8,12,0.28);
     padding:8px;
 }
 
-#chatPublicGate{
+#chatTyping,
+#chatInputArea{
+    position:relative;
+    z-index:2;
+}
+
+#chatClearBtn{
+    z-index:2;
+}
+
+#chatPublicGate,
+#chatPrivateGate{
     position:absolute;
     inset:0;
     display:none;
@@ -1662,6 +1708,76 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     border:1px solid rgba(207,227,255,0.2);
     border-radius:999px;
     background:rgba(14,23,35,0.35);
+}
+
+#chatPrivateGate{
+    cursor:default;
+}
+
+.chatPrivateGateBox{
+    width:min(210px, 92%);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    padding:12px;
+    border:1px solid rgba(207,227,255,0.2);
+    border-radius:8px;
+    background:rgba(14,23,35,0.72);
+    box-shadow:0 12px 32px rgba(0,0,0,0.4);
+}
+
+.chatPrivateGateTitle{
+    color:#E5EEF9;
+    font-size:11px;
+    font-weight:700;
+    text-align:left;
+}
+
+#chatPrivatePassword{
+    width:100%;
+    height:30px;
+    border:1px solid rgba(207,227,255,0.25);
+    border-radius:6px;
+    background:rgba(8,10,16,0.65);
+    color:#F3F4F6;
+    padding:0 9px;
+    outline:none;
+    font-size:12px;
+}
+
+#chatPrivatePassword:focus{
+    border-color:rgba(91,140,255,0.8);
+    box-shadow:0 0 0 2px rgba(91,140,255,0.18);
+}
+
+#chatPrivateGateError{
+    min-height:12px;
+    color:#FCA5A5;
+    font-size:10px;
+    text-align:left;
+}
+
+.chatPrivateGateActions{
+    display:flex;
+    gap:8px;
+    justify-content:flex-end;
+}
+
+.chatPrivateGateActions button{
+    min-width:64px;
+    height:28px;
+    border-radius:6px;
+    border:1px solid rgba(207,227,255,0.2);
+    background:rgba(31,41,55,0.86);
+    color:#E5EEF9;
+    cursor:pointer;
+    font-size:11px;
+    padding:0 9px;
+}
+
+.chatPrivateGateActions button:last-child{
+    background:#2563EB;
+    border-color:#3B82F6;
 }
 
 .chatUnreadDivider{
@@ -1699,14 +1815,16 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 }
 
 #chatInputArea{
-    background:#0E1723;
-    border-top:1px solid #223044;
+    background:rgba(7,16,24,0.82);
+    border-top:1px solid rgba(148,163,184,0.16);
+    backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px);
 }
 
 #chatInput{
-    background:#0B121A;
+    background:rgba(8,13,20,0.78);
     color:#E6F0FF;
-    border-right:1px solid #223044;
+    border-right:1px solid rgba(148,163,184,0.16);
 }
 
 #chatInput::placeholder{
@@ -1714,9 +1832,9 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 }
 
 #chatInputArea button{
-    background:linear-gradient(135deg,#5B8CFF,#2F6BFF);
+    background:linear-gradient(135deg,var(--room-accent),#2F6BFF);
     color:white;
-    border:1px solid #2B59D1;
+    border:1px solid rgba(255,255,255,0.16);
     border-radius:10px;
     font-weight:700;
     letter-spacing:0.3px;
