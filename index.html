@@ -2986,11 +2986,18 @@ function enviarMensagemSistema(texto, roomId, extra = {}){
 
 function adicionarMensagemLocalChat(roomId, mensagem){
     if(!roomId || !mensagem) return;
-    const lista = roomMessages[roomId] || [];
+
+    window.roomMessages = window.roomMessages || {};
+    roomMessages = window.roomMessages;
+
+    const lista = Array.isArray(roomMessages[roomId]) ? roomMessages[roomId] : [];
+
     if(mensagem.clientEventId && lista.some(msg => msg?.clientEventId === mensagem.clientEventId)){
         return;
     }
+
     roomMessages[roomId] = [...lista, mensagem];
+
     if(roomId === salaAtual){
         atualizarVistaChatAtivo(roomId, false);
     }
@@ -5401,9 +5408,9 @@ onAuthStateChanged(auth, async (user) => {
             if (adminBtn) adminBtn.style.display = "flex";
             iniciarSolicitacoesAdmin(); // 🔥 AQUI
             iniciarListaUsuarios();
-            rebuildNicknamesSimple();
-            rebuildNicknamesAuth();
-            rebuildNicknamesSolic();
+            await rebuildNicknamesSimple();
+            await rebuildNicknamesAuth();
+            await rebuildNicknamesSolic();
             if (adminPanel) adminPanel.style.display = "block";
         } else {
             if (adminBtn) adminBtn.style.display = "none";
@@ -5587,8 +5594,11 @@ let chatTypingRoomUnsub = null;
 let typingUsers = {};
 let typingIdleTimer = null;
 let lastTypingSent = 0;
-let roomMessages = {};
-let unreadCounts = {};
+window.roomMessages = window.roomMessages || {};
+window.unreadCounts = window.unreadCounts || {};
+
+let roomMessages = window.roomMessages;
+let unreadCounts = window.unreadCounts;
 let unreadTitleTimer = null;
 let unreadTitleFlip = false;
 let unreadTitleCount = 0;
