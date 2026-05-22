@@ -485,9 +485,27 @@
         font-size: 11px;
     }
 
+    .contagemMachineProgress {
+        min-height: 34px;
+        padding: 5px 10px;
+        gap: 7px;
+    }
+
+    .contagemMachineProgress span {
+        font-size: 12px;
+    }
+
+    .contagemMachineProgress strong {
+        font-size: 14px;
+    }
+
+    .contagemMachineProgress small {
+        font-size: 10px;
+    }
+
     #contagemCardArea {
         align-items: stretch;
-        padding: 8px 42px;
+        padding: 6px 38px;
         overflow: hidden;
     }
 
@@ -501,8 +519,8 @@
     #contagemCard {
         width: 100%;
         justify-content: space-between;
-        gap: 6px;
-        padding: 10px;
+        gap: 4px;
+        padding: 8px;
         border-radius: 12px;
         box-shadow: none;
     }
@@ -514,11 +532,11 @@
     }
 
     #contagemEnderecoDestaque {
-        gap: 7px;
+        gap: 6px;
     }
 
     #contagemEnderecoDestaque div {
-        padding: 8px 6px;
+        padding: 5px 6px;
         border-radius: 11px;
     }
 
@@ -527,14 +545,14 @@
     }
 
     #contagemEnderecoDestaque strong {
-        font-size: 40px;
+        font-size: 36px;
     }
 
     #contagemCardDescricao {
-        min-height: 30px;
-        max-height: 40px;
+        min-height: 24px;
+        max-height: 34px;
         overflow: hidden;
-        font-size: 12px;
+        font-size: 11px;
         line-height: 1.25;
     }
 
@@ -553,41 +571,54 @@
     }
 
     #contagemInput {
-        height: 54px;
-        padding: 6px 10px;
-        font-size: 34px;
-        border-radius: 10px;
+        height: 40px;
+        padding: 4px 8px;
+        font-size: 22px;
+        border-radius: 9px;
+        border-width: 1px;
+        opacity: 0.9;
     }
 
     #contagemInputStatus {
-        min-height: 13px;
-        font-size: 10px;
+        min-height: 11px;
+        font-size: 9px;
     }
 
     #contagemQuickPad {
-        gap: 6px;
+        gap: 5px;
     }
 
     #contagemQuickPad button {
-        min-height: 42px;
-        padding: 6px;
-        border-radius: 9px;
-        font-size: 18px;
+        min-height: 34px;
+        padding: 4px;
+        border-radius: 8px;
+        font-size: 16px;
     }
 
     #contagemQuickPad button.op {
-        min-height: 38px;
-        font-size: 15px;
+        min-height: 32px;
+        font-size: 14px;
     }
 
     #contagemQuickPad button.zero,
     #contagemQuickPad button.ok {
-        min-height: 44px;
-        font-size: 12px;
+        min-height: 35px;
+        font-size: 11px;
     }
 
     #contagemQuickPad button.ok {
-        font-size: 14px;
+        font-size: 13px;
+    }
+
+    #contagemGhostActions {
+        gap: 6px;
+    }
+
+    #contagemGhostActions button {
+        min-height: 42px;
+        border-radius: 9px;
+        font-size: 12px;
+        padding: 6px;
     }
 
     .contagemNavBtn {
@@ -687,12 +718,12 @@
     }
 
     #contagemCardArea {
-        padding-left: 36px;
-        padding-right: 36px;
+        padding-left: 32px;
+        padding-right: 32px;
     }
 
     #contagemQuickPad button {
-        min-height: 40px;
+        min-height: 32px;
     }
 }
 

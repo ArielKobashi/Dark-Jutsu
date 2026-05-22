@@ -2348,6 +2348,35 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     font-size:10px;
 }
 
+.contagemMachineProgress{
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    border:1px solid rgba(134,239,172,0.26);
+    border-radius:999px;
+    background:rgba(15,35,22,0.62);
+    color:#A7F3D0;
+    padding:8px 12px;
+    font-weight:800;
+}
+
+.contagemMachineProgress span{
+    font-size:13px;
+    letter-spacing:0.5px;
+}
+
+.contagemMachineProgress strong{
+    color:#FFFFFF;
+    font-size:15px;
+}
+
+.contagemMachineProgress small{
+    color:#8FB8A0;
+    font-size:11px;
+}
+
 #contagemCardArea{
     flex:1;
     display:flex;
@@ -2533,6 +2562,31 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 #contagemQuickPad button.ok{
     grid-column:span 2;
     font-size:15px;
+}
+
+#contagemGhostActions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+}
+
+#contagemGhostActions button{
+    min-height:54px;
+    border-radius:12px;
+    border:1px solid rgba(134,239,172,0.28);
+    color:#FFFFFF;
+    font-size:15px;
+    font-weight:900;
+    cursor:pointer;
+}
+
+#contagemGhostActions .livre{
+    background:#15803D;
+}
+
+#contagemGhostActions .fantasma{
+    background:#B91C1C;
+    border-color:rgba(252,165,165,0.42);
 }
 
 .contagemNavBtn{
