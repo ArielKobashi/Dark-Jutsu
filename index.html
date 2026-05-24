@@ -751,6 +751,23 @@ function parsePlanilhaData(valor){
     return Number.isNaN(data.getTime()) ? null : data.getTime();
 }
 
+function normalizarNomeGuia(valor){
+    return (valor ?? "").toString()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+}
+
+function selecionarGuiaWorkbook(workbook, guia = null){
+    if(!guia) return workbook.SheetNames[0];
+    if(workbook.Sheets[guia]) return guia;
+    const alvo = normalizarNomeGuia(guia);
+    const encontrada = workbook.SheetNames.find(nome => normalizarNomeGuia(nome) === alvo)
+        || workbook.SheetNames.find(nome => normalizarNomeGuia(nome).includes(alvo) || alvo.includes(normalizarNomeGuia(nome)));
+    return encontrada || workbook.SheetNames[0];
+}
+
 function getHistoricoSaldoItem(itemOrKey){
     const key = typeof itemOrKey === "string" ? itemOrKey : getItemKey(itemOrKey);
     const chave = chaveAjusteItem(key);
@@ -2514,7 +2531,7 @@ async function carregarPlanilhaPadrao(tipo, arquivo, guia = null){
             if(!response.ok) continue;
             const data = await response.arrayBuffer();
             const workbook = XLSX.read(data, { type: "array" });
-            const sheetName = guia && workbook.Sheets[guia] ? guia : workbook.SheetNames[0];
+            const sheetName = selecionarGuiaWorkbook(workbook, guia);
             const sheet = workbook.Sheets[sheetName];
             planilhas[tipo] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             return true;

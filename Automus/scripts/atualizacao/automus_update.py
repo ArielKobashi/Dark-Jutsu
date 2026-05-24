@@ -81,10 +81,31 @@ def _extract_firebase_config(index_html_path: Path) -> tuple[str, str]:
     return api_match.group(1), db_match.group(1).rstrip("/")
 
 
+def _sheet_name_key(value: Any) -> str:
+    txt = _safe_text(value).lower()
+    normalized = unicodedata.normalize("NFKD", txt)
+    return normalized.encode("ascii", "ignore").decode("ascii").strip()
+
+
 def _read_sheet(path: Path, sheet_name: str | None = None) -> list[list[Any]]:
     wb = load_workbook(path, data_only=True, read_only=True)
     try:
-        ws = wb[sheet_name] if sheet_name and sheet_name in wb.sheetnames else wb[wb.sheetnames[0]]
+        ws_name = wb.sheetnames[0]
+        if sheet_name:
+            if sheet_name in wb.sheetnames:
+                ws_name = sheet_name
+            else:
+                alvo = _sheet_name_key(sheet_name)
+                ws_name = next(
+                    (
+                        name for name in wb.sheetnames
+                        if _sheet_name_key(name) == alvo
+                        or alvo in _sheet_name_key(name)
+                        or _sheet_name_key(name) in alvo
+                    ),
+                    ws_name,
+                )
+        ws = wb[ws_name]
         out: list[list[Any]] = []
         for row in ws.iter_rows(values_only=True):
             out.append(list(row))
