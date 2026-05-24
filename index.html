@@ -1013,10 +1013,20 @@ function getEnderecosForaEndereco(item){
     return item.enderecos.filter(e => enderecoPossuiSaldo(e) && isEnderecoForaEndereco(e.endereco));
 }
 
+function saldoAtualTotalmenteEnderecado(item){
+    const saldoAtual = parsePlanilhaNumero(item?.saldo);
+    if(saldoAtual === null || saldoAtual <= 0) return false;
+    const saldoEnderecado = (Array.isArray(item?.enderecos) ? item.enderecos : [])
+        .filter(enderecoContaComoEndereco)
+        .reduce((total, end) => total + (parsePlanilhaNumero(end?.saldo) || 0), 0);
+    return saldoEnderecado >= saldoAtual - 0.0001;
+}
+
 function getResumoSaldoForaEndereco(item){
     const foraEndereco = getEnderecosForaEndereco(item);
     const pedido = getPedidoCompraItem(item);
-    if(pedido?.recebidoSemEntrada > 0){
+    const considerarPedidoRecebidoForaEndereco = pedido?.recebidoSemEntrada > 0 && !saldoAtualTotalmenteEnderecado(item);
+    if(considerarPedidoRecebidoForaEndereco){
         foraEndereco.push({
             endereco: "RECEBIDO SEM ENTRADA",
             armazem: "PEDIDO",
@@ -2769,10 +2779,8 @@ function renderTabela(){
         const statusEstoque = obterStatusEstoque(item);
         if(statusEstoque === "abaixo"){
             tdSaldo.classList.add("estoqueAbaixoMinimo");
-            tdSaldo.title = "Saldo abaixo do mínimo";
         }else if(statusEstoque === "acima"){
             tdSaldo.classList.add("estoqueAcimaMaximo");
-            tdSaldo.title = "Saldo acima do máximo";
         }
 
         row.ondblclick = ()=>{
