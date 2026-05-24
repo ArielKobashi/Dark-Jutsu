@@ -1,0 +1,12 @@
+{
+  "app": "Automus",
+  "version": "1.0.0",
+  "releasedAt": "2026-05-24",
+  "updateManifestUrl": "",
+  "updateBaseUrl": "",
+  "notes": [
+    "Pacote inicial separado do projeto principal.",
+    "Login ADM obrigatorio antes de atualizar.",
+    "Agendamento, historico e execucao em segundo plano."
+  ]
+}

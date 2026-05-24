@@ -30,11 +30,45 @@ dist\Automus.exe
 
 Para passar para outro PC, copie somente `dist\Automus.exe`. No primeiro uso ele cria uma pasta `AutomusData` ao lado do executavel para guardar configuracoes, historico e arquivos baixados.
 
+## Gerar pacote de atualizacao
+
+Antes de gerar uma nova versao, altere `scripts\version.json`.
+
+Para ativar atualizacao automatica nos computadores dos usuarios, publique o conteudo da pasta `releases` em algum endereco HTTP/HTTPS e preencha:
+
+```json
+{
+  "updateManifestUrl": "https://seu-servidor/automus/latest.json",
+  "updateBaseUrl": "https://seu-servidor/automus/"
+}
+```
+
+O `updateManifestUrl` e o endereco que o Automus instalado consulta. O `updateBaseUrl` e usado na hora de gerar o `latest.json`, para apontar para o `.zip` da versao nova.
+
+Depois use:
+
+```bat
+gerar_pacote_atualizacao.bat
+```
+
+O pacote fica em:
+
+```text
+releases\Automus-vVERSAO.zip
+```
+
+Esse `.zip` leva o `Automus.exe`, o manifesto `latest.json` e a versao usada. Para atualizar outro PC, feche o Automus antigo, substitua o `Automus.exe` pelo novo e abra novamente. A pasta `AutomusData` do outro PC deve permanecer no lugar para manter preferencias, historico e agendamentos.
+
+Com `updateManifestUrl` configurado, o Automus verifica automaticamente depois do login ADM. Se houver versao nova, o app baixa o pacote, confere o SHA256, fecha, troca o executavel e abre novamente. A `AutomusData` nao e alterada. O botao `Verificar update` continua disponivel para conferir manualmente.
+
 ## Arquivos principais
 
 - `scripts\controladordeatualizacao*.py`: interface e app em segundo plano.
 - `scripts\executar_tudo.py`: fluxo principal de atualizacao.
 - `scripts\atualizacao\automus_update.py`: envio e validacao dos dados no Firebase.
 - `scripts\firebase_config.json`: configuracao Firebase usada pelo Automus sem depender do `index.html` do projeto principal.
+- `scripts\version.json`: versao exibida no titulo e usada nos pacotes de atualizacao.
+- `scripts\package_automus_release.py`: cria o `.zip` de atualizacao.
+- `scripts\automus_self_update.py`: verifica, baixa e instala novas versoes do Automus.exe.
 - `downloads\`: planilhas base copiadas para o pacote isolado.
 - `requirements.txt`: dependencias Python do Automus.

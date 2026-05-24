@@ -5,6 +5,7 @@ Automus/scripts/atualizacao/automus_config.json
 Automus/AutomusData/
 Automus/build/
 Automus/dist/
+Automus/releases/
 build/
 dist/
 *.spec

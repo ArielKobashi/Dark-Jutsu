@@ -17,6 +17,13 @@ from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from automus_self_update import (
+    check_for_update,
+    download_update,
+    get_manifest_url,
+    install_downloaded_update,
+)
+
 
 # Evita carga duplicada quando o arquivo roda como script (__main__) e tambem
 # e importado por nome de modulo em outros pontos (ex.: executar_tudo.py).
@@ -47,9 +54,24 @@ os.environ.setdefault("AUTOMUS_PROJECT_ROOT", str(PROJECT_ROOT))
 os.environ.setdefault("AUTOMUS_SCRIPT_DIR", str(SCRIPT_DIR))
 os.environ.setdefault("AUTOMUS_BUNDLED_SCRIPT_DIR", str(BUNDLED_SCRIPT_DIR))
 CONTROLLER_CONFIG_PATH = SCRIPT_DIR / "controlador_config.json"
-STARTUP_BAT_NAME = "DarkJutsu_Controlador_Atualizacoes.bat"
+STARTUP_BAT_NAME = "Automus_Controlador_Atualizacoes.bat"
 APP_DISPLAY_NAME = "Automus"
-APP_TITLE = "Automus | Controlador de Atualizações"
+
+
+def _load_app_version() -> str:
+    for path in (SCRIPT_DIR / "version.json", BUNDLED_SCRIPT_DIR / "version.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            version = str(data.get("version") or "").strip()
+            if version:
+                return version
+        except Exception:
+            continue
+    return "dev"
+
+
+APP_VERSION = _load_app_version()
+APP_TITLE = f"Automus {APP_VERSION} | Controlador de Atualizações"
 
 
 def _http_json(url: str, method: str = "GET", payload: Optional[dict] = None, timeout: float = 25.0):
@@ -254,6 +276,7 @@ class _ControlWindow:
         try:
             import tkinter as tk
             import tkinter.font as tkfont
+            from tkinter import messagebox
             from tkinter import scrolledtext
         except Exception:
             self._ready.set()
@@ -389,6 +412,80 @@ class _ControlWindow:
         senha_entry.pack(fill="x", padx=42, ipady=8, pady=(0, 12))
 
         main_frame = tk.Frame(root, bg=palette["bg"])
+        update_status_var = tk.StringVar(value="")
+
+        def check_update_ui(silent=False, auto_install=False):
+            manifest_url = self._state.get_update_manifest_url()
+            if not manifest_url:
+                if not silent:
+                    update_status_var.set("Configure updateManifestUrl no version.json para ativar updates automáticos.")
+                return
+
+            update_status_var.set("Verificando atualização do Automus...")
+
+            def worker():
+                try:
+                    info = self._state.check_app_update()
+                    root.after(0, lambda: handle_result(info, None))
+                except Exception as exc:
+                    root.after(0, lambda exc=exc: handle_result(None, exc))
+
+            def handle_result(info, exc):
+                if exc is not None:
+                    update_status_var.set(f"Falha ao verificar atualização: {exc}")
+                    if not silent:
+                        messagebox.showerror("Atualização do Automus", str(exc))
+                    return
+                if info is None:
+                    update_status_var.set("")
+                    return
+                if not info.has_update:
+                    update_status_var.set(f"Automus {info.current_version} já está atualizado.")
+                    if not silent:
+                        messagebox.showinfo("Atualização do Automus", "Você já está usando a versão mais recente.")
+                    return
+
+                notes = "\n".join(f"- {note}" for note in info.notes[:5])
+                if auto_install:
+                    update_status_var.set(f"Nova versão {info.latest_version} encontrada. Atualizando automaticamente...")
+                    install_update_ui(info)
+                    return
+
+                message = (
+                    f"Existe uma nova versão do Automus.\n\n"
+                    f"Atual: {info.current_version}\n"
+                    f"Nova: {info.latest_version}"
+                )
+                if notes:
+                    message += f"\n\nNotas:\n{notes}"
+                message += "\n\nBaixar, instalar e reiniciar agora?"
+                update_status_var.set(f"Nova versão disponível: {info.latest_version}.")
+                if messagebox.askyesno("Atualização do Automus", message):
+                    install_update_ui(info)
+
+            threading.Thread(target=worker, name="automus-update-check", daemon=True).start()
+
+        def install_update_ui(info):
+            update_status_var.set(f"Baixando Automus {info.latest_version}...")
+
+            def worker():
+                try:
+                    new_exe = self._state.download_app_update(info)
+                    self._state.install_app_update(new_exe)
+                    root.after(0, finish)
+                except Exception as exc:
+                    root.after(0, lambda exc=exc: fail(exc))
+
+            def finish():
+                update_status_var.set("Atualização pronta. Reiniciando Automus...")
+                root.destroy()
+                os._exit(0)
+
+            def fail(exc):
+                update_status_var.set(f"Falha ao instalar atualização: {exc}")
+                messagebox.showerror("Atualização do Automus", str(exc))
+
+            threading.Thread(target=worker, name="automus-update-install", daemon=True).start()
 
         def do_login(event=None):
             login_status.set("Validando permissão ADM...")
@@ -401,6 +498,7 @@ class _ControlWindow:
                     root.after(0, refresh_schedule_ui)
                 except Exception:
                     pass
+                root.after(1200, lambda: check_update_ui(silent=True, auto_install=True))
             except Exception as exc:
                 login_status.set(str(exc))
             return "break"
@@ -473,6 +571,26 @@ class _ControlWindow:
             bg="#2563eb",
         )
         run_btn.pack(side="left", padx=(6, 0))
+
+        update_btn = make_button(
+            buttons,
+            text="Verificar update",
+            command=lambda: check_update_ui(silent=False),
+            width=13,
+            height=1,
+            bg="#0f766e",
+        )
+        update_btn.pack(side="left", padx=(6, 0))
+
+        tk.Label(
+            main_frame,
+            textvariable=update_status_var,
+            bg=palette["bg"],
+            fg=palette["muted"],
+            font=("Segoe UI", 8),
+            anchor="w",
+            wraplength=520,
+        ).pack(fill="x", padx=14, pady=(0, 6))
 
         schedule_shell = tk.Frame(main_frame, bg=palette["panel"], highlightbackground=palette["line"], highlightthickness=1)
         schedule_shell.pack(fill="x", padx=14, pady=(0, 10))
@@ -1160,6 +1278,18 @@ class _SharedState:
                 callback(title, message)
             except Exception:
                 pass
+
+    def get_update_manifest_url(self) -> str:
+        return get_manifest_url(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
+
+    def check_app_update(self):
+        return check_for_update(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
+
+    def download_app_update(self, info):
+        return download_update(info)
+
+    def install_app_update(self, new_exe: Path):
+        install_downloaded_update(new_exe)
 
     def record_update_history(self, status: str, origem: str = "manual", usuario: Optional[str] = None) -> dict:
         usuario = usuario or (self.authenticated_admin or {}).get("nickname") or "Automus"

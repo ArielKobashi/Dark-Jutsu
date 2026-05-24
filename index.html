@@ -160,6 +160,13 @@
 
                     <th data-col="endereco">
                         <div class="headerContent">
+                            <button
+                                type="button"
+                                id="btnFiltroEnderecoFora"
+                                class="saldoExtremosBtn enderecoForaBtn"
+                                title="Mostrar apenas itens com saldo fora de endereço"
+                                aria-pressed="false"
+                            >!</button>
                             <span class="titulo">Endereço</span>
                             <span class="setas">
                                 <span class="setaUp">▲</span>
@@ -825,23 +832,59 @@ function enderecoPossuiSaldo(endereco){
     return saldo !== null && saldo > 0;
 }
 
+function isEnderecoForaEndereco(valor){
+    const norm = normalizarEndereco(valor);
+    if(!isEnderecoValido(norm)) return true;
+    const foraEndereco = new Set([
+        "BARRACAO",
+        "BARRACÃO",
+        "FORA DE ENDERECO",
+        "FORA DE ENDEREÇO",
+        "SEM LOCAL",
+        "SEM POSICAO",
+        "SEM POSIÇÃO"
+    ]);
+    return foraEndereco.has(norm);
+}
+
+function enderecoContaComoEndereco(endereco){
+    return enderecoPossuiSaldo(endereco) && !isEnderecoForaEndereco(endereco.endereco);
+}
+
 function contarEnderecosComSaldo(item){
     if(!item || !Array.isArray(item.enderecos)) return 0;
 
     const unicos = new Set();
 
     item.enderecos.forEach(e => {
-        if(!enderecoPossuiSaldo(e)) return;
+        if(!enderecoContaComoEndereco(e)) return;
 
         const endereco = normalizarEndereco(e.endereco);
-        const armazem = normalizarEndereco(e.armazem || "");
 
         if(endereco){
-            unicos.add(endereco + "|" + armazem);
+            unicos.add(endereco);
         }
     });
 
     return unicos.size;
+}
+
+function getEnderecosForaEndereco(item){
+    if(!item || !Array.isArray(item.enderecos)) return [];
+    return item.enderecos.filter(e => enderecoPossuiSaldo(e) && isEnderecoForaEndereco(e.endereco));
+}
+
+function getResumoSaldoForaEndereco(item){
+    const foraEndereco = getEnderecosForaEndereco(item);
+    const saldoTotal = foraEndereco.reduce((total, end) => {
+        const saldo = parsePlanilhaNumero(end.saldo);
+        return total + (saldo || 0);
+    }, 0);
+    return {
+        registros: foraEndereco.length,
+        saldoTotal,
+        enderecos: foraEndereco
+    };
 }
 
 function obterPrioridadeSaldoExtremos(item, asc){
@@ -2250,6 +2293,43 @@ function criarTooltipHistoricoSaldo(td, item){
     td.appendChild(tooltip);
 }
 
+function criarAlertaSaldoForaEndereco(td, item){
+    const resumo = getResumoSaldoForaEndereco(item);
+    if(!resumo.registros) return;
+
+    const esc = (texto) => String(texto ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const registrosTexto = `${resumo.registros} registro${resumo.registros === 1 ? "" : "s"}`;
+    const saldoTexto = formatarNumeroPlanilha(resumo.saldoTotal);
+    const linhasTitle = resumo.enderecos.map(end => {
+        const local = normalizarEndereco(end.endereco) || "SEM ENDERECO";
+        const armazem = end.armazem || "ND";
+        return `${local} | Armazém ${armazem}: ${formatarNumeroPlanilha(end.saldo)}`;
+    });
+
+    td.title = `Saldo fora de endereço: ${saldoTexto}\n${registrosTexto}\n${linhasTitle.join("\n")}`;
+    td.classList.add("enderecoForaCell");
+
+    const tooltip = document.createElement("div");
+    tooltip.className = "enderecoForaTooltip";
+    tooltip.innerHTML = `
+        <div class="enderecoForaTitulo">Saldo fora de endereço</div>
+        <div class="enderecoForaResumo">${esc(saldoTexto)} em ${esc(registrosTexto)}</div>
+        ${resumo.enderecos.map(end => `
+            <div class="enderecoForaLinha">
+                <span>${esc(normalizarEndereco(end.endereco) || "SEM ENDERECO")}</span>
+                <strong>${esc(formatarNumeroPlanilha(end.saldo))}</strong>
+            </div>
+        `).join("")}
+    `;
+    td.appendChild(tooltip);
+}
+
 let dragSelectActive = false;
 let dragSelectValue = true;
 let checkboxIndexMap = [];
@@ -2466,7 +2546,7 @@ function renderTabela(){
 
         let armazensUnicos = [
             ...new Set(
-                (item.enderecos || []).filter(enderecoPossuiSaldo).map(e=>e?.armazem)
+                (item.enderecos || []).filter(enderecoContaComoEndereco).map(e=>e?.armazem)
             )
         ];
 
@@ -2482,6 +2562,7 @@ function renderTabela(){
 
         // ENDEREÇO
         let tdEnd = criarTd(row, item.enderecoPrincipal || "");
+        criarAlertaSaldoForaEndereco(tdEnd, item);
 
         if(contarEnderecosComSaldo(item) > 1){
             tdEnd.style.background = "rgba(122,60,255,0.25)";
@@ -3951,6 +4032,7 @@ window.exportarRelatorioContagemXlsx = exportarRelatorioContagemXlsx;
 
 let filtrosColuna = {};
 let filtroSaldoExtremosAtivo = false;
+let filtroEnderecoForaAtivo = false;
 
 document.querySelectorAll("th[data-col]").forEach(th => {
 
@@ -4035,6 +4117,21 @@ if(btnFiltroSaldoExtremos){
     });
 }
 
+const btnFiltroEnderecoFora = document.getElementById("btnFiltroEnderecoFora");
+if(btnFiltroEnderecoFora){
+    btnFiltroEnderecoFora.addEventListener("click", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        filtroEnderecoForaAtivo = !filtroEnderecoForaAtivo;
+        aplicarTodosFiltros();
+    });
+
+    btnFiltroEnderecoFora.addEventListener("dblclick", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+    });
+}
+
 let ordensAtivas = [];
 
 function ordenar(col, direcao){
@@ -4058,6 +4155,14 @@ function ordenar(col, direcao){
         if(indiceSaldo > 0){
             const [ordenacaoSaldo] = ordensAtivas.splice(indiceSaldo, 1);
             ordensAtivas.unshift(ordenacaoSaldo);
+        }
+    }
+
+    if(filtroEnderecoForaAtivo && col === "endereco"){
+        const indiceEndereco = ordensAtivas.findIndex(o => o.col === "endereco");
+        if(indiceEndereco > 0){
+            const [ordenacaoEndereco] = ordensAtivas.splice(indiceEndereco, 1);
+            ordensAtivas.unshift(ordenacaoEndereco);
         }
     }
 
@@ -4087,6 +4192,11 @@ function atualizarVisualHeaders(){
         thSaldo.classList.toggle("saldo-extremos-ativo", filtroSaldoExtremosAtivo);
     }
 
+    const thEndereco = document.querySelector('th[data-col="endereco"]');
+    if(thEndereco){
+        thEndereco.classList.toggle("endereco-fora-ativo", filtroEnderecoForaAtivo);
+    }
+
     const btnFiltro = document.getElementById("btnFiltroSaldoExtremos");
     if(btnFiltro){
         btnFiltro.classList.toggle("ativo", filtroSaldoExtremosAtivo);
@@ -4094,6 +4204,15 @@ function atualizarVisualHeaders(){
         btnFiltro.title = filtroSaldoExtremosAtivo
             ? "Mostrando apenas itens fora da faixa. Clique para voltar ao normal."
             : "Mostrar apenas itens fora da faixa";
+    }
+
+    const btnFiltroEndereco = document.getElementById("btnFiltroEnderecoFora");
+    if(btnFiltroEndereco){
+        btnFiltroEndereco.classList.toggle("ativo", filtroEnderecoForaAtivo);
+        btnFiltroEndereco.setAttribute("aria-pressed", filtroEnderecoForaAtivo ? "true" : "false");
+        btnFiltroEndereco.title = filtroEnderecoForaAtivo
+            ? "Mostrando apenas itens com saldo fora de endereço. Clique para voltar ao normal."
+            : "Mostrar apenas itens com saldo fora de endereço";
     }
 
 }
@@ -4123,6 +4242,15 @@ function aplicarOrdenacao(){
             if(ordem.col === "saldo" && filtroSaldoExtremosAtivo){
                 const prioridadeA = obterPrioridadeSaldoExtremos(a, ordem.asc);
                 const prioridadeB = obterPrioridadeSaldoExtremos(b, ordem.asc);
+
+                if(prioridadeA !== prioridadeB){
+                    return prioridadeA - prioridadeB;
+                }
+            }
+
+            if(ordem.col === "endereco" && filtroEnderecoForaAtivo){
+                const prioridadeA = getResumoSaldoForaEndereco(a).registros ? 0 : 1;
+                const prioridadeB = getResumoSaldoForaEndereco(b).registros ? 0 : 1;
 
                 if(prioridadeA !== prioridadeB){
                     return prioridadeA - prioridadeB;
@@ -5042,6 +5170,10 @@ function aplicarTodosFiltros(){
             if(statusEstoque === "ok"){
                 return false;
             }
+        }
+
+        if(filtroEnderecoForaAtivo && !getResumoSaldoForaEndereco(item).registros){
+            return false;
         }
 
         /* ===== FILTRO PESQUISA GERAL ===== */
