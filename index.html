@@ -587,7 +587,9 @@ let planilhas = {
     incluir: null,
     saldoAtual: null,
     saldoEndereco: null,
-    estoque_minimo: null
+    estoque_minimo: null,
+    mata110: null,
+    mata111: null
 };
 
 let dados = [];
@@ -596,6 +598,7 @@ window.dadosMortos = dadosMortos;
 let visiveis = [];
 let ajustesItensEstoque = {};
 let historicoSaldoEstoque = {};
+let pedidosCompraEstado = {};
 var privateRoomGateState = null;
 var salaAtual = window.salaAtual || "publica";
 var roomMessages = window.roomMessages || {};
@@ -728,10 +731,137 @@ function formatarDataHistoricoSaldo(timestamp = Date.now()){
     return new Date(timestamp).toLocaleDateString("pt-BR");
 }
 
+function parsePlanilhaData(valor){
+    if(valor === null || valor === undefined || valor === "") return null;
+    if(typeof valor === "number"){
+        const parsed = XLSX?.SSF?.parse_date_code ? XLSX.SSF.parse_date_code(valor) : null;
+        if(parsed){
+            return new Date(parsed.y, parsed.m - 1, parsed.d).getTime();
+        }
+    }
+    const texto = String(valor).trim();
+    if(!texto) return null;
+    const partes = texto.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if(partes){
+        const ano = Number(partes[3].length === 2 ? "20" + partes[3] : partes[3]);
+        return new Date(ano, Number(partes[2]) - 1, Number(partes[1])).getTime();
+    }
+    const data = new Date(texto);
+    return Number.isNaN(data.getTime()) ? null : data.getTime();
+}
+
 function getHistoricoSaldoItem(itemOrKey){
     const key = typeof itemOrKey === "string" ? itemOrKey : getItemKey(itemOrKey);
     const chave = chaveAjusteItem(key);
     return Array.isArray(historicoSaldoEstoque?.[chave]) ? historicoSaldoEstoque[chave] : [];
+}
+
+function ultimaEntradaSaldoDepois(itemOrKey, timestamp){
+    const limite = Number(timestamp || 0);
+    return getHistoricoSaldoItem(itemOrKey).some(h => {
+        const ts = Number(h?.timestamp || 0);
+        return h?.tipo === "entrada" && Number(h?.delta || 0) > 0 && (!limite || ts >= limite);
+    });
+}
+
+function montarEstadoPedidosCompra(mata110, mata111, itens = []){
+    const pedidosPorCodigo = new Map();
+    (Array.isArray(mata111) ? mata111.slice(1) : []).forEach((row, idx) => {
+        const codigo = normalizarCodigoItem(row?.[6]);
+        if(!codigo) return;
+        const quantidadePedida = parsePlanilhaNumero(row?.[9]) || 0;
+        const quantidadeRecebida = parsePlanilhaNumero(row?.[11]) || 0;
+        const timestamp = parsePlanilhaData(row?.[2]) || 0;
+        const pedido = {
+            codigo,
+            dataPedido: timestamp ? formatarDataHistoricoSaldo(timestamp) : "",
+            timestamp,
+            quantidadePedida,
+            quantidadeRecebida,
+            rowIndex: idx
+        };
+        if(!pedidosPorCodigo.has(codigo)) pedidosPorCodigo.set(codigo, []);
+        pedidosPorCodigo.get(codigo).push(pedido);
+    });
+
+    pedidosPorCodigo.forEach(lista => lista.sort((a,b) => (b.timestamp - a.timestamp) || (b.rowIndex - a.rowIndex)));
+
+    const solicitacoesPorCodigo = new Map();
+    (Array.isArray(mata110) ? mata110.slice(1) : []).forEach((row, idx) => {
+        const codigo = normalizarCodigoItem(row?.[3]);
+        if(!codigo) return;
+        const quantidadeSolicitada = parsePlanilhaNumero(row?.[5]) || 0;
+        const quantidadeEmPedido = parsePlanilhaNumero(row?.[8]) || 0;
+        const solicitacao = {
+            codigo,
+            quantidadeSolicitada,
+            solicitante: (row?.[7] ?? "").toString().trim(),
+            quantidadeEmPedido,
+            aceitoPor: (row?.[17] ?? "").toString().trim(),
+            rowIndex: idx
+        };
+        if(!solicitacoesPorCodigo.has(codigo)) solicitacoesPorCodigo.set(codigo, []);
+        solicitacoesPorCodigo.get(codigo).push(solicitacao);
+    });
+
+    const estado = {};
+    (Array.isArray(itens) ? itens : []).forEach(item => {
+        const codigo = normalizarCodigoItem(item?.protheus || item?.protheusKey || item?.cooperat);
+        if(!codigo) return;
+        const solicitacoes = solicitacoesPorCodigo.get(codigo) || [];
+        const pedidos = pedidosPorCodigo.get(codigo) || [];
+        const pedidoAtivo = pedidos.find(p => !ultimaEntradaSaldoDepois(item, p.timestamp));
+        const solicitacao = [...solicitacoes].reverse().find(s => {
+            if(!pedidoAtivo) return true;
+            return s.quantidadeEmPedido > 0 || s.aceitoPor;
+        }) || null;
+        const pedidosRecebidos = pedidos.filter(p => p.quantidadeRecebida > 0);
+        const mediaPedido = pedidosRecebidos.length
+            ? pedidosRecebidos.reduce((s,p)=>s + (p.quantidadeRecebida || p.quantidadePedida || 0), 0) / pedidosRecebidos.length
+            : null;
+
+        let status = "sem";
+        let titulo = "Sem solicitação de pedido";
+        let detalhe = "";
+        let recebidoSemEntrada = 0;
+
+        if(solicitacao){
+            if(!solicitacao.aceitoPor && solicitacao.quantidadeEmPedido <= 0){
+                status = "aguardando_liberacao";
+                titulo = "Aguardando liberação...";
+                detalhe = `Solicitado por: ${solicitacao.solicitante || "-"}`;
+            }else if(!pedidoAtivo && solicitacao.aceitoPor){
+                status = "aguardando_pedido";
+                titulo = "Aguardando pedido de compra...";
+                detalhe = `Aceito por: ${solicitacao.aceitoPor || "-"}`;
+            }else if(pedidoAtivo && pedidoAtivo.quantidadeRecebida <= 0){
+                status = "aguardando_recebimento";
+                titulo = "Aguardando recebimento...";
+                detalhe = `Pedido feito em: ${pedidoAtivo.dataPedido || "-"}`;
+            }else if(pedidoAtivo && pedidoAtivo.quantidadeRecebida > 0){
+                status = "aguardando_contagem";
+                titulo = "Aguardando contagem de nota...";
+                detalhe = `Recebido em: ${pedidoAtivo.dataPedido || "-"}`;
+                recebidoSemEntrada = pedidoAtivo.quantidadeRecebida;
+            }
+        }
+
+        estado[codigo] = {
+            status,
+            titulo,
+            detalhe,
+            solicitacao,
+            pedido: pedidoAtivo || null,
+            mediaPedido,
+            recebidoSemEntrada
+        };
+    });
+    return estado;
+}
+
+function getPedidoCompraItem(item){
+    const codigo = normalizarCodigoItem(item?.protheus || item?.protheusKey || item?.cooperat);
+    return codigo ? pedidosCompraEstado?.[codigo] : null;
 }
 
 function definirHistoricoSaldo(novosItens, itensAnteriores, historicoAtual = historicoSaldoEstoque){
@@ -790,6 +920,15 @@ function chaveAjusteItem(itemOrKey){
 
 function aplicarReposicaoCalculada(item){
     if(!item) return item;
+    const pedido = getPedidoCompraItem(item);
+    if(pedido?.mediaPedido){
+        if(item.minimo === undefined || item.minimo === null || item.minimo === ""){
+            item.minimo = Math.max(1, Math.round(pedido.mediaPedido));
+        }
+        if(item.maximo === undefined || item.maximo === null || item.maximo === ""){
+            item.maximo = Math.max(1, Math.round(pedido.mediaPedido * 2));
+        }
+    }
     const reposicao = calcularReposicaoMedia(item.minimo, item.maximo);
     if(reposicao === null){
         delete item.reposicao;
@@ -876,6 +1015,14 @@ function getEnderecosForaEndereco(item){
 
 function getResumoSaldoForaEndereco(item){
     const foraEndereco = getEnderecosForaEndereco(item);
+    const pedido = getPedidoCompraItem(item);
+    if(pedido?.recebidoSemEntrada > 0){
+        foraEndereco.push({
+            endereco: "RECEBIDO SEM ENTRADA",
+            armazem: "PEDIDO",
+            saldo: pedido.recebidoSemEntrada
+        });
+    }
     const saldoTotal = foraEndereco.reduce((total, end) => {
         const saldo = parsePlanilhaNumero(end.saldo);
         return total + (saldo || 0);
@@ -2108,6 +2255,8 @@ async function atualizarBanco(btn) {
     let saldoEndereco = planilhas.saldoEndereco || [];
     let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereco, false);
     historicoSaldoEstoque = definirHistoricoSaldo(novosDados, dados, historicoSaldoEstoque);
+    pedidosCompraEstado = montarEstadoPedidosCompra(planilhas.mata110, planilhas.mata111, novosDados);
+    novosDados = novosDados.map(item => aplicarAjusteManualItem({...item}));
 
     window.setDados(novosDados);
     window.dadosMortos = Array.isArray(dadosMortos) ? dadosMortos : [];
@@ -2117,6 +2266,7 @@ async function atualizarBanco(btn) {
         dadosMortos: window.dadosMortos || [],
         ajustesItens: ajustesItensEstoque || {},
         historicoSaldo: historicoSaldoEstoque || {},
+        pedidosCompra: pedidosCompraEstado || {},
         ultimaAtualizacao: Date.now(),
         atualizadoPor: (window.meuNickname || "Sistema") + " - atualizado automaticamente",
         atualizacaoAutomatica: true,
@@ -2125,7 +2275,9 @@ async function atualizarBanco(btn) {
             mata105: "incluir.xlsx",
             mata225: "saldo.atual.xlsx",
             mata226: "saldo.por.endereco.xlsx",
-            ...(planilhas.estoque_minimo ? { estoque_minimo: "estoque_minimo.xlsx" } : {})
+            ...(planilhas.estoque_minimo ? { estoque_minimo: "estoque_minimo.xlsx" } : {}),
+            ...(planilhas.mata110 ? { mata110: "mata110.xlsx" } : {}),
+            ...(planilhas.mata111 ? { mata111: "mata111.xlsx" } : {})
         }
     };
 
@@ -2267,10 +2419,7 @@ function criarTd(row, valor){
 
 function criarTooltipHistoricoSaldo(td, item){
     const historico = getHistoricoSaldoItem(item).slice(-8).reverse();
-    if(!historico.length){
-        td.title = "Sem histórico de entrada/saída de saldo.";
-        return;
-    }
+    const pedido = getPedidoCompraItem(item);
     const esc = (texto) => String(texto ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -2279,18 +2428,45 @@ function criarTooltipHistoricoSaldo(td, item){
         .replace(/'/g, "&#039;");
 
     const linhas = historico.map(h => `${h.data}: ${formatarDeltaSaldo(h.delta)}`);
-    td.title = linhas.join("\n");
+    const pedidoTitle = pedido ? `${pedido.titulo}\n${pedido.detalhe || ""}` : "Sem solicitação de pedido";
+    td.title = [pedidoTitle, ...linhas].filter(Boolean).join("\n");
     td.classList.add("saldoHistoricoCell");
 
     const tooltip = document.createElement("div");
     tooltip.className = "saldoHistoricoTooltip";
-    tooltip.innerHTML = historico.map(h => `
+    const pedidoHtml = pedido ? `
+        <div class="pedidoStatusBox ${esc(pedido.status)}">
+            <div class="pedidoStatusTitulo">${esc(pedido.titulo)}</div>
+            ${pedido.detalhe ? `<div class="pedidoStatusDetalhe">${esc(pedido.detalhe)}</div>` : ""}
+            ${pedido.mediaPedido ? `<div class="pedidoStatusMedia">Média por pedido: ${esc(formatarNumeroPlanilha(pedido.mediaPedido))}</div>` : ""}
+        </div>
+    ` : `<div class="pedidoStatusBox sem"><div class="pedidoStatusTitulo">Sem solicitação de pedido</div></div>`;
+    const historicoHtml = historico.length ? historico.map(h => `
         <div class="saldoHistoricoLinha">
             <span>${esc(h.data)}</span>
             <strong class="${Number(h.delta) >= 0 ? "entrada" : "saida"}">${esc(formatarDeltaSaldo(h.delta))}</strong>
         </div>
-    `).join("");
+    `).join("") : `<div class="saldoHistoricoLinha"><span>Sem histórico de saldo</span></div>`;
+    tooltip.innerHTML = pedidoHtml + historicoHtml;
     td.appendChild(tooltip);
+}
+
+async function carregarPlanilhaPadrao(tipo, arquivo){
+    try{
+        const candidatos = [`downloads/${arquivo}`, arquivo];
+        for(const url of candidatos){
+            const response = await fetch(url, { cache: "no-store" });
+            if(!response.ok) continue;
+            const data = await response.arrayBuffer();
+            const workbook = XLSX.read(data, { type: "array" });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            planilhas[tipo] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            return true;
+        }
+    }catch(e){
+        console.warn(`Nao foi possivel carregar ${arquivo} automaticamente:`, e);
+    }
+    return false;
 }
 
 function criarAlertaSaldoForaEndereco(td, item){
@@ -6797,7 +6973,13 @@ onAuthStateChanged(auth, async (user) => {
 
         const carregarDadosSistema = async () => {
             await carregarEstoqueInicial();
-            await carregarEstoqueMinimoPadrao();
+            await Promise.allSettled([
+                carregarEstoqueMinimoPadrao(),
+                carregarPlanilhaPadrao("mata110", "mata110.xlsx"),
+                carregarPlanilhaPadrao("mata111", "mata111.xlsx")
+            ]);
+            pedidosCompraEstado = montarEstadoPedidosCompra(planilhas.mata110, planilhas.mata111, dados);
+            renderTabela();
         };
 
         if(isMobileLayout()){
@@ -6892,6 +7074,7 @@ async function carregarEstoqueInicial() {
 
             ajustesItensEstoque = banco.ajustesItens || {};
             historicoSaldoEstoque = banco.historicoSaldo || {};
+            pedidosCompraEstado = banco.pedidosCompra || {};
             dadosMortos = Array.isArray(banco.dadosMortos) ? banco.dadosMortos : [];
             dadosMortos = dadosMortos.map(item => aplicarAjusteManualItem({...item}));
             window.dadosMortos = dadosMortos;
@@ -6907,6 +7090,7 @@ onValue(window.estoqueRef, snapshot => {
         window.__estoqueSyncToken = syncToken;
         ajustesItensEstoque = val.ajustesItens || {};
         historicoSaldoEstoque = val.historicoSaldo || {};
+        pedidosCompraEstado = val.pedidosCompra || {};
         dadosMortos = Array.isArray(val.dadosMortos) ? val.dadosMortos.map(item => aplicarAjusteManualItem({...item})) : [];
         window.dadosMortos = dadosMortos;
         if(Array.isArray(val.dados)){
@@ -6933,6 +7117,7 @@ onValue(window.estoqueRef, snapshot => {
             dadosMortos = [];
             ajustesItensEstoque = {};
             historicoSaldoEstoque = {};
+            pedidosCompraEstado = {};
             window.dadosMortos = dadosMortos;
             window.setDados([]);
 

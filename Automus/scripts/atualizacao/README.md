@@ -6,7 +6,6 @@ Estrutura consolidada da atualizacao automatica (sem interferir na sessao aberta
 - `automus_config.json`: credenciais locais (ignorado no git).
 - `automus_config.json.example`: modelo de configuracao.
 - `__main__.py`: entrada para execucao como modulo.
-- `executar_automus.bat`: disparo manual direto do Automus.
 
 Fluxo padrao (com macros):
 1) `scripts/executar_tudo.py` roda macros `001..005`.

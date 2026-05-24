@@ -5,7 +5,7 @@ import subprocess
 import sys
 import zipfile
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.parse import urljoin
 
 
@@ -15,6 +15,15 @@ VERSION_PATH = SCRIPTS / "version.json"
 DIST = ROOT / "dist"
 EXE = DIST / "Automus.exe"
 RELEASES = ROOT / "releases"
+
+
+def python_console_executable() -> str:
+    exe = Path(sys.executable)
+    if exe.name.lower() == "pythonw.exe":
+        python_exe = exe.with_name("python.exe")
+        if python_exe.exists():
+            return str(python_exe)
+    return sys.executable
 
 
 def load_version() -> dict:
@@ -34,7 +43,18 @@ def sha256(path: Path) -> str:
 
 
 def build_exe():
-    subprocess.check_call([sys.executable, str(SCRIPTS / "build_automus_exe.py")], cwd=ROOT)
+    subprocess.check_call([python_console_executable(), str(SCRIPTS / "build_automus_exe.py")], cwd=ROOT)
+
+
+def build_package_url(update_base_url: str, package_name: str) -> str:
+    base = update_base_url.strip()
+    if not base:
+        return ""
+    if base.startswith(("http://", "https://")):
+        return urljoin(base.rstrip("/") + "/", package_name)
+    if base.startswith("file://"):
+        return urljoin(base.rstrip("/") + "/", package_name)
+    return str(PureWindowsPath(base) / package_name)
 
 
 def main():
@@ -47,7 +67,7 @@ def main():
     package_path = RELEASES / package_name
     checksum = sha256(EXE)
     update_base_url = str(version_data.get("updateBaseUrl") or "").strip()
-    package_url = urljoin(update_base_url.rstrip("/") + "/", package_name) if update_base_url else ""
+    package_url = build_package_url(update_base_url, package_name)
 
     manifest = {
         **version_data,

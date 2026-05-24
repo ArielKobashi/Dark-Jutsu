@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -14,6 +15,16 @@ STAGE_SCRIPTS = STAGE / "scripts"
 DIST = ROOT / "dist"
 ICON = BUILD / "automus.ico"
 FIREBASE_CONFIG = SCRIPTS / "firebase_config.json"
+RUNTIME_TMPDIR = Path(os.environ.get("PUBLIC") or r"C:\Users\Public") / "AutomusRuntimeTemp"
+
+
+def python_console_executable() -> str:
+    exe = Path(sys.executable)
+    if exe.name.lower() == "pythonw.exe":
+        python_exe = exe.with_name("python.exe")
+        if python_exe.exists():
+            return str(python_exe)
+    return sys.executable
 
 
 def find_entry() -> Path:
@@ -85,21 +96,23 @@ def prepare_stage():
 
 
 def install_dependencies():
+    python_exe = python_console_executable()
     requirements = ROOT / "requirements.txt"
     if requirements.exists():
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(requirements)])
+        subprocess.check_call([python_exe, "-m", "pip", "install", "-r", str(requirements)])
         return
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller", "pystray", "pillow", "openpyxl", "pynput"])
+    subprocess.check_call([python_exe, "-m", "pip", "install", "pyinstaller", "pystray", "pillow", "openpyxl", "pynput"])
 
 
 def main():
     entry = find_entry()
+    python_exe = python_console_executable()
     install_dependencies()
     build_icon(ICON)
     prepare_stage()
     subprocess.check_call(
         [
-            sys.executable,
+            python_exe,
             "-m",
             "PyInstaller",
             "--noconfirm",
@@ -107,6 +120,8 @@ def main():
             "--windowed",
             "--name",
             "Automus",
+            "--runtime-tmpdir",
+            str(RUNTIME_TMPDIR),
             "--icon",
             str(ICON),
             "--paths",

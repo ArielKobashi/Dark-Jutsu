@@ -20,8 +20,11 @@ from urllib.request import Request, urlopen
 from automus_self_update import (
     check_for_update,
     download_update,
+    get_manifest_firebase_path,
     get_manifest_url,
     install_downloaded_update,
+    load_local_version,
+    update_info_from_manifest,
 )
 
 
@@ -278,6 +281,7 @@ class _ControlWindow:
             import tkinter.font as tkfont
             from tkinter import messagebox
             from tkinter import scrolledtext
+            from tkinter import ttk
         except Exception:
             self._ready.set()
             return
@@ -415,10 +419,10 @@ class _ControlWindow:
         update_status_var = tk.StringVar(value="")
 
         def check_update_ui(silent=False, auto_install=False):
-            manifest_url = self._state.get_update_manifest_url()
-            if not manifest_url:
+            update_source = self._state.get_update_source_label()
+            if not update_source:
                 if not silent:
-                    update_status_var.set("Configure updateManifestUrl no version.json para ativar updates automáticos.")
+                    update_status_var.set("Configure updateManifestUrl ou updateManifestFirebasePath no version.json.")
                 return
 
             update_status_var.set("Verificando atualização do Automus...")
@@ -467,22 +471,70 @@ class _ControlWindow:
 
         def install_update_ui(info):
             update_status_var.set(f"Baixando Automus {info.latest_version}...")
+            loading = {"window": None, "bar": None, "status": tk.StringVar(value=f"Baixando Automus {info.latest_version}...")}
+
+            try:
+                modal = tk.Toplevel(root)
+                modal.title("Atualizando Automus")
+                modal.geometry("360x150")
+                modal.resizable(False, False)
+                modal.configure(bg=palette["panel"])
+                modal.transient(root)
+                modal.grab_set()
+                modal.protocol("WM_DELETE_WINDOW", lambda: None)
+                tk.Label(
+                    modal,
+                    text="Atualizando Automus",
+                    bg=palette["panel"],
+                    fg=palette["text"],
+                    font=("Segoe UI", 13, "bold"),
+                ).pack(fill="x", padx=18, pady=(18, 6))
+                tk.Label(
+                    modal,
+                    textvariable=loading["status"],
+                    bg=palette["panel"],
+                    fg=palette["muted"],
+                    font=("Segoe UI", 9),
+                    wraplength=320,
+                ).pack(fill="x", padx=18, pady=(0, 12))
+                bar = ttk.Progressbar(modal, mode="indeterminate")
+                bar.pack(fill="x", padx=18, pady=(0, 18))
+                bar.start(12)
+                loading["window"] = modal
+                loading["bar"] = bar
+            except Exception:
+                pass
 
             def worker():
                 try:
                     new_exe = self._state.download_app_update(info)
+                    root.after(0, lambda: loading["status"].set("Instalando atualização..."))
                     self._state.install_app_update(new_exe)
                     root.after(0, finish)
                 except Exception as exc:
                     root.after(0, lambda exc=exc: fail(exc))
 
             def finish():
-                update_status_var.set("Atualização pronta. Reiniciando Automus...")
+                update_status_var.set("Atualização pronta. Abra o Automus novamente.")
+                try:
+                    if loading["bar"] is not None:
+                        loading["bar"].stop()
+                    if loading["window"] is not None:
+                        loading["window"].destroy()
+                except Exception:
+                    pass
                 root.destroy()
                 os._exit(0)
 
             def fail(exc):
                 update_status_var.set(f"Falha ao instalar atualização: {exc}")
+                try:
+                    if loading["bar"] is not None:
+                        loading["bar"].stop()
+                    if loading["window"] is not None:
+                        loading["window"].destroy()
+                except Exception:
+                    pass
                 messagebox.showerror("Atualização do Automus", str(exc))
 
             threading.Thread(target=worker, name="automus-update-install", daemon=True).start()
@@ -972,7 +1024,16 @@ class _ControlWindow:
         history_header.bind("<Button-1>", toggle_history_section)
 
         log = scrolledtext.ScrolledText(main_frame, wrap="word", height=18, state="disabled", bg="#020617", fg=palette["text"], insertbackground=palette["text"], relief="flat")
-        log.pack(fill="both", expand=True, padx=14, pady=(4, 14))
+        log.pack(fill="both", expand=True, padx=14, pady=(4, 6))
+
+        tk.Label(
+            main_frame,
+            text=f"Automus versão {APP_VERSION}",
+            bg=palette["bg"],
+            fg=palette["muted"],
+            font=("Segoe UI", 8, "bold"),
+            anchor="center",
+        ).pack(fill="x", padx=14, pady=(0, 8))
         try:
             current_font = tkfont.Font(font=log.cget("font"))
             # Tamanho compacto e legivel para as mensagens de status.
@@ -1000,6 +1061,37 @@ class _ControlWindow:
         root.bind("<F7>", trigger_totvs_test)
 
         tray_icon_holder = {"icon": None}
+
+        def exit_app():
+            try:
+                self._state.request_stop()
+            except Exception:
+                pass
+            try:
+                self._state.scheduler_stop.set()
+            except Exception:
+                pass
+            for listener_name in ("listener", "mouse_listener"):
+                try:
+                    listener = getattr(self._state, listener_name, None)
+                    if listener is not None:
+                        listener.stop()
+                        setattr(self._state, listener_name, None)
+                except Exception:
+                    pass
+            try:
+                icon = tray_icon_holder.get("icon")
+                if icon is not None:
+                    icon.stop()
+                    tray_icon_holder["icon"] = None
+                    self._state.notify_callback = None
+            except Exception:
+                pass
+            try:
+                root.destroy()
+            except Exception:
+                pass
+            os._exit(0)
 
         def bring_to_front():
             try:
@@ -1031,12 +1123,16 @@ class _ControlWindow:
                 def open_from_tray(_icon=None, _item=None):
                     root.after(0, bring_to_front)
 
+                def close_from_tray(_icon=None, _item=None):
+                    root.after(0, exit_app)
+
                 icon = pystray.Icon(
                     "automus_controlador",
                     config_icon_image,
                     self._state.get_tray_tooltip(),
                     menu=pystray.Menu(
                         pystray.MenuItem("Abrir Automus", open_from_tray, default=True),
+                        pystray.MenuItem("Fechar Automus", close_from_tray),
                     ),
                 )
                 tray_icon_holder["icon"] = icon
@@ -1282,7 +1378,29 @@ class _SharedState:
     def get_update_manifest_url(self) -> str:
         return get_manifest_url(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
 
+    def get_update_manifest_firebase_path(self) -> str:
+        return get_manifest_firebase_path(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
+
+    def get_update_source_label(self) -> str:
+        firebase_path = self.get_update_manifest_firebase_path()
+        if firebase_path:
+            return f"Firebase:{firebase_path}"
+        return self.get_update_manifest_url()
+
     def check_app_update(self):
+        firebase_path = self.get_update_manifest_firebase_path()
+        if firebase_path:
+            admin = self.authenticated_admin or {}
+            token = str(admin.get("idToken") or "").strip()
+            if not token:
+                raise RuntimeError("Login ADM necessario para consultar update no Firebase.")
+            _, db_url = _extract_firebase_config()
+            manifest = _http_json(f"{db_url}/{firebase_path}.json?auth={token}", method="GET")
+            if not isinstance(manifest, dict):
+                return None
+            local = load_local_version(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
+            current_version = str(local.get("version") or "dev").strip()
+            return update_info_from_manifest(current_version, manifest, f"firebase:{firebase_path}")
         return check_for_update(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
 
     def download_app_update(self, info):

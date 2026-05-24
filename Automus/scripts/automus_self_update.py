@@ -9,7 +9,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urljoin
+from urllib.parse import unquote, urljoin, urlparse
 from urllib.request import urlopen
 
 
@@ -61,6 +61,38 @@ def get_manifest_url(script_dir: Path, bundled_script_dir: Path) -> str:
     return str(data.get("updateManifestUrl") or "").strip()
 
 
+def get_manifest_firebase_path(script_dir: Path, bundled_script_dir: Path) -> str:
+    data = load_local_version(script_dir, bundled_script_dir)
+    return str(data.get("updateManifestFirebasePath") or "").strip().strip("/")
+
+
+def update_info_from_manifest(current_version: str, manifest: dict, manifest_source: str) -> UpdateInfo:
+    latest_version = str(manifest.get("version") or "").strip()
+    package_name = str(manifest.get("package") or "Automus.zip").strip()
+    package_url = str(manifest.get("packageUrl") or manifest.get("url") or "").strip()
+    if not package_url and manifest_source.startswith(("http://", "https://")):
+        package_url = urljoin(manifest_source, package_name)
+    checksum = str(manifest.get("sha256") or "").strip().lower()
+    notes = manifest.get("notes") if isinstance(manifest.get("notes"), list) else []
+
+    if not latest_version:
+        raise RuntimeError("Manifesto de atualizacao sem versao.")
+    if not package_url:
+        raise RuntimeError("Manifesto de atualizacao sem packageUrl.")
+    if not checksum:
+        raise RuntimeError("Manifesto de atualizacao sem SHA256.")
+
+    return UpdateInfo(
+        current_version=current_version,
+        latest_version=latest_version,
+        manifest_url=manifest_source,
+        package_url=package_url,
+        package_name=package_name,
+        sha256=checksum,
+        notes=[str(note) for note in notes],
+    )
+
+
 def check_for_update(script_dir: Path, bundled_script_dir: Path, timeout: float = 20.0) -> Optional[UpdateInfo]:
     local = load_local_version(script_dir, bundled_script_dir)
     current_version = str(local.get("version") or "dev").strip()
@@ -71,28 +103,7 @@ def check_for_update(script_dir: Path, bundled_script_dir: Path, timeout: float 
     with urlopen(manifest_url, timeout=timeout) as resp:
         manifest = json.loads(resp.read().decode("utf-8-sig"))
 
-    latest_version = str(manifest.get("version") or "").strip()
-    package_name = str(manifest.get("package") or "Automus.zip").strip()
-    package_url = str(manifest.get("packageUrl") or manifest.get("url") or "").strip()
-    if not package_url:
-        package_url = urljoin(manifest_url, package_name)
-    checksum = str(manifest.get("sha256") or "").strip().lower()
-    notes = manifest.get("notes") if isinstance(manifest.get("notes"), list) else []
-
-    if not latest_version:
-        raise RuntimeError("Manifesto de atualizacao sem versao.")
-    if not checksum:
-        raise RuntimeError("Manifesto de atualizacao sem SHA256.")
-
-    return UpdateInfo(
-        current_version=current_version,
-        latest_version=latest_version,
-        manifest_url=manifest_url,
-        package_url=package_url,
-        package_name=package_name,
-        sha256=checksum,
-        notes=[str(note) for note in notes],
-    )
+    return update_info_from_manifest(current_version, manifest, manifest_url)
 
 
 def _sha256(path: Path) -> str:
@@ -103,6 +114,26 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _copy_package(package_url: str, package_path: Path):
+    parsed = urlparse(package_url)
+    if parsed.scheme in ("http", "https"):
+        with urlopen(package_url, timeout=90) as resp, package_path.open("wb") as fh:
+            shutil.copyfileobj(resp, fh)
+        return
+
+    if parsed.scheme == "file":
+        if parsed.netloc:
+            source = Path(f"//{parsed.netloc}{unquote(parsed.path)}")
+        else:
+            source = Path(unquote(parsed.path))
+    else:
+        source = Path(package_url)
+
+    if not source.exists():
+        raise RuntimeError(f"Pacote de atualizacao nao encontrado: {source}")
+    shutil.copy2(source, package_path)
+
+
 def download_update(info: UpdateInfo) -> Path:
     work_dir = Path(tempfile.gettempdir()) / "AutomusUpdater" / info.latest_version
     if work_dir.exists():
@@ -110,8 +141,7 @@ def download_update(info: UpdateInfo) -> Path:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     package_path = work_dir / info.package_name
-    with urlopen(info.package_url, timeout=90) as resp, package_path.open("wb") as fh:
-        shutil.copyfileobj(resp, fh)
+    _copy_package(info.package_url, package_path)
 
     with zipfile.ZipFile(package_path, "r") as zf:
         zf.extractall(work_dir)
@@ -134,21 +164,46 @@ def install_downloaded_update(new_exe: Path) -> None:
     current_exe = Path(sys.executable).resolve()
     helper = new_exe.parent / "instalar_automus_update.bat"
     pid = os.getpid()
+    current_dir = current_exe.parent
     helper.write_text(
         "@echo off\r\n"
         "setlocal\r\n"
+        "title Atualizando Automus\r\n"
         f'set "NEW_EXE={new_exe}"\r\n'
         f'set "CURRENT_EXE={current_exe}"\r\n'
+        f'set "CURRENT_DIR={current_dir}"\r\n'
         f'set "PID={pid}"\r\n'
+        'set "AUTOMUS_RUNTIME_TEMP=%CURRENT_DIR%\\AutomusData\\RuntimeTemp"\r\n'
+        "echo Atualizando Automus. Aguarde...\r\n"
         ":wait_process\r\n"
-        'tasklist /FI "PID eq %PID%" | find "%PID%" >nul\r\n'
+        'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul\r\n'
         "if not errorlevel 1 (\r\n"
         "  timeout /t 1 /nobreak >nul\r\n"
         "  goto wait_process\r\n"
         ")\r\n"
-        'copy /Y "%NEW_EXE%" "%CURRENT_EXE%" >nul\r\n'
-        'start "" "%CURRENT_EXE%"\r\n'
-        'del "%~f0"\r\n',
+        "timeout /t 2 /nobreak >nul\r\n"
+        "taskkill /IM Automus.exe /F /T >nul 2>nul\r\n"
+        "set /a TRY=0\r\n"
+        ":copy_retry\r\n"
+        "set /a TRY+=1\r\n"
+        'copy /Y "%NEW_EXE%" "%CURRENT_EXE%" >nul 2>nul\r\n'
+        "if not errorlevel 1 goto start_app\r\n"
+        "if %TRY% GEQ 30 goto fail\r\n"
+        "echo Aguardando o Windows liberar o Automus.exe... tentativa %TRY%/30\r\n"
+        "timeout /t 1 /nobreak >nul\r\n"
+        "goto copy_retry\r\n"
+        ":start_app\r\n"
+        "echo.\r\n"
+        "echo Atualizacao concluida com sucesso.\r\n"
+        "echo Abra o Automus novamente pelo atalho ou pelo Automus.exe atualizado.\r\n"
+        "timeout /t 5 /nobreak >nul\r\n"
+        "exit /b 0\r\n"
+        ":fail\r\n"
+        "echo.\r\n"
+        "echo Nao foi possivel substituir o Automus.exe.\r\n"
+        "echo Feche qualquer Automus aberto e tente novamente.\r\n"
+        "pause\r\n"
+        "exit /b 1\r\n",
         encoding="utf-8",
     )
     subprocess.Popen(["cmd", "/c", "start", "", str(helper)], shell=False)

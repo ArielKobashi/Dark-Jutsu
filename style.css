@@ -1115,7 +1115,7 @@ th.col-ordenada.col-filtrada {
     position:absolute;
     left:50%;
     bottom:calc(100% + 7px);
-    min-width:132px;
+    min-width:210px;
     transform:translate(-50%, 6px);
     opacity:0;
     pointer-events:none;
@@ -1127,6 +1127,32 @@ th.col-ordenada.col-filtrada {
     box-shadow:0 12px 28px rgba(0,0,0,0.45);
     transition:opacity 0.16s ease, transform 0.16s ease;
 }
+
+.pedidoStatusBox{
+    margin-bottom:7px;
+    padding-bottom:7px;
+    border-bottom:1px solid rgba(207,227,255,0.16);
+}
+
+.pedidoStatusTitulo{
+    color:#FFFFFF;
+    font-size:11px;
+    font-weight:900;
+    margin-bottom:4px;
+}
+
+.pedidoStatusDetalhe,
+.pedidoStatusMedia{
+    color:#CFE3FF;
+    font-size:10px;
+    line-height:1.35;
+}
+
+.pedidoStatusBox.aguardando_liberacao .pedidoStatusTitulo{color:#FDE68A;}
+.pedidoStatusBox.aguardando_pedido .pedidoStatusTitulo{color:#BFDBFE;}
+.pedidoStatusBox.aguardando_recebimento .pedidoStatusTitulo{color:#FDBA74;}
+.pedidoStatusBox.aguardando_contagem .pedidoStatusTitulo{color:#FCA5A5;}
+.pedidoStatusBox.sem .pedidoStatusTitulo{color:#94A3B8;}
 
 .saldoHistoricoCell:hover .saldoHistoricoTooltip{
     opacity:1;

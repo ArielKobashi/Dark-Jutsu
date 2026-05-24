@@ -1,12 +1,12 @@
 {
   "app": "Automus",
-  "version": "1.0.0",
+  "version": "1.0.10",
   "releasedAt": "2026-05-24",
   "updateManifestUrl": "",
-  "updateBaseUrl": "",
+  "updateManifestFirebasePath": "automus/releases/latest",
+  "updateBaseUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus",
+  "publishDir": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "notes": [
-    "Pacote inicial separado do projeto principal.",
-    "Login ADM obrigatorio antes de atualizar.",
-    "Agendamento, historico e execucao em segundo plano."
+    "agora vai"
   ]
 }
