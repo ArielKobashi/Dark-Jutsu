@@ -827,7 +827,21 @@ function enderecoPossuiSaldo(endereco){
 
 function contarEnderecosComSaldo(item){
     if(!item || !Array.isArray(item.enderecos)) return 0;
-    return item.enderecos.filter(enderecoPossuiSaldo).length;
+
+    const unicos = new Set();
+
+    item.enderecos.forEach(e => {
+        if(!enderecoPossuiSaldo(e)) return;
+
+        const endereco = normalizarEndereco(e.endereco);
+        const armazem = normalizarEndereco(e.armazem || "");
+
+        if(endereco){
+            unicos.add(endereco + "|" + armazem);
+        }
+    });
+
+    return unicos.size;
 }
 
 function obterPrioridadeSaldoExtremos(item, asc){
@@ -4330,7 +4344,7 @@ function abrirModalSaldos(item){
             const obj = (info && typeof info === "object") ? info : {};
             const endereco = (obj.endereco ?? "").toString().trim();
             if(!isEnderecoValido(endereco)) return;
-            const chave = normalizarEndereco(endereco);
+            const chave = normalizarEndereco(endereco) + "|" + normalizarEndereco(obj.armazem || "");
             if(!chavesEnderecos.has(chave)){
                 chavesEnderecos.add(chave);
                 listaEnderecos.push({
