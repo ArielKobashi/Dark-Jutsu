@@ -1152,6 +1152,7 @@ th.col-ordenada.col-filtrada {
 .pedidoStatusBox.aguardando_pedido .pedidoStatusTitulo{color:#BFDBFE;}
 .pedidoStatusBox.aguardando_recebimento .pedidoStatusTitulo{color:#FDBA74;}
 .pedidoStatusBox.aguardando_contagem .pedidoStatusTitulo{color:#FCA5A5;}
+.pedidoStatusBox.aguardando_enderecamento .pedidoStatusTitulo{color:#A7F3D0;}
 .pedidoStatusBox.sem .pedidoStatusTitulo{color:#94A3B8;}
 
 .saldoHistoricoCell:hover .saldoHistoricoTooltip{

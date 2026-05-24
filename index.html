@@ -589,7 +589,8 @@ let planilhas = {
     saldoEndereco: null,
     estoque_minimo: null,
     mata110: null,
-    mata111: null
+    mata111: null,
+    mata112: null
 };
 
 let dados = [];
@@ -764,7 +765,7 @@ function ultimaEntradaSaldoDepois(itemOrKey, timestamp){
     });
 }
 
-function montarEstadoPedidosCompra(mata110, mata111, itens = []){
+function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
     const pedidosPorCodigo = new Map();
     (Array.isArray(mata111) ? mata111.slice(1) : []).forEach((row, idx) => {
         const codigo = normalizarCodigoItem(row?.[6]);
@@ -805,12 +806,43 @@ function montarEstadoPedidosCompra(mata110, mata111, itens = []){
     });
 
     const estado = {};
+    const entradasPorCodigo = new Map();
+    (Array.isArray(mata112) ? mata112.slice(1) : []).forEach((row, idx) => {
+        const codigo = normalizarCodigoItem(row?.[0]);
+        if(!codigo) return;
+        const timestamp = parsePlanilhaData(row?.[12]) || 0;
+        const entrada = {
+            codigo,
+            quantidadeEntrada: parsePlanilhaNumero(row?.[3]) || 0,
+            saldoAEnderecar: parsePlanilhaNumero(row?.[4]) || 0,
+            dataEntrada: timestamp ? formatarDataHistoricoSaldo(timestamp) : "",
+            timestamp,
+            rowIndex: idx
+        };
+        if(!entradasPorCodigo.has(codigo)) entradasPorCodigo.set(codigo, []);
+        entradasPorCodigo.get(codigo).push(entrada);
+    });
+
+    entradasPorCodigo.forEach(lista => lista.sort((a,b) => (b.timestamp - a.timestamp) || (b.rowIndex - a.rowIndex)));
+
     (Array.isArray(itens) ? itens : []).forEach(item => {
         const codigo = normalizarCodigoItem(item?.protheus || item?.protheusKey || item?.cooperat);
         if(!codigo) return;
         const solicitacoes = solicitacoesPorCodigo.get(codigo) || [];
         const pedidos = pedidosPorCodigo.get(codigo) || [];
-        const pedidoAtivo = pedidos.find(p => !ultimaEntradaSaldoDepois(item, p.timestamp));
+        const entradas = entradasPorCodigo.get(codigo) || [];
+        const localizarEntradaPedido = pedido => entradas.find(e => !pedido?.timestamp || !e.timestamp || e.timestamp >= pedido.timestamp) || null;
+        let entradaAtiva = null;
+        const pedidoAtivo = pedidos.find(p => {
+            const entrada = localizarEntradaPedido(p);
+            if(entrada && entrada.saldoAEnderecar <= 0){
+                return false;
+            }
+            const encerradoPorHistorico = !entrada && ultimaEntradaSaldoDepois(item, p.timestamp);
+            if(encerradoPorHistorico) return false;
+            entradaAtiva = entrada;
+            return true;
+        });
         const solicitacao = [...solicitacoes].reverse().find(s => {
             if(!pedidoAtivo) return true;
             return s.quantidadeEmPedido > 0 || s.aceitoPor;
@@ -838,6 +870,10 @@ function montarEstadoPedidosCompra(mata110, mata111, itens = []){
                 status = "aguardando_recebimento";
                 titulo = "Aguardando recebimento...";
                 detalhe = `Pedido feito em: ${pedidoAtivo.dataPedido || "-"}`;
+            }else if(pedidoAtivo && entradaAtiva && entradaAtiva.saldoAEnderecar > 0){
+                status = "aguardando_enderecamento";
+                titulo = "Aguardando endereçamento...";
+                detalhe = `Entrou dia: ${entradaAtiva.dataEntrada || "-"} - ${formatarNumeroPlanilha(entradaAtiva.quantidadeEntrada)} unidades`;
             }else if(pedidoAtivo && pedidoAtivo.quantidadeRecebida > 0){
                 status = "aguardando_contagem";
                 titulo = "Aguardando contagem de nota...";
@@ -852,6 +888,7 @@ function montarEstadoPedidosCompra(mata110, mata111, itens = []){
             detalhe,
             solicitacao,
             pedido: pedidoAtivo || null,
+            entradaEndereco: entradaAtiva || null,
             mediaPedido,
             recebidoSemEntrada
         };
@@ -1025,7 +1062,14 @@ function saldoAtualTotalmenteEnderecado(item){
 function getResumoSaldoForaEndereco(item){
     const foraEndereco = getEnderecosForaEndereco(item);
     const pedido = getPedidoCompraItem(item);
-    const considerarPedidoRecebidoForaEndereco = pedido?.recebidoSemEntrada > 0 && !saldoAtualTotalmenteEnderecado(item);
+    if(pedido?.entradaEndereco?.saldoAEnderecar > 0){
+        foraEndereco.push({
+            endereco: "AGUARDANDO ENDEREÇAMENTO",
+            armazem: "MATA112",
+            saldo: pedido.entradaEndereco.saldoAEnderecar
+        });
+    }
+    const considerarPedidoRecebidoForaEndereco = !pedido?.entradaEndereco && pedido?.recebidoSemEntrada > 0 && !saldoAtualTotalmenteEnderecado(item);
     if(considerarPedidoRecebidoForaEndereco){
         foraEndereco.push({
             endereco: "RECEBIDO SEM ENTRADA",
@@ -2265,7 +2309,7 @@ async function atualizarBanco(btn) {
     let saldoEndereco = planilhas.saldoEndereco || [];
     let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereco, false);
     historicoSaldoEstoque = definirHistoricoSaldo(novosDados, dados, historicoSaldoEstoque);
-    pedidosCompraEstado = montarEstadoPedidosCompra(planilhas.mata110, planilhas.mata111, novosDados);
+    pedidosCompraEstado = montarEstadoPedidosCompra(planilhas.mata110, planilhas.mata111, planilhas.mata112, novosDados);
     novosDados = novosDados.map(item => aplicarAjusteManualItem({...item}));
 
     window.setDados(novosDados);
@@ -2287,7 +2331,8 @@ async function atualizarBanco(btn) {
             mata226: "saldo.por.endereco.xlsx",
             ...(planilhas.estoque_minimo ? { estoque_minimo: "estoque_minimo.xlsx" } : {}),
             ...(planilhas.mata110 ? { mata110: "mata110.xlsx" } : {}),
-            ...(planilhas.mata111 ? { mata111: "mata111.xlsx" } : {})
+            ...(planilhas.mata111 ? { mata111: "mata111.xlsx" } : {}),
+            ...(planilhas.mata112 ? { mata112: "mata112.xlsx" } : {})
         }
     };
 
@@ -2461,7 +2506,7 @@ function criarTooltipHistoricoSaldo(td, item){
     td.appendChild(tooltip);
 }
 
-async function carregarPlanilhaPadrao(tipo, arquivo){
+async function carregarPlanilhaPadrao(tipo, arquivo, guia = null){
     try{
         const candidatos = [`downloads/${arquivo}`, arquivo];
         for(const url of candidatos){
@@ -2469,7 +2514,8 @@ async function carregarPlanilhaPadrao(tipo, arquivo){
             if(!response.ok) continue;
             const data = await response.arrayBuffer();
             const workbook = XLSX.read(data, { type: "array" });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const sheetName = guia && workbook.Sheets[guia] ? guia : workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
             planilhas[tipo] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             return true;
         }
@@ -6984,9 +7030,10 @@ onAuthStateChanged(auth, async (user) => {
             await Promise.allSettled([
                 carregarEstoqueMinimoPadrao(),
                 carregarPlanilhaPadrao("mata110", "mata110.xlsx"),
-                carregarPlanilhaPadrao("mata111", "mata111.xlsx")
+                carregarPlanilhaPadrao("mata111", "mata111.xlsx"),
+                carregarPlanilhaPadrao("mata112", "mata112.xlsx", "Saldos a Endereçar")
             ]);
-            pedidosCompraEstado = montarEstadoPedidosCompra(planilhas.mata110, planilhas.mata111, dados);
+            pedidosCompraEstado = montarEstadoPedidosCompra(planilhas.mata110, planilhas.mata111, planilhas.mata112, dados);
             renderTabela();
         };
 

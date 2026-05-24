@@ -1,12 +1,12 @@
 {
   "app": "Automus",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "releasedAt": "2026-05-24",
   "updateManifestUrl": "",
   "updateManifestFirebasePath": "automus/releases/latest",
   "updateBaseUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "publishDir": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "notes": [
-    "blz"
+    "arrumando a macro 4"
   ]
 }

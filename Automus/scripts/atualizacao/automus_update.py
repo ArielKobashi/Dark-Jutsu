@@ -22,6 +22,7 @@ FILE_MAP = {
     "estoque_minimo": "estoque_minimo.xlsx",
     "mata110": "mata110.xlsx",
     "mata111": "mata111.xlsx",
+    "mata112": "mata112.xlsx",
 }
 
 
@@ -80,10 +81,10 @@ def _extract_firebase_config(index_html_path: Path) -> tuple[str, str]:
     return api_match.group(1), db_match.group(1).rstrip("/")
 
 
-def _read_sheet(path: Path) -> list[list[Any]]:
+def _read_sheet(path: Path, sheet_name: str | None = None) -> list[list[Any]]:
     wb = load_workbook(path, data_only=True, read_only=True)
     try:
-        ws = wb[wb.sheetnames[0]]
+        ws = wb[sheet_name] if sheet_name and sheet_name in wb.sheetnames else wb[wb.sheetnames[0]]
         out: list[list[Any]] = []
         for row in ws.iter_rows(values_only=True):
             out.append(list(row))
@@ -233,6 +234,7 @@ def _entrada_depois(item: dict[str, Any], historico: dict[str, Any], timestamp: 
 def _montar_pedidos_compra(
     mata110: list[list[Any]] | None,
     mata111: list[list[Any]] | None,
+    mata112: list[list[Any]] | None,
     itens: list[dict[str, Any]],
     historico: dict[str, Any],
 ) -> dict[str, Any]:
@@ -267,6 +269,23 @@ def _montar_pedidos_compra(
             "rowIndex": idx,
         })
 
+    entradas_por_codigo: dict[str, list[dict[str, Any]]] = {}
+    for idx, row in enumerate((mata112 or [])[1:]):
+        codigo = _ascii_lower(row[0] if len(row) > 0 else "")
+        if not codigo:
+            continue
+        data_txt, ts = _sheet_date(row[12] if len(row) > 12 else "")
+        entradas_por_codigo.setdefault(codigo, []).append({
+            "codigo": codigo,
+            "quantidadeEntrada": _num(row[3] if len(row) > 3 else 0),
+            "saldoAEnderecar": _num(row[4] if len(row) > 4 else 0),
+            "dataEntrada": data_txt,
+            "timestamp": ts,
+            "rowIndex": idx,
+        })
+    for lista in entradas_por_codigo.values():
+        lista.sort(key=lambda e: (e.get("timestamp") or 0, e.get("rowIndex") or 0), reverse=True)
+
     estado: dict[str, Any] = {}
     for item in itens:
         codigo = _ascii_lower(item.get("protheus") or item.get("protheusKey") or item.get("cooperat"))
@@ -274,7 +293,23 @@ def _montar_pedidos_compra(
             continue
         pedidos = pedidos_por_codigo.get(codigo, [])
         solicitacoes = solicitacoes_por_codigo.get(codigo, [])
-        pedido = next((p for p in pedidos if not _entrada_depois(item, historico, int(p.get("timestamp") or 0))), None)
+        entradas = entradas_por_codigo.get(codigo, [])
+        entrada_ativa = None
+
+        def localizar_entrada(pedido: dict[str, Any]) -> dict[str, Any] | None:
+            pedido_ts = int(pedido.get("timestamp") or 0)
+            return next((e for e in entradas if not pedido_ts or not int(e.get("timestamp") or 0) or int(e.get("timestamp") or 0) >= pedido_ts), None)
+
+        pedido = None
+        for candidato in pedidos:
+            entrada = localizar_entrada(candidato)
+            if entrada and _num(entrada.get("saldoAEnderecar")) <= 0:
+                continue
+            if not entrada and _entrada_depois(item, historico, int(candidato.get("timestamp") or 0)):
+                continue
+            pedido = candidato
+            entrada_ativa = entrada
+            break
         solicitacao = next(reversed(solicitacoes), None) if solicitacoes else None
         recebidos = [p for p in pedidos if _num(p.get("quantidadeRecebida")) > 0]
         media = sum(_num(p.get("quantidadeRecebida")) or _num(p.get("quantidadePedida")) for p in recebidos) / len(recebidos) if recebidos else None
@@ -286,6 +321,10 @@ def _montar_pedidos_compra(
                 status, titulo, detalhe = "aguardando_pedido", "Aguardando pedido de compra...", f"Aceito por: {solicitacao.get('aceitoPor') or '-'}"
             elif pedido and _num(pedido.get("quantidadeRecebida")) <= 0:
                 status, titulo, detalhe = "aguardando_recebimento", "Aguardando recebimento...", f"Pedido feito em: {pedido.get('dataPedido') or '-'}"
+            elif pedido and entrada_ativa and _num(entrada_ativa.get("saldoAEnderecar")) > 0:
+                status = "aguardando_enderecamento"
+                titulo = "Aguardando endereçamento..."
+                detalhe = f"Entrou dia: {entrada_ativa.get('dataEntrada') or '-'} - {_format_num(entrada_ativa.get('quantidadeEntrada'))} unidades"
             elif pedido:
                 status, titulo, detalhe = "aguardando_contagem", "Aguardando contagem de nota...", f"Recebido em: {pedido.get('dataPedido') or '-'}"
                 recebido_sem_entrada = _num(pedido.get("quantidadeRecebida"))
@@ -295,6 +334,7 @@ def _montar_pedidos_compra(
             "detalhe": detalhe,
             "solicitacao": solicitacao,
             "pedido": pedido,
+            "entradaEndereco": entrada_ativa,
             "mediaPedido": media,
             "recebidoSemEntrada": recebido_sem_entrada,
         }
@@ -305,6 +345,13 @@ def _safe_text(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _format_num(value: Any) -> str:
+    num = _num(value)
+    if float(num).is_integer():
+        return str(int(num))
+    return f"{num:.2f}".replace(".", ",")
 
 
 def _ascii_lower(value: Any) -> str:
@@ -609,6 +656,7 @@ def run_automus_update(
     estoque_minimo_path = _resolve_optional_file(project_root, FILE_MAP["estoque_minimo"])
     mata110_path = _resolve_optional_file(project_root, FILE_MAP["mata110"])
     mata111_path = _resolve_optional_file(project_root, FILE_MAP["mata111"])
+    mata112_path = _resolve_optional_file(project_root, FILE_MAP["mata112"])
     log.info(
         "TEST_PLANILHAS_RESOLVIDAS_OK | incluir=%s | saldoAtual=%s | saldoEndereco=%s | estoque_minimo=%s",
         incluir_path,
@@ -656,6 +704,7 @@ def run_automus_update(
     estoque_minimo = _read_sheet(estoque_minimo_path) if estoque_minimo_path else None
     mata110 = _read_sheet(mata110_path) if mata110_path else None
     mata111 = _read_sheet(mata111_path) if mata111_path else None
+    mata112 = _read_sheet(mata112_path, "Saldos a Endereçar") if mata112_path else None
     log.info(
         "TEST_PLANILHAS_LIDAS_OK | incluir_linhas=%s | saldoAtual_linhas=%s | saldoEndereco_linhas=%s | estoque_minimo_linhas=%s",
         len(incluir),
@@ -693,7 +742,7 @@ def run_automus_update(
         historico_saldo,
         agora_ms,
     )
-    pedidos_compra = _montar_pedidos_compra(mata110, mata111, novos_dados, historico_saldo)
+    pedidos_compra = _montar_pedidos_compra(mata110, mata111, mata112, novos_dados, historico_saldo)
 
     payload = {
         "dados": novos_dados,
@@ -712,6 +761,7 @@ def run_automus_update(
             **({"estoque_minimo": "estoque_minimo.xlsx"} if estoque_minimo_path else {}),
             **({"mata110": "mata110.xlsx"} if mata110_path else {}),
             **({"mata111": "mata111.xlsx"} if mata111_path else {}),
+            **({"mata112": "mata112.xlsx"} if mata112_path else {}),
         },
         "automus": {
             "executadoEm": datetime.now().isoformat(timespec="seconds"),

@@ -98,6 +98,7 @@ def preparar_planilhas_para_importacao(
         ("estoque_minimo", "estoque_minimo.xlsx"),
         ("mata110", "mata110.xlsx"),
         ("mata111", "mata111.xlsx"),
+        ("mata112", "mata112.xlsx"),
     ]
 
     pastas_origem = [
