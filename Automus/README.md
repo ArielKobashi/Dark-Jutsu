@@ -32,7 +32,20 @@ Para passar para outro PC, copie somente `dist\Automus.exe`. No primeiro uso ele
 
 ## Gerar pacote de atualizacao
 
-Antes de gerar uma nova versao, altere `scripts\version.json`.
+O jeito mais simples e usar:
+
+```bat
+atualizar_automus.bat
+```
+
+Ele pergunta a nova versao, as notas da versao, atualiza `scripts\version.json`, gera o novo `Automus.exe`, cria o `.zip`, atualiza o `latest.json` e abre a pasta `releases`.
+
+Se voce preencher uma pasta local de publicacao no assistente, ele tambem copia automaticamente para essa pasta:
+
+```text
+latest.json
+Automus-vVERSAO.zip
+```
 
 Para ativar atualizacao automatica nos computadores dos usuarios, publique o conteudo da pasta `releases` em algum endereco HTTP/HTTPS e preencha:
 
@@ -51,7 +64,7 @@ Depois use:
 gerar_pacote_atualizacao.bat
 ```
 
-O pacote fica em:
+Esse comando ainda existe para gerar o pacote direto a partir do `scripts\version.json`. O pacote fica em:
 
 ```text
 releases\Automus-vVERSAO.zip
@@ -68,6 +81,7 @@ Com `updateManifestUrl` configurado, o Automus verifica automaticamente depois d
 - `scripts\atualizacao\automus_update.py`: envio e validacao dos dados no Firebase.
 - `scripts\firebase_config.json`: configuracao Firebase usada pelo Automus sem depender do `index.html` do projeto principal.
 - `scripts\version.json`: versao exibida no titulo e usada nos pacotes de atualizacao.
+- `scripts\preparar_release_automus.py`: assistente para atualizar versao, notas e gerar o pacote completo.
 - `scripts\package_automus_release.py`: cria o `.zip` de atualizacao.
 - `scripts\automus_self_update.py`: verifica, baixa e instala novas versoes do Automus.exe.
 - `downloads\`: planilhas base copiadas para o pacote isolado.
