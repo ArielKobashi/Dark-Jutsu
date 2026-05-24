@@ -381,7 +381,7 @@ class _ControlWindow:
         ).pack(pady=(0, 18))
         login_var = tk.StringVar()
         senha_var = tk.StringVar()
-        login_status = tk.StringVar(value="Entre com um login ADM do Dark Jutsu.")
+        login_status = tk.StringVar(value="Entre com um login ADM.")
         login_entry = tk.Entry(login_card, textvariable=login_var, bg="#020617", fg=palette["text"], insertbackground=palette["text"], relief="flat", font=("Segoe UI", 11))
         login_entry.pack(fill="x", padx=42, ipady=8, pady=(0, 10))
         login_entry.insert(0, "")
@@ -923,7 +923,7 @@ class _ControlWindow:
                 )
                 tray_icon_holder["icon"] = icon
                 self._state.notify_callback = lambda title, message: icon.notify(message, title)
-                threading.Thread(target=icon.run, name="dark-jutsu-tray", daemon=True).start()
+                threading.Thread(target=icon.run, name="automus-tray", daemon=True).start()
                 return True
             except Exception as exc:
                 emit_status(f"Não foi possível criar o ícone em segundo plano: {exc}", level="WARNING")
@@ -1279,7 +1279,7 @@ class _SharedState:
                 _set_startup_enabled(True)
             except Exception as exc:
                 emit_status(f"Falha ao registrar inicialização com o Windows: {exc}", level="WARNING")
-        self.scheduler_thread = threading.Thread(target=self._scheduler_loop, name="dark-jutsu-scheduler", daemon=True)
+        self.scheduler_thread = threading.Thread(target=self._scheduler_loop, name="automus-scheduler", daemon=True)
         self.scheduler_thread.start()
 
     def _scheduler_loop(self):
@@ -1422,7 +1422,7 @@ class _SharedState:
     def trigger_dark_jutsu_reset_shortcut(self):
         if pynput_keyboard is None:
             emit_status(
-                "Não foi possível acionar o reset do Dark Jutsu: pynput keyboard indisponível.",
+                "Não foi possível acionar o reset do sistema: pynput keyboard indisponível.",
                 level="WARNING",
             )
             return
@@ -1435,12 +1435,12 @@ class _SharedState:
             kb.release(pynput_keyboard.Key.alt_l)
             kb.release(pynput_keyboard.Key.ctrl_l)
             emit_status(
-                "Atalho de reset enviado (Ctrl+Alt+R). Com o Dark Jutsu em foco, o rollback será executado.",
+                "Atalho de reset enviado (Ctrl+Alt+R). Com o sistema em foco, o rollback será executado.",
                 level="INFO",
             )
         except Exception as exc:
             emit_status(
-                f"Falha ao enviar atalho de reset do Dark Jutsu: {exc}",
+                f"Falha ao enviar atalho de reset do sistema: {exc}",
                 level="WARNING",
             )
 

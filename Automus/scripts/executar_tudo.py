@@ -202,7 +202,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
     )
     logger.info(
         "Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; "
-        "apos a macro 005, Automus envia direto ao Firebase (sem mexer na sessao aberta do Dark Jutsu)."
+        "apos a macro 005, Automus envia direto ao Firebase (sem mexer na sessao aberta do sistema)."
     )
 
     for macro in macros:

@@ -1,0 +1,5 @@
+openpyxl
+pillow
+pynput
+pystray
+pyinstaller

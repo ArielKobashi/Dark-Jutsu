@@ -1,1 +1,10 @@
 _backups/
+scripts/controlador_config.json
+Automus/scripts/controlador_config.json
+Automus/scripts/atualizacao/automus_config.json
+Automus/AutomusData/
+Automus/build/
+Automus/dist/
+build/
+dist/
+*.spec

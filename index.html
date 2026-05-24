@@ -634,6 +634,54 @@ function normalizarCodigoItem(valor){
     return texto ? texto.toLowerCase() : "";
 }
 
+function isDescricaoDadoMorto(valor){
+    const texto = (valor ?? "").toString()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+    return texto.includes("desativado") || texto.includes("bloqueado");
+}
+
+function prepararItemComoDadoMorto(item){
+    const morto = {...(item || {})};
+    const key = (morto.protheus || morto.cooperat || morto.protheusKey || "").toString().trim();
+    morto.morto = true;
+    if(key){
+        morto.protheusKey = "MORTO|" + key;
+    }
+    return morto;
+}
+
+function separarDadosMortosPorDescricao(lista, mortosAnteriores = []){
+    const ativos = [];
+    const mortos = [];
+    const codigosAtivos = new Set();
+    const codigosMortos = new Set();
+
+    (Array.isArray(lista) ? lista : []).forEach(item => {
+        const key = (item?.protheus || item?.cooperat || item?.protheusKey || "").toString().trim();
+        if(isDescricaoDadoMorto(item?.descricao)){
+            if(key && codigosMortos.has(key)) return;
+            if(key) codigosMortos.add(key);
+            mortos.push(prepararItemComoDadoMorto(item));
+            return;
+        }
+        const ativo = {...item, morto:false};
+        delete ativo.protheusKey;
+        if(key) codigosAtivos.add(key);
+        ativos.push(ativo);
+    });
+
+    (Array.isArray(mortosAnteriores) ? mortosAnteriores : []).forEach(item => {
+        const key = (item?.protheus || item?.cooperat || item?.protheusKey || "").toString().trim();
+        if(key && (codigosAtivos.has(key) || codigosMortos.has(key))) return;
+        mortos.push({...item, morto:true});
+        if(key) codigosMortos.add(key);
+    });
+
+    return { ativos, mortos };
+}
+
 function parsePlanilhaNumero(valor){
     if(valor === null || valor === undefined || valor === "") return null;
     if(typeof valor === "number"){
@@ -937,8 +985,11 @@ window.salvarAjusteEstoqueItem = salvarAjusteEstoqueItem;
 
 window.setDados = function(novosDados){
     const anteriores = Array.isArray(dados) ? dados : [];
-    dados = enriquecerItensComEstoqueMinimo(Array.isArray(novosDados) ? novosDados : [], anteriores);
+    const separados = separarDadosMortosPorDescricao(novosDados, dadosMortos);
+    dados = enriquecerItensComEstoqueMinimo(separados.ativos, anteriores);
+    dadosMortos = separados.mortos.map(item => aplicarAjusteManualItem(item));
     window.dados = dados;
+    window.dadosMortos = dadosMortos;
     aplicarTodosFiltros();
 }
 function getLimiteTabelaInicial(){
