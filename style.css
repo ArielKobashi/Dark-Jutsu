@@ -1430,6 +1430,7 @@ hr {
 
     border-radius:10px; /* botÃ£o mais arredondado */
 
+    opacity:.7;
     z-index:30;
 }
 

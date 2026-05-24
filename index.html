@@ -819,6 +819,17 @@ function obterStatusEstoque(item){
     return "ok";
 }
 
+function enderecoPossuiSaldo(endereco){
+    if(!endereco) return false;
+    const saldo = parsePlanilhaNumero(endereco.saldo);
+    return saldo !== null && saldo > 0;
+}
+
+function contarEnderecosComSaldo(item){
+    if(!item || !Array.isArray(item.enderecos)) return 0;
+    return item.enderecos.filter(enderecoPossuiSaldo).length;
+}
+
 function obterPrioridadeSaldoExtremos(item, asc){
     const status = obterStatusEstoque(item);
 
@@ -2441,7 +2452,7 @@ function renderTabela(){
 
         let armazensUnicos = [
             ...new Set(
-                (item.enderecos || []).map(e=>e?.armazem)
+                (item.enderecos || []).filter(enderecoPossuiSaldo).map(e=>e?.armazem)
             )
         ];
 
@@ -2458,7 +2469,7 @@ function renderTabela(){
         // ENDEREÇO
         let tdEnd = criarTd(row, item.enderecoPrincipal || "");
 
-        if((item.enderecos || []).length > 1){
+        if(contarEnderecosComSaldo(item) > 1){
             tdEnd.style.background = "rgba(122,60,255,0.25)";
             tdEnd.style.cursor = "pointer";
         }
@@ -4360,8 +4371,11 @@ function abrirModalSaldos(item){
             </article>
         `).join("");
 
-        const enderecosHtml = listaEnderecos.map(info => `
-            <article class="addressCard">
+        const enderecosHtml = listaEnderecos.map(info => {
+            const saldoEndereco = parsePlanilhaNumero(info.saldo);
+            const classeSaldoEndereco = saldoEndereco !== null && saldoEndereco <= 0 ? " addressZero" : "";
+            return `
+            <article class="addressCard${classeSaldoEndereco}">
                 <div class="addressTop">
                     <div>
                         <span class="label">Endereço</span>
@@ -4374,7 +4388,8 @@ function abrirModalSaldos(item){
                     <span class="chip">Saldo: ${esc(formatarNumeroPlanilha(info.saldo))}</span>
                 </div>
             </article>
-        `).join("");
+        `;
+        }).join("");
 
         const historicoSaldoHtml = historicoSaldo.length
             ? historicoSaldo.map(h => `
@@ -4724,6 +4739,9 @@ function abrirModalSaldos(item){
             inset:0 auto 0 0;
             width:4px;
             background:linear-gradient(180deg, var(--accent), rgba(143,91,255,.08));
+        }
+        .addressCard.addressZero::before{
+            background:linear-gradient(180deg, var(--bad), rgba(255,93,108,.12));
         }
         .addressTop{
             display:flex;
