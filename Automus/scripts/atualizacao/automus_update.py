@@ -628,29 +628,31 @@ def _build_items(
                 "maximo": estoque_minimo_item.get("maximo"),
                 "reposicao": estoque_minimo_item.get("reposicao"),
             }
-            if estoque_minimo_item.get("temLinha"):
+            if estoque_minimo_item.get("temLinha") and estoque_minimo_item.get("minimo") is not None:
                 item["minimo"] = estoque_minimo_item["minimo"]
-                item["maximo"] = estoque_minimo_item["maximo"]
                 item["minimoOrigem"] = "cooperat"
+            if estoque_minimo_item.get("temLinha") and estoque_minimo_item.get("maximo") is not None:
+                item["maximo"] = estoque_minimo_item["maximo"]
                 item["maximoOrigem"] = "cooperat"
-                item["reposicaoOrigem"] = "cooperat"
-                item["limitesOrigem"] = "cooperat"
-            if estoque_minimo_item.get("reposicao") is not None:
+            if estoque_minimo_item.get("temLinha") and estoque_minimo_item.get("reposicao") is not None:
                 item["reposicao"] = estoque_minimo_item["reposicao"]
+                item["reposicaoOrigem"] = "cooperat"
+            if estoque_minimo_item.get("temLinha"):
+                item["limitesOrigem"] = "cooperat"
 
         anterior = prev_by_protheus.get(protheus) or prev_by_cooperat.get(cooperat_cod)
         if anterior:
-            if not item.get("limitesCooperat") and isinstance(anterior.get("limitesCooperat"), dict):
+            if estoque_minimo is None and not item.get("limitesCooperat") and isinstance(anterior.get("limitesCooperat"), dict):
                 item["limitesCooperat"] = anterior.get("limitesCooperat")
-            if item.get("minimo") is None and anterior.get("minimo") is not None:
+            if estoque_minimo is None and item.get("minimo") is None and anterior.get("minimo") is not None:
                 item["minimo"] = anterior.get("minimo")
                 item["minimoOrigem"] = anterior.get("minimoOrigem") or anterior.get("limitesOrigem") or "anterior"
-            if item.get("maximo") is None and anterior.get("maximo") is not None:
+            if estoque_minimo is None and item.get("maximo") is None and anterior.get("maximo") is not None:
                 item["maximo"] = anterior.get("maximo")
                 item["maximoOrigem"] = anterior.get("maximoOrigem") or anterior.get("limitesOrigem") or "anterior"
-            if not item.get("limitesOrigem"):
+            if estoque_minimo is None and not item.get("limitesOrigem"):
                 item["limitesOrigem"] = anterior.get("limitesOrigem") or "anterior"
-            if not item.get("reposicaoOrigem"):
+            if estoque_minimo is None and not item.get("reposicaoOrigem"):
                 item["reposicaoOrigem"] = anterior.get("reposicaoOrigem") or item.get("limitesOrigem")
 
         ajuste = (ajustes_itens or {}).get(_ajuste_key(protheus))
