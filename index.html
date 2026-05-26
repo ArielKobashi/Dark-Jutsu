@@ -1220,6 +1220,28 @@ function findItemByKey(key){
     return getBaseDadosTodos().find(d => getItemKey(d) === key);
 }
 
+function pareceCodigoProtheus(valor){
+    return /^[0-9]{6,14}$/.test(String(valor ?? "").trim());
+}
+
+function corrigirItemIncluirInvertido(item){
+    if(!item || typeof item !== "object") return item;
+    const protheusAtual = String(item.protheus ?? "").trim();
+    const cooperatAtual = String(item.cooperat ?? "").trim();
+    const descricaoAtual = String(item.descricao ?? "").trim();
+
+    if(protheusAtual && !pareceCodigoProtheus(protheusAtual) && pareceCodigoProtheus(cooperatAtual)){
+        return {
+            ...item,
+            protheus: cooperatAtual,
+            cooperat: descricaoAtual,
+            descricao: protheusAtual
+        };
+    }
+
+    return item;
+}
+
 async function salvarAjusteEstoqueItem(itemKey, minimoRaw, maximoRaw){
     const item = findItemByKey(itemKey);
     if(!item){
@@ -1286,7 +1308,10 @@ window.salvarAjusteEstoqueItem = salvarAjusteEstoqueItem;
 
 window.setDados = function(novosDados){
     const anteriores = Array.isArray(dados) ? dados : [];
-    const separados = separarDadosMortosPorDescricao(novosDados, dadosMortos);
+    const dadosCorrigidos = Array.isArray(novosDados)
+        ? novosDados.map(item => corrigirItemIncluirInvertido({...item}))
+        : [];
+    const separados = separarDadosMortosPorDescricao(dadosCorrigidos, dadosMortos);
     dados = enriquecerItensComEstoqueMinimo(separados.ativos, anteriores);
     dadosMortos = separados.mortos.map(item => aplicarAjusteManualItem(item));
     window.dados = dados;
@@ -2057,10 +2082,11 @@ function buscarItemMata105(linhas, codigo){
         .replace(/[.\-/_\s]/g, "");
     const alvo = normalizarBusca(codigo);
     if(!alvo) return null;
-    for(const row of linhas || []){
-        const cooperat = String(row?.[0] ?? "").trim();
-        const protheus = String(row?.[1] ?? "").trim();
-        const descricao = String(row?.[2] ?? "").trim();
+    const colunas = detectarColunasIncluir(linhas || []);
+    for(const row of (linhas || []).slice(colunas.inicio)){
+        const cooperat = String(row?.[colunas.cooperat] ?? "").trim();
+        const protheus = String(row?.[colunas.protheus] ?? "").trim();
+        const descricao = String(row?.[colunas.descricao] ?? "").trim();
         if(!protheus) continue;
         const header = `${cooperat} ${protheus} ${descricao}`.toLowerCase();
         if(header.includes("cooperat") || header.includes("protheus") || header.includes("descri")) continue;
@@ -7272,7 +7298,7 @@ async function carregarEstoqueInicial() {
             historicoSaldoEstoque = banco.historicoSaldo || {};
             pedidosCompraEstado = calcularPedidosCompraEstado(banco.dados || [], banco.pedidosCompra || {});
             dadosMortos = Array.isArray(banco.dadosMortos) ? banco.dadosMortos : [];
-            dadosMortos = dadosMortos.map(item => aplicarAjusteManualItem({...item}));
+            dadosMortos = dadosMortos.map(item => aplicarAjusteManualItem(corrigirItemIncluirInvertido({...item})));
             window.dadosMortos = dadosMortos;
             window.setDados(banco.dados || []);
 
@@ -7287,7 +7313,7 @@ onValue(window.estoqueRef, snapshot => {
         ajustesItensEstoque = val.ajustesItens || {};
         historicoSaldoEstoque = val.historicoSaldo || {};
         pedidosCompraEstado = calcularPedidosCompraEstado(val.dados || [], val.pedidosCompra || {});
-        dadosMortos = Array.isArray(val.dadosMortos) ? val.dadosMortos.map(item => aplicarAjusteManualItem({...item})) : [];
+        dadosMortos = Array.isArray(val.dadosMortos) ? val.dadosMortos.map(item => aplicarAjusteManualItem(corrigirItemIncluirInvertido({...item}))) : [];
         window.dadosMortos = dadosMortos;
         if(Array.isArray(val.dados)){
             window.setDados(val.dados);
