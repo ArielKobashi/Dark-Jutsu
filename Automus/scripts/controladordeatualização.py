@@ -1320,7 +1320,24 @@ class _SharedState:
                     self._send(200, {"ok": True, "app": APP_DISPLAY_NAME, "running": state.automation_running})
                     return
                 if path == "/executar-tudo":
-                    state.run_executar_tudo(origem="sistema", usuario="Dark-Jutsu")
+                    payload = {}
+                    try:
+                        length = int(self.headers.get("Content-Length") or 0)
+                        if length > 0:
+                            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                    except Exception:
+                        payload = {}
+                    ok, auth_msg = state.ensure_local_request_admin(payload)
+                    if not ok:
+                        self._send(403, {"ok": False, "error": auth_msg})
+                        return
+                    started = state.run_executar_tudo(
+                        origem="sistema",
+                        usuario=(state.authenticated_admin or {}).get("nickname") or "Dark-Jutsu",
+                    )
+                    if not started:
+                        self._send(409, {"ok": False, "error": "Automus ocupado ou sem login ADM."})
+                        return
                     self._send(200, {"ok": True, "message": "executar_tudo iniciado"})
                     return
                 self._send(404, {"ok": False, "error": "comando desconhecido"})
@@ -1337,6 +1354,34 @@ class _SharedState:
             emit_status(f"Comando local ativo em http://{LOCAL_COMMAND_HOST}:{LOCAL_COMMAND_PORT}.")
         except OSError as exc:
             emit_status(f"Comando local do Automus indisponível: {exc}", level="WARNING")
+
+    def ensure_local_request_admin(self, payload: dict) -> tuple[bool, str]:
+        if self.authenticated_admin is not None:
+            return True, "ADM já autenticado."
+        token = str((payload or {}).get("idToken") or "").strip()
+        uid = str((payload or {}).get("uid") or "").strip()
+        email = str((payload or {}).get("email") or "").strip()
+        nickname = str((payload or {}).get("nickname") or "").strip()
+        if not token or not uid:
+            return False, "Login ADM necessário no sistema para acionar o Automus."
+        try:
+            _, db_url = _extract_firebase_config()
+            usuario = _http_json(f"{db_url}/usuarios/{uid}.json?auth={token}", method="GET")
+            if not isinstance(usuario, dict) or str(usuario.get("nivel") or "").lower() != "admin":
+                return False, "Apenas ADM pode acionar o Automus por aqui."
+            admin = {
+                "uid": uid,
+                "email": email,
+                "nickname": usuario.get("nickname") or nickname or email or uid,
+                "idToken": token,
+            }
+            with self.lock:
+                self.authenticated_admin = admin
+            self._ensure_user_schedule(admin)
+            emit_status(f"Interface liberada por comando local para ADM: {admin.get('nickname')}.")
+            return True, "ADM autenticado."
+        except Exception as exc:
+            return False, f"Falha ao validar ADM local: {exc}"
 
     def login_admin(self, login: str, senha: str) -> dict:
         admin = _auth_admin_dark_jutsu(login, senha)
@@ -1909,28 +1954,29 @@ class _SharedState:
             if self.authenticated_admin is None:
                 self._show_window_now()
                 emit_status("Login ADM necessário. A atualização não será iniciada sem usuário de sessão.", level="WARNING")
-                return
+                return False
             if self.automation_running:
                 self._show_window_now()
                 emit_status("Automação já está em execução.")
-                return
+                return False
             self.automation_running = True
 
         self._show_window_now()
         self._prepare_new_run()
         thread = threading.Thread(target=target, name=worker_name, daemon=True)
         thread.start()
+        return True
 
     def run_macro_file(self, macro_filename: str):
         macro_filename = str(macro_filename)
         worker_name = f"macro-worker-{Path(macro_filename).stem}"
-        self._start_worker(
+        return self._start_worker(
             worker_name,
             lambda: self._run_single_macro_worker(macro_filename),
         )
 
     def run_executar_tudo(self, origem: str = "manual", usuario: Optional[str] = None):
-        self._start_worker(
+        return self._start_worker(
             "executar-tudo-worker",
             lambda: self._run_executar_tudo_worker(origem, usuario),
         )

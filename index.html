@@ -1821,9 +1821,21 @@ async function acionarAtualizacaoAutomusPainel(btn){
     }
 
     try {
+        const currentUser = window.auth?.currentUser;
+        const idToken = currentUser ? await currentUser.getIdToken() : "";
         const response = await fetch("http://127.0.0.1:47655/executar-tudo", {
             method: "POST",
-            cache: "no-store"
+            cache: "no-store",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                idToken,
+                uid: currentUser?.uid || "",
+                email: currentUser?.email || "",
+                nickname: window.meuNickname || "",
+                nivel: window.nivelUsuario || ""
+            })
         });
         const result = await response.json().catch(() => ({}));
         if(!response.ok || result.ok === false){
