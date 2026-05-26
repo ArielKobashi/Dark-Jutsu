@@ -1,4 +1,5 @@
 ﻿import argparse
+import argparse
 import importlib.util
 import logging
 import os
@@ -188,6 +189,9 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
             base / "macro_003.py",
             base / "macro_004.py",
             base / "macro_005.py",
+            base / "macro_007.py",
+            base / "macro_008.py",
+            base / "macro_009.py",
         ]
 
     logger = configurar_logger(base / "executar_tudo.log")
@@ -200,12 +204,13 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
     )
     logger.info(
         "Marco temporal de validacao criado em: %s. "
-        "Somente planilhas mata105/mata225/mata226 com data/hora >= esse marco serao aceitas.",
+        "Somente planilhas mata105/mata225/mata226/mata110/mata111/mata112 "
+        "com data/hora >= esse marco serao aceitas.",
         time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(started_at_epoch)),
     )
     logger.info(
-        "Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; "
-        "apos a macro 005, Automus envia direto ao Firebase (sem mexer na sessao aberta do sistema)."
+        "Fluxo esperado: macros 003/004/005/007/008/009 salvam as planilhas; "
+        "apos a macro 009, Automus envia direto ao Firebase (sem mexer na sessao aberta do sistema)."
     )
 
     for macro in macros:
@@ -240,28 +245,31 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
             break
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
-            if macro.name.lower() == "macro_005.py":
+            if macro.name.lower() == "macro_009.py":
                 try:
                     mapa = preparar_planilhas_para_importacao(logger, base, started_at_epoch, project_root=project_root)
                     logger.info(
-                        "CONFIRMACAO: preparo planilhas apos macro final | mata105=%s | mata225=%s | mata226=%s",
+                        "CONFIRMACAO: preparo planilhas apos macro final | mata105=%s | mata225=%s | mata226=%s | mata110=%s | mata111=%s | mata112=%s",
                         "OK" if mapa.get("mata105") else "FALHOU",
                         "OK" if mapa.get("mata225") else "FALHOU",
                         "OK" if mapa.get("mata226") else "FALHOU",
+                        "OK" if mapa.get("mata110") else "FALHOU",
+                        "OK" if mapa.get("mata111") else "FALHOU",
+                        "OK" if mapa.get("mata112") else "FALHOU",
                     )
-                    if not all(mapa.get(cod, False) for cod in ("mata105", "mata225", "mata226")):
+                    if not all(mapa.get(cod, False) for cod in ("mata105", "mata225", "mata226", "mata110", "mata111", "mata112")):
                         raise RuntimeError(
                             "Validacao forte falhou: nem todas as planilhas novas da execucao atual foram encontradas."
                         )
                     logger.info(
-                        "CONFIRMACAO: macro final de extracao concluida. Preparo final executado apos as 5 macros."
+                        "CONFIRMACAO: macro final de extracao concluida. Preparo final executado apos as macros."
                     )
                     enviar_atualizacao_automus(logger, base, automus_auth=automus_auth, project_root=project_root)
                     logger.info(
-                        "CONFIRMACAO: envio Firebase via Automus executado apos a macro_005 (sem automacao de navegador)."
+                        "CONFIRMACAO: envio Firebase via Automus executado apos a macro_009 (sem automacao de navegador)."
                     )
                 except Exception as exc:
-                    logger.exception("Falha no pos-processamento apos macro_005: %s", exc)
+                    logger.exception("Falha no pos-processamento apos macro_009: %s", exc)
                     logger.error("Automacao encerrada com erro.")
                     failed = True
                     break

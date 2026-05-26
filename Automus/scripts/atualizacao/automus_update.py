@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import logging
+import math
 import re
 import sys
 import time
@@ -27,8 +28,29 @@ FILE_MAP = {
 
 
 def _json_hash(value: Any) -> str:
-    raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    raw = _json_payload(value, sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _sanitize_json_value(value: Any) -> Any:
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {str(k): _sanitize_json_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_json_value(v) for v in value]
+    return value
+
+
+def _json_payload(value: Any, sort_keys: bool = False, indent: int | None = None) -> str:
+    return json.dumps(
+        _sanitize_json_value(value),
+        ensure_ascii=False,
+        sort_keys=sort_keys,
+        separators=None if indent is not None else (",", ":"),
+        indent=indent,
+        allow_nan=False,
+    )
 
 
 def _http_json(
@@ -40,7 +62,7 @@ def _http_json(
     data = None
     headers = {"Accept": "application/json"}
     if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
+        data = _json_payload(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
     req = Request(url=url, data=data, method=method, headers=headers)
     try:
@@ -349,7 +371,8 @@ def _montar_pedidos_compra(
             elif pedido:
                 status, titulo, detalhe = "aguardando_contagem", "Aguardando contagem de nota...", f"Recebido em: {pedido.get('dataPedido') or '-'}"
                 recebido_sem_entrada = _num(pedido.get("quantidadeRecebida"))
-        estado[codigo] = {
+        estado[_ajuste_key(codigo)] = {
+            "codigo": codigo,
             "status": status,
             "titulo": titulo,
             "detalhe": detalhe,
@@ -632,7 +655,7 @@ def _write_local_backup(project_root: Path, backup_payload: dict[str, Any], agor
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_path = backup_dir / f"firebase_backup_{agora_ms}.json"
     backup_path.write_text(
-        json.dumps(backup_payload, ensure_ascii=False, indent=2),
+        _json_payload(backup_payload, indent=2),
         encoding="utf-8",
     )
     if not backup_path.exists() or backup_path.stat().st_size <= 0:
@@ -797,20 +820,31 @@ def run_automus_update(
         "hashAntes": hash_banco_antes,
         "dados": banco,
     }
+    backup_remote_payload = {
+        "salvoEm": agora_ms,
+        "origem": "automus",
+        "hashAntes": hash_banco_antes,
+        "backupLocal": str(backup_local_path) if "backup_local_path" in locals() else "",
+        "dadosQuantidade": len(dados_anteriores),
+        "dadosMortosQuantidade": len(dados_mortos),
+        "tamanhoBackupLocalBytes": 0,
+    }
 
     backup_local_path = _write_local_backup(project_root, backup_payload, agora_ms, log)
+    backup_remote_payload["backupLocal"] = str(backup_local_path)
+    backup_remote_payload["tamanhoBackupLocalBytes"] = backup_local_path.stat().st_size
 
     backup_remoto_ok = False
     try:
-        log.info("AUTOMUS: gravando backup remoto de seguranca antes da atualizacao.")
-        _http_json(backup_url, method="PUT", payload=backup_payload)
+        log.info("AUTOMUS: gravando indice remoto do backup de seguranca.")
+        _http_json(backup_url, method="PUT", payload=backup_remote_payload)
         backup_check = _http_json(backup_url, method="GET")
         if not isinstance(backup_check, dict):
-            raise RuntimeError("NAO CONFORME: backup remoto nao pode ser conferido.")
+            raise RuntimeError("NAO CONFORME: indice remoto do backup nao pode ser conferido.")
         if backup_check.get("salvoEm") != agora_ms or backup_check.get("hashAntes") != hash_banco_antes:
-            raise RuntimeError("NAO CONFORME: backup remoto gravou dados divergentes.")
+            raise RuntimeError("NAO CONFORME: indice remoto do backup gravou dados divergentes.")
         log.info(
-            "BACKUP_REMOTO_OK | salvoEm=%s | hashAntes=%s",
+            "BACKUP_REMOTO_INDICE_OK | salvoEm=%s | hashAntes=%s",
             backup_check.get("salvoEm"),
             backup_check.get("hashAntes"),
         )
@@ -827,8 +861,32 @@ def run_automus_update(
         "OK" if backup_remoto_ok else "NAO",
     )
 
-    log.info("AUTOMUS: enviando atualizacao final para estoqueGlobal.")
-    _http_json(estoque_url, method="PATCH", payload=payload)
+    payload = _sanitize_json_value(payload)
+    _json_payload(payload)
+
+    log.info("AUTOMUS: enviando atualizacao final para estoqueGlobal em blocos.")
+    blocos = [
+        ("dados", novos_dados),
+        ("dadosMortos", dados_mortos),
+        ("ajustesItens", ajustes_itens),
+        ("historicoSaldo", historico_saldo),
+        ("pedidosCompra", pedidos_compra),
+        ("mapeamentoArquivos", payload["mapeamentoArquivos"]),
+        ("automus", payload["automus"]),
+    ]
+    for nome_bloco, bloco in blocos:
+        bloco_url = f"{db_url}/estoqueGlobal/{nome_bloco}.json{token_qs}"
+        tamanho = len(_json_payload(bloco).encode("utf-8"))
+        log.info("AUTOMUS: enviando bloco %s | bytes=%s", nome_bloco, tamanho)
+        _http_json(bloco_url, method="PUT", payload=bloco)
+
+    meta_payload = {
+        "ultimaAtualizacao": agora_ms,
+        "atualizadoPor": updated_by,
+        "atualizacaoAutomatica": True,
+        "ultimaAtualizacaoAutomatica": agora_ms,
+    }
+    _http_json(estoque_url, method="PATCH", payload=meta_payload)
     log.info("TEST_FIREBASE_PATCH_OK")
 
     check = _http_json(estoque_url, method="GET")

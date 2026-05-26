@@ -899,7 +899,8 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
             }
         }
 
-        estado[codigo] = {
+        estado[chaveAjusteItem(codigo)] = {
+            codigo,
             status,
             titulo,
             detalhe,
@@ -915,7 +916,8 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
 
 function getPedidoCompraItem(item){
     const codigo = normalizarCodigoItem(item?.protheus || item?.protheusKey || item?.cooperat);
-    return codigo ? pedidosCompraEstado?.[codigo] : null;
+    if(!codigo) return null;
+    return pedidosCompraEstado?.[chaveAjusteItem(codigo)] || pedidosCompraEstado?.[codigo] || null;
 }
 
 function planilhasPedidosCompraProntas(){
@@ -1776,28 +1778,83 @@ function mostrarNotificacao(msg){
     },4000);
 }
 
-function acionarAtualizacaoAutomusPainel(btn){
-    const pronto = !!planilhas.incluir && !!planilhas.saldoAtual && !!planilhas.saldoEndereco;
-    if (pronto) {
-        atualizarBanco(btn);
-        return;
+function normalizarUrlDownloadAutomus(url){
+    const texto = String(url || "").trim();
+    if(!texto) return "";
+    if(/^https?:\/\//i.test(texto) || /^file:\/\//i.test(texto)) return texto;
+    if(texto.startsWith("\\\\")){
+        return "file://///" + texto.replace(/^\\\\/, "").replace(/\\/g, "/");
+    }
+    return "file:///" + texto.replace(/\\/g, "/");
+}
+
+async function baixarAutomusMaisRecenteSeAdmin(){
+    if(window.nivelUsuario !== "admin"){
+        throw new Error("Apenas ADM pode baixar o Automus mais recente por aqui.");
+    }
+    if(!window.get || !window.ref || !window.db){
+        throw new Error("Firebase ainda não está pronto.");
     }
 
-    const batPath = "C:\\Users\\davi.souza\\Desktop\\KKKKKKKK\\executar_tudo.bat";
-    const fileUrl = "file:///" + batPath.replace(/\\/g, "/");
-    let abriu = false;
+    const snap = await window.get(window.ref(window.db, "automus/releases/latest"));
+    if(!snap.exists()){
+        throw new Error("Manifesto do Automus não encontrado no Firebase.");
+    }
+    const manifest = snap.val() || {};
+    const packageUrl = normalizarUrlDownloadAutomus(manifest.packageUrl || manifest.url || "");
+    if(!packageUrl){
+        throw new Error("Manifesto do Automus sem link de pacote.");
+    }
+
+    const janela = window.open(packageUrl, "_blank");
+    if(!janela){
+        throw new Error("O navegador bloqueou a abertura do download.");
+    }
+    return manifest;
+}
+
+async function acionarAtualizacaoAutomusPainel(btn){
+    const originalText = btn?.textContent;
+    if(btn){
+        btn.disabled = true;
+        btn.textContent = "ACIONANDO AUTOMUS...";
+    }
+
     try {
-        const janela = window.open(fileUrl, "_blank");
-        abriu = !!janela;
+        const response = await fetch("http://127.0.0.1:47655/executar-tudo", {
+            method: "POST",
+            cache: "no-store"
+        });
+        const result = await response.json().catch(() => ({}));
+        if(!response.ok || result.ok === false){
+            throw new Error(result.error || "Automus não confirmou o comando.");
+        }
+        if (typeof window.mostrarNotificacao === "function") {
+            window.mostrarNotificacao("Automus em segundo plano iniciou a atualização.");
+        }
     } catch (e) {
-        abriu = false;
-    }
-
-    if (!abriu) {
-        const comando = 'C:\\Users\\davi.souza\\Desktop\\KKKKKKKK\\executar_tudo.bat';
-        alert("Não consegui abrir automaticamente.\nExecute este arquivo:\n" + comando);
-    } else if (typeof window.mostrarNotificacao === "function") {
-        window.mostrarNotificacao("Automus acionado. Se o navegador bloquear, execute o .bat manualmente.");
+        console.warn("Falha ao acionar Automus local:", e);
+        try{
+            if(btn) btn.textContent = "BAIXANDO AUTOMUS...";
+            const manifest = await baixarAutomusMaisRecenteSeAdmin();
+            const versao = manifest.version ? ` versão ${manifest.version}` : "";
+            if (typeof window.mostrarNotificacao === "function") {
+                window.mostrarNotificacao(`Automus local não respondeu. Abrindo download do Automus${versao}.`);
+            }
+        }catch(downloadError){
+            console.warn("Falha ao baixar Automus mais recente:", downloadError);
+            const msg = downloadError?.message || "Abra o Automus e tente novamente.";
+            if (typeof window.mostrarNotificacao === "function") {
+                window.mostrarNotificacao(`Automus em segundo plano não respondeu. ${msg}`);
+            } else {
+                alert(`Automus em segundo plano não respondeu.\n${msg}`);
+            }
+        }
+    } finally {
+        if(btn){
+            btn.disabled = false;
+            btn.textContent = originalText || "Executar Atualização (Automus)";
+        }
     }
 }
 

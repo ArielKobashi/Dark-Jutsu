@@ -1,5 +1,6 @@
 import ctypes
 import hashlib
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import importlib
 import msvcrt
@@ -56,9 +57,15 @@ SCRIPT_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("AUTOMUS_PROJECT_ROOT", str(PROJECT_ROOT))
 os.environ.setdefault("AUTOMUS_SCRIPT_DIR", str(SCRIPT_DIR))
 os.environ.setdefault("AUTOMUS_BUNDLED_SCRIPT_DIR", str(BUNDLED_SCRIPT_DIR))
-CONTROLLER_CONFIG_PATH = SCRIPT_DIR / "controlador_config.json"
+CONTROLLER_CONFIG_PATH = PROJECT_ROOT / "controlador_config.json"
+LEGACY_CONTROLLER_CONFIG_PATHS = [
+    SCRIPT_DIR / "controlador_config.json",
+    BUNDLED_SCRIPT_DIR / "controlador_config.json",
+]
 STARTUP_BAT_NAME = "Automus_Controlador_Atualizacoes.bat"
 APP_DISPLAY_NAME = "Automus"
+LOCAL_COMMAND_HOST = "127.0.0.1"
+LOCAL_COMMAND_PORT = 47655
 
 
 def _load_app_version() -> str:
@@ -180,10 +187,13 @@ def _apply_machine_lock(config: dict) -> dict:
 
 
 def _load_controller_config() -> dict:
-    if not CONTROLLER_CONFIG_PATH.exists():
+    source_path = CONTROLLER_CONFIG_PATH
+    if not source_path.exists():
+        source_path = next((path for path in LEGACY_CONTROLLER_CONFIG_PATHS if path.exists()), CONTROLLER_CONFIG_PATH)
+    if not source_path.exists():
         return _apply_machine_lock({"horarios": [], "frequencia": "todos_os_dias", "vezesPorDia": 1, "iniciarComWindows": True})
     try:
-        data = json.loads(CONTROLLER_CONFIG_PATH.read_text(encoding="utf-8-sig"))
+        data = json.loads(source_path.read_text(encoding="utf-8-sig"))
         if not isinstance(data, dict):
             return {"horarios": [], "frequencia": "todos_os_dias", "vezesPorDia": 1, "iniciarComWindows": True}
         data.setdefault("horarios", [])
@@ -192,7 +202,10 @@ def _load_controller_config() -> dict:
         data.setdefault("iniciarComWindows", True)
         data.setdefault("historicoAtualizacoes", [])
         data.setdefault("usuariosAtualizacao", {})
-        return _apply_machine_lock(data)
+        data = _apply_machine_lock(data)
+        if source_path != CONTROLLER_CONFIG_PATH:
+            _save_controller_config(data)
+        return data
     except Exception:
         return _apply_machine_lock({"horarios": [], "frequencia": "todos_os_dias", "vezesPorDia": 1, "iniciarComWindows": True})
 
@@ -680,11 +693,12 @@ class _ControlWindow:
         tk.Label(freq_row, text="Frequência", bg=palette["panel"], fg=palette["muted"], font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 8))
         freq_label_map = {
             "todos_os_dias": "Todos os dias",
+            "segunda_a_sexta": "Segunda a sexta",
             "a_cada_2_dias": "A cada 2 dias",
         }
         freq_config = self._state.get_schedule_config().get("frequencia", "todos_os_dias")
         freq_var = tk.StringVar(value=freq_label_map.get(freq_config, "Todos os dias"))
-        freq_menu = tk.OptionMenu(freq_row, freq_var, "Todos os dias", "A cada 2 dias")
+        freq_menu = tk.OptionMenu(freq_row, freq_var, "Todos os dias", "Segunda a sexta", "A cada 2 dias")
         freq_menu.configure(bg="#020617", fg=palette["text"], activebackground=palette["panel2"], activeforeground=palette["text"], relief="flat", highlightthickness=0, width=16)
         freq_menu["menu"].configure(bg="#020617", fg=palette["text"])
         freq_menu.pack(side="left", padx=(0, 18))
@@ -813,6 +827,8 @@ class _ControlWindow:
         macro_exec_row1.pack(fill="x", pady=(0, 4))
         macro_exec_row2 = tk.Frame(macro_exec_frame, bg=palette["panel"])
         macro_exec_row2.pack(fill="x")
+        macro_exec_row3 = tk.Frame(macro_exec_frame, bg=palette["panel"])
+        macro_exec_row3.pack(fill="x", pady=(4, 0))
 
         macro_buttons = [
             ("Macro 1", "macro_001.py"),
@@ -820,10 +836,18 @@ class _ControlWindow:
             ("Macro 3", "macro_003.py"),
             ("Macro 4", "macro_004.py"),
             ("Macro 5", "macro_005.py"),
+            ("Macro 7", "macro_007.py"),
+            ("Macro 8", "macro_008.py"),
+            ("Macro 9", "macro_009.py"),
         ]
 
         for index, (label, filename) in enumerate(macro_buttons):
-            parent = macro_exec_row1 if index < 3 else macro_exec_row2
+            if index < 3:
+                parent = macro_exec_row1
+            elif index < 6:
+                parent = macro_exec_row2
+            else:
+                parent = macro_exec_row3
             button = make_button(
                 parent,
                 text=label,
@@ -1247,6 +1271,8 @@ class _SharedState:
         self.config = _load_controller_config()
         self.scheduler_thread: Optional[threading.Thread] = None
         self.scheduler_stop = threading.Event()
+        self.command_server = None
+        self.command_server_thread: Optional[threading.Thread] = None
         self.last_schedule_run: dict[str, str] = {}
         self.warned_schedule: set[str] = set()
         self.history_version = 0
@@ -1256,6 +1282,61 @@ class _SharedState:
         if self.window is None:
             self.window = _ControlWindow(self)
         self.ensure_scheduler()
+        self.ensure_command_server()
+
+    def ensure_command_server(self):
+        if self.command_server_thread is not None:
+            return
+
+        state = self
+
+        class AutomusCommandHandler(BaseHTTPRequestHandler):
+            def log_message(self, format, *args):
+                return
+
+            def _send(self, status: int, payload: dict):
+                raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+            def do_OPTIONS(self):
+                self._send(200, {"ok": True})
+
+            def do_GET(self):
+                self._handle()
+
+            def do_POST(self):
+                self._handle()
+
+            def _handle(self):
+                path = self.path.split("?", 1)[0].rstrip("/")
+                if path in ("", "/status"):
+                    self._send(200, {"ok": True, "app": APP_DISPLAY_NAME, "running": state.automation_running})
+                    return
+                if path == "/executar-tudo":
+                    state.run_executar_tudo(origem="sistema", usuario="Dark-Jutsu")
+                    self._send(200, {"ok": True, "message": "executar_tudo iniciado"})
+                    return
+                self._send(404, {"ok": False, "error": "comando desconhecido"})
+
+        try:
+            server = HTTPServer((LOCAL_COMMAND_HOST, LOCAL_COMMAND_PORT), AutomusCommandHandler)
+            self.command_server = server
+            self.command_server_thread = threading.Thread(
+                target=server.serve_forever,
+                name="automus-local-command-server",
+                daemon=True,
+            )
+            self.command_server_thread.start()
+            emit_status(f"Comando local ativo em http://{LOCAL_COMMAND_HOST}:{LOCAL_COMMAND_PORT}.")
+        except OSError as exc:
+            emit_status(f"Comando local do Automus indisponível: {exc}", level="WARNING")
 
     def login_admin(self, login: str, senha: str) -> dict:
         admin = _auth_admin_dark_jutsu(login, senha)
@@ -1340,6 +1421,8 @@ class _SharedState:
         for offset in range(0, 8):
             day = now.date() + timedelta(days=offset)
             if freq == "a_cada_2_dias" and ((day - start_date).days % 2) != 0:
+                continue
+            if freq == "segunda_a_sexta" and day.weekday() >= 5:
                 continue
             for horario in horarios:
                 try:
@@ -1464,6 +1547,9 @@ class _SharedState:
         freq_map = {
             "todos os dias": "todos_os_dias",
             "todos_os_dias": "todos_os_dias",
+            "segunda a sexta": "segunda_a_sexta",
+            "segunda_a_sexta": "segunda_a_sexta",
+            "seg a sex": "segunda_a_sexta",
             "a cada 2 dias": "a_cada_2_dias",
             "a_cada_2_dias": "a_cada_2_dias",
         }
@@ -1510,7 +1596,11 @@ class _SharedState:
                 "usuario": admin.get("nickname") or admin.get("email") or key,
             }
         _save_controller_config(self.config)
-        freq_txt = "todos os dias" if freq == "todos_os_dias" else "a cada 2 dias"
+        freq_txt = {
+            "todos_os_dias": "todos os dias",
+            "segunda_a_sexta": "segunda a sexta",
+            "a_cada_2_dias": "a cada 2 dias",
+        }.get(freq, freq)
         emit_status(f"Agendamento salvo: {freq_txt}, {vezes} vez(es) por dia, horários {', '.join(normalizados)}.")
 
     def set_startup(self, enabled: bool):
@@ -1552,6 +1642,8 @@ class _SharedState:
                         except Exception:
                             start_dt = now.date()
                         should_run_today = ((now.date() - start_dt).days % 2) == 0
+                    elif cfg.get("frequencia") == "segunda_a_sexta":
+                        should_run_today = now.weekday() < 5
 
                     next_dt = self._next_for_config(cfg, now - timedelta(seconds=1))
                     if next_dt is not None:

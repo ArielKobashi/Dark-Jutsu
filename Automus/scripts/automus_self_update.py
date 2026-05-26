@@ -165,6 +165,7 @@ def install_downloaded_update(new_exe: Path) -> None:
     helper = new_exe.parent / "instalar_automus_update.bat"
     pid = os.getpid()
     current_dir = current_exe.parent
+    desktop_exe = Path.home() / "Desktop" / "Automus.exe"
     helper.write_text(
         "@echo off\r\n"
         "setlocal\r\n"
@@ -172,9 +173,9 @@ def install_downloaded_update(new_exe: Path) -> None:
         f'set "NEW_EXE={new_exe}"\r\n'
         f'set "CURRENT_EXE={current_exe}"\r\n'
         f'set "CURRENT_DIR={current_dir}"\r\n'
+        f'set "DESKTOP_EXE={desktop_exe}"\r\n'
         f'set "PID={pid}"\r\n'
         'set "AUTOMUS_RUNTIME_TEMP=%CURRENT_DIR%\\AutomusData\\RuntimeTemp"\r\n'
-        "echo Atualizando Automus. Aguarde...\r\n"
         ":wait_process\r\n"
         'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul\r\n'
         "if not errorlevel 1 (\r\n"
@@ -189,21 +190,22 @@ def install_downloaded_update(new_exe: Path) -> None:
         'copy /Y "%NEW_EXE%" "%CURRENT_EXE%" >nul 2>nul\r\n'
         "if not errorlevel 1 goto start_app\r\n"
         "if %TRY% GEQ 30 goto fail\r\n"
-        "echo Aguardando o Windows liberar o Automus.exe... tentativa %TRY%/30\r\n"
         "timeout /t 1 /nobreak >nul\r\n"
         "goto copy_retry\r\n"
         ":start_app\r\n"
-        "echo.\r\n"
-        "echo Atualizacao concluida com sucesso.\r\n"
-        "echo Abra o Automus novamente pelo atalho ou pelo Automus.exe atualizado.\r\n"
-        "timeout /t 5 /nobreak >nul\r\n"
+        'if exist "%DESKTOP_EXE%" (\r\n'
+        '  start "" "%DESKTOP_EXE%"\r\n'
+        ") else (\r\n"
+        '  start "" "%CURRENT_EXE%"\r\n'
+        ")\r\n"
+        'del "%~f0" >nul 2>nul\r\n'
         "exit /b 0\r\n"
         ":fail\r\n"
-        "echo.\r\n"
-        "echo Nao foi possivel substituir o Automus.exe.\r\n"
-        "echo Feche qualquer Automus aberto e tente novamente.\r\n"
-        "pause\r\n"
+        'del "%~f0" >nul 2>nul\r\n'
         "exit /b 1\r\n",
         encoding="utf-8",
     )
-    subprocess.Popen(["cmd", "/c", "start", "", str(helper)], shell=False)
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    subprocess.Popen(["cmd.exe", "/c", str(helper)], shell=False, creationflags=creationflags)
