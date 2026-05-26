@@ -184,6 +184,7 @@ def install_downloaded_update(new_exe: Path) -> None:
     pid = os.getpid()
     current_dir = current_exe.parent
     desktop_exe = Path.home() / "Desktop" / "Automus.exe"
+    auto_reopen = os.environ.get("AUTOMUS_REABRIR_APOS_UPDATE", "").strip() == "1"
     helper.write_text(
         "@echo off\r\n"
         "setlocal\r\n"
@@ -193,6 +194,7 @@ def install_downloaded_update(new_exe: Path) -> None:
         f'set "CURRENT_DIR={current_dir}"\r\n'
         f'set "DESKTOP_EXE={desktop_exe}"\r\n'
         f'set "PID={pid}"\r\n'
+        f'set "AUTO_REOPEN={"1" if auto_reopen else "0"}"\r\n'
         'set "AUTOMUS_RUNTIME_TEMP=%CURRENT_DIR%\\AutomusData\\RuntimeTemp"\r\n'
         "echo Atualizando Automus. Aguarde...\r\n"
         "echo Novo EXE: %NEW_EXE%\r\n"
@@ -218,7 +220,10 @@ def install_downloaded_update(new_exe: Path) -> None:
         "timeout /t 1 /nobreak >nul\r\n"
         "goto copy_retry\r\n"
         ":start_app\r\n"
-        "echo Atualizacao concluida. Abrindo Automus...\r\n"
+        "echo Atualizacao concluida.\r\n"
+        'if not "%AUTO_REOPEN%"=="1" goto done\r\n'
+        "echo Tentando abrir Automus em alguns segundos...\r\n"
+        "timeout /t 10 /nobreak >nul\r\n"
         'if exist "%DESKTOP_EXE%" (\r\n'
         '  echo Abrindo "%DESKTOP_EXE%"\r\n'
         '  start "" "%DESKTOP_EXE%"\r\n'
@@ -226,8 +231,11 @@ def install_downloaded_update(new_exe: Path) -> None:
         '  echo Abrindo "%CURRENT_EXE%"\r\n'
         '  start "" "%CURRENT_EXE%"\r\n'
         ")\r\n"
+        "goto done\r\n"
+        ":done\r\n"
         "echo.\r\n"
-        "echo Pronto. Esta janela vai fechar em 8 segundos.\r\n"
+        "echo Pronto. Se o Automus nao abriu sozinho, abra pelo Automus.exe da Area de Trabalho.\r\n"
+        "echo Esta janela vai fechar em 8 segundos.\r\n"
         "timeout /t 8 /nobreak >nul\r\n"
         "exit /b 0\r\n"
         ":fail\r\n"

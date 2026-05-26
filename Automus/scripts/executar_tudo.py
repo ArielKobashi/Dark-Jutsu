@@ -18,6 +18,8 @@ from controladordeatualização import (
     validate_macro_comment_sequence,
 )
 
+ATUALIZACAO_NIVEL_2_ATIVA = False
+
 
 def carregar_macro(path: Path):
     spec = importlib.util.spec_from_file_location(path.stem, path)
@@ -304,10 +306,13 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
             base / "macro_003.py",
             base / "macro_004.py",
             base / "macro_005.py",
-            base / "macro_007.py",
-            base / "macro_008.py",
-            base / "macro_009.py",
         ]
+        if ATUALIZACAO_NIVEL_2_ATIVA:
+            macros.extend([
+                base / "macro_007.py",
+                base / "macro_008.py",
+                base / "macro_009.py",
+            ])
 
     logger = configurar_logger(base / "executar_tudo.log")
     controller = ExecutionController()
@@ -324,9 +329,11 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
         time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(started_at_epoch)),
     )
     logger.info(
-        "Fluxo esperado: macros 003/004/005/007/008/009 salvam as planilhas; "
-        "apos a macro 009, Automus envia direto ao Firebase (sem mexer na sessao aberta do sistema)."
+        "Fluxo esperado: macros 003/004/005 salvam as planilhas; "
+        "apos a macro 005, Automus envia a atualizacao nivel 1 direto ao Firebase."
     )
+    if not ATUALIZACAO_NIVEL_2_ATIVA:
+        logger.info("Atualizacao nivel 2 temporariamente desativada: macros 007/008/009 nao serao executadas.")
 
     for macro in macros:
         controller.poll_keypress()
@@ -376,15 +383,18 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
                         ("mata105", "mata225", "mata226"),
                     )
                     logger.info(
-                        "CONFIRMACAO: primeira parte enviada. Continuando para macro_007/macro_008/macro_009."
+                        "CONFIRMACAO: atualizacao nivel 1 enviada."
                     )
+                    if not ATUALIZACAO_NIVEL_2_ATIVA:
+                        logger.info("CONFIRMACAO: fluxo encerrado apos nivel 1 porque o nivel 2 esta desativado.")
+                        break
                 except Exception as exc:
                     logger.exception("Falha no envio da primeira parte apos macro_005: %s", exc)
                     logger.error("Automacao encerrada com erro.")
                     failed = True
                     break
 
-            if macro.name.lower() == "macro_009.py":
+            if macro.name.lower() == "macro_009.py" and ATUALIZACAO_NIVEL_2_ATIVA:
                 try:
                     logger.info(
                         "CONFIRMACAO: segunda parte concluida. Enviando pedido/compra/enderecamento ao Firebase."

@@ -554,7 +554,8 @@ def _build_items(
             continue
         minimo = _optional_limit_num(row[6] if len(row) > 6 else None)
         maximo = _optional_limit_num(row[7] if len(row) > 7 else None)
-        reposicao = _reposicao_media(minimo, maximo)
+        reposicao_planilha = _optional_limit_num(row[8] if len(row) > 8 else None)
+        reposicao = reposicao_planilha if reposicao_planilha is not None else _reposicao_media(minimo, maximo)
         if minimo is None and maximo is None and reposicao is None:
             continue
         estoque_minimo_idx[cooperat_cod] = {
@@ -622,31 +623,55 @@ def _build_items(
 
         estoque_minimo_item = estoque_minimo_idx.get(cooperat_cod)
         if estoque_minimo_item:
+            item["limitesCooperat"] = {
+                "minimo": estoque_minimo_item.get("minimo"),
+                "maximo": estoque_minimo_item.get("maximo"),
+                "reposicao": estoque_minimo_item.get("reposicao"),
+            }
             if estoque_minimo_item.get("temLinha"):
                 item["minimo"] = estoque_minimo_item["minimo"]
                 item["maximo"] = estoque_minimo_item["maximo"]
+                item["minimoOrigem"] = "cooperat"
+                item["maximoOrigem"] = "cooperat"
+                item["reposicaoOrigem"] = "cooperat"
+                item["limitesOrigem"] = "cooperat"
             if estoque_minimo_item.get("reposicao") is not None:
                 item["reposicao"] = estoque_minimo_item["reposicao"]
 
         anterior = prev_by_protheus.get(protheus) or prev_by_cooperat.get(cooperat_cod)
         if anterior:
+            if not item.get("limitesCooperat") and isinstance(anterior.get("limitesCooperat"), dict):
+                item["limitesCooperat"] = anterior.get("limitesCooperat")
             if item.get("minimo") is None and anterior.get("minimo") is not None:
                 item["minimo"] = anterior.get("minimo")
+                item["minimoOrigem"] = anterior.get("minimoOrigem") or anterior.get("limitesOrigem") or "anterior"
             if item.get("maximo") is None and anterior.get("maximo") is not None:
                 item["maximo"] = anterior.get("maximo")
+                item["maximoOrigem"] = anterior.get("maximoOrigem") or anterior.get("limitesOrigem") or "anterior"
+            if not item.get("limitesOrigem"):
+                item["limitesOrigem"] = anterior.get("limitesOrigem") or "anterior"
+            if not item.get("reposicaoOrigem"):
+                item["reposicaoOrigem"] = anterior.get("reposicaoOrigem") or item.get("limitesOrigem")
 
         ajuste = (ajustes_itens or {}).get(_ajuste_key(protheus))
         if isinstance(ajuste, dict):
             if "minimo" in ajuste:
                 item["minimo"] = _optional_limit_num(ajuste.get("minimo"))
+                item["minimoOrigem"] = "manual"
             if "maximo" in ajuste:
                 item["maximo"] = _optional_limit_num(ajuste.get("maximo"))
+                item["maximoOrigem"] = "manual"
+            item["limitesOrigem"] = "manual"
 
-        reposicao_final = _reposicao_media(item.get("minimo"), item.get("maximo"))
+        reposicao_cooperat = None
+        if item.get("limitesOrigem") == "cooperat" and isinstance(item.get("limitesCooperat"), dict):
+            reposicao_cooperat = _optional_limit_num(item["limitesCooperat"].get("reposicao"))
+        reposicao_final = reposicao_cooperat if reposicao_cooperat is not None else _reposicao_media(item.get("minimo"), item.get("maximo"))
         if reposicao_final is None:
             item.pop("reposicao", None)
         else:
             item["reposicao"] = reposicao_final
+            item["reposicaoOrigem"] = item.get("limitesOrigem") or item.get("reposicaoOrigem") or "calculada"
 
         novos.append(item)
 

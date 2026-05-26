@@ -993,16 +993,24 @@ function aplicarReposicaoCalculada(item){
     if(pedido?.mediaPedido){
         if(item.minimo === undefined || item.minimo === null || item.minimo === ""){
             item.minimo = Math.max(1, Math.round(pedido.mediaPedido));
+            item.minimoOrigem = "automatico";
+            item.limitesOrigem = item.limitesOrigem || "automatico";
         }
         if(item.maximo === undefined || item.maximo === null || item.maximo === ""){
             item.maximo = Math.max(1, Math.round(pedido.mediaPedido * 2));
+            item.maximoOrigem = "automatico";
+            item.limitesOrigem = item.limitesOrigem || "automatico";
         }
     }
-    const reposicao = calcularReposicaoMedia(item.minimo, item.maximo);
+    const reposicaoCooperat = item.limitesOrigem === "cooperat"
+        ? parseLimiteEstoque(item.limitesCooperat?.reposicao)
+        : null;
+    const reposicao = reposicaoCooperat !== null ? reposicaoCooperat : calcularReposicaoMedia(item.minimo, item.maximo);
     if(reposicao === null){
         delete item.reposicao;
     }else{
         item.reposicao = reposicao;
+        item.reposicaoOrigem = item.limitesOrigem || item.reposicaoOrigem || "calculada";
     }
     return item;
 }
@@ -1011,8 +1019,15 @@ function aplicarAjusteManualItem(item){
     if(!item) return item;
     const ajuste = ajustesItensEstoque?.[chaveAjusteItem(item)];
     if(ajuste){
-        if(ajuste.minimo !== undefined) item.minimo = ajuste.minimo;
-        if(ajuste.maximo !== undefined) item.maximo = ajuste.maximo;
+        if(ajuste.minimo !== undefined){
+            item.minimo = ajuste.minimo;
+            item.minimoOrigem = "manual";
+        }
+        if(ajuste.maximo !== undefined){
+            item.maximo = ajuste.maximo;
+            item.maximoOrigem = "manual";
+        }
+        item.limitesOrigem = "manual";
     }
     return aplicarReposicaoCalculada(item);
 }
@@ -1146,7 +1161,8 @@ function indexarEstoqueMinimoItens(planilha){
 
         const minimo = parseLimiteEstoque(row[6]);
         const maximo = parseLimiteEstoque(row[7]);
-        const reposicao = calcularReposicaoMedia(minimo, maximo);
+        const reposicaoPlanilha = parseLimiteEstoque(row[8]);
+        const reposicao = reposicaoPlanilha !== null ? reposicaoPlanilha : calcularReposicaoMedia(minimo, maximo);
 
         if(minimo === null && maximo === null && reposicao === null) continue;
 
@@ -1179,20 +1195,36 @@ function enriquecerItensComEstoqueMinimo(lista, anteriores){
         const extra = mapa.get(codigo);
         const anterior = mapaAnteriores.get(codigo);
         if(extra){
+            novo.limitesCooperat = {
+                minimo: extra.minimo,
+                maximo: extra.maximo,
+                reposicao: extra.reposicao
+            };
             if(extra.temLinha){
                 novo.minimo = extra.minimo;
                 novo.maximo = extra.maximo;
                 novo.reposicao = extra.reposicao;
+                novo.minimoOrigem = "cooperat";
+                novo.maximoOrigem = "cooperat";
+                novo.reposicaoOrigem = "cooperat";
+                novo.limitesOrigem = "cooperat";
             }
         }
 
         if(anterior){
+            if(!novo.limitesCooperat && anterior.limitesCooperat){
+                novo.limitesCooperat = anterior.limitesCooperat;
+            }
             if((novo.minimo === undefined || novo.minimo === null || novo.minimo === "") && anterior.minimo !== undefined && anterior.minimo !== null){
                 novo.minimo = anterior.minimo;
+                novo.minimoOrigem = anterior.minimoOrigem || anterior.limitesOrigem || "anterior";
             }
             if((novo.maximo === undefined || novo.maximo === null || novo.maximo === "") && anterior.maximo !== undefined && anterior.maximo !== null){
                 novo.maximo = anterior.maximo;
+                novo.maximoOrigem = anterior.maximoOrigem || anterior.limitesOrigem || "anterior";
             }
+            novo.limitesOrigem = novo.limitesOrigem || anterior.limitesOrigem || "anterior";
+            novo.reposicaoOrigem = novo.reposicaoOrigem || anterior.reposicaoOrigem || novo.limitesOrigem;
         }
 
         return aplicarAjusteManualItem(novo);
@@ -4785,8 +4817,33 @@ function abrirModalSaldos(item){
         const maximoValor = parseLimiteEstoque(itemSeguro.maximo);
         const temMinimo = minimoValor !== null;
         const temMaximo = maximoValor !== null;
-        const reposicaoValor = calcularReposicaoMedia(minimoValor, maximoValor);
+        const reposicaoValor = parseLimiteEstoque(itemSeguro.reposicao) ?? calcularReposicaoMedia(minimoValor, maximoValor);
         const temFaixa = temMinimo || temMaximo;
+        const limitesCooperat = (itemSeguro.limitesCooperat && typeof itemSeguro.limitesCooperat === "object") ? itemSeguro.limitesCooperat : {};
+        const minimoCooperat = parseLimiteEstoque(limitesCooperat.minimo);
+        const maximoCooperat = parseLimiteEstoque(limitesCooperat.maximo);
+        const reposicaoCooperat = parseLimiteEstoque(limitesCooperat.reposicao);
+        const temLimiteCooperat = minimoCooperat !== null || maximoCooperat !== null;
+        const origemLimites = (itemSeguro.limitesOrigem || itemSeguro.minimoOrigem || itemSeguro.maximoOrigem || itemSeguro.reposicaoOrigem || "").toString();
+        const origemTexto = origemLimites === "automatico"
+            ? "Sugerido pelo Automus"
+            : origemLimites === "manual"
+                ? "Ajuste manual salvo"
+                : origemLimites === "cooperat"
+                    ? "Planilha Cooperat"
+                    : origemLimites === "anterior"
+                        ? "Mantido da atualização anterior"
+                        : "Não identificada";
+        const origemHelp = origemLimites === "automatico"
+            ? "O Automus criou estes limites com base na média de pedidos do item."
+            : origemLimites === "manual"
+                ? "Estes limites foram definidos no perfil do item e ficam salvos após atualizar."
+                : origemLimites === "cooperat"
+                    ? "Estes limites vieram da planilha inicial Cooperat."
+                    : origemLimites === "anterior"
+                        ? "Estes limites foram reaproveitados do cadastro anterior do sistema."
+                        : "Não encontrei metadados de origem para estes limites.";
+        const valorLimite = (valor, vazio) => valor === null ? vazio : formatarNumeroPlanilha(valor);
 
         const statusEstoque = saldoValor !== null && temMinimo && saldoValor < minimoValor
             ? "abaixo"
@@ -4854,9 +4911,9 @@ function abrirModalSaldos(item){
             { titulo: "Armazém principal", valor: itemSeguro.armazemPrincipal || "-", ajuda: "Primeiro armazém encontrado para o item", classe: "cardArmazem" },
             { titulo: "Endereço principal", valor: itemSeguro.enderecoPrincipal || "Sem endereço", ajuda: "Endereço mostrado na tabela principal", classe: "cardEndereco" },
             { titulo: "Saldo atual", valor: formatarNumeroPlanilha(itemSeguro.saldo), ajuda: "Saldo consolidado", classe: "cardSaldo" },
-            { titulo: "Mínimo", valor: temMinimo ? formatarNumeroPlanilha(minimoValor) : "Sem mínimo", ajuda: "Limite inferior da planilha", classe: "cardMinimo" },
-            { titulo: "Máximo", valor: temMaximo ? formatarNumeroPlanilha(maximoValor) : "Sem máximo", ajuda: "Limite superior da planilha", classe: "cardMaximo" },
-            { titulo: "Reposição", valor: reposicaoValor === null ? "Não informada" : formatarNumeroPlanilha(reposicaoValor), ajuda: "Quantidade sugerida para reposição", classe: "cardReposicao" },
+            { titulo: "Mínimo ativo", valor: valorLimite(minimoValor, "Sem mínimo"), ajuda: origemTexto, classe: `cardMinimo origem-${origemLimites || "indefinida"}` },
+            { titulo: "Máximo ativo", valor: valorLimite(maximoValor, "Sem máximo"), ajuda: origemTexto, classe: `cardMaximo origem-${origemLimites || "indefinida"}` },
+            { titulo: "Reposição ativa", valor: valorLimite(reposicaoValor, "Não informada"), ajuda: origemTexto, classe: `cardReposicao origem-${origemLimites || "indefinida"}` },
             { titulo: "Endereços", valor: String(listaEnderecos.length), ajuda: "Locais vinculados ao item", classe: "cardEnderecos" }
         ];
 
@@ -4897,6 +4954,19 @@ function abrirModalSaldos(item){
                 </article>
             `).join("")
             : `<div class="emptyState">Nenhuma entrada ou saída de saldo registrada para este item.</div>`;
+
+        const cooperatCards = [
+            { titulo: "Mínimo Cooperat", valor: valorLimite(minimoCooperat, "Não veio"), ajuda: "Valor original da planilha Cooperat", classe: "cardMinimo" },
+            { titulo: "Máximo Cooperat", valor: valorLimite(maximoCooperat, "Não veio"), ajuda: "Valor original da planilha Cooperat", classe: "cardMaximo" },
+            { titulo: "Reposição Cooperat", valor: valorLimite(reposicaoCooperat, "Não veio"), ajuda: "Média entre mínimo e máximo Cooperat", classe: "cardReposicao" }
+        ];
+        const cooperatHtml = cooperatCards.map(card => `
+            <article class="card ${card.classe}">
+                <span class="cardTitle">${esc(card.titulo)}</span>
+                <strong class="cardValue">${esc(card.valor)}</strong>
+                <span class="cardHelp">${esc(card.ajuda)}</span>
+            </article>
+        `).join("");
 
         const html = `<!doctype html>
 <html lang="pt-br">
@@ -5067,6 +5137,18 @@ function abrirModalSaldos(item){
         .cardMaximo{border-color:rgba(67,200,255,.22)}
         .cardReposicao{border-color:rgba(255,194,72,.18)}
         .cardEnderecos{border-color:rgba(58,214,122,.18)}
+        .origem-automatico{
+            background:linear-gradient(180deg, rgba(255,194,72,.17), rgba(255,255,255,.045));
+            border-color:rgba(255,194,72,.36);
+        }
+        .origem-manual{
+            background:linear-gradient(180deg, rgba(67,200,255,.15), rgba(255,255,255,.045));
+            border-color:rgba(67,200,255,.32);
+        }
+        .origem-cooperat{
+            background:linear-gradient(180deg, rgba(58,214,122,.12), rgba(255,255,255,.045));
+            border-color:rgba(58,214,122,.28);
+        }
         .cardTitle{
             display:block;
             font-size:11px;
@@ -5338,7 +5420,20 @@ function abrirModalSaldos(item){
             <div class="banner ${statusClasse}">
                 <div class="bannerTitle">Situação atual</div>
                 <div class="bannerValue">${esc(statusTexto)}</div>
-                <div class="bannerHelp">Quando mínimo ou máximo for 0 na planilha, o sistema trata como ausência de limite.</div>
+                <div class="bannerHelp">${esc(origemHelp)} Quando mínimo ou máximo for 0 na planilha, o sistema trata como ausência de limite.</div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="sectionHeader">
+                <div>
+                    <h2>Planilha Cooperat original</h2>
+                    <p>${temLimiteCooperat ? "Valores encontrados na planilha inicial antes de qualquer sugestão automática ou ajuste manual." : "Nenhum mínimo, máximo ou reposição veio da planilha Cooperat para este item."}</p>
+                </div>
+                <span class="countBadge">Origem Cooperat</span>
+            </div>
+            <div class="cardGrid">
+                ${cooperatHtml}
             </div>
         </section>
 
@@ -5346,7 +5441,7 @@ function abrirModalSaldos(item){
             <div class="sectionHeader">
                 <div>
                     <h2>Editar limites</h2>
-                    <p>Os valores salvos aqui ficam mantidos no sistema após novas atualizações. Reposição é calculada automaticamente pela média entre mínimo e máximo.</p>
+                    <p>Os valores salvos aqui ficam mantidos no sistema após novas atualizações e aparecem como ajuste manual. Reposição é calculada automaticamente pela média entre mínimo e máximo.</p>
                 </div>
             </div>
             <div class="editGrid">
