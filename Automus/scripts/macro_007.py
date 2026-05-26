@@ -1347,6 +1347,13 @@ def _parse_button(name):
 def _parse_key(value):
     if not value:
         return None
+    if isinstance(value, str) and value.startswith('<') and value.endswith('>'):
+        try:
+            code = int(value[1:-1])
+            if 96 <= code <= 105:
+                return str(code - 96)
+        except ValueError:
+            pass
     if isinstance(value, str) and value.startswith('Key.'):
         name = value.split('.', 1)[1]
         return getattr(keyboard.Key, name, value)
