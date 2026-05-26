@@ -484,6 +484,10 @@ Usuários do Sistema
           <input type="checkbox" id="ignoreSeparators" checked>
           <span>Ignorar Pontos/Traços</span>
       </label>
+      <label class="toggleItem">
+          <input type="checkbox" id="desativarSugestaoEstoque">
+          <span>Sem Sugestão Estoque</span>
+      </label>
           <label class="toggleItem">
               <input type="checkbox" id="mostrarDadosMortos">
               <span>Dados Mortos</span>
@@ -600,6 +604,7 @@ let visiveis = [];
 let ajustesItensEstoque = {};
 let historicoSaldoEstoque = {};
 let pedidosCompraEstado = {};
+let sugestaoAutomaticaEstoqueAtiva = localStorage.getItem("sugestaoAutomaticaEstoqueAtiva") !== "false";
 var privateRoomGateState = null;
 var salaAtual = window.salaAtual || "publica";
 var roomMessages = window.roomMessages || {};
@@ -989,6 +994,24 @@ function chaveAjusteItem(itemOrKey){
 
 function aplicarReposicaoCalculada(item){
     if(!item) return item;
+    if(!sugestaoAutomaticaEstoqueAtiva){
+        if(item.minimoOrigem === "automatico"){
+            delete item.minimo;
+            delete item.minimoOrigem;
+        }
+        if(item.maximoOrigem === "automatico"){
+            delete item.maximo;
+            delete item.maximoOrigem;
+        }
+        if(item.reposicaoOrigem === "automatico" || item.reposicaoOrigem === "calculada"){
+            delete item.reposicao;
+            delete item.reposicaoOrigem;
+        }
+        if(item.limitesOrigem === "automatico"){
+            delete item.limitesOrigem;
+        }
+        return item;
+    }
     const pedido = getPedidoCompraItem(item);
     if(pedido?.mediaPedido){
         if(item.minimo === undefined || item.minimo === null || item.minimo === ""){
@@ -1031,6 +1054,17 @@ function aplicarAjusteManualItem(item){
         item.limitesOrigem = "manual";
     }
     return aplicarReposicaoCalculada(item);
+}
+
+function configurarSugestaoAutomaticaEstoque(){
+    const input = document.getElementById("desativarSugestaoEstoque");
+    if(!input) return;
+    input.checked = !sugestaoAutomaticaEstoqueAtiva;
+    input.addEventListener("change", () => {
+        sugestaoAutomaticaEstoqueAtiva = !input.checked;
+        localStorage.setItem("sugestaoAutomaticaEstoqueAtiva", sugestaoAutomaticaEstoqueAtiva ? "true" : "false");
+        window.setDados(dados || []);
+    });
 }
 
 function obterStatusEstoque(item){
@@ -1449,6 +1483,8 @@ if(chkDadosMortos){
         aplicarTodosFiltros();
     });
 }
+
+configurarSugestaoAutomaticaEstoque();
 
 document
 .getElementById("btnFecharAdmin")
