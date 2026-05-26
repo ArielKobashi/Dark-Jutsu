@@ -115,6 +115,51 @@ def _localizar_arquivo_mais_recente(
     return max(candidatos, key=lambda p: p.stat().st_mtime)
 
 
+def _mesmo_arquivo(origem: Path, destino: Path) -> bool:
+    try:
+        return destino.exists() and os.path.samefile(origem, destino)
+    except OSError:
+        return False
+
+
+def _copiar_planilha_com_retentativas(
+    logger: logging.Logger,
+    origem: Path,
+    destino: Path,
+    tentativas: int = 30,
+    espera: float = 1.5,
+) -> bool:
+    if _mesmo_arquivo(origem, destino):
+        return True
+
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    ultimo_erro: Exception | None = None
+
+    for tentativa in range(1, tentativas + 1):
+        try:
+            shutil.copy2(origem, destino)
+            return True
+        except PermissionError as exc:
+            ultimo_erro = exc
+        except OSError as exc:
+            ultimo_erro = exc
+            if getattr(exc, "winerror", None) not in {5, 32, 33}:
+                raise
+
+        if tentativa < tentativas:
+            logger.info(
+                "Planilha em uso, aguardando liberar: %s -> %s | tentativa %s/%s",
+                origem,
+                destino,
+                tentativa,
+                tentativas,
+            )
+            time.sleep(espera)
+
+    logger.error("Falha ao copiar planilha apos tentativas: %s -> %s | erro=%s", origem, destino, ultimo_erro)
+    return False
+
+
 def preparar_planilhas_para_importacao(
     logger: logging.Logger,
     base: Path,
@@ -181,7 +226,12 @@ def preparar_planilhas_para_importacao(
 
         for destino_base in pastas_destino:
             destino = destino_base / nome_destino
-            shutil.copy2(origem, destino)
+            copiado = _copiar_planilha_com_retentativas(logger, origem, destino)
+            if not copiado:
+                if destino_base == pastas_destino[0]:
+                    raise PermissionError(f"Arquivo em uso: {origem} -> {destino}")
+                logger.warning("Copia secundaria ignorada porque o arquivo esta em uso: %s", destino)
+                continue
             logger.info(
                 "Planilha preparada (nova): %s | mtime=%s -> %s",
                 origem.name,
