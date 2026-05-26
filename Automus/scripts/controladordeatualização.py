@@ -427,7 +427,6 @@ class _ControlWindow:
         login_entry.insert(0, "")
         senha_entry = tk.Entry(login_card, textvariable=senha_var, show="*", bg="#020617", fg=palette["text"], insertbackground=palette["text"], relief="flat", font=("Segoe UI", 11))
         senha_entry.pack(fill="x", padx=42, ipady=8, pady=(0, 12))
-
         main_frame = tk.Frame(root, bg=palette["bg"])
         update_status_var = tk.StringVar(value="")
 
@@ -473,6 +472,8 @@ class _ControlWindow:
                     f"Atual: {info.current_version}\n"
                     f"Nova: {info.latest_version}"
                 )
+                if info.current_version == info.latest_version:
+                    message += "\n\nA versão tem o mesmo número, mas o arquivo publicado é diferente."
                 if notes:
                     message += f"\n\nNotas:\n{notes}"
                 message += "\n\nBaixar, instalar e reiniciar agora?"

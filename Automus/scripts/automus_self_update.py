@@ -21,11 +21,17 @@ class UpdateInfo:
     package_url: str
     package_name: str
     sha256: str
+    current_sha256: str
     notes: list[str]
 
     @property
     def has_update(self) -> bool:
-        return _compare_versions(self.latest_version, self.current_version) > 0
+        version_compare = _compare_versions(self.latest_version, self.current_version)
+        if version_compare > 0:
+            return True
+        if version_compare == 0 and self.current_sha256 and self.sha256:
+            return self.current_sha256.lower() != self.sha256.lower()
+        return False
 
 
 def _version_parts(version: str) -> list[int]:
@@ -66,6 +72,17 @@ def get_manifest_firebase_path(script_dir: Path, bundled_script_dir: Path) -> st
     return str(data.get("updateManifestFirebasePath") or "").strip().strip("/")
 
 
+def _current_exe_sha256() -> str:
+    try:
+        if getattr(sys, "frozen", False):
+            exe = Path(sys.executable)
+            if exe.exists():
+                return _sha256(exe).lower()
+    except Exception:
+        pass
+    return ""
+
+
 def update_info_from_manifest(current_version: str, manifest: dict, manifest_source: str) -> UpdateInfo:
     latest_version = str(manifest.get("version") or "").strip()
     package_name = str(manifest.get("package") or "Automus.zip").strip()
@@ -89,6 +106,7 @@ def update_info_from_manifest(current_version: str, manifest: dict, manifest_sou
         package_url=package_url,
         package_name=package_name,
         sha256=checksum,
+        current_sha256=_current_exe_sha256(),
         notes=[str(note) for note in notes],
     )
 
@@ -176,7 +194,12 @@ def install_downloaded_update(new_exe: Path) -> None:
         f'set "DESKTOP_EXE={desktop_exe}"\r\n'
         f'set "PID={pid}"\r\n'
         'set "AUTOMUS_RUNTIME_TEMP=%CURRENT_DIR%\\AutomusData\\RuntimeTemp"\r\n'
+        "echo Atualizando Automus. Aguarde...\r\n"
+        "echo Novo EXE: %NEW_EXE%\r\n"
+        "echo EXE atual: %CURRENT_EXE%\r\n"
+        "echo EXE area de trabalho: %DESKTOP_EXE%\r\n"
         ":wait_process\r\n"
+        "echo Aguardando Automus atual encerrar...\r\n"
         'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul\r\n'
         "if not errorlevel 1 (\r\n"
         "  timeout /t 1 /nobreak >nul\r\n"
@@ -187,25 +210,32 @@ def install_downloaded_update(new_exe: Path) -> None:
         "set /a TRY=0\r\n"
         ":copy_retry\r\n"
         "set /a TRY+=1\r\n"
+        "echo Copiando Automus.exe... tentativa %TRY%/30\r\n"
         'copy /Y "%NEW_EXE%" "%CURRENT_EXE%" >nul 2>nul\r\n'
         "if not errorlevel 1 goto start_app\r\n"
         "if %TRY% GEQ 30 goto fail\r\n"
+        "echo Aguardando o Windows liberar o Automus.exe...\r\n"
         "timeout /t 1 /nobreak >nul\r\n"
         "goto copy_retry\r\n"
         ":start_app\r\n"
+        "echo Atualizacao concluida. Abrindo Automus...\r\n"
         'if exist "%DESKTOP_EXE%" (\r\n'
+        '  echo Abrindo "%DESKTOP_EXE%"\r\n'
         '  start "" "%DESKTOP_EXE%"\r\n'
         ") else (\r\n"
+        '  echo Abrindo "%CURRENT_EXE%"\r\n'
         '  start "" "%CURRENT_EXE%"\r\n'
         ")\r\n"
-        'del "%~f0" >nul 2>nul\r\n'
+        "echo.\r\n"
+        "echo Pronto. Esta janela vai fechar em 8 segundos.\r\n"
+        "timeout /t 8 /nobreak >nul\r\n"
         "exit /b 0\r\n"
         ":fail\r\n"
-        'del "%~f0" >nul 2>nul\r\n'
+        "echo.\r\n"
+        "echo ERRO: nao foi possivel substituir o Automus.exe.\r\n"
+        "echo Feche qualquer Automus aberto e tente atualizar novamente.\r\n"
+        "pause\r\n"
         "exit /b 1\r\n",
         encoding="utf-8",
     )
-    creationflags = 0
-    if os.name == "nt":
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
-    subprocess.Popen(["cmd.exe", "/c", str(helper)], shell=False, creationflags=creationflags)
+    subprocess.Popen(["cmd.exe", "/c", "start", "Atualizando Automus", str(helper)], shell=False)

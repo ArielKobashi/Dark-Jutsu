@@ -9,7 +9,14 @@ import time
 from pathlib import Path
 
 from atualizacao.automus_update import run_automus_update
-from controladordeatualização import ExecutionController, StopRequested, push_status, validate_macro_comment_sequence
+from controladordeatualização import (
+    ExecutionController,
+    StopRequested,
+    handle_custom_event,
+    push_status,
+    sleep_with_controls,
+    validate_macro_comment_sequence,
+)
 
 
 def carregar_macro(path: Path):
@@ -27,6 +34,29 @@ def executar_macro(path: Path):
         mod.play()
     else:
         raise RuntimeError(f"{path.name} nao possui funcao play()")
+
+
+def preparar_transicao_macro(logger: logging.Logger, controller: ExecutionController, macro: Path):
+    nome = macro.name.lower()
+    if nome not in {"macro_007.py", "macro_008.py", "macro_009.py"}:
+        return
+
+    espera = 8.0 if nome == "macro_007.py" else 2.5
+    logger.info("Preparando transicao para %s: aguardando %.1fs e refocando TOTVS.", macro.name, espera)
+    if not sleep_with_controls(espera, controller):
+        raise StopRequested(controller.get_stop_message())
+    handle_custom_event(
+        "focus_totvs_window",
+        {
+            "titles": ["TOTVS SmartClient HTML", "TOTVS Manufatura"],
+            "timeout": 15,
+            "interval": 0.2,
+            "post_wait": 1.0,
+            "error_on_timeout": False,
+            "label": f"transicao {macro.name} foco TOTVS",
+        },
+        controller,
+    )
 
 
 class MacroPanelLogHandler(logging.Handler):
@@ -90,8 +120,10 @@ def preparar_planilhas_para_importacao(
     base: Path,
     started_at_epoch: float,
     project_root: Path | None = None,
+    required_codes: tuple[str, ...] = ("mata105", "mata225", "mata226", "mata110", "mata111", "mata112"),
 ) -> dict[str, bool]:
     project_root = project_root or base.parent
+    required = set(required_codes)
     mapeamento = [
         ("mata105", "incluir.xlsx"),
         ("mata225", "Saldo Atual.xlsx"),
@@ -132,7 +164,7 @@ def preparar_planilhas_para_importacao(
                 break
 
         if origem is None:
-            if codigo == "estoque_minimo":
+            if codigo == "estoque_minimo" or codigo not in required:
                 logger.info(
                     "Planilha opcional nao localizada para %s em %s.",
                     codigo,
@@ -174,6 +206,39 @@ def enviar_atualizacao_automus(logger: logging.Logger, base: Path, automus_auth:
         auth_email=(automus_auth or {}).get("email") or (automus_auth or {}).get("nickname"),
     )
     logger.info("AUTOMUS: envio concluido com sucesso.")
+
+
+def preparar_e_enviar_etapa(
+    logger: logging.Logger,
+    base: Path,
+    started_at_epoch: float,
+    project_root: Path,
+    automus_auth: dict | None,
+    etapa: str,
+    required_codes: tuple[str, ...],
+) -> None:
+    mapa = preparar_planilhas_para_importacao(
+        logger,
+        base,
+        started_at_epoch,
+        project_root=project_root,
+        required_codes=required_codes,
+    )
+    logger.info(
+        "CONFIRMACAO: preparo planilhas %s | mata105=%s | mata225=%s | mata226=%s | mata110=%s | mata111=%s | mata112=%s",
+        etapa,
+        "OK" if mapa.get("mata105") else "FALHOU",
+        "OK" if mapa.get("mata225") else "FALHOU",
+        "OK" if mapa.get("mata226") else "FALHOU",
+        "OK" if mapa.get("mata110") else "FALHOU",
+        "OK" if mapa.get("mata111") else "FALHOU",
+        "OK" if mapa.get("mata112") else "FALHOU",
+    )
+    if not all(mapa.get(cod, False) for cod in required_codes):
+        faltando = ", ".join(cod for cod in required_codes if not mapa.get(cod, False))
+        raise RuntimeError(f"Validacao forte falhou na {etapa}: planilhas obrigatorias ausentes: {faltando}.")
+    enviar_atualizacao_automus(logger, base, automus_auth=automus_auth, project_root=project_root)
+    logger.info("CONFIRMACAO: envio Firebase via Automus concluido na %s.", etapa)
 
 def main(macro_ref: str | None = None, automus_auth: dict | None = None):
     base = Path(os.environ.get("AUTOMUS_BUNDLED_SCRIPT_DIR") or Path(__file__).resolve().parent)
@@ -231,6 +296,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
             validate_macro_comment_sequence(macro)
         except RuntimeError as exc:
             logger.warning("Validacao de comentarios ignorada em %s: %s", macro.name, exc)
+        preparar_transicao_macro(logger, controller, macro)
         logger.info("Iniciando etapa: %s", macro.name)
 
         try:
@@ -245,31 +311,45 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
             break
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
-            if macro.name.lower() == "macro_009.py":
+            if macro.name.lower() == "macro_005.py":
                 try:
-                    mapa = preparar_planilhas_para_importacao(logger, base, started_at_epoch, project_root=project_root)
                     logger.info(
-                        "CONFIRMACAO: preparo planilhas apos macro final | mata105=%s | mata225=%s | mata226=%s | mata110=%s | mata111=%s | mata112=%s",
-                        "OK" if mapa.get("mata105") else "FALHOU",
-                        "OK" if mapa.get("mata225") else "FALHOU",
-                        "OK" if mapa.get("mata226") else "FALHOU",
-                        "OK" if mapa.get("mata110") else "FALHOU",
-                        "OK" if mapa.get("mata111") else "FALHOU",
-                        "OK" if mapa.get("mata112") else "FALHOU",
+                        "CONFIRMACAO: primeira parte concluida. Enviando mata105/mata225/mata226 ao Firebase antes de continuar."
                     )
-                    if not all(mapa.get(cod, False) for cod in ("mata105", "mata225", "mata226", "mata110", "mata111", "mata112")):
-                        raise RuntimeError(
-                            "Validacao forte falhou: nem todas as planilhas novas da execucao atual foram encontradas."
-                        )
-                    logger.info(
-                        "CONFIRMACAO: macro final de extracao concluida. Preparo final executado apos as macros."
+                    preparar_e_enviar_etapa(
+                        logger,
+                        base,
+                        started_at_epoch,
+                        project_root,
+                        automus_auth,
+                        "primeira parte apos macro_005",
+                        ("mata105", "mata225", "mata226"),
                     )
-                    enviar_atualizacao_automus(logger, base, automus_auth=automus_auth, project_root=project_root)
                     logger.info(
-                        "CONFIRMACAO: envio Firebase via Automus executado apos a macro_009 (sem automacao de navegador)."
+                        "CONFIRMACAO: primeira parte enviada. Continuando para macro_007/macro_008/macro_009."
                     )
                 except Exception as exc:
-                    logger.exception("Falha no pos-processamento apos macro_009: %s", exc)
+                    logger.exception("Falha no envio da primeira parte apos macro_005: %s", exc)
+                    logger.error("Automacao encerrada com erro.")
+                    failed = True
+                    break
+
+            if macro.name.lower() == "macro_009.py":
+                try:
+                    logger.info(
+                        "CONFIRMACAO: segunda parte concluida. Enviando pedido/compra/enderecamento ao Firebase."
+                    )
+                    preparar_e_enviar_etapa(
+                        logger,
+                        base,
+                        started_at_epoch,
+                        project_root,
+                        automus_auth,
+                        "segunda parte apos macro_009",
+                        ("mata105", "mata225", "mata226", "mata110", "mata111", "mata112"),
+                    )
+                except Exception as exc:
+                    logger.exception("Falha no envio da segunda parte apos macro_009: %s", exc)
                     logger.error("Automacao encerrada com erro.")
                     failed = True
                     break

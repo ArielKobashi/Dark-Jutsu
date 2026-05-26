@@ -406,6 +406,33 @@ def _ascii_lower(value: Any) -> str:
     return normalized.encode("ascii", "ignore").decode("ascii")
 
 
+def _detect_incluir_columns(incluir: list[list[Any]]) -> dict[str, int]:
+    header = incluir[1] if len(incluir) > 1 else incluir[0] if incluir else []
+    cols = {"protheus": 1, "cooperat": 0, "descricao": 2, "inicio": 2}
+
+    for index, value in enumerate(header):
+        name = _ascii_lower(value)
+        if not name:
+            continue
+        is_codigo = name in {"codigo", "cod produto", "codigo produto"}
+        is_descricao = name in {"descricao", "descrição"}
+        is_referencia = "refer" in name or "antigo" in name or name == "cooperat"
+
+        if is_codigo:
+            cols["protheus"] = index
+        if is_descricao:
+            cols["descricao"] = index
+        if is_referencia:
+            cols["cooperat"] = index
+
+    if len(header) > 1 and _ascii_lower(header[0]) == "codigo" and _ascii_lower(header[1]) == "descricao":
+        cols["protheus"] = 0
+        cols["descricao"] = 1
+        cols["cooperat"] = 2
+
+    return cols
+
+
 def _is_descricao_dado_morto(value: Any) -> bool:
     desc = _ascii_lower(value)
     return "desativado" in desc or "bloqueado" in desc
@@ -549,13 +576,15 @@ def _build_items(
         if c and c not in prev_by_cooperat:
             prev_by_cooperat[c] = d
 
-    for row in incluir[2:]:
-        if len(row) < 3:
+    incluir_cols = _detect_incluir_columns(incluir)
+
+    for row in incluir[incluir_cols["inicio"]:]:
+        if len(row) <= incluir_cols["protheus"]:
             continue
 
-        protheus = _safe_text(row[1])
-        cooperat_cod = _safe_text(row[0])
-        descricao = _safe_text(row[2])
+        protheus = _safe_text(row[incluir_cols["protheus"]])
+        cooperat_cod = _safe_text(row[incluir_cols["cooperat"]] if len(row) > incluir_cols["cooperat"] else "")
+        descricao = _safe_text(row[incluir_cols["descricao"]] if len(row) > incluir_cols["descricao"] else "")
         if not protheus:
             continue
 

@@ -786,6 +786,7 @@ events = [
     (28.056023836135864, 'move', {'x': 915, 'y': 665}),  # 0781
     (28.720179796218872, 'click', {'x': 915, 'y': 665, 'button': 'left', 'pressed': True}),  # 0782
     (28.880064010620117, 'click', {'x': 915, 'y': 665, 'button': 'left', 'pressed': False}),  # 0783
+    (70.000000000000000, 'wait_any_screen_text', {'texts': ['Salvar como', 'Save As', 'Nome do arquivo', 'File name', 'Nome:', 'File name:'], 'timeout': 200, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_007 wait texto salvar'}),
     (70.81751132011414, 'key_down', {'key': 'm'}),  # 0784
     (70.98531603813171, 'key_down', {'key': 'a'}),  # 0785
     (70.99626302719116, 'key_up', {'key': 'm'}),  # 0786

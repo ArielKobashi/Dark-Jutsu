@@ -104,12 +104,12 @@
         <table>
             <colgroup>
                 <col style="width:18px">
+                <col style="width:86px">
+                <col style="width:72px">
+                <col style="width:58px">
                 <col>
-                <col>
-                <col>
-                <col>
-                <col>
-                <col style="width:75px">
+                <col style="width:128px">
+                <col style="width:68px">
             </colgroup>
 
             <thead>
@@ -5656,14 +5656,56 @@ function isMobileLayout(){
     return window.matchMedia("(max-width: 900px)").matches;
 }
 
+function normalizarCabecalhoPlanilha(valor){
+    return (valor ?? "")
+        .toString()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase();
+}
+
+function detectarColunasIncluir(basePlanilha){
+    const cabecalho = basePlanilha[1] || basePlanilha[0] || [];
+    let colunas = {
+        protheus: 1,
+        cooperat: 0,
+        descricao: 2,
+        inicio: 2
+    };
+
+    cabecalho.forEach((valor, indice) => {
+        const nome = normalizarCabecalhoPlanilha(valor);
+        if(!nome) return;
+        const ehCodigo = nome === "codigo" || nome === "cod produto" || nome === "codigo produto";
+        const ehDescricao = nome === "descricao" || nome === "descrição";
+        const ehReferencia = nome.includes("refer") || nome.includes("antigo") || nome === "cooperat";
+
+        if(ehCodigo) colunas.protheus = indice;
+        if(ehDescricao) colunas.descricao = indice;
+        if(ehReferencia) colunas.cooperat = indice;
+    });
+
+    const temNovoFormato = normalizarCabecalhoPlanilha(cabecalho[0]) === "codigo" &&
+        normalizarCabecalhoPlanilha(cabecalho[1]) === "descricao";
+    if(temNovoFormato){
+        colunas.protheus = 0;
+        colunas.descricao = 1;
+        colunas.cooperat = 2;
+    }
+
+    return colunas;
+}
+
 function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, marcarMorto){
     let novos = [];
+    const colunasIncluir = detectarColunasIncluir(basePlanilha);
 
-    for (let i = 2; i < basePlanilha.length; i++) {
+    for (let i = colunasIncluir.inicio; i < basePlanilha.length; i++) {
 
-        let protheus = basePlanilha[i][1];
-        let cooperatCod = basePlanilha[i][0] ?? "";
-        let descricao = basePlanilha[i][2] ?? "";
+        let protheus = basePlanilha[i][colunasIncluir.protheus];
+        let cooperatCod = basePlanilha[i][colunasIncluir.cooperat] ?? "";
+        let descricao = basePlanilha[i][colunasIncluir.descricao] ?? "";
 
         if (!protheus) continue;
 
