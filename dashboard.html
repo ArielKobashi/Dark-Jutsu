@@ -133,7 +133,7 @@
         }
         .filters{
             display:grid;
-            grid-template-columns:repeat(7, minmax(0, 1fr));
+            grid-template-columns:repeat(5, minmax(0, 1fr));
             gap:8px;
             margin-bottom:12px;
             padding:10px;
@@ -190,7 +190,39 @@
         tr:last-child td{border-bottom:0}
         .codigo{font-weight:800;color:#e2e8f0;white-space:nowrap}
         .descricao{min-width:280px}
+        .descricao{white-space:normal}
         .num{text-align:right;white-space:nowrap}
+        .vizGrid{
+            display:grid;
+            grid-template-columns:1.2fr .8fr;
+            gap:10px;
+            margin-bottom:12px;
+        }
+        .vizPanel{
+            background:rgba(21,21,29,.82);
+            border:1px solid rgba(122,60,255,.28);
+            border-radius:8px;
+            padding:12px;
+        }
+        .vizPanel h2{font-size:14px;margin:0 0 10px;color:#EDE9FE}
+        .bars{display:grid;gap:7px}
+        .barRow{display:grid;grid-template-columns:minmax(140px,1fr) 3fr auto;gap:8px;align-items:center;font-size:12px}
+        .barLabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dbe3ef}
+        .barTrack{height:10px;background:#1F1F2A;border-radius:999px;overflow:hidden;border:1px solid #2A2A35}
+        .barFill{height:100%;background:linear-gradient(90deg,#7A3CFF,#00D9FF)}
+        .pieWrap{display:flex;align-items:center;gap:14px}
+        .pie{
+            width:118px;
+            height:118px;
+            border-radius:50%;
+            background:conic-gradient(#ef4444 0 var(--abaixo), #22c55e var(--abaixo) var(--acima), #00D9FF var(--acima) 100%);
+            border:1px solid rgba(122,60,255,.35);
+            box-shadow:0 0 16px rgba(122,60,255,.18);
+            flex:0 0 auto;
+        }
+        .legend{display:grid;gap:6px;font-size:12px;color:var(--soft)}
+        .legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--c)}
+        .sectionTitle{font-size:15px;margin:16px 0 8px;color:#EDE9FE}
         .status{
             display:inline-flex;
             border-radius:999px;
@@ -212,6 +244,7 @@
             main{padding:14px}
             .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
             .filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+            .vizGrid{grid-template-columns:1fr}
             .card strong{font-size:22px}
             th,td{font-size:12px;padding:8px}
         }
@@ -257,6 +290,8 @@
         const root = document.getElementById("app");
         const btnAtualizar = document.getElementById("btnAtualizar");
         let estoqueMinimoCache = null;
+        let mata111Cache = null;
+        let mata112Cache = null;
 
         function parametroPermitido(valor, permitidos, padrao){
             return permitidos.includes(valor) ? valor : padrao;
@@ -266,12 +301,14 @@
         }
         const cfg = {
             titulo: params.get("titulo") || "Dashboard de Estoque",
+            ambiente: parametroPermitido((params.get("ambiente") || "estoque").toLowerCase(), ["estoque","movimentacao"], "estoque"),
             status: parametroPermitido((params.get("status") || "fora").toLowerCase(), ["todos","all","fora","abaixo","acima","ok","sem","sem-faixa"], "fora"),
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
+            suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
             origem: (params.get("origem") || "").toLowerCase(),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
             busca: (params.get("busca") || "").toLowerCase(),
-            limite: Math.max(1, Math.min(500, Number(params.get("limite") || 80) || 80)),
+            limite: Math.max(1, Math.min(50000, Number(params.get("limite") || 50000) || 50000)),
             ordenar: parametroPermitido((params.get("ordenar") || "reposicao").toLowerCase(), ["reposicao","saldo","descricao","codigo"], "reposicao"),
             direcao: parametroPermitido((params.get("direcao") || "desc").toLowerCase(), ["asc","desc"], "desc")
         };
@@ -303,6 +340,21 @@
         }
         function normalizarCodigo(valor){
             return String(valor ?? "").trim().toLowerCase();
+        }
+        function parseDataPlanilha(valor){
+            if(valor === null || valor === undefined || valor === "") return null;
+            if(typeof valor === "number"){
+                const parsed = XLSX?.SSF?.parse_date_code ? XLSX.SSF.parse_date_code(valor) : null;
+                if(parsed) return new Date(parsed.y, parsed.m - 1, parsed.d).getTime();
+            }
+            const texto = String(valor).trim();
+            const partes = texto.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+            if(partes){
+                const ano = Number(partes[3].length === 2 ? "20" + partes[3] : partes[3]);
+                return new Date(ano, Number(partes[2]) - 1, Number(partes[1])).getTime();
+            }
+            const data = new Date(texto);
+            return Number.isNaN(data.getTime()) ? null : data.getTime();
         }
         function ajusteKey(itemOrKey){
             const valor = typeof itemOrKey === "string" ? itemOrKey : key(itemOrKey);
@@ -352,6 +404,30 @@
             if(Array.isArray(valor)) return valor;
             if(valor && typeof valor === "object") return Object.values(valor);
             return [];
+        }
+        async function carregarPlanilhaDownload(nome){
+            try{
+                if(typeof XLSX === "undefined") return [];
+                const response = await fetch(`downloads/${nome}`, { cache: "no-store" });
+                if(!response.ok) return [];
+                const data = await response.arrayBuffer();
+                const workbook = XLSX.read(data, { type: "array" });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                return XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            }catch(err){
+                console.warn(`Nao foi possivel carregar ${nome}:`, err);
+                return [];
+            }
+        }
+        async function carregarMata111(){
+            if(mata111Cache) return mata111Cache;
+            mata111Cache = await carregarPlanilhaDownload("mata111.xlsx");
+            return mata111Cache;
+        }
+        async function carregarMata112(){
+            if(mata112Cache) return mata112Cache;
+            mata112Cache = await carregarPlanilhaDownload("mata112.xlsx");
+            return mata112Cache;
         }
         async function carregarEstoqueMinimo(){
             if(estoqueMinimoCache) return estoqueMinimoCache;
@@ -440,6 +516,77 @@
         function normalizarTexto(valor){
             return String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         }
+        function itemTemSuposicao(item){
+            const origem = origemItem(item);
+            return origem === "automatico" || origem === "calculada" || !!item?.sugestaoEstoque;
+        }
+        function calcularLeadTimes(mata111, mata112, dados){
+            const descPorCodigo = new Map();
+            dados.forEach(item => {
+                [item.protheus, item.cooperat, item.protheusKey].forEach(c => {
+                    const cod = normalizarCodigo(c);
+                    if(cod && !descPorCodigo.has(cod)) descPorCodigo.set(cod, item.descricao || "-");
+                });
+            });
+            const entradas = new Map();
+            (Array.isArray(mata112) ? mata112.slice(1) : []).forEach(row => {
+                const codigo = normalizarCodigo(row?.[0]);
+                const timestamp = parseDataPlanilha(row?.[12]);
+                if(!codigo || !timestamp) return;
+                if(!entradas.has(codigo)) entradas.set(codigo, []);
+                entradas.get(codigo).push({ timestamp, data: new Date(timestamp).toLocaleDateString("pt-BR"), qtd: num(row?.[3]) || 0 });
+            });
+            entradas.forEach(lista => lista.sort((a,b) => a.timestamp - b.timestamp));
+            return (Array.isArray(mata111) ? mata111.slice(1) : []).map(row => {
+                const codigo = normalizarCodigo(row?.[6]);
+                const pedidoTs = parseDataPlanilha(row?.[2]);
+                if(!codigo || !pedidoTs) return null;
+                const entrada = (entradas.get(codigo) || []).find(e => e.timestamp >= pedidoTs);
+                if(!entrada) return null;
+                const dias = Math.max(0, Math.round((entrada.timestamp - pedidoTs) / 86400000));
+                return {
+                    codigo,
+                    descricao: descPorCodigo.get(codigo) || "-",
+                    dataPedido: new Date(pedidoTs).toLocaleDateString("pt-BR"),
+                    dataEntrada: entrada.data,
+                    dias,
+                    quantidade: entrada.qtd || num(row?.[11]) || num(row?.[9]) || 0
+                };
+            }).filter(Boolean).sort((a,b) => b.dias - a.dias);
+        }
+        function eventosHistorico(banco, dados){
+            const itemPorChave = new Map();
+            dados.forEach(item => {
+                const chave = ajusteKey(key(item));
+                itemPorChave.set(chave, item);
+            });
+            const eventos = [];
+            Object.entries(banco?.historicoSaldo || {}).forEach(([chave, lista]) => {
+                const item = itemPorChave.get(chave) || {};
+                (Array.isArray(lista) ? lista : []).forEach(ev => {
+                    eventos.push({ ...ev, item, chave, timestamp: Number(ev.timestamp || 0) });
+                });
+            });
+            return eventos;
+        }
+        function faixaDiaAnterior(eventos){
+            const timestamps = eventos.map(e => e.timestamp).filter(Boolean);
+            const base = timestamps.length ? Math.max(...timestamps) : Date.now();
+            const d = new Date(base);
+            d.setHours(0,0,0,0);
+            const fim = d.getTime();
+            const inicio = fim - 86400000;
+            return { inicio, fim, label: new Date(inicio).toLocaleDateString("pt-BR") };
+        }
+        function calcularMovimentacaoDiaAnterior(banco, dados){
+            const eventos = eventosHistorico(banco, dados);
+            const faixa = faixaDiaAnterior(eventos);
+            const lista = eventos.filter(e => e.timestamp >= faixa.inicio && e.timestamp < faixa.fim);
+            const zeraram = lista.filter(e => (num(e.saldoAtual) || 0) === 0 && (num(e.saldoAnterior) || 0) > 0);
+            const entradas = lista.filter(e => Number(e.delta || 0) > 0);
+            const saidas = lista.filter(e => Number(e.delta || 0) < 0);
+            return { faixa, lista, zeraram, entradas, saidas };
+        }
         function passaStatus(status){
             if(cfg.status === "todos" || cfg.status === "all") return true;
             if(cfg.status === "fora") return status === "abaixo" || status === "acima";
@@ -505,7 +652,7 @@
                     if(nome === "semSolicitacao"){
                         cfg.semSolicitacao = el.value === "1";
                     }else if(nome === "limite"){
-                        cfg.limite = Math.max(1, Math.min(500, Number(el.value) || 80));
+                        cfg.limite = Math.max(1, Math.min(50000, Number(el.value) || 50000));
                     }else{
                         cfg[nome] = el.value.toLowerCase();
                     }
@@ -520,90 +667,135 @@
             }
             renderLoading();
             try{
-                const [snap, mapaMinimo] = await Promise.all([
+                const [snap, mapaMinimo, mata111, mata112] = await Promise.all([
                     get(ref(db, "estoqueGlobal")),
-                    carregarEstoqueMinimo()
+                    carregarEstoqueMinimo(),
+                    carregarMata111(),
+                    carregarMata112()
                 ]);
-                renderDashboard(snap.val() || {}, mapaMinimo);
+                renderDashboard(snap.val() || {}, mapaMinimo, mata111, mata112);
             }catch(err){
                 document.getElementById("subtitulo").textContent = "Erro ao carregar dados";
                 renderErro(err.message || String(err));
             }
         }
-        function renderDashboard(banco, mapaMinimo = estoqueMinimoCache || new Map()){
-            bancoAtual = banco;
-            const ajustes = banco?.ajustesItens || {};
-            const dados = listaDados(banco?.dados).map(item => aplicarLimitesDashboard(item, mapaMinimo, ajustes));
-            const pedidos = banco?.pedidosCompra || {};
-            const origens = [...new Set(dados.map(origemItem).filter(Boolean))].sort((a,b) => a.localeCompare(b, "pt-BR"));
-            let linhas = dados.map(item => {
-                const pedido = pedidoItem(item, pedidos);
-                return { item, pedido, status: statusEstoque(item), reposicao: reposicao(item), origem: origemItem(item) };
-            }).filter(linha => {
-                const codigo = key(linha.item);
-                if(cfg.itens.length && !cfg.itens.includes(codigo) && !cfg.itens.includes(String(linha.item.cooperat || "").toLowerCase())) return false;
-                if(!passaStatus(linha.status)) return false;
-                if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
-                if(cfg.origem && linha.origem !== cfg.origem) return false;
-                if(cfg.busca){
-                    const texto = normalizarTexto([
-                        linha.item.protheus,
-                        linha.item.cooperat,
-                        linha.item.descricao,
-                        linha.item.enderecoPrincipal,
-                        linha.item.armazemPrincipal
-                    ].join(" "));
-                    if(!texto.includes(normalizarTexto(cfg.busca))) return false;
-                }
-                return true;
-            });
-
-            const dir = cfg.direcao === "asc" ? 1 : -1;
-            linhas.sort((a,b) => {
-                if(cfg.ordenar === "saldo") return ((num(a.item.saldo) || 0) - (num(b.item.saldo) || 0)) * dir;
-                if(cfg.ordenar === "descricao") return String(a.item.descricao || "").localeCompare(String(b.item.descricao || ""), "pt-BR") * dir;
-                if(cfg.ordenar === "codigo") return key(a.item).localeCompare(key(b.item)) * dir;
-                return ((a.reposicao || 0) - (b.reposicao || 0)) * dir;
-            });
-            linhas = linhas.slice(0, cfg.limite);
-
-            const abaixo = linhas.filter(l => l.status === "abaixo").length;
-            const acima = linhas.filter(l => l.status === "acima").length;
-            const semPedido = linhas.filter(l => !pedidoAtivo(l.pedido)).length;
-            const totalReposicao = linhas.reduce((s,l) => s + (l.reposicao || 0), 0);
-
-            document.getElementById("subtitulo").textContent = `${linhas.length} item(ns) conforme parametros da URL`;
-            const dt = banco?.ultimaAtualizacao ? new Date(banco.ultimaAtualizacao).toLocaleString("pt-BR") : "-";
-            document.getElementById("ultimaAtualizacao").textContent = `Ultima atualizacao: ${dt}`;
-
+        function renderBarras(titulo, linhas, campoValor = "dias"){
+            const top = linhas.slice(0, 8);
+            const max = Math.max(1, ...top.map(l => Number(l[campoValor] || 0)));
+            return `
+                <section class="vizPanel">
+                    <h2>${esc(titulo)}</h2>
+                    <div class="bars">
+                        ${top.length ? top.map(l => `
+                            <div class="barRow" title="${esc(l.descricao || "")}">
+                                <div class="barLabel">${esc(l.codigo || l.item?.protheus || "-")}</div>
+                                <div class="barTrack"><div class="barFill" style="width:${Math.max(2, (Number(l[campoValor] || 0) / max) * 100)}%"></div></div>
+                                <strong>${esc(fmt(l[campoValor]))}</strong>
+                            </div>
+                        `).join("") : `<div class="empty">Sem dados para o periodo.</div>`}
+                    </div>
+                </section>
+            `;
+        }
+        function renderPizza(abaixo, acima, ok){
+            const total = Math.max(1, abaixo + acima + ok);
+            const p1 = (abaixo / total) * 100;
+            const p2 = p1 + (acima / total) * 100;
+            return `
+                <section class="vizPanel">
+                    <h2>Distribuicao</h2>
+                    <div class="pieWrap">
+                        <div class="pie" style="--abaixo:${p1}%;--acima:${p2}%"></div>
+                        <div class="legend">
+                            <span style="--c:#ef4444">Abaixo: ${abaixo}</span>
+                            <span style="--c:#22c55e">Acima: ${acima}</span>
+                            <span style="--c:#00D9FF">Outros: ${ok}</span>
+                        </div>
+                    </div>
+                </section>
+            `;
+        }
+        function renderMovimentacao(banco, dados, movimentacao, leadTimes){
+            const zeraram = movimentacao.zeraram
+                .sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
+            const totalSaidas = movimentacao.saidas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
+            const totalEntradas = movimentacao.entradas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
+            document.getElementById("subtitulo").textContent = `Movimentacao do dia ${movimentacao.faixa.label}`;
             root.innerHTML = `
                 <section class="cards">
-                    <article class="card blue"><span>Itens</span><strong>${linhas.length}</strong></article>
-                    <article class="card red"><span>Abaixo do minimo</span><strong>${abaixo}</strong></article>
-                    <article class="card green"><span>Acima do maximo</span><strong>${acima}</strong></article>
-                    <article class="card"><span>Reposicao total</span><strong>${fmt(totalReposicao)}</strong></article>
+                    <article class="card blue"><span>Movimentos</span><strong>${movimentacao.lista.length}</strong></article>
+                    <article class="card red"><span>Zeraram</span><strong>${zeraram.length}</strong></article>
+                    <article class="card"><span>Saidas</span><strong>${fmt(totalSaidas)}</strong></article>
+                    <article class="card green"><span>Entradas</span><strong>${fmt(totalEntradas)}</strong></article>
                 </section>
-                <div class="toolbar">
-                    <span class="chip">status=${esc(cfg.status)}</span>
-                    <span class="chip">semSolicitacao=${cfg.semSolicitacao ? "1" : "0"}</span>
-                    <span class="chip">ordenar=${esc(cfg.ordenar)} ${esc(cfg.direcao)}</span>
-                    <span class="chip">limite=${cfg.limite}</span>
-                    <span class="chip">sem solicitacao na lista: ${semPedido}</span>
-                    <span class="chip">base carregada: ${dados.length}</span>
-                    <span class="chip">com faixa: ${dados.filter(item => limite(item.minimo) !== null || limite(item.maximo) !== null).length}</span>
-                    ${cfg.origem ? `<span class="chip">origem=${esc(cfg.origem)}</span>` : ""}
-                    ${cfg.itens.length ? `<span class="chip">itens=${cfg.itens.length}</span>` : ""}
+                ${renderFiltros([], dados.length)}
+                <section class="vizGrid">
+                    ${renderBarras("Itens que zeraram apos movimentacao", zeraram.map(e => ({...e, codigo:e.item?.protheus || e.item?.cooperat || "-", descricao:e.item?.descricao || "-", dias:Math.abs(Number(e.delta || 0))})), "dias")}
+                    ${renderBarras("Pedidos mais demorados", leadTimes, "dias")}
+                </section>
+                <h2 class="sectionTitle">Relatorio de zerados do dia anterior</h2>
+                <div class="tableWrap">
+                    <table>
+                        <thead><tr><th>Codigo</th><th>Descricao</th><th class="num">Anterior</th><th class="num">Atual</th><th class="num">Mov.</th><th>Data</th></tr></thead>
+                        <tbody>
+                            ${zeraram.length ? zeraram.map(e => `
+                                <tr>
+                                    <td class="codigo">${esc(e.item?.protheus || e.item?.cooperat || "-")}</td>
+                                    <td class="descricao">${esc(e.item?.descricao || "-")}</td>
+                                    <td class="num">${fmt(e.saldoAnterior)}</td>
+                                    <td class="num">${fmt(e.saldoAtual)}</td>
+                                    <td class="num">${fmt(e.delta)}</td>
+                                    <td>${esc(e.data || new Date(e.timestamp).toLocaleDateString("pt-BR"))}</td>
+                                </tr>
+                            `).join("") : `<tr><td colspan="6">Nenhum item zerou no periodo encontrado.</td></tr>`}
+                        </tbody>
+                    </table>
                 </div>
+                <h2 class="sectionTitle">Pedidos com maior tempo ate chegada</h2>
+                ${renderLeadTimesTabela(leadTimes)}
+            `;
+            bindFiltros();
+        }
+        function renderLeadTimesTabela(leadTimes){
+            return `
+                <div class="tableWrap">
+                    <table>
+                        <thead><tr><th>Codigo</th><th>Descricao</th><th>Pedido</th><th>Chegada</th><th class="num">Dias</th><th class="num">Qtd.</th></tr></thead>
+                        <tbody>
+                            ${leadTimes.slice(0, 30).map(l => `
+                                <tr>
+                                    <td class="codigo">${esc(l.codigo)}</td>
+                                    <td class="descricao">${esc(l.descricao)}</td>
+                                    <td>${esc(l.dataPedido)}</td>
+                                    <td>${esc(l.dataEntrada)}</td>
+                                    <td class="num">${fmt(l.dias)}</td>
+                                    <td class="num">${fmt(l.quantidade)}</td>
+                                </tr>
+                            `).join("") || `<tr><td colspan="6">Sem pedidos com chegada localizada.</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        function renderFiltros(origens, totalDados){
+            return `
                 <section class="filters">
                     <div class="filter">
+                        <label for="fAmbiente">Ambiente</label>
+                        <select id="fAmbiente" data-filter="ambiente">
+                            <option value="estoque" ${cfg.ambiente === "estoque" ? "selected" : ""}>Estoque</option>
+                            <option value="movimentacao" ${cfg.ambiente === "movimentacao" ? "selected" : ""}>Movimentacao D-1</option>
+                        </select>
+                    </div>
+                    <div class="filter">
                         <label for="fBusca">Busca</label>
-                        <input id="fBusca" data-filter="busca" value="${esc(cfg.busca)}" placeholder="codigo, descricao...">
+                        <input id="fBusca" data-filter="busca" value="${esc(cfg.busca)}" placeholder="codigo, descricao, armazem...">
                     </div>
                     <div class="filter">
                         <label for="fStatus">Status</label>
                         <select id="fStatus" data-filter="status">
                             ${[
-                                ["fora","Fora da faixa"],
+                                ["fora","Saldo abaixo ou acima"],
                                 ["abaixo","Abaixo"],
                                 ["acima","Acima"],
                                 ["ok","Ok"],
@@ -617,6 +809,14 @@
                         <select id="fSolicitacao" data-filter="semSolicitacao">
                             <option value="0" ${cfg.semSolicitacao ? "" : "selected"}>Todos</option>
                             <option value="1" ${cfg.semSolicitacao ? "selected" : ""}>Sem solicitacao</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fSuposicao">Suposicao</label>
+                        <select id="fSuposicao" data-filter="suposicao">
+                            <option value="todos" ${cfg.suposicao === "todos" ? "selected" : ""}>Todos</option>
+                            <option value="com" ${cfg.suposicao === "com" ? "selected" : ""}>Com suposicao</option>
+                            <option value="sem" ${cfg.suposicao === "sem" ? "selected" : ""}>Sem suposicao</option>
                         </select>
                     </div>
                     <div class="filter">
@@ -646,9 +846,92 @@
                     </div>
                     <div class="filter">
                         <label for="fLimite">Limite</label>
-                        <input id="fLimite" data-filter="limite" type="number" min="1" max="500" value="${cfg.limite}">
+                        <input id="fLimite" data-filter="limite" type="number" min="1" max="${Math.max(1,totalDados)}" value="${Math.min(cfg.limite, Math.max(1,totalDados))}">
                     </div>
                 </section>
+            `;
+        }
+        function renderDashboard(banco, mapaMinimo = estoqueMinimoCache || new Map(), mata111 = mata111Cache || [], mata112 = mata112Cache || []){
+            bancoAtual = banco;
+            const ajustes = banco?.ajustesItens || {};
+            const dados = listaDados(banco?.dados).map(item => aplicarLimitesDashboard(item, mapaMinimo, ajustes));
+            const pedidos = banco?.pedidosCompra || {};
+            const leadTimes = calcularLeadTimes(mata111, mata112, dados);
+            const movimentacao = calcularMovimentacaoDiaAnterior(banco, dados);
+            const origens = [...new Set(dados.map(origemItem).filter(Boolean))].sort((a,b) => a.localeCompare(b, "pt-BR"));
+            let linhas = dados.map(item => {
+                const pedido = pedidoItem(item, pedidos);
+                return { item, pedido, status: statusEstoque(item), reposicao: reposicao(item), origem: origemItem(item) };
+            }).filter(linha => {
+                const codigo = key(linha.item);
+                if(cfg.itens.length && !cfg.itens.includes(codigo) && !cfg.itens.includes(String(linha.item.cooperat || "").toLowerCase())) return false;
+                if(!passaStatus(linha.status)) return false;
+                if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
+                if(cfg.suposicao === "com" && !itemTemSuposicao(linha.item)) return false;
+                if(cfg.suposicao === "sem" && itemTemSuposicao(linha.item)) return false;
+                if(cfg.origem && linha.origem !== cfg.origem) return false;
+                if(cfg.busca){
+                    const texto = normalizarTexto([
+                        linha.item.protheus,
+                        linha.item.cooperat,
+                        linha.item.descricao,
+                        linha.item.enderecoPrincipal,
+                        linha.item.armazemPrincipal,
+                        linha.item.armazem
+                    ].join(" "));
+                    if(!texto.includes(normalizarTexto(cfg.busca))) return false;
+                }
+                return true;
+            });
+
+            const dir = cfg.direcao === "asc" ? 1 : -1;
+            linhas.sort((a,b) => {
+                if(cfg.ordenar === "saldo") return ((num(a.item.saldo) || 0) - (num(b.item.saldo) || 0)) * dir;
+                if(cfg.ordenar === "descricao") return String(a.item.descricao || "").localeCompare(String(b.item.descricao || ""), "pt-BR") * dir;
+                if(cfg.ordenar === "codigo") return key(a.item).localeCompare(key(b.item)) * dir;
+                return ((a.reposicao || 0) - (b.reposicao || 0)) * dir;
+            });
+            const totalFiltrado = linhas.length;
+            linhas = linhas.slice(0, Math.min(cfg.limite, linhas.length));
+
+            const abaixo = linhas.filter(l => l.status === "abaixo").length;
+            const acima = linhas.filter(l => l.status === "acima").length;
+            const semPedido = linhas.filter(l => !pedidoAtivo(l.pedido)).length;
+            const totalReposicao = linhas.reduce((s,l) => s + (l.reposicao || 0), 0);
+
+            document.getElementById("subtitulo").textContent = `${linhas.length} de ${totalFiltrado} item(ns) conforme filtros`;
+            const dt = banco?.ultimaAtualizacao ? new Date(banco.ultimaAtualizacao).toLocaleString("pt-BR") : "-";
+            document.getElementById("ultimaAtualizacao").textContent = `Ultima atualizacao: ${dt}`;
+            if(cfg.ambiente === "movimentacao"){
+                renderMovimentacao(banco, dados, movimentacao, leadTimes);
+                return;
+            }
+
+            root.innerHTML = `
+                <section class="cards">
+                    <article class="card blue"><span>Itens</span><strong>${linhas.length}</strong></article>
+                    <article class="card red"><span>Abaixo do minimo</span><strong>${abaixo}</strong></article>
+                    <article class="card green"><span>Acima do maximo</span><strong>${acima}</strong></article>
+                    <article class="card"><span>Reposicao total</span><strong>${fmt(totalReposicao)}</strong></article>
+                </section>
+                <div class="toolbar">
+                    <span class="chip">status=${esc(cfg.status)}</span>
+                    <span class="chip">semSolicitacao=${cfg.semSolicitacao ? "1" : "0"}</span>
+                    <span class="chip">suposicao=${esc(cfg.suposicao)}</span>
+                    <span class="chip">ordenar=${esc(cfg.ordenar)} ${esc(cfg.direcao)}</span>
+                    <span class="chip">limite=${cfg.limite}</span>
+                    <span class="chip">sem solicitacao na lista: ${semPedido}</span>
+                    <span class="chip">base carregada: ${dados.length}</span>
+                    <span class="chip">com estoque minimo: ${dados.filter(item => limite(item.minimo) !== null || limite(item.maximo) !== null).length}</span>
+                    ${cfg.origem ? `<span class="chip">origem=${esc(cfg.origem)}</span>` : ""}
+                    ${cfg.itens.length ? `<span class="chip">itens=${cfg.itens.length}</span>` : ""}
+                </div>
+                ${renderFiltros(origens, dados.length)}
+                <section class="vizGrid">
+                    ${renderBarras("Pedidos que mais demoraram ate chegar", leadTimes, "dias")}
+                    ${renderPizza(abaixo, acima, Math.max(0, linhas.length - abaixo - acima))}
+                </section>
+                <h2 class="sectionTitle">Itens em estoque</h2>
                 ${linhas.length ? `
                     <div class="tableWrap">
                         <table>
@@ -683,6 +966,8 @@
                         </table>
                     </div>
                 ` : `<section class="empty">Nenhum item encontrado com estes parametros.</section>`}
+                <h2 class="sectionTitle">Pedidos com maior tempo ate chegada</h2>
+                ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
         }

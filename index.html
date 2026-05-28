@@ -885,6 +885,19 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
         const pedidos = pedidosPorCodigo.get(codigo) || [];
         const entradas = entradasPorCodigo.get(codigo) || [];
         const localizarEntradaPedido = pedido => entradas.find(e => !pedido?.timestamp || !e.timestamp || e.timestamp >= pedido.timestamp) || null;
+        const entradasAsc = [...entradas].sort((a,b) => (a.timestamp - b.timestamp) || (a.rowIndex - b.rowIndex));
+        const localizarPrimeiraEntradaPedido = pedido => entradasAsc.find(e => pedido?.timestamp && e.timestamp && e.timestamp >= pedido.timestamp) || null;
+        const temposRecebimento = pedidos.map(p => {
+            const entrada = localizarPrimeiraEntradaPedido(p);
+            if(!p.timestamp || !entrada?.timestamp) return null;
+            const dias = Math.max(0, Math.round((entrada.timestamp - p.timestamp) / 86400000));
+            return {
+                dataPedido: p.dataPedido || "",
+                dataEntrada: entrada.dataEntrada || "",
+                dias,
+                quantidade: entrada.quantidadeEntrada || p.quantidadeRecebida || p.quantidadePedida || 0
+            };
+        }).filter(Boolean);
         let entradaAtiva = null;
         const pedidoAtivo = pedidos.find(p => {
             const entrada = localizarEntradaPedido(p);
@@ -903,6 +916,12 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
         const pedidosRecebidos = pedidos.filter(p => p.quantidadeRecebida > 0);
         const mediaPedido = pedidosRecebidos.length
             ? pedidosRecebidos.reduce((s,p)=>s + (p.quantidadeRecebida || p.quantidadePedida || 0), 0) / pedidosRecebidos.length
+            : null;
+        const mediaDiasRecebimento = temposRecebimento.length
+            ? temposRecebimento.reduce((s,t)=>s + t.dias, 0) / temposRecebimento.length
+            : null;
+        const diasPedidoAtual = pedidoAtivo?.timestamp
+            ? Math.max(0, Math.round((Date.now() - pedidoAtivo.timestamp) / 86400000))
             : null;
 
         let status = "sem";
@@ -944,7 +963,10 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
             pedido: pedidoAtivo || null,
             entradaEndereco: entradaAtiva || null,
             mediaPedido,
-            recebidoSemEntrada
+            recebidoSemEntrada,
+            temposRecebimento,
+            mediaDiasRecebimento,
+            diasPedidoAtual
         };
     });
     return estado;
@@ -2216,6 +2238,7 @@ async function carregarEstoqueMinimoPadrao(){
 let etiquetaMata105Cache = null;
 let etiquetaLogoCache = null;
 let etiquetaCodigosPorTamanho = { "5": "", "7": "", "10": "", "15": "" };
+const ETIQUETA_MEMORIA_STORAGE_KEY = "darkjutsu_etiqueta_tamanho_por_codigo_v1";
 const ETIQUETA_DPI = 96;
 const ETIQUETA_COR = "#283285";
 const ETIQUETA_ESCALA = 2;
@@ -2277,6 +2300,128 @@ const ETIQUETA_MOLDES = {
         espessura_borda: 16
     }
 };
+
+function normalizarCodigoEtiqueta(valor){
+    return String(valor || "").trim().toLowerCase();
+}
+
+function carregarMemoriaTamanhoEtiquetas(){
+    try{
+        const raw = localStorage.getItem(ETIQUETA_MEMORIA_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === "object" ? parsed : {};
+    }catch(e){
+        console.warn("Nao foi possivel carregar memoria de etiquetas:", e);
+        return {};
+    }
+}
+
+let etiquetaMemoriaTamanhoPorCodigo = carregarMemoriaTamanhoEtiquetas();
+
+function salvarMemoriaTamanhoEtiquetas(){
+    try{
+        localStorage.setItem(ETIQUETA_MEMORIA_STORAGE_KEY, JSON.stringify(etiquetaMemoriaTamanhoPorCodigo || {}));
+    }catch(e){
+        console.warn("Nao foi possivel salvar memoria de etiquetas:", e);
+    }
+}
+
+function getTamanhoMemorizadoEtiqueta(codigo){
+    const chave = normalizarCodigoEtiqueta(codigo);
+    const tamanho = chave ? etiquetaMemoriaTamanhoPorCodigo[chave] : "";
+    return ETIQUETA_MOLDES[tamanho] ? tamanho : "";
+}
+
+function memorizarTamanhoEtiqueta(codigo, tamanho){
+    const chave = normalizarCodigoEtiqueta(codigo);
+    if(!chave || !ETIQUETA_MOLDES[tamanho]) return false;
+    etiquetaMemoriaTamanhoPorCodigo[chave] = tamanho;
+    return true;
+}
+
+function memorizarCodigosEtiqueta(codigos, tamanho){
+    let alterou = false;
+    (Array.isArray(codigos) ? codigos : []).forEach(codigo => {
+        alterou = memorizarTamanhoEtiqueta(codigo, tamanho) || alterou;
+    });
+    if(alterou) salvarMemoriaTamanhoEtiquetas();
+    return alterou;
+}
+
+function codigosUnicosEtiqueta(lista){
+    const acumulados = [];
+    const vistos = new Set();
+    (Array.isArray(lista) ? lista : []).forEach(codigo => {
+        const texto = String(codigo || "").trim();
+        const chave = normalizarCodigoEtiqueta(texto);
+        if(!chave || vistos.has(chave)) return;
+        vistos.add(chave);
+        acumulados.push(texto);
+    });
+    return acumulados;
+}
+
+function removerCodigoDasListasEtiqueta(codigo, excetoTamanho = ""){
+    const chave = normalizarCodigoEtiqueta(codigo);
+    if(!chave) return;
+    Object.keys(ETIQUETA_MOLDES).forEach(tamanho => {
+        if(tamanho === excetoTamanho) return;
+        const lista = parseCodigosEtiquetasTexto(etiquetaCodigosPorTamanho[tamanho] || "");
+        const filtrada = lista.filter(c => normalizarCodigoEtiqueta(c) !== chave);
+        etiquetaCodigosPorTamanho[tamanho] = filtrada.join(", ");
+    });
+}
+
+function setListaEtiquetaTamanho(tamanho, codigos){
+    etiquetaCodigosPorTamanho[tamanho] = codigosUnicosEtiqueta(codigos).join(", ");
+}
+
+function distribuirCodigosPorMemoriaEtiqueta(codigos, tamanhoPadrao = getEtiquetaTamanhoAtual()){
+    const totalPorTamanho = {};
+    Object.keys(ETIQUETA_MOLDES).forEach(tamanho => {
+        totalPorTamanho[tamanho] = parseCodigosEtiquetasTexto(etiquetaCodigosPorTamanho[tamanho] || "");
+    });
+    (Array.isArray(codigos) ? codigos : []).forEach(codigo => {
+        const texto = String(codigo || "").trim();
+        if(!texto) return;
+        const tamanho = getTamanhoMemorizadoEtiqueta(texto) || tamanhoPadrao || "7";
+        const chave = normalizarCodigoEtiqueta(texto);
+        Object.keys(ETIQUETA_MOLDES).forEach(t => {
+            if(t === tamanho) return;
+            totalPorTamanho[t] = (totalPorTamanho[t] || []).filter(c => normalizarCodigoEtiqueta(c) !== chave);
+        });
+        totalPorTamanho[tamanho] = totalPorTamanho[tamanho] || [];
+        totalPorTamanho[tamanho].push(texto);
+        memorizarTamanhoEtiqueta(texto, tamanho);
+    });
+    Object.entries(totalPorTamanho).forEach(([tamanho, lista]) => setListaEtiquetaTamanho(tamanho, lista));
+    salvarMemoriaTamanhoEtiquetas();
+    carregarCodigosEtiquetaAtual();
+}
+window.distribuirCodigosPorMemoriaEtiqueta = distribuirCodigosPorMemoriaEtiqueta;
+
+function getTamanhoEtiquetaItem(itemOrCodigo){
+    if(typeof itemOrCodigo === "string") return getTamanhoMemorizadoEtiqueta(itemOrCodigo);
+    const item = itemOrCodigo || {};
+    return getTamanhoMemorizadoEtiqueta(item.protheus)
+        || getTamanhoMemorizadoEtiqueta(item.cooperat)
+        || getTamanhoMemorizadoEtiqueta(getItemKey(item));
+}
+window.getTamanhoEtiquetaItem = getTamanhoEtiquetaItem;
+
+function importarMemoriaEtiquetasPlanilha(linhas){
+    const dados = Array.isArray(linhas) ? linhas : [];
+    let importados = 0;
+    dados.forEach(row => {
+        const codigo = row?.codigo ?? row?.Codigo ?? row?.código ?? row?.Código ?? row?.[0];
+        const tamanhoRaw = row?.tamanho ?? row?.Tamanho ?? row?.cm ?? row?.CM ?? row?.[1];
+        const match = String(tamanhoRaw || "").match(/(5|7|10|15)/);
+        if(codigo && match && memorizarTamanhoEtiqueta(codigo, match[1])) importados++;
+    });
+    salvarMemoriaTamanhoEtiquetas();
+    return importados;
+}
+window.importarMemoriaEtiquetasPlanilha = importarMemoriaEtiquetasPlanilha;
 
 function cmParaPxEtiqueta(cm){
     return Math.trunc(Number(cm) * ETIQUETA_DPI / 2.54);
@@ -2477,7 +2622,10 @@ function parseCodigosEtiquetasTexto(texto){
 function salvarCodigosEtiquetaAtual(){
     const tamanho = getEtiquetaTamanhoAtual();
     const input = document.getElementById("etiquetaCodigos");
-    etiquetaCodigosPorTamanho[tamanho] = input?.value || "";
+    const codigos = parseCodigosEtiquetasTexto(input?.value || "");
+    setListaEtiquetaTamanho(tamanho, codigos);
+    codigos.forEach(codigo => removerCodigoDasListasEtiqueta(codigo, tamanho));
+    memorizarCodigosEtiqueta(codigos, tamanho);
 }
 
 function carregarCodigosEtiquetaAtual(){
@@ -2512,19 +2660,9 @@ function selecionadosParaEtiquetas(){
         const item = findItemByKey(key);
         return item?.protheus || item?.cooperat || key;
     }).filter(Boolean);
-    const input = document.getElementById("etiquetaCodigos");
-    const atuais = parseCodigosEtiquetasTexto(etiquetaCodigosPorTamanho[tamanho] || input?.value || "");
-    const acumulados = [];
-    const vistos = new Set();
-    [...atuais, ...novos].forEach(codigo=>{
-        const chave = codigo.toLowerCase();
-        if(vistos.has(chave)) return;
-        vistos.add(chave);
-        acumulados.push(codigo);
-    });
-    if(input) input.value = acumulados.join(", ");
-    etiquetaCodigosPorTamanho[tamanho] = input?.value || "";
-    setEtiquetasStatus(`${novos.length} selecionado(s) adicionados. Total: ${acumulados.length}.`);
+    distribuirCodigosPorMemoriaEtiqueta(novos, tamanho);
+    const totalAtual = parseCodigosEtiquetasTexto(etiquetaCodigosPorTamanho[getEtiquetaTamanhoAtual()] || "").length;
+    setEtiquetasStatus(`${novos.length} selecionado(s) distribuido(s) por tamanho. Lista atual: ${totalAtual}.`);
 }
 window.selecionadosParaEtiquetas = selecionadosParaEtiquetas;
 
@@ -2568,6 +2706,8 @@ async function baixarEtiquetas(){
                     naoEncontrados[cfg.nome].push(codigo);
                     continue;
                 }
+                memorizarTamanhoEtiqueta(item.protheus || codigo, tamanho);
+                if(item.cooperat) memorizarTamanhoEtiqueta(item.cooperat, tamanho);
                 const chave = String(item.protheus || codigo).toLowerCase();
                 if(vistosItens.has(chave)) continue;
                 vistosItens.add(chave);
@@ -2594,6 +2734,7 @@ async function baixarEtiquetas(){
             "Pastas: 5cm, 7cm, 10cm, 15cm",
             naoEncontradosLinhas.length ? `Não encontrados:\n${naoEncontradosLinhas.join("\n")}` : "Todos os códigos foram encontrados."
         ].join("\n"));
+        salvarMemoriaTamanhoEtiquetas();
 
         setEtiquetasStatus("Compactando etiquetas...");
         const pacote = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
@@ -2885,6 +3026,9 @@ function criarTooltipHistoricoSaldo(td, item){
             <div class="pedidoStatusTitulo">${esc(pedido.titulo)}</div>
             ${pedido.detalhe ? `<div class="pedidoStatusDetalhe">${esc(pedido.detalhe)}</div>` : ""}
             ${pedido.mediaPedido ? `<div class="pedidoStatusMedia">Média por pedido: ${esc(formatarNumeroPlanilha(pedido.mediaPedido))}</div>` : ""}
+            ${pedido.diasPedidoAtual !== null && pedido.diasPedidoAtual !== undefined ? `<div class="pedidoStatusMedia">Dias desde emissão: ${esc(pedido.diasPedidoAtual)}</div>` : ""}
+            ${pedido.mediaDiasRecebimento !== null && pedido.mediaDiasRecebimento !== undefined ? `<div class="pedidoStatusMedia">Média de chegada da peça: ${esc(formatarNumeroPlanilha(pedido.mediaDiasRecebimento))} dias</div>` : ""}
+            ${pedido.diasPedidoAtual !== null && pedido.mediaDiasRecebimento ? `<div class="pedidoStatusMedia">Comparação: ${esc(pedido.diasPedidoAtual >= pedido.mediaDiasRecebimento ? "+" : "")}${esc(formatarNumeroPlanilha(pedido.diasPedidoAtual - pedido.mediaDiasRecebimento))} dias vs média</div>` : ""}
         </div>
     ` : `<div class="pedidoStatusBox sem"><div class="pedidoStatusTitulo">Sem solicitação de pedido</div></div>`;
     const historicoHtml = historico.length ? historico.map(h => `
@@ -3182,6 +3326,7 @@ function renderTabela(){
 
         // DESCRIÇÃO
         const tdDescricao = criarTd(row, item.descricao || "");
+        tdDescricao.classList.add("descricaoPrincipal");
         tdDescricao.style.cursor = "pointer";
         tdDescricao.title = [tdDescricao.title, "Clique duas vezes para abrir o perfil do item."].filter(Boolean).join("\n");
         tdDescricao.ondblclick = (e)=> {
@@ -5277,6 +5422,7 @@ function abrirModalSaldos(item){
             ? `${temMinimo ? `Mínimo ${esc(formatarNumeroPlanilha(minimoValor))}` : "Sem mínimo"} · ${temMaximo ? `Máximo ${esc(formatarNumeroPlanilha(maximoValor))}` : "Sem máximo"}`
             : "Este item não possui faixa configurada na planilha de estoque mínimo.";
         const itemKey = getItemKey(itemSeguro);
+        const etiquetaTamanhoMemorizado = getTamanhoEtiquetaItem(itemSeguro);
         const historicoSaldo = getHistoricoSaldoItem(itemKey).slice(-20).reverse();
         const itemKeyEncoded = encodeURIComponent(itemKey);
         const minimoInputValor = minimoValor === null ? "" : String(minimoValor).replace(".", ",");
@@ -5322,6 +5468,7 @@ function abrirModalSaldos(item){
             { titulo: "Mínimo ativo", valor: valorLimite(minimoValor, "Sem mínimo"), ajuda: textoOrigem(origemMinimo), classe: `cardMinimo origem-${origemMinimo || "indefinida"}` },
             { titulo: "Máximo ativo", valor: valorLimite(maximoValor, "Sem máximo"), ajuda: textoOrigem(origemMaximo), classe: `cardMaximo origem-${origemMaximo || "indefinida"}` },
             { titulo: "Reposição ativa", valor: valorLimite(reposicaoValor, "Não informada"), ajuda: textoOrigem(origemReposicao), classe: `cardReposicao origem-${origemReposicao || "indefinida"}` },
+            { titulo: "Etiqueta", valor: etiquetaTamanhoMemorizado ? `${etiquetaTamanhoMemorizado} cm` : "Sem memória", ajuda: etiquetaTamanhoMemorizado ? "Último tamanho usado para este código." : "Será memorizado quando este código entrar em uma lista de etiquetas.", classe: "cardEtiqueta" },
             { titulo: "Endereços", valor: String(listaEnderecos.length), ajuda: "Locais vinculados ao item", classe: "cardEnderecos" }
         ];
 
