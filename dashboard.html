@@ -325,7 +325,7 @@
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
             origem: (params.get("origem") || "").toLowerCase(),
-            armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "").split(",").map(v => v.trim()).filter(Boolean),
+            armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
             busca: (params.get("busca") || "").toLowerCase(),
             limite: Math.max(1, Math.min(50000, Number(params.get("limite") || 50000) || 50000)),
@@ -475,7 +475,10 @@
             if(valor && typeof valor === "object") return Object.values(valor);
             return [];
         }
-        async function carregarPlanilhaDownload(nome){
+        function normalizarNomeGuia(valor){
+            return String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        }
+        async function carregarPlanilhaDownload(nome, guia = ""){
             try{
                 if(typeof XLSX === "undefined") return [];
                 let response = await fetch(`downloads/${nome}`, { cache: "no-store" });
@@ -485,7 +488,12 @@
                 if(!response.ok) return [];
                 const data = await response.arrayBuffer();
                 const workbook = XLSX.read(data, { type: "array" });
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const guiaNormalizada = normalizarNomeGuia(guia);
+                const nomeGuia = guiaNormalizada
+                    ? workbook.SheetNames.find(nomeAba => normalizarNomeGuia(nomeAba) === guiaNormalizada)
+                        || workbook.SheetNames.find(nomeAba => normalizarNomeGuia(nomeAba).includes(guiaNormalizada) || guiaNormalizada.includes(normalizarNomeGuia(nomeAba)))
+                    : "";
+                const sheet = workbook.Sheets[nomeGuia || workbook.SheetNames[0]];
                 return XLSX.utils.sheet_to_json(sheet, { header: 1 });
             }catch(err){
                 console.warn(`Nao foi possivel carregar ${nome}:`, err);
@@ -499,7 +507,7 @@
         }
         async function carregarMata112(){
             if(mata112Cache) return mata112Cache;
-            mata112Cache = await carregarPlanilhaDownload("mata112.xlsx");
+            mata112Cache = await carregarPlanilhaDownload("mata112.xlsx", "Saldos a Endereçar");
             return mata112Cache;
         }
         async function carregarEstoqueMinimo(){
@@ -622,14 +630,16 @@
         }
         function calcularLeadTimes(mata111, mata112, dados){
             const descPorCodigo = new Map();
+            const codigosPermitidos = new Set();
             dados.forEach(item => {
                 [item.protheus, item.cooperat, item.protheusKey].forEach(c => {
                     const cod = normalizarCodigo(c);
+                    if(cod) codigosPermitidos.add(cod);
                     if(cod && !descPorCodigo.has(cod)) descPorCodigo.set(cod, item.descricao || "-");
                 });
             });
             const entradas = new Map();
-            (Array.isArray(mata112) ? mata112.slice(1) : []).forEach(row => {
+            (Array.isArray(mata112) ? mata112.slice(2) : []).forEach(row => {
                 const codigo = normalizarCodigo(row?.[0]);
                 const timestamp = parseDataPlanilha(row?.[12]);
                 if(!codigo || !timestamp) return;
@@ -637,8 +647,9 @@
                 entradas.get(codigo).push({ timestamp, data: new Date(timestamp).toLocaleDateString("pt-BR"), qtd: num(row?.[3]) || 0 });
             });
             entradas.forEach(lista => lista.sort((a,b) => a.timestamp - b.timestamp));
-            return (Array.isArray(mata111) ? mata111.slice(1) : []).map(row => {
+            return (Array.isArray(mata111) ? mata111.slice(2) : []).map(row => {
                 const codigo = normalizarCodigo(row?.[6]);
+                if(codigosPermitidos.size && !codigosPermitidos.has(codigo)) return null;
                 const pedidoTs = dataPedidoMata111(row);
                 if(!codigo || !pedidoTs) return null;
                 const entrada = (entradas.get(codigo) || []).find(e => e.timestamp >= pedidoTs);
@@ -753,7 +764,7 @@
                     if(nome === "semSolicitacao"){
                         cfg.semSolicitacao = el.value === "1";
                     }else if(nome === "armazens"){
-                        cfg.armazens = el.value.split(",").map(v => v.trim()).filter(Boolean);
+                        cfg.armazens = el.value.split(/[,\s]+/).map(v => v.trim()).filter(Boolean);
                     }else if(nome === "limite"){
                         cfg.limite = Math.max(1, Math.min(50000, Number(el.value) || 50000));
                     }else{
@@ -1048,17 +1059,17 @@
             bancoAtual = banco;
             const ajustes = banco?.ajustesItens || {};
             const dados = listaDados(banco?.dados).map(item => aplicarLimitesDashboard(item, mapaMinimo, ajustes));
+            const dadosEscopo = dados.filter(item => passaFiltroArmazem(item));
             const pedidos = banco?.pedidosCompra || {};
-            const leadTimes = calcularLeadTimes(mata111, mata112, dados);
-            const movimentacao = calcularMovimentacaoDiaAnterior(banco, dados);
-            const origens = [...new Set(dados.map(origemItem).filter(Boolean))].sort((a,b) => a.localeCompare(b, "pt-BR"));
-            let linhas = dados.map(item => {
+            const leadTimes = calcularLeadTimes(mata111, mata112, dadosEscopo);
+            const movimentacao = calcularMovimentacaoDiaAnterior(banco, dadosEscopo);
+            const origens = [...new Set(dadosEscopo.map(origemItem).filter(Boolean))].sort((a,b) => a.localeCompare(b, "pt-BR"));
+            let linhas = dadosEscopo.map(item => {
                 const pedido = pedidoItem(item, pedidos);
                 return { item, pedido, status: statusEstoque(item), reposicao: reposicao(item), origem: origemItem(item) };
             }).filter(linha => {
                 const codigo = key(linha.item);
                 if(cfg.itens.length && !cfg.itens.includes(codigo) && !cfg.itens.includes(String(linha.item.cooperat || "").toLowerCase())) return false;
-                if(!passaFiltroArmazem(linha.item)) return false;
                 if(!passaStatus(linha.status)) return false;
                 if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
                 if(cfg.suposicao === "com" && !itemTemSuposicao(linha.item)) return false;
@@ -1102,7 +1113,7 @@
             const dt = banco?.ultimaAtualizacao ? new Date(banco.ultimaAtualizacao).toLocaleString("pt-BR") : "-";
             document.getElementById("ultimaAtualizacao").textContent = `Ultima atualizacao: ${dt}`;
             if(cfg.ambiente === "movimentacao"){
-                renderMovimentacao(banco, dados, movimentacao, leadTimes);
+                renderMovimentacao(banco, dadosEscopo, movimentacao, leadTimes);
                 return;
             }
 
@@ -1121,8 +1132,8 @@
                     <span class="chip">limite=${cfg.limite}</span>
                     ${cfg.armazens.length ? `<span class="chip">armazem=${esc(cfg.armazens.join(","))}</span>` : ""}
                     <span class="chip">sem solicitacao na lista: ${semPedido}</span>
-                    <span class="chip">base carregada: ${dados.length}</span>
-                    <span class="chip">com estoque minimo: ${dados.filter(item => limite(item.minimo) !== null || limite(item.maximo) !== null).length}</span>
+                    <span class="chip">base carregada: ${dadosEscopo.length}${cfg.armazens.length ? ` de ${dados.length}` : ""}</span>
+                    <span class="chip">com estoque minimo: ${dadosEscopo.filter(item => limite(item.minimo) !== null || limite(item.maximo) !== null).length}</span>
                     ${cfg.origem ? `<span class="chip">origem=${esc(cfg.origem)}</span>` : ""}
                     ${cfg.itens.length ? `<span class="chip">itens=${cfg.itens.length}</span>` : ""}
                 </div>
