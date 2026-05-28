@@ -309,6 +309,7 @@
         const root = document.getElementById("app");
         const btnAtualizar = document.getElementById("btnAtualizar");
         let estoqueMinimoCache = null;
+        let mata110Cache = null;
         let mata111Cache = null;
         let mata112Cache = null;
 
@@ -349,6 +350,7 @@
                 .trim();
         }
         let bancoAtual = null;
+        let extrasAtual = {};
         document.getElementById("titulo").textContent = cfg.titulo;
         btnAtualizar.addEventListener("click", () => carregar());
 
@@ -421,6 +423,15 @@
                 return btoa(unescape(encodeURIComponent(valor || ""))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
             }catch{
                 return String(valor || "").replace(/[^A-Za-z0-9_-]/g, "_");
+            }
+        }
+        function decodeAjusteKey(valor){
+            try{
+                const texto = String(valor || "").replace(/-/g, "+").replace(/_/g, "/");
+                const padded = texto + "=".repeat((4 - texto.length % 4) % 4);
+                return decodeURIComponent(escape(atob(padded))).trim().toLowerCase();
+            }catch{
+                return "";
             }
         }
         function key(item){
@@ -505,6 +516,11 @@
             if(mata111Cache) return mata111Cache;
             mata111Cache = await carregarPlanilhaDownload("mata111.xlsx");
             return mata111Cache;
+        }
+        async function carregarMata110(){
+            if(mata110Cache) return mata110Cache;
+            mata110Cache = await carregarPlanilhaDownload("mata110.xlsx");
+            return mata110Cache;
         }
         async function carregarMata112(){
             if(mata112Cache) return mata112Cache;
@@ -675,15 +691,93 @@
                 };
             }).filter(Boolean).sort((a,b) => b.dias - a.dias);
         }
+        function incrementarRanking(mapa, usuario, qtd = 1){
+            const nome = String(usuario || "").trim() || "Sem usuario";
+            const atual = mapa.get(nome) || { usuario:nome, eventos:0, quantidade:0 };
+            atual.eventos += 1;
+            atual.quantidade += Number(qtd || 0) || 0;
+            mapa.set(nome, atual);
+        }
+        function rankingReposicao(mata110){
+            const mapa = new Map();
+            (Array.isArray(mata110) ? mata110.slice(2) : []).forEach(row => {
+                const solicitante = (row?.[7] ?? "").toString().trim();
+                if(!solicitante) return;
+                incrementarRanking(mapa, solicitante, num(row?.[5]) || 0);
+            });
+            return [...mapa.values()].sort((a,b) => (b.eventos - a.eventos) || (b.quantidade - a.quantidade));
+        }
+        function rankingContagens(contagens){
+            const mapa = new Map();
+            Object.entries(contagens || {}).forEach(([, porUsuario]) => {
+                Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
+                    Object.values(registros || {}).forEach(registro => {
+                        const itens = Object.keys(registro?.itens || {}).length;
+                        const vazios = Object.keys(registro?.verificacoesVazio || {}).length;
+                        incrementarRanking(mapa, registro?.usuario || usuarioKey, itens + vazios);
+                    });
+                });
+            });
+            return [...mapa.values()].sort((a,b) => (b.quantidade - a.quantidade) || (b.eventos - a.eventos));
+        }
+        function rankingEtiquetas(etiquetasGeradas){
+            const mapa = new Map();
+            Object.entries(etiquetasGeradas || {}).forEach(([, porUsuario]) => {
+                Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
+                    Object.values(registros || {}).forEach(registro => {
+                        incrementarRanking(mapa, registro?.usuario || usuarioKey, registro?.totalEtiquetas || 0);
+                    });
+                });
+            });
+            return [...mapa.values()].sort((a,b) => (b.quantidade - a.quantidade) || (b.eventos - a.eventos));
+        }
+        function renderRankingUsuarios(titulo, linhas, rotuloQtd){
+            const top = linhas.slice(0, 8);
+            const max = Math.max(1, ...top.map(l => Number(l.quantidade || l.eventos || 0)));
+            return `
+                <section class="vizPanel">
+                    <h2>${esc(titulo)}</h2>
+                    <div class="bars">
+                        ${top.length ? top.map((l, idx) => {
+                            const valor = Number(l.quantidade || l.eventos || 0);
+                            return `
+                                <div class="barRow" title="${esc(l.usuario)}">
+                                    <div class="barRank">${idx + 1}.</div>
+                                    <div class="barLabel">${esc(l.usuario)}</div>
+                                    <div class="barTrack"><div class="barFill" style="width:${Math.max(2, (valor / max) * 100)}%"></div></div>
+                                    <strong>${esc(fmt(valor))}</strong>
+                                </div>
+                            `;
+                        }).join("") : `<div class="empty">Sem dados para ranking.</div>`}
+                        ${top.length ? `<div class="sub">${esc(rotuloQtd)}. Eventos: ${esc(top.reduce((s,l)=>s + Number(l.eventos || 0), 0))}</div>` : ""}
+                    </div>
+                </section>
+            `;
+        }
         function eventosHistorico(banco, dados){
             const itemPorChave = new Map();
             dados.forEach(item => {
-                const chave = ajusteKey(key(item));
-                itemPorChave.set(chave, item);
+                [
+                    key(item),
+                    item?.protheus,
+                    item?.protheusKey,
+                    item?.cooperat
+                ].forEach(codigo => {
+                    const normalizado = normalizarCodigo(codigo);
+                    if(!normalizado) return;
+                    itemPorChave.set(normalizado, item);
+                    itemPorChave.set(ajusteKey(normalizado), item);
+                });
             });
             const eventos = [];
             Object.entries(banco?.historicoSaldo || {}).forEach(([chave, lista]) => {
-                const item = itemPorChave.get(chave) || {};
+                const chaveNormalizada = normalizarCodigo(chave);
+                const chaveDecodificada = decodeAjusteKey(chave);
+                const item = itemPorChave.get(chave)
+                    || itemPorChave.get(chaveNormalizada)
+                    || itemPorChave.get(chaveDecodificada)
+                    || null;
+                if(!item || !(item.protheus || item.cooperat || item.protheusKey)) return;
                 (Array.isArray(lista) ? lista : []).forEach(ev => {
                     eventos.push({ ...ev, item, chave, timestamp: Number(ev.timestamp || 0) });
                 });
@@ -763,7 +857,7 @@
             root.innerHTML = `<section class="erro"><h2>Nao foi possivel carregar</h2><p>${esc(msg)}</p></section>`;
         }
         function renderDashboardAtual(foco){
-            if(bancoAtual) renderDashboard(bancoAtual);
+            if(bancoAtual) renderDashboard(bancoAtual, estoqueMinimoCache || new Map(), mata111Cache || [], mata112Cache || [], extrasAtual);
             if(foco?.id){
                 requestAnimationFrame(() => {
                     const el = document.getElementById(foco.id);
@@ -832,13 +926,20 @@
             }
             renderLoading();
             try{
-                const [snap, mapaMinimo, mata111, mata112] = await Promise.all([
+                const [snap, mapaMinimo, mata110, mata111, mata112, contagensSnap, etiquetasSnap] = await Promise.all([
                     get(ref(db, "estoqueGlobal")),
                     carregarEstoqueMinimo(),
+                    carregarMata110(),
                     carregarMata111(),
-                    carregarMata112()
+                    carregarMata112(),
+                    get(ref(db, "contagens")).catch(() => null),
+                    get(ref(db, "etiquetasGeradas")).catch(() => null)
                 ]);
-                renderDashboard(snap.val() || {}, mapaMinimo, mata111, mata112);
+                renderDashboard(snap.val() || {}, mapaMinimo, mata111, mata112, {
+                    mata110,
+                    contagens: contagensSnap?.val?.() || {},
+                    etiquetasGeradas: etiquetasSnap?.val?.() || {}
+                });
             }catch(err){
                 document.getElementById("subtitulo").textContent = "Erro ao carregar dados";
                 renderErro(err.message || String(err));
@@ -883,7 +984,18 @@
                 </section>
             `;
         }
-        function renderMovimentacao(banco, dados, movimentacao, leadTimes){
+        function renderRankingsOperacao(rankings){
+            return `
+                <section class="vizGrid">
+                    ${renderRankingUsuarios("Quem mais pede reposicao", rankings.reposicao || [], "Pecas solicitadas")}
+                    ${renderRankingUsuarios("Quem mais conta pecas", rankings.contagem || [], "Pecas contadas/verificadas")}
+                </section>
+                <section class="vizGrid">
+                    ${renderRankingUsuarios("Quem mais faz etiqueta", rankings.etiqueta || [], "Etiquetas geradas")}
+                </section>
+            `;
+        }
+        function renderMovimentacao(banco, dados, movimentacao, leadTimes, rankings){
             const zeraram = movimentacao.zeraram
                 .sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
             const totalSaidas = movimentacao.saidas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
@@ -898,9 +1010,10 @@
                 </section>
                 ${renderFiltros([], dados.length)}
                 <section class="vizGrid">
-                    ${renderBarras(`Itens que zeraram apos movimentacao - ${movimentacao.faixa.nome}`, zeraram.map(e => ({...e, codigo:e.item?.protheus || e.item?.cooperat || "-", descricao:e.item?.descricao || "-", dias:Math.abs(Number(e.delta || 0))})), "dias")}
+                    ${renderBarras(`Itens que zeraram apos movimentacao - ${movimentacao.faixa.nome}`, zeraram.map(e => ({...e, codigo:e.item.protheus || e.item.cooperat, descricao:e.item.descricao || "", dias:Math.abs(Number(e.delta || 0))})), "dias")}
                     ${renderBarras("Pedidos mais demorados ou em aberto", leadTimes, "dias")}
                 </section>
+                ${renderRankingsOperacao({...rankings, leadTimes})}
                 <h2 class="sectionTitle">Relatorio de zerados - ${esc(movimentacao.faixa.nome)}</h2>
                 <div class="tableWrap">
                     <table>
@@ -908,8 +1021,8 @@
                         <tbody>
                             ${zeraram.length ? zeraram.map(e => `
                                 <tr>
-                                    <td class="codigo">${esc(e.item?.protheus || e.item?.cooperat || "-")}</td>
-                                    <td class="descricao">${esc(e.item?.descricao || "-")}</td>
+                                    <td class="codigo">${esc(e.item.protheus || e.item.cooperat)}</td>
+                                    <td class="descricao">${esc(e.item.descricao || "")}</td>
                                     <td class="num">${fmt(e.saldoAnterior)}</td>
                                     <td class="num">${fmt(e.saldoAtual)}</td>
                                     <td class="num">${fmt(e.delta)}</td>
@@ -928,8 +1041,8 @@
         }
         function movimentoValor(e, campo, idx){
             if(campo === "rank") return idx + 1;
-            if(campo === "codigo") return e.item?.protheus || e.item?.cooperat || "";
-            if(campo === "descricao") return e.item?.descricao || "";
+            if(campo === "codigo") return e.item.protheus || e.item.cooperat || "";
+            if(campo === "descricao") return e.item.descricao || "";
             if(campo === "tipo") return Number(e.delta || 0) >= 0 ? "Entrada" : "Saida";
             if(campo === "anterior") return num(e.saldoAnterior) || 0;
             if(campo === "atual") return num(e.saldoAtual) || 0;
@@ -947,8 +1060,8 @@
                             ${ordenada.length ? ordenada.map(({e, idx}) => `
                                 <tr>
                                     <td class="num">${idx + 1}</td>
-                                    <td class="codigo">${esc(e.item?.protheus || e.item?.cooperat || "-")}</td>
-                                    <td class="descricao">${esc(e.item?.descricao || "-")}</td>
+                                    <td class="codigo">${esc(e.item.protheus || e.item.cooperat)}</td>
+                                    <td class="descricao">${esc(e.item.descricao || "")}</td>
                                     <td>${Number(e.delta || 0) >= 0 ? "Entrada" : "Saida"}</td>
                                     <td class="num">${fmt(e.saldoAnterior)}</td>
                                     <td class="num">${fmt(e.saldoAtual)}</td>
@@ -1085,13 +1198,19 @@
                 </section>
             `;
         }
-        function renderDashboard(banco, mapaMinimo = estoqueMinimoCache || new Map(), mata111 = mata111Cache || [], mata112 = mata112Cache || []){
+        function renderDashboard(banco, mapaMinimo = estoqueMinimoCache || new Map(), mata111 = mata111Cache || [], mata112 = mata112Cache || [], extras = {}){
             bancoAtual = banco;
+            extrasAtual = extras || {};
             const ajustes = banco?.ajustesItens || {};
             const dados = listaDados(banco?.dados).map(item => aplicarLimitesDashboard(item, mapaMinimo, ajustes));
             const dadosEscopo = dados.filter(item => passaFiltroArmazem(item));
             const pedidos = banco?.pedidosCompra || {};
             const leadTimes = calcularLeadTimes(mata111, mata112, dadosEscopo);
+            const rankings = {
+                reposicao: rankingReposicao(extras.mata110 || []),
+                contagem: rankingContagens(extras.contagens || {}),
+                etiqueta: rankingEtiquetas(extras.etiquetasGeradas || {})
+            };
             const movimentacao = calcularMovimentacaoPeriodo(banco, dadosEscopo);
             const origens = [...new Set(dadosEscopo.map(origemItem).filter(Boolean))].sort((a,b) => a.localeCompare(b, "pt-BR"));
             let linhas = dadosEscopo.map(item => {
@@ -1143,7 +1262,7 @@
             const dt = banco?.ultimaAtualizacao ? new Date(banco.ultimaAtualizacao).toLocaleString("pt-BR") : "-";
             document.getElementById("ultimaAtualizacao").textContent = `Ultima atualizacao: ${dt}`;
             if(cfg.ambiente === "movimentacao"){
-                renderMovimentacao(banco, dadosEscopo, movimentacao, leadTimes);
+                renderMovimentacao(banco, dadosEscopo, movimentacao, leadTimes, rankings);
                 return;
             }
 
@@ -1172,6 +1291,7 @@
                     ${renderBarras("Pedidos que mais demoraram ou ainda estao em aberto", leadTimes, "dias")}
                     ${renderPizza(abaixo, acima, Math.max(0, linhas.length - abaixo - acima))}
                 </section>
+                ${renderRankingsOperacao({...rankings, leadTimes})}
                 <h2 class="sectionTitle">Itens em estoque</h2>
                 ${linhas.length ? `
                     <div class="tableWrap">

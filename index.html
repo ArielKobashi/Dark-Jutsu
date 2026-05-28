@@ -2747,12 +2747,31 @@ async function baixarEtiquetas(){
         a.remove();
         setTimeout(()=>URL.revokeObjectURL(url), 1000);
         setEtiquetasStatus(naoEncontradosLinhas.length ? "Baixado com alguns códigos não encontrados." : "Pacote baixado.");
+        registrarGeracaoEtiquetas(geradas, codigosPorTamanho, naoEncontradosLinhas).catch(err => {
+            console.warn("Nao foi possivel registrar ranking de etiquetas:", err);
+        });
     }catch(e){
         console.error("Falha ao gerar etiquetas:", e);
         setEtiquetasStatus(e?.message || "Erro ao gerar etiquetas.");
     }
 }
 window.baixarEtiquetas = baixarEtiquetas;
+
+async function registrarGeracaoEtiquetas(totalGeradas, codigosPorTamanho, naoEncontradosLinhas){
+    if(!window.db || !window.ref || !window.push) return;
+    const nick = window.meuNickname || "desconhecido";
+    const data = new Date().toISOString().slice(0, 10);
+    const payload = {
+        usuario:nick,
+        data,
+        timestamp:Date.now(),
+        totalEtiquetas:Number(totalGeradas || 0),
+        totalCodigosInformados:Object.values(codigosPorTamanho || {}).reduce((acc, lista)=>acc + (Array.isArray(lista) ? lista.length : 0), 0),
+        porTamanho:Object.fromEntries(Object.entries(codigosPorTamanho || {}).map(([tamanho, lista]) => [tamanho, Array.isArray(lista) ? lista.length : 0])),
+        teveNaoEncontrados:!!(naoEncontradosLinhas && naoEncontradosLinhas.length)
+    };
+    await window.push(window.ref(window.db, `etiquetasGeradas/${data}/${chaveFirebaseContagem(nick)}`), payload);
+}
 
 document.querySelectorAll("input[name='etiquetaTamanho']").forEach(input=>{
     input.addEventListener("change", (e)=>{
