@@ -104,12 +104,12 @@
         <table>
             <colgroup>
                 <col style="width:18px">
-                <col style="width:86px">
-                <col style="width:72px">
-                <col style="width:58px">
+                <col style="width:70px">
+                <col style="width:62px">
+                <col style="width:42px">
                 <col>
-                <col style="width:128px">
-                <col style="width:68px">
+                <col style="width:96px">
+                <col style="width:50px">
             </colgroup>
 
             <thead>
@@ -2805,6 +2805,7 @@ function atualizarEstadoHeader(){
 function criarTd(row, valor){
     let td = document.createElement("td");
     td.textContent = valor ?? "";
+    td.title = valor ?? "";
     row.appendChild(td);
     return td;
 }

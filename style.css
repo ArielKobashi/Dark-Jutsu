@@ -13,8 +13,8 @@ body {
 }
 /* CONSOLE */
 #app {
-    min-width: 800px;
-    width: fit-content;
+    min-width: 0;
+    width: min(800px, 95vw);
     max-width: 95vw;
      /* antes 530 */
     height: 600px;    /* antes 600 */
@@ -583,13 +583,13 @@ table{
     width:100%;
     table-layout:fixed;
     border-collapse:collapse;
-    font-size:9px;
+    font-size:8.5px;
    
 }
 
 th, td {
     border: 1px solid #2A2A35;
-    padding: 1px;           /* antes 3px */
+    padding: 1px 2px;           /* antes 3px */
     text-align: center;
     white-space: nowrap;
     overflow: hidden;

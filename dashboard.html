@@ -128,6 +128,33 @@
             color:var(--soft);
             background:rgba(15,23,42,.74);
         }
+        .filters{
+            display:grid;
+            grid-template-columns:repeat(7, minmax(0, 1fr));
+            gap:8px;
+            margin-bottom:12px;
+            padding:10px;
+            border:1px solid rgba(148,163,184,.18);
+            border-radius:8px;
+            background:rgba(17,24,39,.72);
+        }
+        .filter{
+            min-width:0;
+        }
+        .filter label{
+            margin:0 0 5px;
+        }
+        select,.filter input{
+            width:100%;
+            min-height:34px;
+            border:1px solid var(--line);
+            background:#0d1422;
+            color:var(--text);
+            padding:8px 9px;
+            border-radius:6px;
+            font:inherit;
+            font-size:12px;
+        }
         .tableWrap{
             overflow:auto;
             border:1px solid rgba(148,163,184,.18);
@@ -181,6 +208,7 @@
             .headerActions{justify-content:flex-start;margin-top:12px}
             main{padding:14px}
             .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+            .filters{grid-template-columns:repeat(2,minmax(0,1fr))}
             .card strong{font-size:22px}
             th,td{font-size:12px;padding:8px}
         }
@@ -237,10 +265,12 @@
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             origem: (params.get("origem") || "").toLowerCase(),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
+            busca: (params.get("busca") || "").toLowerCase(),
             limite: Math.max(1, Math.min(500, Number(params.get("limite") || 80) || 80)),
             ordenar: parametroPermitido((params.get("ordenar") || "reposicao").toLowerCase(), ["reposicao","saldo","descricao","codigo"], "reposicao"),
             direcao: parametroPermitido((params.get("direcao") || "desc").toLowerCase(), ["asc","desc"], "desc")
         };
+        let bancoAtual = null;
         document.getElementById("titulo").textContent = cfg.titulo;
         btnAtualizar.addEventListener("click", () => carregar());
 
@@ -298,6 +328,14 @@
         function origemItem(item){
             return String(item?.limitesOrigem || item?.minimoOrigem || item?.maximoOrigem || item?.reposicaoOrigem || "").toLowerCase();
         }
+        function listaDados(valor){
+            if(Array.isArray(valor)) return valor;
+            if(valor && typeof valor === "object") return Object.values(valor);
+            return [];
+        }
+        function normalizarTexto(valor){
+            return String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        }
         function passaStatus(status){
             if(cfg.status === "todos" || cfg.status === "all") return true;
             if(cfg.status === "fora") return status === "abaixo" || status === "acima";
@@ -341,6 +379,21 @@
         function renderErro(msg){
             root.innerHTML = `<section class="erro"><h2>Nao foi possivel carregar</h2><p>${esc(msg)}</p></section>`;
         }
+        function bindFiltros(){
+            root.querySelectorAll("[data-filter]").forEach(el => {
+                el.addEventListener("input", () => {
+                    const nome = el.dataset.filter;
+                    if(nome === "semSolicitacao"){
+                        cfg.semSolicitacao = el.value === "1";
+                    }else if(nome === "limite"){
+                        cfg.limite = Math.max(1, Math.min(500, Number(el.value) || 80));
+                    }else{
+                        cfg[nome] = el.value.toLowerCase();
+                    }
+                    if(bancoAtual) renderDashboard(bancoAtual);
+                });
+            });
+        }
         async function carregar(){
             if(!auth.currentUser){
                 renderLogin();
@@ -356,8 +409,10 @@
             }
         }
         function renderDashboard(banco){
-            const dados = Array.isArray(banco?.dados) ? banco.dados : [];
+            bancoAtual = banco;
+            const dados = listaDados(banco?.dados);
             const pedidos = banco?.pedidosCompra || {};
+            const origens = [...new Set(dados.map(origemItem).filter(Boolean))].sort((a,b) => a.localeCompare(b, "pt-BR"));
             let linhas = dados.map(item => {
                 const pedido = pedidoItem(item, pedidos);
                 return { item, pedido, status: statusEstoque(item), reposicao: reposicao(item), origem: origemItem(item) };
@@ -367,6 +422,16 @@
                 if(!passaStatus(linha.status)) return false;
                 if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
                 if(cfg.origem && linha.origem !== cfg.origem) return false;
+                if(cfg.busca){
+                    const texto = normalizarTexto([
+                        linha.item.protheus,
+                        linha.item.cooperat,
+                        linha.item.descricao,
+                        linha.item.enderecoPrincipal,
+                        linha.item.armazemPrincipal
+                    ].join(" "));
+                    if(!texto.includes(normalizarTexto(cfg.busca))) return false;
+                }
                 return true;
             });
 
@@ -401,9 +466,65 @@
                     <span class="chip">ordenar=${esc(cfg.ordenar)} ${esc(cfg.direcao)}</span>
                     <span class="chip">limite=${cfg.limite}</span>
                     <span class="chip">sem solicitacao na lista: ${semPedido}</span>
+                    <span class="chip">base carregada: ${dados.length}</span>
                     ${cfg.origem ? `<span class="chip">origem=${esc(cfg.origem)}</span>` : ""}
                     ${cfg.itens.length ? `<span class="chip">itens=${cfg.itens.length}</span>` : ""}
                 </div>
+                <section class="filters">
+                    <div class="filter">
+                        <label for="fBusca">Busca</label>
+                        <input id="fBusca" data-filter="busca" value="${esc(cfg.busca)}" placeholder="codigo, descricao...">
+                    </div>
+                    <div class="filter">
+                        <label for="fStatus">Status</label>
+                        <select id="fStatus" data-filter="status">
+                            ${[
+                                ["fora","Fora da faixa"],
+                                ["abaixo","Abaixo"],
+                                ["acima","Acima"],
+                                ["ok","Ok"],
+                                ["sem","Sem faixa"],
+                                ["todos","Todos"]
+                            ].map(([v,t]) => `<option value="${v}" ${cfg.status === v ? "selected" : ""}>${t}</option>`).join("")}
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fSolicitacao">Solicitacao</label>
+                        <select id="fSolicitacao" data-filter="semSolicitacao">
+                            <option value="0" ${cfg.semSolicitacao ? "" : "selected"}>Todos</option>
+                            <option value="1" ${cfg.semSolicitacao ? "selected" : ""}>Sem solicitacao</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fOrigem">Origem</label>
+                        <select id="fOrigem" data-filter="origem">
+                            <option value="" ${cfg.origem ? "" : "selected"}>Todas</option>
+                            ${origens.map(o => `<option value="${esc(o)}" ${cfg.origem === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fOrdenar">Ordenar</label>
+                        <select id="fOrdenar" data-filter="ordenar">
+                            ${[
+                                ["reposicao","Reposicao"],
+                                ["saldo","Saldo"],
+                                ["descricao","Descricao"],
+                                ["codigo","Codigo"]
+                            ].map(([v,t]) => `<option value="${v}" ${cfg.ordenar === v ? "selected" : ""}>${t}</option>`).join("")}
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fDirecao">Direcao</label>
+                        <select id="fDirecao" data-filter="direcao">
+                            <option value="desc" ${cfg.direcao === "desc" ? "selected" : ""}>Maior primeiro</option>
+                            <option value="asc" ${cfg.direcao === "asc" ? "selected" : ""}>Menor primeiro</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fLimite">Limite</label>
+                        <input id="fLimite" data-filter="limite" type="number" min="1" max="500" value="${cfg.limite}">
+                    </div>
+                </section>
                 ${linhas.length ? `
                     <div class="tableWrap">
                         <table>
@@ -439,6 +560,7 @@
                     </div>
                 ` : `<section class="empty">Nenhum item encontrado com estes parametros.</section>`}
             `;
+            bindFiltros();
         }
 
         onAuthStateChanged(auth, user => {
