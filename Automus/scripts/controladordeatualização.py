@@ -628,15 +628,35 @@ class _ControlWindow:
         )
         stop_btn.pack(side="left")
 
-        run_btn = make_button(
+        run_n1_btn = make_button(
             buttons,
-            text="Executar tudo",
-            command=self._state.run_executar_tudo,
-            width=13,
+            text="Nivel 1",
+            command=lambda: self._state.run_executar_tudo(modo_atualizacao="nivel1"),
+            width=9,
             height=1,
             bg="#2563eb",
         )
-        run_btn.pack(side="left", padx=(6, 0))
+        run_n1_btn.pack(side="left", padx=(6, 0))
+
+        run_n2_btn = make_button(
+            buttons,
+            text="Nivel 2",
+            command=lambda: self._state.run_executar_tudo(modo_atualizacao="nivel2"),
+            width=9,
+            height=1,
+            bg="#4f46e5",
+        )
+        run_n2_btn.pack(side="left", padx=(6, 0))
+
+        run_all_btn = make_button(
+            buttons,
+            text="Os dois",
+            command=lambda: self._state.run_executar_tudo(modo_atualizacao="todos"),
+            width=9,
+            height=1,
+            bg="#2563eb",
+        )
+        run_all_btn.pack(side="left", padx=(6, 0))
 
         update_btn = make_button(
             buttons,
@@ -1332,14 +1352,16 @@ class _SharedState:
                     if not ok:
                         self._send(403, {"ok": False, "error": auth_msg})
                         return
+                    modo_atualizacao = str(payload.get("modoAtualizacao") or payload.get("modo_atualizacao") or "todos")
                     started = state.run_executar_tudo(
                         origem="sistema",
                         usuario=(state.authenticated_admin or {}).get("nickname") or "Dark-Jutsu",
+                        modo_atualizacao=modo_atualizacao,
                     )
                     if not started:
                         self._send(409, {"ok": False, "error": "Automus ocupado ou sem login ADM."})
                         return
-                    self._send(200, {"ok": True, "message": "executar_tudo iniciado"})
+                    self._send(200, {"ok": True, "message": "executar_tudo iniciado", "modoAtualizacao": modo_atualizacao})
                     return
                 self._send(404, {"ok": False, "error": "comando desconhecido"})
 
@@ -1976,10 +1998,10 @@ class _SharedState:
             lambda: self._run_single_macro_worker(macro_filename),
         )
 
-    def run_executar_tudo(self, origem: str = "manual", usuario: Optional[str] = None):
+    def run_executar_tudo(self, origem: str = "manual", usuario: Optional[str] = None, modo_atualizacao: str = "todos"):
         return self._start_worker(
             "executar-tudo-worker",
-            lambda: self._run_executar_tudo_worker(origem, usuario),
+            lambda: self._run_executar_tudo_worker(origem, usuario, modo_atualizacao),
         )
 
     def _run_single_macro_worker(self, macro_filename: str):
@@ -2004,11 +2026,11 @@ class _SharedState:
                 self.automation_running = False
             emit_status(f"Execução de {macro_path.name} finalizada.")
 
-    def _run_executar_tudo_worker(self, origem: str = "manual", usuario: Optional[str] = None):
+    def _run_executar_tudo_worker(self, origem: str = "manual", usuario: Optional[str] = None, modo_atualizacao: str = "todos"):
         history_entry = self.record_update_history("ativou", origem=origem, usuario=usuario)
         completed = False
         try:
-            emit_status("Iniciando executar_tudo.py pelo controlador...")
+            emit_status(f"Iniciando executar_tudo.py pelo controlador | modo={modo_atualizacao}...")
             mod = importlib.import_module("executar_tudo")
             if not hasattr(mod, "main"):
                 raise RuntimeError("executar_tudo.py não possui função main().")
@@ -2018,7 +2040,8 @@ class _SharedState:
                     "idToken": auth.get("idToken"),
                     "email": auth.get("email"),
                     "nickname": auth.get("nickname"),
-                }
+                },
+                modo_atualizacao=modo_atualizacao,
             )
             completed = result is not False
         except Exception as exc:
@@ -2242,7 +2265,9 @@ class ModCommandApp:
         _STATE.ensure_listener()
 
     def executar(self, comando: str) -> str:
-        cmd = (comando or "").strip().lower()
+        texto = (comando or "").strip().lower()
+        parts = texto.split()
+        cmd = parts[0] if parts else ""
         if not cmd:
             return self._help_text()
 
@@ -2274,8 +2299,11 @@ class ModCommandApp:
             return "OK: captura de pixel solicitada."
 
         if cmd in {"run", "executar", "executar_tudo", "start"}:
-            _STATE.run_executar_tudo()
-            return "OK: executar_tudo iniciado."
+            modo = "todos"
+            if len(parts) > 1:
+                modo = parts[1]
+            _STATE.run_executar_tudo(modo_atualizacao=modo)
+            return f"OK: executar_tudo iniciado | modo={modo}."
 
         if cmd in {"status", "estado"}:
             with _STATE.lock:
@@ -2298,7 +2326,7 @@ class ModCommandApp:
         return (
             "Comandos internos (mod): "
             "pausar, retomar, parar, ativar_pixel, desativar_pixel, "
-            "capturar_pixel, executar_tudo, status, ajuda"
+            "capturar_pixel, executar_tudo [nivel1|nivel2|todos], status, ajuda"
         )
 
 

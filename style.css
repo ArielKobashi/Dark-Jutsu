@@ -656,6 +656,22 @@ button:hover {
     transform: scale(1.03);
     box-shadow: 0 0 10px #7A3CFF;
 }
+
+.automusUpdateActions{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:6px;
+}
+
+.automusUpdateActions button{
+    width:100%;
+    min-height:34px;
+    padding:7px 8px;
+    font-size:11px;
+    white-space:normal;
+    line-height:1.15;
+}
+
 .toggle {
     margin-bottom: 3px;
 }

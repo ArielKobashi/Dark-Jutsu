@@ -436,7 +436,11 @@ Usuários do Sistema
 
     <hr>
     <div id="updateControls" style="display:none;">
-        <button onclick="acionarAtualizacaoAutomusPainel(this)">Executar Atualização (Automus)</button>
+        <div class="automusUpdateActions">
+            <button onclick="acionarAtualizacaoAutomusPainel(this, 'nivel1')">Atualizar nível 1</button>
+            <button onclick="acionarAtualizacaoAutomusPainel(this, 'nivel2')">Atualizar nível 2</button>
+            <button onclick="acionarAtualizacaoAutomusPainel(this, 'todos')">Atualizar os dois</button>
+        </div>
         <input type="file" id="fileInput" style="display:none" accept=".xlsx">
         <div style="margin-top:6px; font-size:10px; text-align:center;">
         Última atualização:
@@ -1925,11 +1929,20 @@ async function baixarAutomusMaisRecenteSeAdmin(){
     return manifest;
 }
 
-async function acionarAtualizacaoAutomusPainel(btn){
+function labelModoAtualizacaoAutomus(modo){
+    if(modo === "nivel2") return "nível 2";
+    if(modo === "todos") return "níveis 1 e 2";
+    return "nível 1";
+}
+
+async function acionarAtualizacaoAutomusPainel(btn, modoAtualizacao = "nivel1"){
+    const modo = ["nivel1", "nivel2", "todos"].includes(modoAtualizacao) ? modoAtualizacao : "nivel1";
+    const modoLabel = labelModoAtualizacaoAutomus(modo);
     const originalText = btn?.textContent;
+    const botoes = Array.from(document.querySelectorAll(".automusUpdateActions button"));
     if(btn){
-        btn.disabled = true;
-        btn.textContent = "ACIONANDO AUTOMUS...";
+        botoes.forEach(botao => botao.disabled = true);
+        btn.textContent = "ACIONANDO...";
     }
 
     try {
@@ -1946,7 +1959,8 @@ async function acionarAtualizacaoAutomusPainel(btn){
                 uid: currentUser?.uid || "",
                 email: currentUser?.email || "",
                 nickname: window.meuNickname || "",
-                nivel: window.nivelUsuario || ""
+                nivel: window.nivelUsuario || "",
+                modoAtualizacao: modo
             })
         });
         const result = await response.json().catch(() => ({}));
@@ -1954,12 +1968,12 @@ async function acionarAtualizacaoAutomusPainel(btn){
             throw new Error(result.error || "Automus não confirmou o comando.");
         }
         if (typeof window.mostrarNotificacao === "function") {
-            window.mostrarNotificacao("Automus em segundo plano iniciou a atualização.");
+            window.mostrarNotificacao(`Automus iniciou a atualização ${modoLabel}.`);
         }
     } catch (e) {
         console.warn("Falha ao acionar Automus local:", e);
         try{
-            if(btn) btn.textContent = "BAIXANDO AUTOMUS...";
+            if(btn) btn.textContent = "BAIXANDO...";
             const manifest = await baixarAutomusMaisRecenteSeAdmin();
             const versao = manifest.version ? ` versão ${manifest.version}` : "";
             if (typeof window.mostrarNotificacao === "function") {
@@ -1976,8 +1990,8 @@ async function acionarAtualizacaoAutomusPainel(btn){
         }
     } finally {
         if(btn){
-            btn.disabled = false;
-            btn.textContent = originalText || "Executar Atualização (Automus)";
+            botoes.forEach(botao => botao.disabled = false);
+            btn.textContent = originalText || "Atualizar nível 1";
         }
     }
 }

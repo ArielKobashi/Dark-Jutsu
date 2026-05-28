@@ -18,7 +18,27 @@ from controladordeatualização import (
     validate_macro_comment_sequence,
 )
 
-ATUALIZACAO_NIVEL_2_ATIVA = False
+MODOS_ATUALIZACAO = {"nivel1", "nivel2", "todos"}
+
+
+def normalizar_modo_atualizacao(modo: str | None) -> str:
+    modo_limpo = str(modo or "todos").strip().lower().replace("-", "").replace("_", "")
+    aliases = {
+        "1": "nivel1",
+        "n1": "nivel1",
+        "nivel1": "nivel1",
+        "nível1": "nivel1",
+        "2": "nivel2",
+        "n2": "nivel2",
+        "nivel2": "nivel2",
+        "nível2": "nivel2",
+        "ambos": "todos",
+        "completo": "todos",
+        "full": "todos",
+        "tudo": "todos",
+        "todos": "todos",
+    }
+    return aliases.get(modo_limpo, "todos")
 
 
 def carregar_macro(path: Path):
@@ -292,22 +312,25 @@ def preparar_e_enviar_etapa(
     enviar_atualizacao_automus(logger, base, automus_auth=automus_auth, project_root=project_root)
     logger.info("CONFIRMACAO: envio Firebase via Automus concluido na %s.", etapa)
 
-def main(macro_ref: str | None = None, automus_auth: dict | None = None):
+def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_atualizacao: str | None = "todos"):
     base = Path(os.environ.get("AUTOMUS_BUNDLED_SCRIPT_DIR") or Path(__file__).resolve().parent)
     project_root = Path(os.environ.get("AUTOMUS_PROJECT_ROOT") or base.parent)
     started_at_epoch = time.time()
     failed = False
+    modo_atualizacao = normalizar_modo_atualizacao(modo_atualizacao)
     if macro_ref:
         macros = [_resolver_macro(base, macro_ref)]
     else:
-        macros = [
-            base / "macro_001.py",
-            base / "macro_002.py",
-            base / "macro_003.py",
-            base / "macro_004.py",
-            base / "macro_005.py",
-        ]
-        if ATUALIZACAO_NIVEL_2_ATIVA:
+        macros = []
+        if modo_atualizacao in {"nivel1", "todos"}:
+            macros.extend([
+                base / "macro_001.py",
+                base / "macro_002.py",
+                base / "macro_003.py",
+                base / "macro_004.py",
+                base / "macro_005.py",
+            ])
+        if modo_atualizacao in {"nivel2", "todos"}:
             macros.extend([
                 base / "macro_007.py",
                 base / "macro_008.py",
@@ -329,11 +352,9 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
         time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(started_at_epoch)),
     )
     logger.info(
-        "Fluxo esperado: macros 003/004/005 salvam as planilhas; "
-        "apos a macro 005, Automus envia a atualizacao nivel 1 direto ao Firebase."
+        "Fluxo esperado: modo=%s | nivel 1 usa macros 001-005; nivel 2 usa macros 007-009.",
+        modo_atualizacao,
     )
-    if not ATUALIZACAO_NIVEL_2_ATIVA:
-        logger.info("Atualizacao nivel 2 temporariamente desativada: macros 007/008/009 nao serao executadas.")
 
     for macro in macros:
         controller.poll_keypress()
@@ -368,7 +389,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
             break
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
-            if macro.name.lower() == "macro_005.py":
+            if macro.name.lower() == "macro_005.py" and modo_atualizacao in {"nivel1", "todos"}:
                 try:
                     logger.info(
                         "CONFIRMACAO: primeira parte concluida. Enviando mata105/mata225/mata226 ao Firebase antes de continuar."
@@ -385,8 +406,8 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
                     logger.info(
                         "CONFIRMACAO: atualizacao nivel 1 enviada."
                     )
-                    if not ATUALIZACAO_NIVEL_2_ATIVA:
-                        logger.info("CONFIRMACAO: fluxo encerrado apos nivel 1 porque o nivel 2 esta desativado.")
+                    if modo_atualizacao == "nivel1":
+                        logger.info("CONFIRMACAO: fluxo encerrado apos nivel 1 por escolha do operador.")
                         break
                 except Exception as exc:
                     logger.exception("Falha no envio da primeira parte apos macro_005: %s", exc)
@@ -394,7 +415,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
                     failed = True
                     break
 
-            if macro.name.lower() == "macro_009.py" and ATUALIZACAO_NIVEL_2_ATIVA:
+            if macro.name.lower() == "macro_009.py" and modo_atualizacao in {"nivel2", "todos"}:
                 try:
                     logger.info(
                         "CONFIRMACAO: segunda parte concluida. Enviando pedido/compra/enderecamento ao Firebase."
@@ -406,7 +427,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
                         project_root,
                         automus_auth,
                         "segunda parte apos macro_009",
-                        ("mata105", "mata225", "mata226", "mata110", "mata111", "mata112"),
+                        ("mata110", "mata111", "mata112") if modo_atualizacao == "nivel2" else ("mata105", "mata225", "mata226", "mata110", "mata111", "mata112"),
                     )
                 except Exception as exc:
                     logger.exception("Falha no envio da segunda parte apos macro_009: %s", exc)
@@ -423,6 +444,12 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Executa a sequencia de macros ou uma macro isolada.")
     parser.add_argument("macro", nargs="?", help="Nome da macro para executar isoladamente, como macro_001.py.")
+    parser.add_argument(
+        "--modo",
+        choices=sorted(MODOS_ATUALIZACAO),
+        default="todos",
+        help="Modo da atualizacao: nivel1, nivel2 ou todos.",
+    )
     args = parser.parse_args()
-    main(args.macro)
+    main(args.macro, modo_atualizacao=args.modo)
 

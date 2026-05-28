@@ -269,6 +269,10 @@
         border-radius: 8px;
     }
 
+    .automusUpdateActions{
+        grid-template-columns:1fr;
+    }
+
     #chatBox {
         min-height: 180px;
         max-height: none;

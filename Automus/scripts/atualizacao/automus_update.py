@@ -82,6 +82,28 @@ def _http_json(
         raise RuntimeError(f"Falha de rede em {url}: {exc}") from exc
 
 
+def _decode_jwt_payload(token: str) -> dict[str, Any]:
+    parts = str(token or "").split(".")
+    if len(parts) < 2:
+        return {}
+    raw = parts[1] + "=" * (-len(parts[1]) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(raw.encode("ascii"))
+        payload = json.loads(decoded.decode("utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _id_token_expired(token: str, skew_seconds: int = 120) -> bool:
+    payload = _decode_jwt_payload(token)
+    exp = payload.get("exp")
+    try:
+        return int(exp) <= int(time.time()) + skew_seconds
+    except Exception:
+        return False
+
+
 def _extract_firebase_config(index_html_path: Path) -> tuple[str, str]:
     bundled_root = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "frozen", False) else None
     candidates = [index_html_path.parent / "scripts" / "firebase_config.json"]
@@ -750,6 +772,20 @@ def run_automus_update(
     index_path = project_root / "index.html"
     api_key, db_url = _extract_firebase_config(index_path)
 
+    def autenticar_config() -> tuple[str, str]:
+        auth_resp = _http_json(
+            f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}",
+            method="POST",
+            payload={
+                "email": email,
+                "password": password,
+                "returnSecureToken": True,
+            },
+        )
+        if not isinstance(auth_resp, dict) or not auth_resp.get("idToken"):
+            raise RuntimeError("AUTOMUS: falha ao autenticar no Firebase.")
+        return str(auth_resp["idToken"]), _safe_text(auth_resp.get("email")) or email
+
     incluir_path = _resolve_file(project_root, FILE_MAP["mata105"])
     saldo_atual_path = _resolve_file(project_root, FILE_MAP["mata225"])
     saldo_endereco_path = _resolve_file(project_root, FILE_MAP["mata226"])
@@ -765,30 +801,35 @@ def run_automus_update(
         estoque_minimo_path or "NAO_ENCONTRADA",
     )
 
+    if auth_id_token and _id_token_expired(auth_id_token):
+        if not email or not password:
+            raise RuntimeError("AUTOMUS: sessao Firebase expirada e automus_config.json nao tem email/password para renovar.")
+        log.warning("AUTOMUS: sessao Firebase ADM expirada; renovando autenticacao antes do envio.")
+        auth_id_token = None
+
     if auth_id_token:
         log.info("AUTOMUS: usando sessão Firebase ADM já autenticada.")
         id_token = str(auth_id_token)
         safe_email = _safe_text(auth_email) or "sessao-adm"
     else:
         log.info("AUTOMUS: iniciando autenticacao Firebase para envio sem navegador.")
-        auth_resp = _http_json(
-            f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}",
-            method="POST",
-            payload={
-                "email": email,
-                "password": password,
-                "returnSecureToken": True,
-            },
-        )
-        if not isinstance(auth_resp, dict) or not auth_resp.get("idToken"):
-            raise RuntimeError("AUTOMUS: falha ao autenticar no Firebase.")
-
-        id_token = str(auth_resp["idToken"])
-        safe_email = _safe_text(auth_resp.get("email")) or email
+        id_token, safe_email = autenticar_config()
     token_qs = f"?auth={id_token}"
 
-    estoque_url = f"{db_url}/estoqueGlobal.json{token_qs}"
-    snapshot = _http_json(estoque_url, method="GET")
+    usando_token_sessao = bool(auth_id_token)
+    while True:
+        estoque_url = f"{db_url}/estoqueGlobal.json{token_qs}"
+        try:
+            snapshot = _http_json(estoque_url, method="GET")
+            break
+        except RuntimeError as exc:
+            if usando_token_sessao and email and password and "HTTP 401" in str(exc):
+                log.warning("AUTOMUS: sessao Firebase ADM recusada pelo banco; renovando autenticacao e tentando novamente.")
+                id_token, safe_email = autenticar_config()
+                token_qs = f"?auth={id_token}"
+                usando_token_sessao = False
+                continue
+            raise
     banco = snapshot if isinstance(snapshot, dict) else {}
     hash_banco_antes = _json_hash(banco)
     log.info("TEST_FIREBASE_LEITURA_OK | hashAntes=%s", hash_banco_antes)
