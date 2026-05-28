@@ -3405,13 +3405,17 @@ function ajustarLarguraDescricaoTabela(){
         return Math.max(max, largura);
     }, 0);
 
-    const larguraDescricao = Math.max(130, Math.min(maiorDescricao, window.innerWidth - 328));
-    const larguraTabela = 18 + 64 + 52 + 34 + larguraDescricao + 86 + 60 + 18;
-    const larguraConsole = Math.min(window.innerWidth, Math.max(800, larguraTabela + 12));
+    const larguraFixaTabela = 18 + 64 + 52 + 34 + 86 + 60 + 18;
+    const larguraDescricaoIdeal = Math.max(130, maiorDescricao);
+    const larguraTabelaIdeal = larguraFixaTabela + larguraDescricaoIdeal;
+    const larguraMain = Math.max(530, larguraTabelaIdeal + 12);
+    const larguraConfig = document.getElementById("config")?.offsetWidth || 260;
+    const larguraConsole = Math.max(800, larguraMain + larguraConfig);
 
-    colDescricao.style.width = `${larguraDescricao}px`;
+    colDescricao.style.width = `${larguraDescricaoIdeal}px`;
+    main.style.width = `${larguraMain}px`;
     app.style.width = `${larguraConsole}px`;
-    table.style.setProperty("--descricao-col-width", `${larguraDescricao}px`);
+    table.style.setProperty("--descricao-col-width", `${larguraDescricaoIdeal}px`);
 }
 window.addEventListener("resize", () => ajustarLarguraDescricaoTabela());
 document.getElementById("selectAllHeader").addEventListener("change", function(){

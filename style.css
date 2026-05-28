@@ -15,7 +15,7 @@ body {
 #app {
     min-width: 0;
     width: min(800px, 100vw);
-    max-width: 100vw;
+    max-width: none;
      /* antes 530 */
     height: 600px;    /* antes 600 */
     background: #15151D;
@@ -578,7 +578,8 @@ display:none;
 
 /* MAIN AREA */
 #main {
-    flex: 1;              /* substitui width:82% */
+    flex: 0 0 auto;
+    width: var(--main-width, 530px);
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -649,6 +650,7 @@ tr:hover {
 }
 /* CONFIG PANEL */
 #config{
+    flex:0 0 260px;
     width: 260px;         /* substitui width:18% */
     background:#101018;
     padding:8px;
