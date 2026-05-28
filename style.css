@@ -141,34 +141,42 @@ display:none;
 }
 
 .historicoContagemPanel{
-    width:min(420px, 100%);
-    margin:7px auto 0;
+    position:absolute;
+    top:4px;
+    left:50%;
+    transform:translateX(-50%);
+    width:min(420px, calc(100% - 18px));
+    margin:0;
     flex-shrink:0;
-    border:1px solid rgba(103,232,249,0.28);
-    border-radius:8px;
-    background:#111827;
+    border:1px solid rgba(103,232,249,0.12);
+    border-radius:7px;
+    background:rgba(17,24,39,0.16);
     overflow:hidden;
-    box-shadow:0 0 12px rgba(34,211,238,0.08);
+    box-shadow:0 0 8px rgba(34,211,238,0.05);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    z-index:12;
 }
 
 #historicoContagemToggle{
     width:100%;
     border:0;
-    background:linear-gradient(145deg,#0F172A,#12223B);
-    color:#E0F2FE;
-    padding:8px 10px;
+    background:rgba(15,23,42,0.16);
+    color:rgba(224,242,254,0.82);
+    min-height:24px;
+    padding:3px 8px;
     display:flex;
     align-items:center;
     justify-content:space-between;
     gap:10px;
-    font-size:11px;
+    font-size:9px;
     font-weight:800;
     cursor:pointer;
 }
 
 #historicoContagemToggle strong{
-    color:#67E8F9;
-    font-size:10px;
+    color:rgba(103,232,249,0.82);
+    font-size:8px;
     text-transform:uppercase;
 }
 
@@ -180,6 +188,11 @@ display:none;
 
 .historicoContagemPanel.aberto #historicoContagemConteudo{
     max-height:190px;
+}
+
+#historicoContagemToolbar,
+#historicoContagemLista{
+    background:rgba(11,17,32,0.88);
 }
 
 #historicoContagemToolbar{

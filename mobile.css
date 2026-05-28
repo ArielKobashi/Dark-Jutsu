@@ -162,21 +162,26 @@
 
     .historicoContagemPanel {
         position: fixed;
-        left: 10px;
-        right: 10px;
-        bottom: calc(78px + env(safe-area-inset-bottom));
-        width: auto;
-        max-width: 460px;
-        margin: 0 auto;
+        left: 50%;
+        top: calc(4px + env(safe-area-inset-top));
+        width: min(360px, calc(100vw - 24px));
+        max-width: calc(100vw - 24px);
         z-index: 32;
-        border-radius: 10px;
-        box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.32), 0 0 14px rgba(34, 211, 238, 0.12);
+        border-radius: 8px;
+        background: rgba(17, 24, 39, 0.16);
+        border-color: rgba(103, 232, 249, 0.1);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
     }
 
     #historicoContagemToggle {
-        min-height: 38px;
-        padding: 8px 10px;
-        font-size: 11px;
+        min-height: 24px;
+        padding: 3px 8px;
+        font-size: 9px;
+        background: rgba(15, 23, 42, 0.16);
+    }
+
+    #historicoContagemToggle strong {
+        font-size: 8px;
     }
 
     .historicoContagemPanel.aberto #historicoContagemConteudo {
@@ -186,7 +191,8 @@
     #historicoContagemToolbar {
         grid-template-columns: 1fr 1fr;
         gap: 6px;
-        padding: 7px;
+        padding: 6px;
+        background: rgba(11, 17, 32, 0.86);
     }
 
     #historicoContagemToolbar button {
@@ -201,6 +207,7 @@
 
     #historicoContagemLista {
         max-height: 142px;
+        background: rgba(11, 17, 32, 0.86);
     }
 
     .historicoContagemRow {
