@@ -984,7 +984,83 @@ function calcularReposicaoMedia(minimo, maximo){
     const min = parseLimiteEstoque(minimo);
     const max = parseLimiteEstoque(maximo);
     if(min === null || max === null) return null;
-    return (min + max) / 2;
+    if(max <= min) return null;
+    return max - min;
+}
+
+function arredondarLimiteEstoque(valor){
+    const numero = parsePlanilhaNumero(valor);
+    if(numero === null || numero <= 0) return null;
+    return Math.max(1, Math.ceil(numero));
+}
+
+function estatisticasConsumoEstoque(item){
+    const historico = getHistoricoSaldoItem(item)
+        .filter(h => Number(h?.delta || 0) < 0)
+        .slice(-12)
+        .map(h => Math.abs(Number(h.delta || 0)))
+        .filter(v => Number.isFinite(v) && v > 0);
+    if(!historico.length){
+        return { media: 0, pico: 0, desvio: 0, eventos: 0 };
+    }
+    const media = historico.reduce((acc, v) => acc + v, 0) / historico.length;
+    const variancia = historico.reduce((acc, v) => acc + Math.pow(v - media, 2), 0) / historico.length;
+    return {
+        media,
+        pico: Math.max(...historico),
+        desvio: Math.sqrt(variancia),
+        eventos: historico.length
+    };
+}
+
+function calcularSugestaoLimitesEstoque(item){
+    const pedido = getPedidoCompraItem(item);
+    const consumo = estatisticasConsumoEstoque(item);
+    const saldoAtual = parsePlanilhaNumero(item?.saldo) ?? 0;
+    const saldoAnteriorPlanilha = parsePlanilhaNumero(item?.limitesCooperat?.saldoAnterior);
+    const consumoEntrePlanilhas = saldoAnteriorPlanilha !== null ? Math.max(0, saldoAnteriorPlanilha - saldoAtual) : 0;
+    const mediaPedido = parsePlanilhaNumero(pedido?.mediaPedido) ?? 0;
+
+    const candidatosDemanda = [
+        consumo.media,
+        consumo.pico * 0.65,
+        consumoEntrePlanilhas,
+        mediaPedido > 0 ? mediaPedido * 0.5 : 0
+    ].filter(v => Number.isFinite(v) && v > 0);
+
+    if(!candidatosDemanda.length) return null;
+
+    const demandaBase = Math.max(...candidatosDemanda);
+    const estoqueSeguranca = Math.max(
+        consumo.desvio,
+        demandaBase * 0.35,
+        consumo.pico * 0.25
+    );
+    const minimo = arredondarLimiteEstoque(demandaBase + estoqueSeguranca);
+    if(minimo === null) return null;
+
+    const loteReposicao = arredondarLimiteEstoque(Math.max(
+        mediaPedido,
+        demandaBase * 1.5,
+        minimo * 0.8
+    ));
+    const reposicao = loteReposicao || minimo;
+    const maximo = Math.max(minimo + reposicao, minimo + 1);
+
+    return {
+        minimo,
+        maximo,
+        reposicao: maximo - minimo,
+        criterio: {
+            demandaBase,
+            estoqueSeguranca,
+            consumoMedio: consumo.media,
+            consumoPico: consumo.pico,
+            eventosConsumo: consumo.eventos,
+            consumoEntrePlanilhas,
+            mediaPedido
+        }
+    };
 }
 
 function chaveAjusteItem(itemOrKey){
@@ -1014,20 +1090,26 @@ function aplicarReposicaoCalculada(item){
         if(item.limitesOrigem === "automatico"){
             delete item.limitesOrigem;
         }
+        delete item.sugestaoEstoque;
         return item;
     }
-    const pedido = getPedidoCompraItem(item);
-    if(pedido?.mediaPedido){
+    const sugestao = calcularSugestaoLimitesEstoque(item);
+    if(sugestao){
         if(item.minimo === undefined || item.minimo === null || item.minimo === ""){
-            item.minimo = Math.max(1, Math.round(pedido.mediaPedido));
+            item.minimo = sugestao.minimo;
             item.minimoOrigem = "automatico";
             item.limitesOrigem = item.limitesOrigem || "automatico";
         }
         if(item.maximo === undefined || item.maximo === null || item.maximo === ""){
-            item.maximo = Math.max(1, Math.round(pedido.mediaPedido * 2));
+            item.maximo = sugestao.maximo;
             item.maximoOrigem = "automatico";
             item.limitesOrigem = item.limitesOrigem || "automatico";
         }
+        if(item.limitesOrigem === "automatico"){
+            item.sugestaoEstoque = sugestao.criterio;
+        }
+    }else if(item.limitesOrigem !== "automatico"){
+        delete item.sugestaoEstoque;
     }
     const reposicaoCooperat = item.reposicaoOrigem === "cooperat" || item.limitesOrigem === "cooperat"
         ? parseLimiteEstoque(item.limitesCooperat?.reposicao)
@@ -1201,15 +1283,17 @@ function indexarEstoqueMinimoItens(planilha){
         const minimo = parseLimiteEstoque(row[6]);
         const maximo = parseLimiteEstoque(row[7]);
         const reposicaoPlanilha = parseLimiteEstoque(row[8]);
+        const saldoAnterior = parsePlanilhaNumero(row[5]);
         const reposicao = reposicaoPlanilha !== null ? reposicaoPlanilha : calcularReposicaoMedia(minimo, maximo);
 
-        if(minimo === null && maximo === null && reposicao === null) continue;
+        if(minimo === null && maximo === null && reposicao === null && saldoAnterior === null) continue;
 
         mapa.set(cooperatCodigo, {
             temLinha: true,
             minimo,
             maximo,
-            reposicao
+            reposicao,
+            saldoAnterior
         });
     }
 
@@ -1235,24 +1319,26 @@ function enriquecerItensComEstoqueMinimo(lista, anteriores){
         const extra = mapa.get(codigo);
         const anterior = mapaAnteriores.get(codigo);
         if(extra){
+            const temLimitePlanilha = extra.minimo !== null || extra.maximo !== null || extra.reposicao !== null;
             novo.limitesCooperat = {
                 minimo: extra.minimo,
                 maximo: extra.maximo,
-                reposicao: extra.reposicao
+                reposicao: extra.reposicao,
+                saldoAnterior: extra.saldoAnterior
             };
-            if(extra.temLinha && extra.minimo !== null){
+            if(temLimitePlanilha && extra.minimo !== null){
                 novo.minimo = extra.minimo;
                 novo.minimoOrigem = "cooperat";
             }
-            if(extra.temLinha && extra.maximo !== null){
+            if(temLimitePlanilha && extra.maximo !== null){
                 novo.maximo = extra.maximo;
                 novo.maximoOrigem = "cooperat";
             }
-            if(extra.temLinha && extra.reposicao !== null){
+            if(temLimitePlanilha && extra.reposicao !== null){
                 novo.reposicao = extra.reposicao;
                 novo.reposicaoOrigem = "cooperat";
             }
-            if(extra.temLinha){
+            if(temLimitePlanilha){
                 novo.limitesOrigem = "cooperat";
             }
         }else if(planilhaEstoqueCarregada && novo.limitesOrigem !== "manual"){
@@ -4905,7 +4991,7 @@ function abrirModalSaldos(item){
                         : "Não identificada";
         const origemTexto = textoOrigem(origemLimites);
         const origemHelp = origemLimites === "automatico"
-            ? "O sistema criou estes limites com base na média de pedidos do item."
+            ? "O sistema criou estes limites com base em consumo, pedido médio e saldo das planilhas."
             : origemLimites === "manual"
                 ? "Estes limites foram definidos no perfil do item e ficam salvos após atualizar."
                 : origemLimites === "cooperat"
@@ -4947,7 +5033,7 @@ function abrirModalSaldos(item){
         const minimoInputValor = minimoValor === null ? "" : String(minimoValor).replace(".", ",");
         const maximoInputValor = maximoValor === null ? "" : String(maximoValor).replace(".", ",");
         const reposicaoPreview = reposicaoValor === null ? "Informe mínimo e máximo" : formatarNumeroPlanilha(reposicaoValor);
-        const recalcularReposicaoAttr = 'const p=(v)=>{v=(v||"").trim().replace(/\\./g,"").replace(",",".");const n=Number(v);return Number.isFinite(n)&&n!==0?n:null};const a=p(document.getElementById("editMinimo").value);const b=p(document.getElementById("editMaximo").value);document.getElementById("reposicaoPreview").textContent=(a===null||b===null)?"Informe mínimo e máximo":new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format((a+b)/2);';
+        const recalcularReposicaoAttr = 'const p=(v)=>{v=(v||"").trim().replace(/\\./g,"").replace(",",".");const n=Number(v);return Number.isFinite(n)&&n!==0?n:null};const a=p(document.getElementById("editMinimo").value);const b=p(document.getElementById("editMaximo").value);document.getElementById("reposicaoPreview").textContent=(a===null||b===null||b<=a)?"Informe mínimo e máximo":new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(b-a);';
         const salvarAjusteAttr = `const b=this;b.disabled=true;b.textContent="Salvando...";parent.salvarAjusteEstoqueItem(decodeURIComponent("${itemKeyEncoded}"),document.getElementById("editMinimo").value,document.getElementById("editMaximo").value).then(r=>{const s=document.getElementById("editStatus");if(r&&r.ok){s.textContent="Salvo.";s.className="editStatus ok";document.getElementById("reposicaoPreview").textContent=r.reposicao===""?"Informe mínimo e máximo":new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(Number(r.reposicao));}else{s.textContent=(r&&r.mensagem)||"Erro ao salvar.";s.className="editStatus erro";}}).finally(()=>{b.disabled=false;b.textContent="Salvar limites";});`;
 
         const enderecosOriginais = Array.isArray(itemSeguro.enderecos) ? itemSeguro.enderecos : [];
@@ -5031,7 +5117,7 @@ function abrirModalSaldos(item){
         const cooperatCards = [
             { titulo: "Mínimo Cooperat", valor: valorLimite(minimoCooperat, "Não veio"), ajuda: "Valor original da planilha Cooperat", classe: "cardMinimo" },
             { titulo: "Máximo Cooperat", valor: valorLimite(maximoCooperat, "Não veio"), ajuda: "Valor original da planilha Cooperat", classe: "cardMaximo" },
-            { titulo: "Reposição Cooperat", valor: valorLimite(reposicaoCooperat, "Não veio"), ajuda: "Média entre mínimo e máximo Cooperat", classe: "cardReposicao" }
+            { titulo: "Reposição Cooperat", valor: valorLimite(reposicaoCooperat, "Não veio"), ajuda: "Quantidade para retornar do mínimo ao máximo Cooperat", classe: "cardReposicao" }
         ];
         const cooperatHtml = cooperatCards.map(card => `
             <article class="card ${card.classe}">
@@ -5514,7 +5600,7 @@ function abrirModalSaldos(item){
             <div class="sectionHeader">
                 <div>
                     <h2>Editar limites</h2>
-                    <p>Os valores salvos aqui ficam mantidos no sistema após novas atualizações e aparecem como ajuste manual. Reposição é calculada automaticamente pela média entre mínimo e máximo.</p>
+                    <p>Os valores salvos aqui ficam mantidos no sistema após novas atualizações e aparecem como ajuste manual. Reposição é calculada como a quantidade para voltar do mínimo ao máximo.</p>
                 </div>
             </div>
             <div class="editGrid">
@@ -5918,7 +6004,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
         // SALDO TOTAL
         for (let j = 1; j < saldoAtual.length; j++) {
             if (saldoAtual[j][1] == protheus) {
-                item.saldo = Number(saldoAtual[j][4]) || 0;
+                item.saldo = parsePlanilhaNumero(saldoAtual[j][5] ?? saldoAtual[j][4]) || 0;
                 break;
             }
         }

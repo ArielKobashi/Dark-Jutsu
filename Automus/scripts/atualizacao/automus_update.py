@@ -211,7 +211,117 @@ def _reposicao_media(minimo: Any, maximo: Any) -> float | None:
     max_num = _optional_limit_num(maximo)
     if min_num is None or max_num is None:
         return None
-    return (min_num + max_num) / 2
+    if max_num <= min_num:
+        return None
+    return max_num - min_num
+
+
+def _ceil_positive(value: Any) -> int | None:
+    num = _optional_num(value)
+    if num is None or num <= 0:
+        return None
+    return max(1, int(math.ceil(num)))
+
+
+def _historico_consumo_stats(item: dict[str, Any], historico: dict[str, Any]) -> dict[str, float]:
+    hist = historico.get(_ajuste_key(_item_key(item)))
+    saidas: list[float] = []
+    if isinstance(hist, list):
+        for ent in hist[-12:]:
+            if not isinstance(ent, dict):
+                continue
+            delta = _optional_num(ent.get("delta"))
+            if delta is not None and delta < 0:
+                saidas.append(abs(delta))
+    if not saidas:
+        return {"media": 0.0, "pico": 0.0, "desvio": 0.0, "eventos": 0.0}
+    media = sum(saidas) / len(saidas)
+    variancia = sum((v - media) ** 2 for v in saidas) / len(saidas)
+    return {
+        "media": media,
+        "pico": max(saidas),
+        "desvio": math.sqrt(variancia),
+        "eventos": float(len(saidas)),
+    }
+
+
+def _sugerir_limites_estoque(
+    item: dict[str, Any],
+    historico: dict[str, Any],
+    pedidos_compra: dict[str, Any],
+) -> dict[str, Any] | None:
+    consumo = _historico_consumo_stats(item, historico)
+    saldo_atual = _optional_num(item.get("saldo")) or 0.0
+    limites_cooperat = item.get("limitesCooperat") if isinstance(item.get("limitesCooperat"), dict) else {}
+    saldo_anterior = _optional_num(limites_cooperat.get("saldoAnterior") if isinstance(limites_cooperat, dict) else None)
+    consumo_entre_planilhas = max(0.0, (saldo_anterior or 0.0) - saldo_atual) if saldo_anterior is not None else 0.0
+
+    codigo = _ascii_lower(item.get("protheus") or item.get("protheusKey") or item.get("cooperat"))
+    pedido = pedidos_compra.get(_ajuste_key(codigo)) if codigo else None
+    if not isinstance(pedido, dict) and codigo:
+        pedido = pedidos_compra.get(codigo)
+    media_pedido = _optional_num(pedido.get("mediaPedido")) if isinstance(pedido, dict) else None
+    media_pedido = media_pedido or 0.0
+
+    candidatos = [
+        consumo["media"],
+        consumo["pico"] * 0.65,
+        consumo_entre_planilhas,
+        media_pedido * 0.5 if media_pedido > 0 else 0.0,
+    ]
+    candidatos = [v for v in candidatos if math.isfinite(v) and v > 0]
+    if not candidatos:
+        return None
+
+    demanda_base = max(candidatos)
+    estoque_seguranca = max(consumo["desvio"], demanda_base * 0.35, consumo["pico"] * 0.25)
+    minimo = _ceil_positive(demanda_base + estoque_seguranca)
+    if minimo is None:
+        return None
+    lote = _ceil_positive(max(media_pedido, demanda_base * 1.5, minimo * 0.8)) or minimo
+    maximo = max(minimo + lote, minimo + 1)
+    return {
+        "minimo": minimo,
+        "maximo": maximo,
+        "reposicao": maximo - minimo,
+        "criterio": {
+            "demandaBase": demanda_base,
+            "estoqueSeguranca": estoque_seguranca,
+            "consumoMedio": consumo["media"],
+            "consumoPico": consumo["pico"],
+            "eventosConsumo": int(consumo["eventos"]),
+            "consumoEntrePlanilhas": consumo_entre_planilhas,
+            "mediaPedido": media_pedido,
+        },
+    }
+
+
+def _aplicar_sugestoes_estoque(
+    itens: list[dict[str, Any]],
+    historico: dict[str, Any],
+    pedidos_compra: dict[str, Any],
+) -> None:
+    for item in itens:
+        if not isinstance(item, dict):
+            continue
+        if item.get("limitesOrigem") in {"manual", "cooperat"}:
+            item.pop("sugestaoEstoque", None)
+            continue
+        sugestao = _sugerir_limites_estoque(item, historico, pedidos_compra)
+        if not sugestao:
+            item.pop("sugestaoEstoque", None)
+            continue
+        if item.get("minimo") in (None, ""):
+            item["minimo"] = sugestao["minimo"]
+            item["minimoOrigem"] = "automatico"
+        if item.get("maximo") in (None, ""):
+            item["maximo"] = sugestao["maximo"]
+            item["maximoOrigem"] = "automatico"
+        if item.get("minimoOrigem") == "automatico" or item.get("maximoOrigem") == "automatico":
+            item["limitesOrigem"] = item.get("limitesOrigem") or "automatico"
+            item["reposicao"] = _reposicao_media(item.get("minimo"), item.get("maximo"))
+            item["reposicaoOrigem"] = "automatico"
+            item["sugestaoEstoque"] = sugestao["criterio"]
 
 
 def _ajuste_key(item_key: str) -> str:
@@ -531,7 +641,7 @@ def _build_items(
             continue
         cod = _safe_text(row[1])
         if cod:
-            saldo_atual_idx[cod] = _num(row[4])
+            saldo_atual_idx[cod] = _num(row[5] if len(row) > 5 else row[4])
 
     end_antigo_idx: dict[str, str] = {}
     for row in cooperat[2:]:
@@ -577,14 +687,16 @@ def _build_items(
         minimo = _optional_limit_num(row[6] if len(row) > 6 else None)
         maximo = _optional_limit_num(row[7] if len(row) > 7 else None)
         reposicao_planilha = _optional_limit_num(row[8] if len(row) > 8 else None)
+        saldo_anterior = _optional_num(row[5] if len(row) > 5 else None)
         reposicao = reposicao_planilha if reposicao_planilha is not None else _reposicao_media(minimo, maximo)
-        if minimo is None and maximo is None and reposicao is None:
+        if minimo is None and maximo is None and reposicao is None and saldo_anterior is None:
             continue
         estoque_minimo_idx[cooperat_cod] = {
             "temLinha": True,
             "minimo": minimo,
             "maximo": maximo,
             "reposicao": reposicao,
+            "saldoAnterior": saldo_anterior,
         }
 
     prev_by_protheus: dict[str, dict[str, Any]] = {}
@@ -649,17 +761,23 @@ def _build_items(
                 "minimo": estoque_minimo_item.get("minimo"),
                 "maximo": estoque_minimo_item.get("maximo"),
                 "reposicao": estoque_minimo_item.get("reposicao"),
+                "saldoAnterior": estoque_minimo_item.get("saldoAnterior"),
             }
-            if estoque_minimo_item.get("temLinha") and estoque_minimo_item.get("minimo") is not None:
+            tem_limite_planilha = (
+                estoque_minimo_item.get("minimo") is not None
+                or estoque_minimo_item.get("maximo") is not None
+                or estoque_minimo_item.get("reposicao") is not None
+            )
+            if tem_limite_planilha and estoque_minimo_item.get("minimo") is not None:
                 item["minimo"] = estoque_minimo_item["minimo"]
                 item["minimoOrigem"] = "cooperat"
-            if estoque_minimo_item.get("temLinha") and estoque_minimo_item.get("maximo") is not None:
+            if tem_limite_planilha and estoque_minimo_item.get("maximo") is not None:
                 item["maximo"] = estoque_minimo_item["maximo"]
                 item["maximoOrigem"] = "cooperat"
-            if estoque_minimo_item.get("temLinha") and estoque_minimo_item.get("reposicao") is not None:
+            if tem_limite_planilha and estoque_minimo_item.get("reposicao") is not None:
                 item["reposicao"] = estoque_minimo_item["reposicao"]
                 item["reposicaoOrigem"] = "cooperat"
-            if estoque_minimo_item.get("temLinha"):
+            if tem_limite_planilha:
                 item["limitesOrigem"] = "cooperat"
 
         anterior = prev_by_protheus.get(protheus) or prev_by_cooperat.get(cooperat_cod)
@@ -884,6 +1002,7 @@ def run_automus_update(
         agora_ms,
     )
     pedidos_compra = _montar_pedidos_compra(mata110, mata111, mata112, novos_dados, historico_saldo)
+    _aplicar_sugestoes_estoque(novos_dados, historico_saldo, pedidos_compra)
 
     payload = {
         "dados": novos_dados,

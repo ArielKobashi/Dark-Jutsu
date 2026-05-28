@@ -26,7 +26,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 - Tela de contagem de estoque por maquina/endereco, limitada aos armazens 04 e 05, com rascunho local, botoes rapidos, divergencias e exportacao XLSX.
 - Modal de perfil do item com saldo, endereco, minimo, maximo e reposicao.
 - Edicao item a item de minimo e maximo dentro do modal.
-- Reposicao calculada automaticamente pela media entre minimo e maximo.
+- Reposicao calculada como quantidade para voltar do minimo ao maximo; sugestoes automaticas usam consumo, pedido medio e saldo das planilhas.
 - Ajustes manuais persistidos em `estoqueGlobal/ajustesItens`, preservados apos atualizacoes.
 - Chat por salas com:
   - sala publica com blur ate abrir;
