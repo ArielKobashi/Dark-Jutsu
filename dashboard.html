@@ -7,61 +7,96 @@
     <style>
         :root{
             color-scheme:dark;
-            --bg:#0b1020;
+            --bg:#080b12;
             --panel:#111827;
-            --line:#243044;
-            --text:#e5e7eb;
-            --muted:#94a3b8;
+            --panel2:#151f2f;
+            --line:#283548;
+            --text:#edf2f7;
+            --muted:#9aa8bc;
+            --soft:#cbd5e1;
             --red:#ef4444;
             --green:#22c55e;
             --amber:#f59e0b;
             --blue:#38bdf8;
+            --violet:#a78bfa;
         }
         *{box-sizing:border-box}
         body{
             margin:0;
             min-height:100vh;
-            background:var(--bg);
+            background:
+                radial-gradient(circle at top left, rgba(56,189,248,.14), transparent 34%),
+                linear-gradient(135deg, #080b12 0%, #101522 46%, #0b111c 100%);
             color:var(--text);
             font-family:Segoe UI, Arial, sans-serif;
         }
         header{
+            border-bottom:1px solid rgba(148,163,184,.18);
+            background:rgba(8,11,18,.78);
+            backdrop-filter:blur(16px);
+        }
+        .topbar{
+            width:min(1420px, 100%);
+            margin:0 auto;
             display:flex;
-            align-items:flex-end;
+            align-items:center;
             justify-content:space-between;
             gap:18px;
-            padding:22px 26px 14px;
-            border-bottom:1px solid var(--line);
-            background:#0f172a;
+            padding:20px 24px 14px;
         }
-        h1{margin:0;font-size:22px}
-        .sub{color:var(--muted);font-size:12px;margin-top:4px}
-        main{padding:18px 26px 28px}
-        .login,.erro{
-            max-width:420px;
-            margin:60px auto;
-            padding:18px;
-            background:var(--panel);
-            border:1px solid var(--line);
+        h1{margin:0;font-size:24px;font-weight:800;letter-spacing:0}
+        h2{margin:0 0 12px;font-size:18px}
+        .sub{color:var(--muted);font-size:12px;margin-top:5px}
+        .headerActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+        main{
+            width:min(1420px, 100%);
+            margin:0 auto;
+            padding:18px 24px 30px;
+        }
+        .login,.erro,.loading,.empty{
+            max-width:440px;
+            margin:58px auto;
+            padding:20px;
+            background:rgba(17,24,39,.92);
+            border:1px solid rgba(148,163,184,.2);
             border-radius:8px;
+            box-shadow:0 22px 70px rgba(0,0,0,.24);
         }
-        label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+        .loading,.empty{max-width:560px;text-align:center;color:var(--muted)}
+        label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px}
         input,button{
             width:100%;
             border:1px solid var(--line);
-            background:#0f172a;
+            background:#0d1422;
             color:var(--text);
             padding:10px 11px;
             border-radius:6px;
             font:inherit;
         }
         button{
-            margin-top:14px;
             cursor:pointer;
-            font-weight:700;
+            font-weight:800;
             background:#2563eb;
             border-color:#3b82f6;
         }
+        button:disabled{opacity:.62;cursor:wait}
+        .primaryBtn,.secondaryBtn{
+            width:auto;
+            min-height:36px;
+            padding:8px 12px;
+            text-decoration:none;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:6px;
+            font-size:13px;
+            font-weight:800;
+            color:var(--text);
+        }
+        .primaryBtn{background:#2563eb;border:1px solid #3b82f6}
+        .secondaryBtn{background:#111827;border:1px solid var(--line)}
+        .login button{margin-top:14px}
+        .loginStatus{min-height:18px;color:#fca5a5;font-size:12px;margin-top:10px}
         .cards{
             display:grid;
             grid-template-columns:repeat(4,minmax(0,1fr));
@@ -69,13 +104,16 @@
             margin-bottom:14px;
         }
         .card{
-            background:var(--panel);
-            border:1px solid var(--line);
+            background:rgba(17,24,39,.88);
+            border:1px solid rgba(148,163,184,.18);
             border-radius:8px;
-            padding:12px;
+            padding:14px;
         }
-        .card span{display:block;color:var(--muted);font-size:11px}
-        .card strong{display:block;font-size:24px;margin-top:6px}
+        .card span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase}
+        .card strong{display:block;font-size:26px;margin-top:7px}
+        .card.red strong{color:#fecaca}
+        .card.green strong{color:#bbf7d0}
+        .card.blue strong{color:#bae6fd}
         .toolbar{
             display:flex;
             flex-wrap:wrap;
@@ -83,42 +121,52 @@
             margin-bottom:12px;
         }
         .chip{
-            border:1px solid var(--line);
+            border:1px solid rgba(148,163,184,.18);
             border-radius:999px;
             padding:6px 9px;
             font-size:12px;
-            color:var(--muted);
-            background:#0f172a;
+            color:var(--soft);
+            background:rgba(15,23,42,.74);
+        }
+        .tableWrap{
+            overflow:auto;
+            border:1px solid rgba(148,163,184,.18);
+            border-radius:8px;
+            background:rgba(17,24,39,.88);
+            box-shadow:0 22px 70px rgba(0,0,0,.2);
         }
         table{
             width:100%;
+            min-width:920px;
             border-collapse:collapse;
-            background:var(--panel);
-            border:1px solid var(--line);
-            border-radius:8px;
-            overflow:hidden;
         }
         th,td{
-            padding:9px 10px;
-            border-bottom:1px solid var(--line);
+            padding:10px 11px;
+            border-bottom:1px solid rgba(148,163,184,.14);
             text-align:left;
             font-size:13px;
             vertical-align:top;
         }
         th{
-            color:#cbd5e1;
-            background:#162033;
+            position:sticky;
+            top:0;
+            z-index:1;
+            color:#d8e1ee;
+            background:#172033;
             font-size:11px;
             text-transform:uppercase;
         }
+        tr:hover td{background:rgba(56,189,248,.045)}
         tr:last-child td{border-bottom:0}
+        .codigo{font-weight:800;color:#e2e8f0;white-space:nowrap}
+        .descricao{min-width:280px}
         .num{text-align:right;white-space:nowrap}
         .status{
             display:inline-flex;
             border-radius:999px;
-            padding:3px 7px;
+            padding:4px 8px;
             font-size:11px;
-            font-weight:700;
+            font-weight:800;
             white-space:nowrap;
         }
         .abaixo{background:rgba(239,68,68,.16);color:#fecaca}
@@ -126,22 +174,31 @@
         .ok{background:rgba(56,189,248,.14);color:#bae6fd}
         .sem{background:rgba(148,163,184,.14);color:#cbd5e1}
         .pedido{color:#cbd5e1}
-        .pedido.semPedido{color:#fca5a5;font-weight:700}
+        .pedido.semPedido{color:#fca5a5;font-weight:800}
+        .origem{color:var(--muted)}
         @media (max-width:800px){
-            header{display:block}
-            .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+            .topbar{display:block;padding:17px 14px 12px}
+            .headerActions{justify-content:flex-start;margin-top:12px}
             main{padding:14px}
+            .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+            .card strong{font-size:22px}
             th,td{font-size:12px;padding:8px}
         }
     </style>
 </head>
 <body>
     <header>
-        <div>
-            <h1 id="titulo">Dashboard de Estoque</h1>
-            <div class="sub" id="subtitulo">Carregando dados...</div>
+        <div class="topbar">
+            <div>
+                <h1 id="titulo">Dashboard de Estoque</h1>
+                <div class="sub" id="subtitulo">Carregando dados...</div>
+            </div>
+            <div class="headerActions">
+                <span class="sub" id="ultimaAtualizacao"></span>
+                <a class="secondaryBtn" href="index.html">Abrir Dark</a>
+                <button class="primaryBtn" id="btnAtualizar" type="button">Atualizar</button>
+            </div>
         </div>
-        <div class="sub" id="ultimaAtualizacao"></div>
     </header>
     <main id="app"></main>
 
@@ -166,18 +223,26 @@
         const db = getDatabase(app);
         const auth = getAuth(app);
         const root = document.getElementById("app");
+        const btnAtualizar = document.getElementById("btnAtualizar");
 
+        function parametroPermitido(valor, permitidos, padrao){
+            return permitidos.includes(valor) ? valor : padrao;
+        }
+        function boolParam(nomeA, nomeB){
+            return ["1","true","sim","yes"].includes((params.get(nomeA) || params.get(nomeB) || "").toLowerCase());
+        }
         const cfg = {
             titulo: params.get("titulo") || "Dashboard de Estoque",
-            status: (params.get("status") || "fora").toLowerCase(),
-            semSolicitacao: ["1","true","sim"].includes((params.get("semSolicitacao") || params.get("semPedido") || "").toLowerCase()),
+            status: parametroPermitido((params.get("status") || "fora").toLowerCase(), ["todos","all","fora","abaixo","acima","ok","sem","sem-faixa"], "fora"),
+            semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             origem: (params.get("origem") || "").toLowerCase(),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
-            limite: Math.max(1, Math.min(500, Number(params.get("limite") || 80))),
-            ordenar: (params.get("ordenar") || "reposicao").toLowerCase(),
-            direcao: (params.get("direcao") || "desc").toLowerCase()
+            limite: Math.max(1, Math.min(500, Number(params.get("limite") || 80) || 80)),
+            ordenar: parametroPermitido((params.get("ordenar") || "reposicao").toLowerCase(), ["reposicao","saldo","descricao","codigo"], "reposicao"),
+            direcao: parametroPermitido((params.get("direcao") || "desc").toLowerCase(), ["asc","desc"], "desc")
         };
         document.getElementById("titulo").textContent = cfg.titulo;
+        btnAtualizar.addEventListener("click", () => carregar());
 
         function fmt(valor){
             const n = Number(valor);
@@ -216,6 +281,9 @@
             if(min !== null || max !== null) return "ok";
             return "sem";
         }
+        function statusRotulo(status){
+            return { abaixo:"Abaixo", acima:"Acima", ok:"Ok", sem:"Sem faixa" }[status] || status;
+        }
         function pedidoAtivo(pedido){
             if(!pedido) return false;
             const status = String(pedido.status || "");
@@ -237,25 +305,55 @@
             return status === cfg.status;
         }
         function renderLogin(){
+            document.getElementById("subtitulo").textContent = "Login necessario para ler o estoque";
+            document.getElementById("ultimaAtualizacao").textContent = "";
             root.innerHTML = `
                 <section class="login">
                     <h2>Entrar</h2>
-                    <label>Login</label>
+                    <label for="login">Login</label>
                     <input id="login" autocomplete="username" placeholder="usuario ou email">
-                    <label>Senha</label>
+                    <label for="senha">Senha</label>
                     <input id="senha" type="password" autocomplete="current-password">
-                    <button id="entrar">Carregar dashboard</button>
+                    <button id="entrar" type="button">Carregar dashboard</button>
+                    <div class="loginStatus" id="loginStatus" aria-live="polite"></div>
                 </section>
             `;
             document.getElementById("entrar").onclick = async () => {
+                const botao = document.getElementById("entrar");
+                const status = document.getElementById("loginStatus");
                 const login = document.getElementById("login").value.trim();
                 const email = login.includes("@") ? login : `${login}@sistema.com`;
                 const senha = document.getElementById("senha").value;
-                await signInWithEmailAndPassword(auth, email, senha);
+                status.textContent = "";
+                botao.disabled = true;
+                try{
+                    await signInWithEmailAndPassword(auth, email, senha);
+                }catch(err){
+                    status.textContent = "Login ou senha invalidos.";
+                    botao.disabled = false;
+                }
             };
         }
+        function renderLoading(){
+            document.getElementById("subtitulo").textContent = "Buscando dados do estoque...";
+            root.innerHTML = `<section class="loading">Carregando dashboard...</section>`;
+        }
         function renderErro(msg){
-            root.innerHTML = `<section class="erro"><h2>Não foi possível carregar</h2><p>${msg}</p></section>`;
+            root.innerHTML = `<section class="erro"><h2>Nao foi possivel carregar</h2><p>${esc(msg)}</p></section>`;
+        }
+        async function carregar(){
+            if(!auth.currentUser){
+                renderLogin();
+                return;
+            }
+            renderLoading();
+            try{
+                const snap = await get(ref(db, "estoqueGlobal"));
+                renderDashboard(snap.val() || {});
+            }catch(err){
+                document.getElementById("subtitulo").textContent = "Erro ao carregar dados";
+                renderErro(err.message || String(err));
+            }
         }
         function renderDashboard(banco){
             const dados = Array.isArray(banco?.dados) ? banco.dados : [];
@@ -264,7 +362,8 @@
                 const pedido = pedidoItem(item, pedidos);
                 return { item, pedido, status: statusEstoque(item), reposicao: reposicao(item), origem: origemItem(item) };
             }).filter(linha => {
-                if(cfg.itens.length && !cfg.itens.includes(key(linha.item)) && !cfg.itens.includes(String(linha.item.cooperat || "").toLowerCase())) return false;
+                const codigo = key(linha.item);
+                if(cfg.itens.length && !cfg.itens.includes(codigo) && !cfg.itens.includes(String(linha.item.cooperat || "").toLowerCase())) return false;
                 if(!passaStatus(linha.status)) return false;
                 if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
                 if(cfg.origem && linha.origem !== cfg.origem) return false;
@@ -285,69 +384,69 @@
             const semPedido = linhas.filter(l => !pedidoAtivo(l.pedido)).length;
             const totalReposicao = linhas.reduce((s,l) => s + (l.reposicao || 0), 0);
 
-            document.getElementById("subtitulo").textContent = `${linhas.length} item(ns) conforme parâmetros da URL`;
+            document.getElementById("subtitulo").textContent = `${linhas.length} item(ns) conforme parametros da URL`;
             const dt = banco?.ultimaAtualizacao ? new Date(banco.ultimaAtualizacao).toLocaleString("pt-BR") : "-";
-            document.getElementById("ultimaAtualizacao").textContent = `Última atualização: ${dt}`;
+            document.getElementById("ultimaAtualizacao").textContent = `Ultima atualizacao: ${dt}`;
 
             root.innerHTML = `
                 <section class="cards">
-                    <article class="card"><span>Itens</span><strong>${linhas.length}</strong></article>
-                    <article class="card"><span>Abaixo do mínimo</span><strong>${abaixo}</strong></article>
-                    <article class="card"><span>Acima do máximo</span><strong>${acima}</strong></article>
-                    <article class="card"><span>Reposição total</span><strong>${fmt(totalReposicao)}</strong></article>
+                    <article class="card blue"><span>Itens</span><strong>${linhas.length}</strong></article>
+                    <article class="card red"><span>Abaixo do minimo</span><strong>${abaixo}</strong></article>
+                    <article class="card green"><span>Acima do maximo</span><strong>${acima}</strong></article>
+                    <article class="card"><span>Reposicao total</span><strong>${fmt(totalReposicao)}</strong></article>
                 </section>
                 <div class="toolbar">
                     <span class="chip">status=${esc(cfg.status)}</span>
                     <span class="chip">semSolicitacao=${cfg.semSolicitacao ? "1" : "0"}</span>
-                    <span class="chip">ordenar=${esc(cfg.ordenar)}</span>
+                    <span class="chip">ordenar=${esc(cfg.ordenar)} ${esc(cfg.direcao)}</span>
                     <span class="chip">limite=${cfg.limite}</span>
-                    <span class="chip">sem pedido na lista: ${semPedido}</span>
+                    <span class="chip">sem solicitacao na lista: ${semPedido}</span>
+                    ${cfg.origem ? `<span class="chip">origem=${esc(cfg.origem)}</span>` : ""}
+                    ${cfg.itens.length ? `<span class="chip">itens=${cfg.itens.length}</span>` : ""}
                 </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Descrição</th>
-                            <th class="num">Saldo</th>
-                            <th class="num">Mín.</th>
-                            <th class="num">Máx.</th>
-                            <th class="num">Reposição</th>
-                            <th>Status</th>
-                            <th>Pedido</th>
-                            <th>Origem</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${linhas.map(({item,pedido,status,reposicao,origem}) => `
-                            <tr>
-                                <td>${esc(item.protheus || item.cooperat || "-")}</td>
-                                <td>${esc(item.descricao || "-")}</td>
-                                <td class="num">${fmt(item.saldo)}</td>
-                                <td class="num">${fmt(item.minimo)}</td>
-                                <td class="num">${fmt(item.maximo)}</td>
-                                <td class="num">${fmt(reposicao)}</td>
-                                <td><span class="status ${esc(status)}">${esc(status)}</span></td>
-                                <td class="pedido ${pedidoAtivo(pedido) ? "" : "semPedido"}">${esc(pedidoAtivo(pedido) ? (pedido.titulo || "Com solicitação") : "Sem solicitação")}</td>
-                                <td>${esc(origem || "-")}</td>
-                            </tr>
-                        `).join("")}
-                    </tbody>
-                </table>
+                ${linhas.length ? `
+                    <div class="tableWrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Codigo</th>
+                                    <th>Descricao</th>
+                                    <th class="num">Saldo</th>
+                                    <th class="num">Min.</th>
+                                    <th class="num">Max.</th>
+                                    <th class="num">Reposicao</th>
+                                    <th>Status</th>
+                                    <th>Pedido</th>
+                                    <th>Origem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${linhas.map(({item,pedido,status,reposicao,origem}) => `
+                                    <tr>
+                                        <td class="codigo">${esc(item.protheus || item.cooperat || "-")}</td>
+                                        <td class="descricao">${esc(item.descricao || "-")}</td>
+                                        <td class="num">${fmt(item.saldo)}</td>
+                                        <td class="num">${fmt(item.minimo)}</td>
+                                        <td class="num">${fmt(item.maximo)}</td>
+                                        <td class="num">${fmt(reposicao)}</td>
+                                        <td><span class="status ${esc(status)}">${esc(statusRotulo(status))}</span></td>
+                                        <td class="pedido ${pedidoAtivo(pedido) ? "" : "semPedido"}">${esc(pedidoAtivo(pedido) ? (pedido.titulo || "Com solicitacao") : "Sem solicitacao")}</td>
+                                        <td class="origem">${esc(origem || "-")}</td>
+                                    </tr>
+                                `).join("")}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : `<section class="empty">Nenhum item encontrado com estes parametros.</section>`}
             `;
         }
 
-        onAuthStateChanged(auth, async user => {
+        onAuthStateChanged(auth, user => {
             if(!user){
-                document.getElementById("subtitulo").textContent = "Login necessário para ler o estoque";
                 renderLogin();
                 return;
             }
-            try{
-                const snap = await get(ref(db, "estoqueGlobal"));
-                renderDashboard(snap.val() || {});
-            }catch(err){
-                renderErro(err.message || String(err));
-            }
+            carregar();
         });
     </script>
 </body>

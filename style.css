@@ -1100,7 +1100,6 @@ th.col-ordenada.col-filtrada {
 
 .enderecoForaCell{
     position:relative;
-    padding-right:22px;
 }
 
 .enderecoForaCell::after{
@@ -1124,7 +1123,6 @@ th.col-ordenada.col-filtrada {
 
 .saldoAbaixoSemPedidoCell{
     position:relative;
-    padding-right:22px;
 }
 
 .saldoAbaixoSemPedidoCell::after{
