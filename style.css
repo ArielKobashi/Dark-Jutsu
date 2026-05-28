@@ -94,22 +94,28 @@ display:none;
     width:100%;
     margin:0;
     padding:10px;
-    font-size:14px;
+    font-size:12px;
 }
 
 #mainActions{
     display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:8px;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:6px;
     flex-shrink:0;
     margin-top:6px;
 }
 
-#btnContagem{
+#btnContagem,
+#btnDashboard{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-sizing:border-box;
     width:100%;
     margin:0;
     padding:10px;
-    font-size:14px;
+    font-size:12px;
+    text-decoration:none;
     background:#166534;
     border:1px solid #22C55E;
     color:#ECFDF5;
@@ -121,6 +127,17 @@ display:none;
 #btnContagem:hover{
     filter:brightness(1.08);
     box-shadow:0 0 12px rgba(34,197,94,0.35);
+}
+
+#btnDashboard{
+    background:linear-gradient(145deg,#7A3CFF,#5A2CBB);
+    border-color:#9A5CFF;
+    color:#F3E8FF;
+}
+
+#btnDashboard:hover{
+    filter:brightness(1.08);
+    box-shadow:0 0 12px rgba(122,60,255,0.42);
 }
 
 #adminBtn{

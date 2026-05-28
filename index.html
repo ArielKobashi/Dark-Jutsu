@@ -8,6 +8,7 @@
 <link rel="icon" href="logo-tab.png">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="mobile.css?v=7">
+<script src="dashboard-nav.js" defer></script>
 <!-- /SPLIT: head.html -->
 
 </head>
@@ -98,7 +99,7 @@
 <!-- SPLIT: main.html (estoque table + magnet + relatorio) -->
 <div id="main">
 
-    <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descrição">
+    <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descrição" oninput="if(['/dashboard','dashboard','dash'].includes(this.value.toLowerCase().trim())){this.value='';location.href='dashboard.html';}">
 
     <div id="tableContainer">
         <table>
@@ -218,7 +219,33 @@ xmlns="http://www.w3.org/2000/svg">
 <div id="mainActions">
     <button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relatório</button>
     <button id="btnContagem" onclick="abrirContagem()">Contagem</button>
+    <a id="btnDashboard" href="dashboard.html" title="Abrir dashboard de estoque">Dashboard</a>
 </div>
+
+<script>
+window.abrirDashboard = window.abrirDashboard || function(){
+    window.location.href = "dashboard.html";
+};
+window.executarComandoDashboardBusca = window.executarComandoDashboardBusca || function(valor){
+    const comando = (valor || "").toLowerCase().trim();
+    if(!["/dashboard", "dashboard", "dash"].includes(comando)) return false;
+    const input = document.getElementById("searchInput");
+    if(input) input.value = "";
+    window.abrirDashboard();
+    return true;
+};
+document.getElementById("searchInput")?.addEventListener("input", function(e){
+    if(window.executarComandoDashboardBusca(this.value)){
+        e.stopImmediatePropagation();
+    }
+});
+document.addEventListener("keydown", function(e){
+    if(e.ctrlKey && e.altKey && (e.key === "d" || e.key === "D")){
+        e.preventDefault();
+        window.abrirDashboard();
+    }
+});
+</script>
 
 </div> <!-- FECHA #main -->
 <!-- /SPLIT: main.html -->
@@ -1562,7 +1589,29 @@ function atualizarBadge(){
 }
 
 /* ====== PESQUISA ====== */
+function abrirDashboard(){
+    window.location.href = "dashboard.html";
+}
+window.abrirDashboard = abrirDashboard;
+
+function executarComandoBusca(valor){
+    const comando = (valor || "").toLowerCase().trim();
+    if(["/dashboard", "dashboard", "dash"].includes(comando)){
+        const input = document.getElementById("searchInput");
+        if(input) input.value = "";
+        abrirDashboard();
+        return true;
+    }
+    return false;
+}
+
 document.getElementById("searchInput").addEventListener("input", ()=>{
+    const input = document.getElementById("searchInput");
+    if(executarComandoBusca(input?.value || "")){
+        limite = getLimiteTabelaInicial();
+        aplicarTodosFiltros();
+        return;
+    }
     limite = getLimiteTabelaInicial();
     aplicarTodosFiltros();
 });
@@ -2783,6 +2832,10 @@ document.addEventListener("keydown", function (e) {
     if (e.ctrlKey && e.altKey && (e.key === "r" || e.key === "R")) {
         e.preventDefault();
         resetAtualizacaoSegura();
+    }
+    if (e.ctrlKey && e.altKey && (e.key === "d" || e.key === "D")) {
+        e.preventDefault();
+        abrirDashboard();
     }
 });
 

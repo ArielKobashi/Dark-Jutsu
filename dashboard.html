@@ -7,33 +7,36 @@
     <style>
         :root{
             color-scheme:dark;
-            --bg:#080b12;
-            --panel:#111827;
-            --panel2:#151f2f;
-            --line:#283548;
-            --text:#edf2f7;
-            --muted:#9aa8bc;
+            --bg:#0D0D12;
+            --panel:#15151D;
+            --panel2:#1A1A25;
+            --line:#2A2A35;
+            --text:#E6E6E6;
+            --muted:#9CA3AF;
             --soft:#cbd5e1;
             --red:#ef4444;
             --green:#22c55e;
             --amber:#f59e0b;
-            --blue:#38bdf8;
-            --violet:#a78bfa;
+            --blue:#00D9FF;
+            --violet:#7A3CFF;
+            --violet2:#9A5CFF;
         }
         *{box-sizing:border-box}
         body{
             margin:0;
             min-height:100vh;
             background:
-                radial-gradient(circle at top left, rgba(56,189,248,.14), transparent 34%),
-                linear-gradient(135deg, #080b12 0%, #101522 46%, #0b111c 100%);
+                radial-gradient(circle at 22% 16%, rgba(122,60,255,.28), transparent 36%),
+                radial-gradient(circle at 88% 12%, rgba(0,217,255,.12), transparent 30%),
+                #0D0D12;
             color:var(--text);
             font-family:Segoe UI, Arial, sans-serif;
         }
         header{
-            border-bottom:1px solid rgba(148,163,184,.18);
-            background:rgba(8,11,18,.78);
+            border-bottom:1px solid rgba(122,60,255,.35);
+            background:rgba(13,13,18,.86);
             backdrop-filter:blur(16px);
+            box-shadow:0 0 20px rgba(122,60,255,.24);
         }
         .topbar{
             width:min(1420px, 100%);
@@ -57,17 +60,17 @@
             max-width:440px;
             margin:58px auto;
             padding:20px;
-            background:rgba(17,24,39,.92);
-            border:1px solid rgba(148,163,184,.2);
+            background:rgba(21,21,29,.94);
+            border:1px solid rgba(122,60,255,.42);
             border-radius:8px;
-            box-shadow:0 22px 70px rgba(0,0,0,.24);
+            box-shadow:0 0 24px rgba(122,60,255,.26);
         }
         .loading,.empty{max-width:560px;text-align:center;color:var(--muted)}
         label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px}
         input,button{
             width:100%;
             border:1px solid var(--line);
-            background:#0d1422;
+            background:#1F1F2A;
             color:var(--text);
             padding:10px 11px;
             border-radius:6px;
@@ -76,8 +79,8 @@
         button{
             cursor:pointer;
             font-weight:800;
-            background:#2563eb;
-            border-color:#3b82f6;
+            background:linear-gradient(145deg,#7A3CFF,#5A2CBB);
+            border-color:#9A5CFF;
         }
         button:disabled{opacity:.62;cursor:wait}
         .primaryBtn,.secondaryBtn{
@@ -93,8 +96,8 @@
             font-weight:800;
             color:var(--text);
         }
-        .primaryBtn{background:#2563eb;border:1px solid #3b82f6}
-        .secondaryBtn{background:#111827;border:1px solid var(--line)}
+        .primaryBtn{background:linear-gradient(145deg,#7A3CFF,#5A2CBB);border:1px solid #9A5CFF}
+        .secondaryBtn{background:#1A1A25;border:1px solid #2A2A35}
         .login button{margin-top:14px}
         .loginStatus{min-height:18px;color:#fca5a5;font-size:12px;margin-top:10px}
         .cards{
@@ -104,8 +107,8 @@
             margin-bottom:14px;
         }
         .card{
-            background:rgba(17,24,39,.88);
-            border:1px solid rgba(148,163,184,.18);
+            background:rgba(21,21,29,.9);
+            border:1px solid rgba(122,60,255,.28);
             border-radius:8px;
             padding:14px;
         }
@@ -121,12 +124,12 @@
             margin-bottom:12px;
         }
         .chip{
-            border:1px solid rgba(148,163,184,.18);
+            border:1px solid rgba(122,60,255,.28);
             border-radius:999px;
             padding:6px 9px;
             font-size:12px;
             color:var(--soft);
-            background:rgba(15,23,42,.74);
+            background:rgba(26,26,37,.78);
         }
         .filters{
             display:grid;
@@ -134,9 +137,9 @@
             gap:8px;
             margin-bottom:12px;
             padding:10px;
-            border:1px solid rgba(148,163,184,.18);
+            border:1px solid rgba(122,60,255,.28);
             border-radius:8px;
-            background:rgba(17,24,39,.72);
+            background:rgba(21,21,29,.76);
         }
         .filter{
             min-width:0;
@@ -148,7 +151,7 @@
             width:100%;
             min-height:34px;
             border:1px solid var(--line);
-            background:#0d1422;
+            background:#1F1F2A;
             color:var(--text);
             padding:8px 9px;
             border-radius:6px;
@@ -157,10 +160,10 @@
         }
         .tableWrap{
             overflow:auto;
-            border:1px solid rgba(148,163,184,.18);
+            border:1px solid rgba(122,60,255,.28);
             border-radius:8px;
-            background:rgba(17,24,39,.88);
-            box-shadow:0 22px 70px rgba(0,0,0,.2);
+            background:rgba(21,21,29,.88);
+            box-shadow:0 0 22px rgba(122,60,255,.18);
         }
         table{
             width:100%;
@@ -178,12 +181,12 @@
             position:sticky;
             top:0;
             z-index:1;
-            color:#d8e1ee;
-            background:#172033;
+            color:#EDE9FE;
+            background:#1A1A25;
             font-size:11px;
             text-transform:uppercase;
         }
-        tr:hover td{background:rgba(56,189,248,.045)}
+        tr:hover td{background:rgba(122,60,255,.16)}
         tr:last-child td{border-bottom:0}
         .codigo{font-weight:800;color:#e2e8f0;white-space:nowrap}
         .descricao{min-width:280px}
@@ -230,6 +233,7 @@
     </header>
     <main id="app"></main>
 
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -252,6 +256,7 @@
         const auth = getAuth(app);
         const root = document.getElementById("app");
         const btnAtualizar = document.getElementById("btnAtualizar");
+        let estoqueMinimoCache = null;
 
         function parametroPermitido(valor, permitidos, padrao){
             return permitidos.includes(valor) ? valor : padrao;
@@ -291,6 +296,21 @@
             if(valor === null || valor === undefined || valor === "") return null;
             const n = Number(String(valor).replace(/\./g,"").replace(",","."));
             return Number.isFinite(n) ? n : null;
+        }
+        function limite(valor){
+            const n = num(valor);
+            return n === null || n === 0 ? null : n;
+        }
+        function normalizarCodigo(valor){
+            return String(valor ?? "").trim().toLowerCase();
+        }
+        function ajusteKey(itemOrKey){
+            const valor = typeof itemOrKey === "string" ? itemOrKey : key(itemOrKey);
+            try{
+                return btoa(unescape(encodeURIComponent(valor || ""))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+            }catch{
+                return String(valor || "").replace(/[^A-Za-z0-9_-]/g, "_");
+            }
         }
         function key(item){
             return String(item?.protheusKey || item?.protheus || item?.cooperat || "").trim().toLowerCase();
@@ -332,6 +352,90 @@
             if(Array.isArray(valor)) return valor;
             if(valor && typeof valor === "object") return Object.values(valor);
             return [];
+        }
+        async function carregarEstoqueMinimo(){
+            if(estoqueMinimoCache) return estoqueMinimoCache;
+            const mapa = new Map();
+            estoqueMinimoCache = mapa;
+            try{
+                if(typeof XLSX === "undefined") return mapa;
+                const response = await fetch("downloads/estoque_minimo.xlsx", { cache: "no-store" });
+                if(!response.ok) return mapa;
+                const data = await response.arrayBuffer();
+                const workbook = XLSX.read(data, { type: "array" });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const linhas = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                linhas.forEach(row => {
+                    const codigo = normalizarCodigo(row?.[1]);
+                    if(!codigo || codigo.includes("codigo") || codigo.includes("código") || codigo.includes("item")) return;
+                    const minimo = limite(row[6]);
+                    const maximo = limite(row[7]);
+                    const reposicaoPlanilha = limite(row[8]);
+                    const saldoAnterior = num(row[5]);
+                    const repos = reposicaoPlanilha !== null ? reposicaoPlanilha : calcularReposicaoMedia(minimo, maximo);
+                    if(minimo === null && maximo === null && repos === null && saldoAnterior === null) return;
+                    mapa.set(codigo, { minimo, maximo, reposicao: repos, saldoAnterior });
+                });
+            }catch(err){
+                console.warn("Nao foi possivel carregar estoque_minimo.xlsx no dashboard:", err);
+            }
+            return mapa;
+        }
+        function calcularReposicaoMedia(minimo, maximo){
+            const min = limite(minimo);
+            const max = limite(maximo);
+            if(min === null || max === null || max <= min) return null;
+            return max - min;
+        }
+        function aplicarLimitesDashboard(item, mapaMinimo, ajustes){
+            const novo = {...(item || {})};
+            const codigoCooperat = normalizarCodigo(novo.cooperat);
+            const extra = mapaMinimo.get(codigoCooperat);
+            if(extra){
+                novo.limitesCooperat = {
+                    minimo: extra.minimo,
+                    maximo: extra.maximo,
+                    reposicao: extra.reposicao,
+                    saldoAnterior: extra.saldoAnterior
+                };
+                if(extra.minimo !== null){
+                    novo.minimo = extra.minimo;
+                    novo.minimoOrigem = "cooperat";
+                }
+                if(extra.maximo !== null){
+                    novo.maximo = extra.maximo;
+                    novo.maximoOrigem = "cooperat";
+                }
+                if(extra.reposicao !== null){
+                    novo.reposicao = extra.reposicao;
+                    novo.reposicaoOrigem = "cooperat";
+                }
+                if(extra.minimo !== null || extra.maximo !== null || extra.reposicao !== null){
+                    novo.limitesOrigem = "cooperat";
+                }
+            }
+            const ajuste = ajustes?.[ajusteKey(novo)] || ajustes?.[ajusteKey(codigoCooperat)];
+            if(ajuste){
+                if(ajuste.minimo !== undefined){
+                    novo.minimo = ajuste.minimo;
+                    novo.minimoOrigem = "manual";
+                }
+                if(ajuste.maximo !== undefined){
+                    novo.maximo = ajuste.maximo;
+                    novo.maximoOrigem = "manual";
+                }
+                if(ajuste.reposicao !== undefined){
+                    novo.reposicao = ajuste.reposicao;
+                    novo.reposicaoOrigem = "manual";
+                }
+                novo.limitesOrigem = "manual";
+            }
+            const repo = limite(novo.reposicao) ?? calcularReposicaoMedia(novo.minimo, novo.maximo);
+            if(repo !== null){
+                novo.reposicao = repo;
+                novo.reposicaoOrigem = novo.reposicaoOrigem || novo.limitesOrigem || "calculada";
+            }
+            return novo;
         }
         function normalizarTexto(valor){
             return String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -379,9 +483,24 @@
         function renderErro(msg){
             root.innerHTML = `<section class="erro"><h2>Nao foi possivel carregar</h2><p>${esc(msg)}</p></section>`;
         }
+        function renderDashboardAtual(foco){
+            if(bancoAtual) renderDashboard(bancoAtual);
+            if(foco?.id){
+                requestAnimationFrame(() => {
+                    const el = document.getElementById(foco.id);
+                    if(!el) return;
+                    el.focus();
+                    if(typeof el.setSelectionRange === "function"){
+                        const pos = Math.min(foco.pos ?? el.value.length, el.value.length);
+                        el.setSelectionRange(pos, pos);
+                    }
+                });
+            }
+        }
         function bindFiltros(){
             root.querySelectorAll("[data-filter]").forEach(el => {
                 el.addEventListener("input", () => {
+                    const foco = { id: el.id, pos: el.selectionStart };
                     const nome = el.dataset.filter;
                     if(nome === "semSolicitacao"){
                         cfg.semSolicitacao = el.value === "1";
@@ -390,7 +509,7 @@
                     }else{
                         cfg[nome] = el.value.toLowerCase();
                     }
-                    if(bancoAtual) renderDashboard(bancoAtual);
+                    renderDashboardAtual(foco);
                 });
             });
         }
@@ -401,16 +520,20 @@
             }
             renderLoading();
             try{
-                const snap = await get(ref(db, "estoqueGlobal"));
-                renderDashboard(snap.val() || {});
+                const [snap, mapaMinimo] = await Promise.all([
+                    get(ref(db, "estoqueGlobal")),
+                    carregarEstoqueMinimo()
+                ]);
+                renderDashboard(snap.val() || {}, mapaMinimo);
             }catch(err){
                 document.getElementById("subtitulo").textContent = "Erro ao carregar dados";
                 renderErro(err.message || String(err));
             }
         }
-        function renderDashboard(banco){
+        function renderDashboard(banco, mapaMinimo = estoqueMinimoCache || new Map()){
             bancoAtual = banco;
-            const dados = listaDados(banco?.dados);
+            const ajustes = banco?.ajustesItens || {};
+            const dados = listaDados(banco?.dados).map(item => aplicarLimitesDashboard(item, mapaMinimo, ajustes));
             const pedidos = banco?.pedidosCompra || {};
             const origens = [...new Set(dados.map(origemItem).filter(Boolean))].sort((a,b) => a.localeCompare(b, "pt-BR"));
             let linhas = dados.map(item => {
@@ -467,6 +590,7 @@
                     <span class="chip">limite=${cfg.limite}</span>
                     <span class="chip">sem solicitacao na lista: ${semPedido}</span>
                     <span class="chip">base carregada: ${dados.length}</span>
+                    <span class="chip">com faixa: ${dados.filter(item => limite(item.minimo) !== null || limite(item.maximo) !== null).length}</span>
                     ${cfg.origem ? `<span class="chip">origem=${esc(cfg.origem)}</span>` : ""}
                     ${cfg.itens.length ? `<span class="chip">itens=${cfg.itens.length}</span>` : ""}
                 </div>
