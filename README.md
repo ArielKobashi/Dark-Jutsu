@@ -58,6 +58,45 @@ Os scripts Python ficam em `scripts/`.
 - `scripts/atualizacao/automus_config.json` - credenciais/configuracao local do Automus.
 - `scripts/executar_tudo.log` - log gerado pela automacao.
 
+## Regras de Estoque
+
+### Origem de minimo, maximo e reposicao
+
+A prioridade dos limites e:
+
+1. Ajuste manual salvo no perfil do item (`estoqueGlobal/ajustesItens`).
+2. Valores validos da planilha `estoque_minimo.xlsx`.
+3. Sugestao automatica do sistema.
+4. Valor anterior ja salvo, quando a planilha de estoque minimo nao foi carregada.
+
+Zero, vazio ou valor invalido em minimo/maximo/reposicao e tratado como "sem limite". Quando a planilha `estoque_minimo.xlsx` traz a linha do item, mas minimo/maximo/reposicao estao zerados, o sistema usa o `SALDO ANTERIOR` apenas como pista de consumo; ele nao vira minimo automaticamente.
+
+### Sugestao automatica
+
+A sugestao automatica usa metodologia de ponto de pedido:
+
+- `reposicao` e a quantidade para voltar do minimo ao maximo (`maximo - minimo`), nao a media entre minimo e maximo.
+- O consumo estimado considera historico de saidas do item, pico recente de saida, queda entre `SALDO ANTERIOR` e saldo atual, e pedido medio anterior quando existir.
+- Quando existe pedido de compra anterior, a media recebida vira referencia de lote de reposicao. O minimo sugerido por compra usa cerca de 35% desse lote como estoque de seguranca, sem transformar o lote inteiro em minimo.
+- Exemplo: pedido medio anterior de 100 pecas, sem outro consumo melhor, sugere minimo perto de 35, maximo perto de 135 e reposicao perto de 100.
+- Ajustes manuais sempre vencem a sugestao automatica e sao preservados nas proximas atualizacoes.
+
+### Filtros de faixa
+
+O botao `!` na coluna Saldo alterna em tres estados:
+
+1. Normal: mostra a tabela completa.
+2. Fora da faixa: mostra itens abaixo do minimo ou acima do maximo, ocultando os itens dentro da faixa.
+3. Fora da faixa sem pedido: mostra apenas os itens fora da faixa que ainda nao tem pedido/solicitacao ativa. Neste modo o botao muda para `P` e fica laranja.
+
+## Modos de Atualizacao Automus
+
+No painel admin do Dark-Jutsu existem tres acoes:
+
+- Atualizar nivel 1: roda macros 001-005 e envia mata105/mata225/mata226.
+- Atualizar nivel 2: roda macros 007-009 e envia dados de pedido, compra e enderecamento.
+- Atualizar os dois: executa nivel 1, envia, depois executa nivel 2 e envia.
+
 ## Como executar scripts
 
 Use o Python instalado via WindowsApps, se `python` nao estiver no PATH:

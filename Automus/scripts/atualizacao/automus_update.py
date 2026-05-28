@@ -262,20 +262,26 @@ def _sugerir_limites_estoque(
         pedido = pedidos_compra.get(codigo)
     media_pedido = _optional_num(pedido.get("mediaPedido")) if isinstance(pedido, dict) else None
     media_pedido = media_pedido or 0.0
+    minimo_por_compra = media_pedido * 0.35 if media_pedido > 0 else 0.0
 
-    candidatos = [
+    candidatos_consumo = [
         consumo["media"],
         consumo["pico"] * 0.65,
         consumo_entre_planilhas,
-        media_pedido * 0.5 if media_pedido > 0 else 0.0,
+    ]
+    candidatos_consumo = [v for v in candidatos_consumo if math.isfinite(v) and v > 0]
+    candidatos = [
+        *candidatos_consumo,
+        minimo_por_compra,
     ]
     candidatos = [v for v in candidatos if math.isfinite(v) and v > 0]
     if not candidatos:
         return None
 
     demanda_base = max(candidatos)
-    estoque_seguranca = max(consumo["desvio"], demanda_base * 0.35, consumo["pico"] * 0.25)
-    minimo = _ceil_positive(demanda_base + estoque_seguranca)
+    estoque_seguranca = max(consumo["desvio"], demanda_base * 0.35, consumo["pico"] * 0.25, minimo_por_compra)
+    minimo_estimado = max(demanda_base + estoque_seguranca, minimo_por_compra) if candidatos_consumo else minimo_por_compra
+    minimo = _ceil_positive(minimo_estimado)
     if minimo is None:
         return None
     lote = _ceil_positive(max(media_pedido, demanda_base * 1.5, minimo * 0.8)) or minimo
@@ -292,6 +298,8 @@ def _sugerir_limites_estoque(
             "eventosConsumo": int(consumo["eventos"]),
             "consumoEntrePlanilhas": consumo_entre_planilhas,
             "mediaPedido": media_pedido,
+            "minimoPorCompra": minimo_por_compra,
+            "fontePrincipal": "pedido_compra" if media_pedido > 0 and not candidatos_consumo else "consumo",
         },
     }
 

@@ -200,13 +200,18 @@ def _sugerir_limites_estoque(item: dict[str, Any], historico: dict[str, Any]) ->
     limites_cooperat = item.get("limitesCooperat") if isinstance(item.get("limitesCooperat"), dict) else {}
     saldo_anterior = _optional_num(limites_cooperat.get("saldoAnterior") if isinstance(limites_cooperat, dict) else None)
     consumo_entre_planilhas = max(0.0, (saldo_anterior or 0.0) - saldo_atual) if saldo_anterior is not None else 0.0
-    candidatos = [consumo["media"], consumo["pico"] * 0.65, consumo_entre_planilhas]
+    media_pedido = 0.0
+    minimo_por_compra = 0.0
+    candidatos_consumo = [consumo["media"], consumo["pico"] * 0.65, consumo_entre_planilhas]
+    candidatos_consumo = [v for v in candidatos_consumo if math.isfinite(v) and v > 0]
+    candidatos = [*candidatos_consumo, minimo_por_compra]
     candidatos = [v for v in candidatos if math.isfinite(v) and v > 0]
     if not candidatos:
         return None
     demanda_base = max(candidatos)
-    estoque_seguranca = max(consumo["desvio"], demanda_base * 0.35, consumo["pico"] * 0.25)
-    minimo = _ceil_positive(demanda_base + estoque_seguranca)
+    estoque_seguranca = max(consumo["desvio"], demanda_base * 0.35, consumo["pico"] * 0.25, minimo_por_compra)
+    minimo_estimado = max(demanda_base + estoque_seguranca, minimo_por_compra) if candidatos_consumo else minimo_por_compra
+    minimo = _ceil_positive(minimo_estimado)
     if minimo is None:
         return None
     lote = _ceil_positive(max(demanda_base * 1.5, minimo * 0.8)) or minimo
@@ -222,7 +227,9 @@ def _sugerir_limites_estoque(item: dict[str, Any], historico: dict[str, Any]) ->
             "consumoPico": consumo["pico"],
             "eventosConsumo": int(consumo["eventos"]),
             "consumoEntrePlanilhas": consumo_entre_planilhas,
-            "mediaPedido": 0,
+            "mediaPedido": media_pedido,
+            "minimoPorCompra": minimo_por_compra,
+            "fontePrincipal": "consumo",
         },
     }
 

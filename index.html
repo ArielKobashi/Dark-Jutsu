@@ -929,6 +929,20 @@ function getPedidoCompraItem(item){
     return pedidosCompraEstado?.[chaveAjusteItem(codigo)] || pedidosCompraEstado?.[codigo] || null;
 }
 
+function itemTemPedidoCompraAtivo(item){
+    const pedido = getPedidoCompraItem(item);
+    if(!pedido) return false;
+    const status = (pedido.status || "").toString();
+    if(!status || status === "sem") return false;
+    return !!(
+        pedido.pedido ||
+        pedido.solicitacao ||
+        pedido.entradaEndereco ||
+        pedido.recebidoSemEntrada > 0 ||
+        status.startsWith("aguardando")
+    );
+}
+
 function planilhasPedidosCompraProntas(){
     return Array.isArray(planilhas.mata110)
         && Array.isArray(planilhas.mata111)
@@ -1020,12 +1034,17 @@ function calcularSugestaoLimitesEstoque(item){
     const saldoAnteriorPlanilha = parsePlanilhaNumero(item?.limitesCooperat?.saldoAnterior);
     const consumoEntrePlanilhas = saldoAnteriorPlanilha !== null ? Math.max(0, saldoAnteriorPlanilha - saldoAtual) : 0;
     const mediaPedido = parsePlanilhaNumero(pedido?.mediaPedido) ?? 0;
+    const minimoPorCompra = mediaPedido > 0 ? mediaPedido * 0.35 : 0;
 
-    const candidatosDemanda = [
+    const candidatosConsumo = [
         consumo.media,
         consumo.pico * 0.65,
-        consumoEntrePlanilhas,
-        mediaPedido > 0 ? mediaPedido * 0.5 : 0
+        consumoEntrePlanilhas
+    ].filter(v => Number.isFinite(v) && v > 0);
+
+    const candidatosDemanda = [
+        ...candidatosConsumo,
+        minimoPorCompra
     ].filter(v => Number.isFinite(v) && v > 0);
 
     if(!candidatosDemanda.length) return null;
@@ -1034,9 +1053,13 @@ function calcularSugestaoLimitesEstoque(item){
     const estoqueSeguranca = Math.max(
         consumo.desvio,
         demandaBase * 0.35,
-        consumo.pico * 0.25
+        consumo.pico * 0.25,
+        minimoPorCompra
     );
-    const minimo = arredondarLimiteEstoque(demandaBase + estoqueSeguranca);
+    const minimoEstimado = candidatosConsumo.length
+        ? Math.max(demandaBase + estoqueSeguranca, minimoPorCompra)
+        : minimoPorCompra;
+    const minimo = arredondarLimiteEstoque(minimoEstimado);
     if(minimo === null) return null;
 
     const loteReposicao = arredondarLimiteEstoque(Math.max(
@@ -1058,7 +1081,9 @@ function calcularSugestaoLimitesEstoque(item){
             consumoPico: consumo.pico,
             eventosConsumo: consumo.eventos,
             consumoEntrePlanilhas,
-            mediaPedido
+            mediaPedido,
+            minimoPorCompra,
+            fontePrincipal: mediaPedido > 0 && !candidatosConsumo.length ? "pedido_compra" : "consumo"
         }
     };
 }
@@ -4573,7 +4598,7 @@ window.exportarRelatorioContagemXlsx = exportarRelatorioContagemXlsx;
 /* ====== PESQUISA INDIVIDUAL POR COLUNA ====== */
 
 let filtrosColuna = {};
-let filtroSaldoExtremosAtivo = false;
+let filtroSaldoExtremosModo = 0;
 let filtroEnderecoForaAtivo = false;
 
 document.querySelectorAll("th[data-col]").forEach(th => {
@@ -4649,7 +4674,7 @@ if(btnFiltroSaldoExtremos){
     btnFiltroSaldoExtremos.addEventListener("click", function(e){
         e.preventDefault();
         e.stopPropagation();
-        filtroSaldoExtremosAtivo = !filtroSaldoExtremosAtivo;
+        filtroSaldoExtremosModo = (filtroSaldoExtremosModo + 1) % 3;
         aplicarTodosFiltros();
     });
 
@@ -4692,7 +4717,7 @@ function ordenar(col, direcao){
         ordensAtivas.push({col, asc: direcao});
     }
 
-    if(filtroSaldoExtremosAtivo && col === "saldo"){
+    if(filtroSaldoExtremosModo > 0 && col === "saldo"){
         const indiceSaldo = ordensAtivas.findIndex(o => o.col === "saldo");
         if(indiceSaldo > 0){
             const [ordenacaoSaldo] = ordensAtivas.splice(indiceSaldo, 1);
@@ -4731,7 +4756,8 @@ function atualizarVisualHeaders(){
 
     const thSaldo = document.querySelector('th[data-col="saldo"]');
     if(thSaldo){
-        thSaldo.classList.toggle("saldo-extremos-ativo", filtroSaldoExtremosAtivo);
+        thSaldo.classList.toggle("saldo-extremos-ativo", filtroSaldoExtremosModo === 1);
+        thSaldo.classList.toggle("saldo-extremos-sem-pedido-ativo", filtroSaldoExtremosModo === 2);
     }
 
     const thEndereco = document.querySelector('th[data-col="endereco"]');
@@ -4741,11 +4767,15 @@ function atualizarVisualHeaders(){
 
     const btnFiltro = document.getElementById("btnFiltroSaldoExtremos");
     if(btnFiltro){
-        btnFiltro.classList.toggle("ativo", filtroSaldoExtremosAtivo);
-        btnFiltro.setAttribute("aria-pressed", filtroSaldoExtremosAtivo ? "true" : "false");
-        btnFiltro.title = filtroSaldoExtremosAtivo
-            ? "Mostrando apenas itens fora da faixa. Clique para voltar ao normal."
-            : "Mostrar apenas itens fora da faixa";
+        btnFiltro.classList.toggle("ativo", filtroSaldoExtremosModo === 1);
+        btnFiltro.classList.toggle("sem-pedido", filtroSaldoExtremosModo === 2);
+        btnFiltro.setAttribute("aria-pressed", filtroSaldoExtremosModo > 0 ? "true" : "false");
+        btnFiltro.textContent = filtroSaldoExtremosModo === 2 ? "P" : "!";
+        btnFiltro.title = filtroSaldoExtremosModo === 2
+            ? "Mostrando fora da faixa sem pedido. Clique para voltar ao normal."
+            : filtroSaldoExtremosModo === 1
+                ? "Mostrando apenas itens fora da faixa. Clique de novo para ver apenas sem pedido."
+                : "Mostrar apenas itens fora da faixa";
     }
 
     const btnFiltroEndereco = document.getElementById("btnFiltroEnderecoFora");
@@ -4781,7 +4811,7 @@ function aplicarOrdenacao(){
                 v2 = b[ordem.col];
             }
 
-            if(ordem.col === "saldo" && filtroSaldoExtremosAtivo){
+            if(ordem.col === "saldo" && filtroSaldoExtremosModo > 0){
                 const prioridadeA = obterPrioridadeSaldoExtremos(a, ordem.asc);
                 const prioridadeB = obterPrioridadeSaldoExtremos(b, ordem.asc);
 
@@ -5774,9 +5804,12 @@ function aplicarTodosFiltros(){
 
         if (!item) return false;
 
-        if(filtroSaldoExtremosAtivo){
+        if(filtroSaldoExtremosModo > 0){
             const statusEstoque = obterStatusEstoque(item);
             if(statusEstoque === "ok"){
+                return false;
+            }
+            if(filtroSaldoExtremosModo === 2 && itemTemPedidoCompraAtivo(item)){
                 return false;
             }
         }
