@@ -433,7 +433,10 @@
         async function carregarPlanilhaDownload(nome){
             try{
                 if(typeof XLSX === "undefined") return [];
-                const response = await fetch(`downloads/${nome}`, { cache: "no-store" });
+                let response = await fetch(`downloads/${nome}`, { cache: "no-store" });
+                if(!response.ok){
+                    response = await fetch(nome, { cache: "no-store" });
+                }
                 if(!response.ok) return [];
                 const data = await response.arrayBuffer();
                 const workbook = XLSX.read(data, { type: "array" });
@@ -594,15 +597,16 @@
                 const pedidoTs = parseDataPlanilha(row?.[2]);
                 if(!codigo || !pedidoTs) return null;
                 const entrada = (entradas.get(codigo) || []).find(e => e.timestamp >= pedidoTs);
-                if(!entrada) return null;
-                const dias = Math.max(0, Math.round((entrada.timestamp - pedidoTs) / 86400000));
+                const fim = entrada?.timestamp || Date.now();
+                const dias = Math.max(0, Math.round((fim - pedidoTs) / 86400000));
                 return {
                     codigo,
                     descricao: descPorCodigo.get(codigo) || "-",
                     dataPedido: new Date(pedidoTs).toLocaleDateString("pt-BR"),
-                    dataEntrada: entrada.data,
+                    dataEntrada: entrada?.data || "Ainda nao chegou",
+                    status: entrada ? "Chegou" : "Em aberto",
                     dias,
-                    quantidade: entrada.qtd || num(row?.[11]) || num(row?.[9]) || 0
+                    quantidade: entrada?.qtd || num(row?.[11]) || num(row?.[9]) || 0
                 };
             }).filter(Boolean).sort((a,b) => b.dias - a.dias);
         }
@@ -786,7 +790,7 @@
                 ${renderFiltros([], dados.length)}
                 <section class="vizGrid">
                     ${renderBarras("Itens que zeraram apos movimentacao", zeraram.map(e => ({...e, codigo:e.item?.protheus || e.item?.cooperat || "-", descricao:e.item?.descricao || "-", dias:Math.abs(Number(e.delta || 0))})), "dias")}
-                    ${renderBarras("Pedidos mais demorados", leadTimes, "dias")}
+                    ${renderBarras("Pedidos mais demorados ou em aberto", leadTimes, "dias")}
                 </section>
                 <h2 class="sectionTitle">Relatorio de zerados do dia anterior</h2>
                 <div class="tableWrap">
@@ -808,7 +812,7 @@
                 </div>
                 <h2 class="sectionTitle">Historico de movimentacao do dia anterior</h2>
                 ${renderMovimentacaoTabela(movimentacao.lista)}
-                <h2 class="sectionTitle">Pedidos com maior tempo ate chegada</h2>
+                <h2 class="sectionTitle">Pedidos com maior tempo ate chegada ou ainda em aberto</h2>
                 ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
@@ -841,7 +845,7 @@
             return `
                 <div class="tableWrap">
                     <table>
-                        <thead><tr><th>#</th><th>Codigo</th><th>Descricao</th><th>Pedido</th><th>Chegada</th><th class="num">Dias</th><th class="num">Qtd.</th></tr></thead>
+                        <thead><tr><th>#</th><th>Codigo</th><th>Descricao</th><th>Pedido</th><th>Chegada/Status</th><th>Status</th><th class="num">Dias</th><th class="num">Qtd.</th></tr></thead>
                         <tbody>
                             ${leadTimes.slice(0, 30).map((l, idx) => `
                                 <tr>
@@ -850,10 +854,11 @@
                                     <td class="descricao">${esc(l.descricao)}</td>
                                     <td>${esc(l.dataPedido)}</td>
                                     <td>${esc(l.dataEntrada)}</td>
+                                    <td>${esc(l.status || "-")}</td>
                                     <td class="num">${fmt(l.dias)}</td>
                                     <td class="num">${fmt(l.quantidade)}</td>
                                 </tr>
-                            `).join("") || `<tr><td colspan="7">Sem pedidos com chegada localizada.</td></tr>`}
+                            `).join("") || `<tr><td colspan="8">Sem pedidos encontrados na MATA111.</td></tr>`}
                         </tbody>
                     </table>
                 </div>
@@ -1017,7 +1022,7 @@
                 </div>
                 ${renderFiltros(origens, dados.length)}
                 <section class="vizGrid">
-                    ${renderBarras("Pedidos que mais demoraram ate chegar", leadTimes, "dias")}
+                    ${renderBarras("Pedidos que mais demoraram ou ainda estao em aberto", leadTimes, "dias")}
                     ${renderPizza(abaixo, acima, Math.max(0, linhas.length - abaixo - acima))}
                 </section>
                 <h2 class="sectionTitle">Itens em estoque</h2>
@@ -1055,7 +1060,7 @@
                         </table>
                     </div>
                 ` : `<section class="empty">Nenhum item encontrado com estes parametros.</section>`}
-                <h2 class="sectionTitle">Pedidos com maior tempo ate chegada</h2>
+                <h2 class="sectionTitle">Pedidos com maior tempo ate chegada ou ainda em aberto</h2>
                 ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
