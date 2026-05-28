@@ -367,6 +367,10 @@ document.addEventListener("keydown", function(e){
                 <input type="checkbox" id="contagemFiltroSoDivergentes" checked>
                 So divergentes
             </label>
+            <label>
+                <input type="checkbox" id="contagemFiltroReposicao">
+                Saldo reposicao
+            </label>
             <select id="contagemFiltroData"></select>
             <select id="contagemFiltroUsuario"></select>
         </div>
@@ -5030,6 +5034,29 @@ function registrarVerificacaoVazioContagem(status){
     contagemProximo();
 }
 
+function obterReposicaoItemContagem(item){
+    const direta = parseLimiteEstoque(item?.reposicao);
+    if(direta !== null) return direta;
+    return calcularReposicaoMedia(item?.minimo, item?.maximo);
+}
+
+function buscarReposicaoRelatorioItem(itemRelatorio){
+    const direta = parseLimiteEstoque(itemRelatorio?.reposicao);
+    if(direta !== null) return direta;
+    const alvoProtheus = String(itemRelatorio?.protheus || "").trim();
+    const alvoCooperat = String(itemRelatorio?.cooperat || "").trim();
+    const alvoEndereco = String(itemRelatorio?.endereco || "").trim();
+    const encontrado = (Array.isArray(window.dados) ? window.dados : []).find(item => {
+        const mesmoCodigo = (alvoProtheus && String(item?.protheus || "").trim() === alvoProtheus)
+            || (alvoCooperat && String(item?.cooperat || "").trim() === alvoCooperat);
+        if(!mesmoCodigo) return false;
+        if(!alvoEndereco) return true;
+        return String(item?.enderecoPrincipal || "").trim() === alvoEndereco
+            || (Array.isArray(item?.enderecos) && item.enderecos.some(end => String(end?.endereco || "").trim() === alvoEndereco));
+    });
+    return obterReposicaoItemContagem(encontrado);
+}
+
 function salvarAtualContagem(){
     const item = contagemItensMaquina[contagemIndice];
     const input = document.getElementById("contagemInput");
@@ -5158,6 +5185,7 @@ function criarPayloadRascunhoRelatorioContagem(rascunho = true){
             armazem:item.armazemPrincipal || "",
             endereco:item.enderecoPrincipal || "",
             saldoSistema:parsePlanilhaNumero(item.saldo),
+            reposicao:obterReposicaoItemContagem(item),
             contado:contagemValores[key]
         };
     });
@@ -5201,8 +5229,9 @@ function coletarLinhasRelatorioContagem(){
                 Object.values(registro.itens || {}).forEach(item => {
                     const saldo = parsePlanilhaNumero(item.saldoSistema);
                     const contado = parsePlanilhaNumero(item.contado);
+                    const reposicao = buscarReposicaoRelatorioItem(item);
                     const diverge = saldo !== null && contado !== null && saldo !== contado;
-                    linhas.push({ data, usuario:registro.usuario || usuarioKey, item, saldo, contado, diverge });
+                    linhas.push({ data, usuario:registro.usuario || usuarioKey, item, saldo, contado, reposicao, diverge });
                 });
                 Object.values(registro.verificacoesVazio || {}).forEach(item => {
                     linhas.push({
@@ -5216,6 +5245,7 @@ function coletarLinhasRelatorioContagem(){
                         },
                         saldo:null,
                         contado:null,
+                        reposicao:null,
                         diverge:item.status === "item fantasma",
                         verificacao:true
                     });
