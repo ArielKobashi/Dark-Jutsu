@@ -160,11 +160,73 @@
         -webkit-backdrop-filter: blur(10px);
     }
 
+    .historicoContagemPanel {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: calc(78px + env(safe-area-inset-bottom));
+        width: auto;
+        max-width: 460px;
+        margin: 0 auto;
+        z-index: 32;
+        border-radius: 10px;
+        box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.32), 0 0 14px rgba(34, 211, 238, 0.12);
+    }
+
+    #historicoContagemToggle {
+        min-height: 38px;
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .historicoContagemPanel.aberto #historicoContagemConteudo {
+        max-height: 220px;
+    }
+
+    #historicoContagemToolbar {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        padding: 7px;
+    }
+
+    #historicoContagemToolbar button {
+        grid-column: 1 / -1;
+        min-height: 34px;
+    }
+
+    #historicoContagemToolbar select,
+    #historicoContagemToolbar button {
+        font-size: 11px;
+    }
+
+    #historicoContagemLista {
+        max-height: 142px;
+    }
+
+    .historicoContagemRow {
+        gap: 6px;
+        padding: 8px 0;
+    }
+
+    .historicoContagemRow button {
+        min-height: 34px;
+        padding: 6px 9px;
+    }
+
     body.auth-open #mainActions,
+    body.auth-open .historicoContagemPanel,
     body.loading-open #mainActions,
+    body.loading-open .historicoContagemPanel,
     body.pending-open #mainActions,
+    body.pending-open .historicoContagemPanel,
     body.cadastro-open #mainActions,
+    body.cadastro-open .historicoContagemPanel,
     body.mobile-config-open #mainActions {
+        display: none !important;
+    }
+
+    body.mobile-config-open .historicoContagemPanel,
+    body.contagem-open .historicoContagemPanel {
         display: none !important;
     }
 

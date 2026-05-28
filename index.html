@@ -4130,6 +4130,7 @@ function salvarSessaoContagem(extra = {}){
 
 function marcarContagemAberta(aberta){
     salvarSessaoContagem({ aberta: !!aberta });
+    document.body?.classList.toggle("contagem-open", !!aberta);
 }
 
 function itemKeyContagem(item){
