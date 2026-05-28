@@ -210,6 +210,25 @@
         .barLabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dbe3ef}
         .barTrack{height:10px;background:#1F1F2A;border-radius:999px;overflow:hidden;border:1px solid #2A2A35}
         .barFill{height:100%;background:linear-gradient(90deg,#7A3CFF,#00D9FF)}
+        .barScale{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;color:var(--muted);font-size:10px;margin-top:2px}
+        .barScale span:nth-child(2){text-align:center}
+        .barScale span:nth-child(3){text-align:right}
+        .sortTh{
+            appearance:none;
+            border:0;
+            background:transparent;
+            color:inherit;
+            width:100%;
+            padding:0;
+            font:inherit;
+            font-weight:800;
+            text-align:inherit;
+            text-transform:inherit;
+            cursor:pointer;
+        }
+        .sortTh::after{content:"";margin-left:5px;color:var(--blue)}
+        .sortTh.asc::after{content:"▲"}
+        .sortTh.desc::after{content:"▼"}
         .pieWrap{display:flex;align-items:center;gap:14px}
         .pie{
             width:118px;
@@ -310,8 +329,12 @@
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
             busca: (params.get("busca") || "").toLowerCase(),
             limite: Math.max(1, Math.min(50000, Number(params.get("limite") || 50000) || 50000)),
-            ordenar: parametroPermitido((params.get("ordenar") || "reposicao").toLowerCase(), ["reposicao","saldo","descricao","codigo"], "reposicao"),
-            direcao: parametroPermitido((params.get("direcao") || "desc").toLowerCase(), ["asc","desc"], "desc")
+            ordenar: parametroPermitido((params.get("ordenar") || "reposicao").toLowerCase(), ["reposicao","saldo","descricao","codigo","minimo","maximo","status","pedido","origem"], "reposicao"),
+            direcao: parametroPermitido((params.get("direcao") || "desc").toLowerCase(), ["asc","desc"], "desc"),
+            pedidoOrdenar: parametroPermitido((params.get("pedidoOrdenar") || "dias").toLowerCase(), ["rank","codigo","descricao","pedido","chegada","status","dias","quantidade"], "dias"),
+            pedidoDirecao: parametroPermitido((params.get("pedidoDirecao") || "desc").toLowerCase(), ["asc","desc"], "desc"),
+            movimentoOrdenar: parametroPermitido((params.get("movimentoOrdenar") || "movimento").toLowerCase(), ["rank","codigo","descricao","tipo","anterior","atual","movimento","data"], "movimento"),
+            movimentoDirecao: parametroPermitido((params.get("movimentoDirecao") || "desc").toLowerCase(), ["asc","desc"], "desc")
         };
         const regexArmazemBusca = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
         const armazemNaBusca = cfg.busca.match(regexArmazemBusca);
@@ -367,6 +390,29 @@
         }
         function normalizarCodigo(valor){
             return String(valor ?? "").trim().toLowerCase();
+        }
+        function dataPedidoMata111(row){
+            return parseDataPlanilha(row?.[2]); // Coluna C da mata111.xlsx.
+        }
+        function valorOrdenacao(valor){
+            if(valor === null || valor === undefined) return "";
+            return String(valor).toLowerCase();
+        }
+        function compararValores(a, b, direcao = "asc"){
+            const dir = direcao === "desc" ? -1 : 1;
+            const na = typeof a === "number" ? a : num(a);
+            const nb = typeof b === "number" ? b : num(b);
+            if(na !== null && nb !== null) return (na - nb) * dir;
+            return valorOrdenacao(a).localeCompare(valorOrdenacao(b), "pt-BR", { numeric:true, sensitivity:"base" }) * dir;
+        }
+        function thOrdenavel(rotulo, grupo, campo, classe = ""){
+            const ativo = grupo === "estoque"
+                ? cfg.ordenar === campo
+                : grupo === "pedido"
+                    ? cfg.pedidoOrdenar === campo
+                    : cfg.movimentoOrdenar === campo;
+            const direcao = grupo === "estoque" ? cfg.direcao : grupo === "pedido" ? cfg.pedidoDirecao : cfg.movimentoDirecao;
+            return `<th class="${esc(classe)}"><button class="sortTh ${ativo ? esc(direcao) : ""}" type="button" data-sort-group="${esc(grupo)}" data-sort="${esc(campo)}">${esc(rotulo)}</button></th>`;
         }
         function parseDataPlanilha(valor){
             if(valor === null || valor === undefined || valor === "") return null;
@@ -608,7 +654,7 @@
             entradas.forEach(lista => lista.sort((a,b) => a.timestamp - b.timestamp));
             return (Array.isArray(mata111) ? mata111.slice(1) : []).map(row => {
                 const codigo = normalizarCodigo(row?.[6]);
-                const pedidoTs = parseDataPlanilha(row?.[2]);
+                const pedidoTs = dataPedidoMata111(row);
                 if(!codigo || !pedidoTs) return null;
                 const entrada = (entradas.get(codigo) || []).find(e => e.timestamp >= pedidoTs);
                 const fim = entrada?.timestamp || Date.now();
@@ -731,6 +777,35 @@
                     renderDashboardAtual(foco);
                 });
             });
+            root.querySelectorAll("[data-sort]").forEach(el => {
+                el.addEventListener("click", () => {
+                    const grupo = el.dataset.sortGroup || "estoque";
+                    const campo = el.dataset.sort;
+                    if(grupo === "pedido"){
+                        if(cfg.pedidoOrdenar === campo){
+                            cfg.pedidoDirecao = cfg.pedidoDirecao === "asc" ? "desc" : "asc";
+                        }else{
+                            cfg.pedidoOrdenar = campo;
+                            cfg.pedidoDirecao = campo === "dias" || campo === "quantidade" ? "desc" : "asc";
+                        }
+                    }else if(grupo === "movimento"){
+                        if(cfg.movimentoOrdenar === campo){
+                            cfg.movimentoDirecao = cfg.movimentoDirecao === "asc" ? "desc" : "asc";
+                        }else{
+                            cfg.movimentoOrdenar = campo;
+                            cfg.movimentoDirecao = ["movimento","anterior","atual"].includes(campo) ? "desc" : "asc";
+                        }
+                    }else{
+                        if(cfg.ordenar === campo){
+                            cfg.direcao = cfg.direcao === "asc" ? "desc" : "asc";
+                        }else{
+                            cfg.ordenar = campo;
+                            cfg.direcao = ["saldo","minimo","maximo","reposicao"].includes(campo) ? "desc" : "asc";
+                        }
+                    }
+                    renderDashboardAtual();
+                });
+            });
         }
         async function carregar(){
             if(!auth.currentUser){
@@ -754,6 +829,7 @@
         function renderBarras(titulo, linhas, campoValor = "dias"){
             const top = linhas.slice(0, 8);
             const max = Math.max(1, ...top.map(l => Number(l[campoValor] || 0)));
+            const meio = max / 2;
             return `
                 <section class="vizPanel">
                     <h2>${esc(titulo)}</h2>
@@ -766,6 +842,7 @@
                                 <strong>${esc(fmt(l[campoValor]))}</strong>
                             </div>
                         `).join("") : `<div class="empty">Sem dados para o periodo.</div>`}
+                        ${top.length ? `<div class="barScale"><span>0 dias</span><span>${esc(fmt(meio))} dias</span><span>${esc(fmt(max))} dias</span></div>` : ""}
                     </div>
                 </section>
             `;
@@ -832,14 +909,25 @@
             bindFiltros();
             ajustarDescricaoEmUmaLinha(root);
         }
+        function movimentoValor(e, campo, idx){
+            if(campo === "rank") return idx + 1;
+            if(campo === "codigo") return e.item?.protheus || e.item?.cooperat || "";
+            if(campo === "descricao") return e.item?.descricao || "";
+            if(campo === "tipo") return Number(e.delta || 0) >= 0 ? "Entrada" : "Saida";
+            if(campo === "anterior") return num(e.saldoAnterior) || 0;
+            if(campo === "atual") return num(e.saldoAtual) || 0;
+            if(campo === "data") return Number(e.timestamp || 0);
+            return Math.abs(Number(e.delta || 0));
+        }
         function renderMovimentacaoTabela(lista){
-            const ordenada = [...lista].sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
+            const base = [...lista].sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
+            const ordenada = base.map((e, idx) => ({ e, idx })).sort((a,b) => compararValores(movimentoValor(a.e, cfg.movimentoOrdenar, a.idx), movimentoValor(b.e, cfg.movimentoOrdenar, b.idx), cfg.movimentoDirecao));
             return `
                 <div class="tableWrap">
                     <table>
-                        <thead><tr><th>#</th><th>Codigo</th><th>Descricao</th><th>Tipo</th><th class="num">Anterior</th><th class="num">Atual</th><th class="num">Mov.</th><th>Data</th></tr></thead>
+                        <thead><tr>${thOrdenavel("#","movimento","rank","num")}${thOrdenavel("Codigo","movimento","codigo")}${thOrdenavel("Descricao","movimento","descricao")}${thOrdenavel("Tipo","movimento","tipo")}${thOrdenavel("Anterior","movimento","anterior","num")}${thOrdenavel("Atual","movimento","atual","num")}${thOrdenavel("Mov.","movimento","movimento","num")}${thOrdenavel("Data","movimento","data")}</tr></thead>
                         <tbody>
-                            ${ordenada.length ? ordenada.map((e, idx) => `
+                            ${ordenada.length ? ordenada.map(({e, idx}) => `
                                 <tr>
                                     <td class="num">${idx + 1}</td>
                                     <td class="codigo">${esc(e.item?.protheus || e.item?.cooperat || "-")}</td>
@@ -857,12 +945,22 @@
             `;
         }
         function renderLeadTimesTabela(leadTimes){
+            const valorPedido = (l, campo, idx) => {
+                if(campo === "rank") return idx + 1;
+                if(campo === "pedido") return parseDataPlanilha(l.dataPedido) || l.dataPedido || "";
+                if(campo === "chegada") return l.status === "Em aberto" ? Date.now() : (parseDataPlanilha(l.dataEntrada) || l.dataEntrada || "");
+                if(campo === "quantidade") return num(l.quantidade) || 0;
+                return campo === "dias" ? Number(l.dias || 0) : (l[campo] || "");
+            };
+            const ordenados = leadTimes
+                .map((l, idx) => ({ l, idx }))
+                .sort((a,b) => compararValores(valorPedido(a.l, cfg.pedidoOrdenar, a.idx), valorPedido(b.l, cfg.pedidoOrdenar, b.idx), cfg.pedidoDirecao));
             return `
                 <div class="tableWrap">
                     <table>
-                        <thead><tr><th>#</th><th>Codigo</th><th>Descricao</th><th>Pedido</th><th>Chegada/Status</th><th>Status</th><th class="num">Dias</th><th class="num">Qtd.</th></tr></thead>
+                        <thead><tr>${thOrdenavel("#","pedido","rank","num")}${thOrdenavel("Codigo","pedido","codigo")}${thOrdenavel("Descricao","pedido","descricao")}${thOrdenavel("Pedido","pedido","pedido")}${thOrdenavel("Chegada/Status","pedido","chegada")}${thOrdenavel("Status","pedido","status")}${thOrdenavel("Dias","pedido","dias","num")}${thOrdenavel("Qtd.","pedido","quantidade","num")}</tr></thead>
                         <tbody>
-                            ${leadTimes.slice(0, 30).map((l, idx) => `
+                            ${ordenados.slice(0, 30).map(({l, idx}) => `
                                 <tr>
                                     <td class="num">${idx + 1}</td>
                                     <td class="codigo">${esc(l.codigo)}</td>
@@ -938,8 +1036,13 @@
                             ${[
                                 ["reposicao","Reposicao"],
                                 ["saldo","Saldo"],
+                                ["minimo","Minimo"],
+                                ["maximo","Maximo"],
                                 ["descricao","Descricao"],
-                                ["codigo","Codigo"]
+                                ["codigo","Codigo"],
+                                ["status","Status"],
+                                ["pedido","Pedido"],
+                                ["origem","Origem"]
                             ].map(([v,t]) => `<option value="${v}" ${cfg.ordenar === v ? "selected" : ""}>${t}</option>`).join("")}
                         </select>
                     </div>
@@ -992,12 +1095,16 @@
                 return true;
             });
 
-            const dir = cfg.direcao === "asc" ? 1 : -1;
             linhas.sort((a,b) => {
-                if(cfg.ordenar === "saldo") return ((num(a.item.saldo) || 0) - (num(b.item.saldo) || 0)) * dir;
-                if(cfg.ordenar === "descricao") return String(a.item.descricao || "").localeCompare(String(b.item.descricao || ""), "pt-BR") * dir;
-                if(cfg.ordenar === "codigo") return key(a.item).localeCompare(key(b.item)) * dir;
-                return ((a.reposicao || 0) - (b.reposicao || 0)) * dir;
+                if(cfg.ordenar === "saldo") return compararValores(num(a.item.saldo) || 0, num(b.item.saldo) || 0, cfg.direcao);
+                if(cfg.ordenar === "minimo") return compararValores(num(a.item.minimo) || 0, num(b.item.minimo) || 0, cfg.direcao);
+                if(cfg.ordenar === "maximo") return compararValores(num(a.item.maximo) || 0, num(b.item.maximo) || 0, cfg.direcao);
+                if(cfg.ordenar === "descricao") return compararValores(a.item.descricao || "", b.item.descricao || "", cfg.direcao);
+                if(cfg.ordenar === "codigo") return compararValores(key(a.item), key(b.item), cfg.direcao);
+                if(cfg.ordenar === "status") return compararValores(statusRotulo(a.status), statusRotulo(b.status), cfg.direcao);
+                if(cfg.ordenar === "pedido") return compararValores(rotuloPedido(a.pedido), rotuloPedido(b.pedido), cfg.direcao);
+                if(cfg.ordenar === "origem") return compararValores(a.origem || "", b.origem || "", cfg.direcao);
+                return compararValores(a.reposicao || 0, b.reposicao || 0, cfg.direcao);
             });
             const totalFiltrado = linhas.length;
             linhas = linhas.slice(0, Math.min(cfg.limite, linhas.length));
@@ -1046,15 +1153,15 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Codigo</th>
-                                    <th>Descricao</th>
-                                    <th class="num">Saldo</th>
-                                    <th class="num">Min.</th>
-                                    <th class="num">Max.</th>
-                                    <th class="num">Reposicao</th>
-                                    <th>Status</th>
-                                    <th>Pedido</th>
-                                    <th>Origem</th>
+                                    ${thOrdenavel("Codigo","estoque","codigo")}
+                                    ${thOrdenavel("Descricao","estoque","descricao")}
+                                    ${thOrdenavel("Saldo","estoque","saldo","num")}
+                                    ${thOrdenavel("Min.","estoque","minimo","num")}
+                                    ${thOrdenavel("Max.","estoque","maximo","num")}
+                                    ${thOrdenavel("Reposicao","estoque","reposicao","num")}
+                                    ${thOrdenavel("Status","estoque","status")}
+                                    ${thOrdenavel("Pedido","estoque","pedido")}
+                                    ${thOrdenavel("Origem","estoque","origem")}
                                 </tr>
                             </thead>
                             <tbody>
