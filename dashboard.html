@@ -334,7 +334,8 @@
             pedidoOrdenar: parametroPermitido((params.get("pedidoOrdenar") || "dias").toLowerCase(), ["rank","codigo","descricao","pedido","chegada","status","dias","quantidade"], "dias"),
             pedidoDirecao: parametroPermitido((params.get("pedidoDirecao") || "desc").toLowerCase(), ["asc","desc"], "desc"),
             movimentoOrdenar: parametroPermitido((params.get("movimentoOrdenar") || "movimento").toLowerCase(), ["rank","codigo","descricao","tipo","anterior","atual","movimento","data"], "movimento"),
-            movimentoDirecao: parametroPermitido((params.get("movimentoDirecao") || "desc").toLowerCase(), ["asc","desc"], "desc")
+            movimentoDirecao: parametroPermitido((params.get("movimentoDirecao") || "desc").toLowerCase(), ["asc","desc"], "desc"),
+            periodoMovimentacao: parametroPermitido((params.get("periodoMovimentacao") || params.get("periodo") || "dia").toLowerCase(), ["dia","semana","mes"], "dia")
         };
         const regexArmazemBusca = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
         const armazemNaBusca = cfg.busca.match(regexArmazemBusca);
@@ -598,14 +599,22 @@
             return String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         }
         function itemTemSuposicao(item){
-            const origem = origemItem(item);
-            return origem === "automatico"
+            const origens = [
+                item?.limitesOrigem,
+                item?.minimoOrigem,
+                item?.maximoOrigem,
+                item?.reposicaoOrigem,
+                item?.origem
+            ].map(v => normalizarTexto(v));
+            const origemSugestiva = origens.some(origem =>
+                origem === "automatico"
                 || origem === "calculada"
                 || origem.includes("auto")
                 || origem.includes("calcul")
                 || origem.includes("estim")
                 || origem.includes("sugest")
-                || !!item?.sugestaoEstoque;
+            );
+            return origemSugestiva || !!item?.sugestaoEstoque;
         }
         function codigoArmazem(valor){
             const texto = String(valor ?? "").trim().toLowerCase();
@@ -681,18 +690,29 @@
             });
             return eventos;
         }
-        function faixaDiaAnterior(eventos){
+        function faixaPeriodoAnterior(eventos, periodo = cfg.periodoMovimentacao){
             const timestamps = eventos.map(e => e.timestamp).filter(Boolean);
             const base = timestamps.length ? Math.max(...timestamps) : Date.now();
             const d = new Date(base);
             d.setHours(0,0,0,0);
             const fim = d.getTime();
-            const inicio = fim - 86400000;
-            return { inicio, fim, label: new Date(inicio).toLocaleDateString("pt-BR") };
+            const dias = periodo === "mes" ? 30 : periodo === "semana" ? 7 : 1;
+            const inicio = fim - (dias * 86400000);
+            const inicioLabel = new Date(inicio).toLocaleDateString("pt-BR");
+            const fimLabel = new Date(fim - 1).toLocaleDateString("pt-BR");
+            const nome = periodo === "mes" ? "mes anterior" : periodo === "semana" ? "semana anterior" : "dia anterior";
+            return {
+                inicio,
+                fim,
+                dias,
+                periodo,
+                nome,
+                label: dias === 1 ? inicioLabel : `${inicioLabel} a ${fimLabel}`
+            };
         }
-        function calcularMovimentacaoDiaAnterior(banco, dados){
+        function calcularMovimentacaoPeriodo(banco, dados){
             const eventos = eventosHistorico(banco, dados);
-            const faixa = faixaDiaAnterior(eventos);
+            const faixa = faixaPeriodoAnterior(eventos);
             const lista = eventos.filter(e => e.timestamp >= faixa.inicio && e.timestamp < faixa.fim);
             const zeraram = lista.filter(e => (num(e.saldoAtual) || 0) === 0 && (num(e.saldoAnterior) || 0) > 0);
             const entradas = lista.filter(e => Number(e.delta || 0) > 0);
@@ -758,7 +778,7 @@
         }
         function bindFiltros(){
             root.querySelectorAll("[data-filter]").forEach(el => {
-                el.addEventListener("input", () => {
+                const aplicarFiltro = () => {
                     const foco = { id: el.id, pos: el.selectionStart };
                     const nome = el.dataset.filter;
                     if(nome === "semSolicitacao"){
@@ -771,7 +791,9 @@
                         cfg[nome] = el.value.toLowerCase();
                     }
                     renderDashboardAtual(foco);
-                });
+                };
+                el.addEventListener("input", aplicarFiltro);
+                el.addEventListener("change", aplicarFiltro);
             });
             root.querySelectorAll("[data-sort]").forEach(el => {
                 el.addEventListener("click", () => {
@@ -866,7 +888,7 @@
                 .sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
             const totalSaidas = movimentacao.saidas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
             const totalEntradas = movimentacao.entradas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
-            document.getElementById("subtitulo").textContent = `Movimentacao do dia ${movimentacao.faixa.label}`;
+            document.getElementById("subtitulo").textContent = `Movimentacao da ${movimentacao.faixa.nome}: ${movimentacao.faixa.label}`;
             root.innerHTML = `
                 <section class="cards">
                     <article class="card blue"><span>Movimentos</span><strong>${movimentacao.lista.length}</strong></article>
@@ -876,10 +898,10 @@
                 </section>
                 ${renderFiltros([], dados.length)}
                 <section class="vizGrid">
-                    ${renderBarras("Itens que zeraram apos movimentacao", zeraram.map(e => ({...e, codigo:e.item?.protheus || e.item?.cooperat || "-", descricao:e.item?.descricao || "-", dias:Math.abs(Number(e.delta || 0))})), "dias")}
+                    ${renderBarras(`Itens que zeraram apos movimentacao - ${movimentacao.faixa.nome}`, zeraram.map(e => ({...e, codigo:e.item?.protheus || e.item?.cooperat || "-", descricao:e.item?.descricao || "-", dias:Math.abs(Number(e.delta || 0))})), "dias")}
                     ${renderBarras("Pedidos mais demorados ou em aberto", leadTimes, "dias")}
                 </section>
-                <h2 class="sectionTitle">Relatorio de zerados do dia anterior</h2>
+                <h2 class="sectionTitle">Relatorio de zerados - ${esc(movimentacao.faixa.nome)}</h2>
                 <div class="tableWrap">
                     <table>
                         <thead><tr><th>Codigo</th><th>Descricao</th><th class="num">Anterior</th><th class="num">Atual</th><th class="num">Mov.</th><th>Data</th></tr></thead>
@@ -897,7 +919,7 @@
                         </tbody>
                     </table>
                 </div>
-                <h2 class="sectionTitle">Historico de movimentacao do dia anterior</h2>
+                <h2 class="sectionTitle">Historico de movimentacao - ${esc(movimentacao.faixa.nome)}</h2>
                 ${renderMovimentacaoTabela(movimentacao.lista)}
                 <h2 class="sectionTitle">Pedidos com maior tempo ate chegada ou ainda em aberto</h2>
                 ${renderLeadTimesTabela(leadTimes)}
@@ -933,7 +955,7 @@
                                     <td class="num">${fmt(e.delta)}</td>
                                     <td>${esc(e.data || new Date(e.timestamp).toLocaleDateString("pt-BR"))}</td>
                                 </tr>
-                            `).join("") : `<tr><td colspan="8">Sem movimentacao registrada no dia anterior encontrado.</td></tr>`}
+                            `).join("") : `<tr><td colspan="8">Sem movimentacao registrada no periodo encontrado.</td></tr>`}
                         </tbody>
                     </table>
                 </div>
@@ -979,7 +1001,15 @@
                         <label for="fAmbiente">Ambiente</label>
                         <select id="fAmbiente" data-filter="ambiente">
                             <option value="estoque" ${cfg.ambiente === "estoque" ? "selected" : ""}>Estoque</option>
-                            <option value="movimentacao" ${cfg.ambiente === "movimentacao" ? "selected" : ""}>Movimentacao D-1</option>
+                            <option value="movimentacao" ${cfg.ambiente === "movimentacao" ? "selected" : ""}>Movimentacao</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fPeriodoMovimentacao">Periodo mov.</label>
+                        <select id="fPeriodoMovimentacao" data-filter="periodoMovimentacao">
+                            <option value="dia" ${cfg.periodoMovimentacao === "dia" ? "selected" : ""}>Dia anterior</option>
+                            <option value="semana" ${cfg.periodoMovimentacao === "semana" ? "selected" : ""}>Semana anterior</option>
+                            <option value="mes" ${cfg.periodoMovimentacao === "mes" ? "selected" : ""}>Mes anterior</option>
                         </select>
                     </div>
                     <div class="filter">
@@ -1062,7 +1092,7 @@
             const dadosEscopo = dados.filter(item => passaFiltroArmazem(item));
             const pedidos = banco?.pedidosCompra || {};
             const leadTimes = calcularLeadTimes(mata111, mata112, dadosEscopo);
-            const movimentacao = calcularMovimentacaoDiaAnterior(banco, dadosEscopo);
+            const movimentacao = calcularMovimentacaoPeriodo(banco, dadosEscopo);
             const origens = [...new Set(dadosEscopo.map(origemItem).filter(Boolean))].sort((a,b) => a.localeCompare(b, "pt-BR"));
             let linhas = dadosEscopo.map(item => {
                 const pedido = pedidoItem(item, pedidos);
