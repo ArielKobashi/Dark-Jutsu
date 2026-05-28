@@ -222,6 +222,23 @@ xmlns="http://www.w3.org/2000/svg">
     <a id="btnDashboard" href="dashboard.html" title="Abrir dashboard de estoque">Dashboard</a>
 </div>
 
+<section id="historicoContagemPanel" class="historicoContagemPanel">
+    <button type="button" id="historicoContagemToggle" onclick="toggleHistoricoContagemPlanilhas()" aria-expanded="false">
+        <span>Historico de planilhas de contagem</span>
+        <strong id="historicoContagemResumo">abrir</strong>
+    </button>
+    <div id="historicoContagemConteudo">
+        <div id="historicoContagemToolbar">
+            <select id="historicoContagemData" onchange="renderizarHistoricoContagemPlanilhas()"></select>
+            <select id="historicoContagemUsuario" onchange="renderizarHistoricoContagemPlanilhas()"></select>
+            <button type="button" onclick="carregarHistoricoContagemPlanilhas(true)">Atualizar</button>
+        </div>
+        <div id="historicoContagemLista">
+            <p>Abra para carregar as contagens salvas.</p>
+        </div>
+    </div>
+</section>
+
 <script>
 window.abrirDashboard = window.abrirDashboard || function(){
     window.location.href = "dashboard.html";
@@ -4016,6 +4033,11 @@ let contagemLocutorAtivo = localStorage.getItem("contagemLocutorAtivo") === "1";
 let contagemReconhecimento = null;
 let contagemEscutando = false;
 let contagemEscutaTimer = null;
+let contagemEscutaAte = 0;
+let contagemReiniciando = false;
+let contagemNarradorFalando = false;
+let contagemIgnorarVozAte = 0;
+const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
 
 function parsearEnderecoContagem(endereco){
     const raw = (endereco || "").toString().trim().toUpperCase();
@@ -4371,9 +4393,11 @@ function toggleNarradorContagem(){
     localStorage.setItem("contagemNarradorAtivo", contagemNarradorAtivo ? "1" : "0");
     if(!contagemNarradorAtivo){
         try{ window.speechSynthesis?.cancel(); }catch(e){}
-        pararEscutaContagem();
+        contagemNarradorFalando = false;
+        contagemIgnorarVozAte = Date.now() + 700;
     }
     atualizarBotoesVozContagem();
+    if(contagemLocutorAtivo) iniciarEscutaContagem();
 }
 
 function toggleLocutorContagem(){
@@ -4384,13 +4408,54 @@ function toggleLocutorContagem(){
     }
     contagemLocutorAtivo = !contagemLocutorAtivo;
     localStorage.setItem("contagemLocutorAtivo", contagemLocutorAtivo ? "1" : "0");
-    if(!contagemLocutorAtivo) pararEscutaContagem();
+    if(contagemLocutorAtivo){
+        iniciarEscutaContagem();
+        abrirJanelaEscutaContagem();
+    }else{
+        pararEscutaContagem();
+    }
     atualizarBotoesVozContagem();
 }
 
 function atualizarStatusEscutaContagem(texto){
     const status = document.getElementById("contagemInputStatus");
-    if(status && texto) status.textContent = texto;
+    if(status) status.textContent = texto || "";
+}
+
+function contagemEstaAberta(){
+    const tela = document.getElementById("contagemScreen");
+    const cardArea = document.getElementById("contagemCardArea");
+    return !!tela && tela.style.display !== "none" && !!cardArea && cardArea.style.display !== "none";
+}
+
+function statusEscutaAtualContagem(){
+    const item = contagemItensMaquina[contagemIndice];
+    if(!item) return "";
+    if(contagemNarradorFalando) return "Narrando endereco...";
+    if(Date.now() > contagemEscutaAte){
+        const key = itemKeyContagem(item);
+        if(isVerificacaoVazioContagem(item)){
+            const verificacao = contagemVerificacoesVazio[key];
+            return verificacao ? `Registrado: ${verificacao}` : "Confirme se o endereco esta livre";
+        }
+        return contagemValores[key] !== undefined ? "Contado" : "Aguardando contagem";
+    }
+    return isVerificacaoVazioContagem(item) ? "Ouvindo resposta: sim ou nao..." : "Ouvindo quantidade...";
+}
+
+function atualizarStatusEscutaAtualContagem(){
+    atualizarStatusEscutaContagem(statusEscutaAtualContagem());
+}
+
+function abrirJanelaEscutaContagem(){
+    if(!contagemLocutorAtivo) return;
+    contagemEscutaAte = Date.now() + CONTAGEM_TOLERANCIA_VOZ_MS;
+    if(contagemEscutaTimer) clearTimeout(contagemEscutaTimer);
+    contagemEscutaTimer = setTimeout(() => {
+        contagemEscutaTimer = null;
+        atualizarStatusEscutaAtualContagem();
+    }, CONTAGEM_TOLERANCIA_VOZ_MS + 100);
+    atualizarStatusEscutaAtualContagem();
 }
 
 function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null){
@@ -4457,6 +4522,10 @@ function renderizarCardContagem(){
     }
     atualizarProgressoContagem();
     falarEnderecoContagem(infoEndereco, item);
+    if(contagemLocutorAtivo && (!contagemNarradorAtivo || !("speechSynthesis" in window))){
+        iniciarEscutaContagem();
+        abrirJanelaEscutaContagem();
+    }
     salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
     if(!isVerificacao){
         setTimeout(() => input.focus({ preventScroll:true }), 60);
@@ -4496,21 +4565,38 @@ function atualizarFooterContagem(){
 
 function falarEnderecoContagem(infoEndereco, item){
     if(!contagemNarradorAtivo) return;
-    if(!("speechSynthesis" in window)) return;
+    if(!("speechSynthesis" in window)){
+        iniciarEscutaContagem();
+        abrirJanelaEscutaContagem();
+        return;
+    }
     const key = itemKeyContagem(item);
     if(!key || contagemUltimoEnderecoFalado === key) return;
     const prateleira = (infoEndereco.prateleira || "").toString().trim();
     const caixa = infoEndereco.caixa ? String(infoEndereco.caixa) : "";
     if(!prateleira && !caixa) return;
     contagemUltimoEnderecoFalado = key;
-    const texto = `${prateleira || "sem prateleira"} ${caixa}`.trim();
+    const enderecoFalado = `${prateleira || "sem prateleira"} ${caixa}`.trim();
+    const texto = isVerificacaoVazioContagem(item) ? `${enderecoFalado}. Caixa esta vazia?` : enderecoFalado;
     try{
         window.speechSynthesis.cancel();
         const fala = new SpeechSynthesisUtterance(texto);
         fala.lang = "pt-BR";
         fala.rate = 0.95;
         fala.pitch = 1;
-        fala.onend = () => iniciarEscutaContagem();
+        fala.onstart = () => {
+            contagemNarradorFalando = true;
+            contagemIgnorarVozAte = Date.now() + 1000;
+            iniciarEscutaContagem();
+            atualizarStatusEscutaAtualContagem();
+        };
+        fala.onend = () => {
+            contagemNarradorFalando = false;
+            contagemIgnorarVozAte = Date.now() + 1500;
+            iniciarEscutaContagem();
+            abrirJanelaEscutaContagem();
+        };
+        fala.onerror = fala.onend;
         window.speechSynthesis.speak(fala);
     }catch(e){}
 }
@@ -4540,28 +4626,29 @@ function normalizarNumeroFaladoContagem(texto){
     return reconheceu ? total : null;
 }
 
-let contagemEscutaAte = 0;
-let contagemReiniciando = false;
+function normalizarSimNaoFaladoContagem(texto){
+    const raw = String(texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const tokens = raw.replace(/[^\w\s]/g, " ").split(/\s+/).filter(Boolean);
+    const negativos = new Set(["nao", "n", "negativo", "errado", "fantasma"]);
+    const positivos = new Set(["sim", "s", "positivo", "livre"]);
+    if(tokens.some(t => negativos.has(t))) return false;
+    if(tokens.some(t => positivos.has(t))) return true;
+    return null;
+}
 
 function iniciarEscutaContagem(){
-    if(!contagemNarradorAtivo || !contagemLocutorAtivo) return;
+    if(!contagemLocutorAtivo || !contagemEstaAberta()) return;
 
     const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
     if(!Reconhecimento) return;
 
     if(contagemEscutando || contagemReiniciando) return;
 
-    contagemEscutaAte = Date.now() + 30000; // tempo total: 30 segundos
-
     iniciarCicloEscutaContagem();
 }
 
 function iniciarCicloEscutaContagem(){
-    if(!contagemNarradorAtivo || !contagemLocutorAtivo) return;
-    if(Date.now() >= contagemEscutaAte) {
-        pararEscutaContagem();
-        return;
-    }
+    if(!contagemLocutorAtivo || !contagemEstaAberta()) return;
 
     const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -4572,24 +4659,43 @@ function iniciarCicloEscutaContagem(){
         contagemEscutando = true;
 
         rec.lang = "pt-BR";
-        rec.interimResults = true;
-        rec.continuous = false;
+        rec.interimResults = false;
+        rec.continuous = true;
         rec.maxAlternatives = 5;
 
-        atualizarStatusEscutaContagem("Ouvindo quantidade...");
+        atualizarStatusEscutaAtualContagem();
 
         rec.onresult = (event) => {
+            if(contagemNarradorFalando || Date.now() < contagemIgnorarVozAte || Date.now() > contagemEscutaAte) return;
+
             let texto = "";
 
             for(let i = event.resultIndex; i < event.results.length; i++){
                 texto += event.results[i][0].transcript + " ";
             }
 
+            const item = contagemItensMaquina[contagemIndice];
+            if(isVerificacaoVazioContagem(item)){
+                const resposta = normalizarSimNaoFaladoContagem(texto);
+                if(resposta === true){
+                    contagemEscutaAte = 0;
+                    registrarVerificacaoVazioContagem("livre");
+                    return;
+                }
+                if(resposta === false){
+                    contagemEscutaAte = 0;
+                    registrarVerificacaoVazioContagem("item fantasma");
+                    return;
+                }
+                atualizarStatusEscutaContagem("Diga sim ou nao.");
+                return;
+            }
+
             const numero = normalizarNumeroFaladoContagem(texto);
 
             if(numero !== null && Number.isFinite(numero) && numero >= 0){
                 preencherContagemRapida(numero, true);
-                pararEscutaContagem();
+                contagemEscutaAte = 0;
             }
         };
 
@@ -4601,13 +4707,13 @@ function iniciarCicloEscutaContagem(){
             contagemEscutando = false;
             contagemReconhecimento = null;
 
-            if(Date.now() < contagemEscutaAte && contagemNarradorAtivo && contagemLocutorAtivo){
+            if(contagemLocutorAtivo && contagemEstaAberta()){
                 contagemReiniciando = true;
 
                 setTimeout(() => {
                     contagemReiniciando = false;
-                    iniciarCicloEscutaContagem();
-                }, 700);
+                    iniciarEscutaContagem();
+                }, 250);
             }
         };
 
@@ -4965,6 +5071,191 @@ function exportarRelatorioContagemXlsx(){
     XLSX.writeFile(wb, `divergencias_contagem_${dataContagemHoje()}.xlsx`);
 }
 
+let historicoContagemPlanilhasAberto = false;
+let historicoContagemPlanilhasCarregado = false;
+let historicoContagemSessoes = [];
+
+function linhasRegistroContagemPlanilha(sessao){
+    const registro = sessao?.registro || {};
+    const linhas = [];
+    Object.values(registro.itens || {}).forEach(item => {
+        const saldo = parsePlanilhaNumero(item.saldoSistema);
+        const contado = parsePlanilhaNumero(item.contado);
+        const diverge = saldo !== null && contado !== null && saldo !== contado;
+        linhas.push({
+            Data:sessao.data,
+            Usuario:sessao.usuario,
+            Tipo:"Item contado",
+            Endereco:item.endereco || "",
+            Armazem:item.armazem || "",
+            Protheus:item.protheus || "",
+            Cooperat:item.cooperat || "",
+            Descricao:item.descricao || "",
+            SaldoSistema:saldo ?? "",
+            Contado:contado ?? "",
+            Status:diverge ? "DIVERGENTE" : "OK"
+        });
+    });
+    Object.values(registro.verificacoesVazio || {}).forEach(item => {
+        linhas.push({
+            Data:sessao.data,
+            Usuario:sessao.usuario,
+            Tipo:"Verificacao de vazio",
+            Endereco:item.endereco || "",
+            Armazem:"",
+            Protheus:"",
+            Cooperat:"",
+            Descricao:"Caixa esta vazia?",
+            SaldoSistema:"",
+            Contado:"",
+            Status:item.status || ""
+        });
+    });
+    return linhas;
+}
+
+function montarSessoesHistoricoContagem(contagens){
+    const sessoes = [];
+    Object.entries(contagens || {}).forEach(([data, porUsuario]) => {
+        Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
+            const entradas = registros?.itens || registros?.verificacoesVazio
+                ? [["registro", registros]]
+                : Object.entries(registros || {});
+            entradas.forEach(([registroKey, registro]) => {
+                if(!registro || (!registro.itens && !registro.verificacoesVazio)) return;
+                const usuario = registro.usuario || usuarioKey;
+                const sessao = {
+                    id:`${data}||${usuarioKey}||${registroKey}`,
+                    data:registro.data || data,
+                    usuario,
+                    timestamp:Number(registro.timestamp || 0),
+                    registro
+                };
+                const linhas = linhasRegistroContagemPlanilha(sessao);
+                sessao.total = linhas.length;
+                sessao.divergencias = linhas.filter(l => l.Status === "DIVERGENTE").length;
+                sessao.vazios = linhas.filter(l => l.Tipo === "Verificacao de vazio").length;
+                if(sessao.total) sessoes.push(sessao);
+            });
+        });
+    });
+    return sessoes.sort((a, b) => {
+        const porData = String(b.data).localeCompare(String(a.data));
+        if(porData) return porData;
+        return (b.timestamp || 0) - (a.timestamp || 0);
+    });
+}
+
+function popularFiltrosHistoricoContagem(){
+    const dataSelect = document.getElementById("historicoContagemData");
+    const usuarioSelect = document.getElementById("historicoContagemUsuario");
+    if(!dataSelect || !usuarioSelect) return;
+    const datas = [...new Set(historicoContagemSessoes.map(s => s.data))].sort().reverse();
+    const usuarios = [...new Set(historicoContagemSessoes.map(s => s.usuario))].sort();
+    const dataAtual = dataSelect.value;
+    const usuarioAtual = usuarioSelect.value;
+    dataSelect.innerHTML = "<option value=''>Todas as datas</option>" + datas.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+    usuarioSelect.innerHTML = "<option value=''>Todos usuarios</option>" + usuarios.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join("");
+    if(datas.includes(dataAtual)) dataSelect.value = dataAtual;
+    if(usuarios.includes(usuarioAtual)) usuarioSelect.value = usuarioAtual;
+}
+
+async function carregarHistoricoContagemPlanilhas(forcar = false){
+    const lista = document.getElementById("historicoContagemLista");
+    if(!lista) return;
+    if(historicoContagemPlanilhasCarregado && !forcar){
+        renderizarHistoricoContagemPlanilhas();
+        return;
+    }
+    if(!window.get || !window.ref || !window.db){
+        lista.innerHTML = "<p>Firebase ainda nao esta pronto.</p>";
+        return;
+    }
+    lista.innerHTML = "<p>Carregando contagens...</p>";
+    try{
+        const snap = await window.get(window.ref(window.db, "contagens"));
+        relContagens = snap.exists() ? snap.val() : {};
+        historicoContagemSessoes = montarSessoesHistoricoContagem(relContagens);
+        historicoContagemPlanilhasCarregado = true;
+        popularFiltrosHistoricoContagem();
+        renderizarHistoricoContagemPlanilhas();
+    }catch(e){
+        console.error("Erro ao carregar historico de contagens:", e);
+        lista.innerHTML = "<p>Erro ao carregar contagens.</p>";
+    }
+}
+
+function renderizarHistoricoContagemPlanilhas(){
+    const lista = document.getElementById("historicoContagemLista");
+    const resumo = document.getElementById("historicoContagemResumo");
+    if(!lista) return;
+    const dataFiltro = document.getElementById("historicoContagemData")?.value || "";
+    const usuarioFiltro = document.getElementById("historicoContagemUsuario")?.value || "";
+    const sessoes = historicoContagemSessoes.filter(sessao => {
+        if(dataFiltro && sessao.data !== dataFiltro) return false;
+        if(usuarioFiltro && sessao.usuario !== usuarioFiltro) return false;
+        return true;
+    });
+    if(resumo) resumo.textContent = historicoContagemPlanilhasAberto ? `${sessoes.length} planilhas` : "abrir";
+    if(!historicoContagemPlanilhasCarregado){
+        lista.innerHTML = "<p>Abra para carregar as contagens salvas.</p>";
+        return;
+    }
+    if(!sessoes.length){
+        lista.innerHTML = "<p>Nenhuma contagem encontrada.</p>";
+        return;
+    }
+    lista.innerHTML = sessoes.map(sessao => {
+        const idx = historicoContagemSessoes.findIndex(s => s.id === sessao.id);
+        const horario = sessao.timestamp ? new Date(sessao.timestamp).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }) : "--:--";
+        return `
+            <div class="historicoContagemRow">
+                <div class="historicoContagemInfo">
+                    <strong>${escapeHtml(sessao.usuario)} - ${escapeHtml(sessao.data)}</strong>
+                    <span>${sessao.total} linhas | ${sessao.divergencias} divergencias | ${sessao.vazios} vazios | ${horario}</span>
+                </div>
+                <button type="button" onclick="baixarHistoricoContagemPlanilha(${idx})">Baixar</button>
+            </div>
+        `;
+    }).join("");
+}
+
+function toggleHistoricoContagemPlanilhas(){
+    const panel = document.getElementById("historicoContagemPanel");
+    const toggle = document.getElementById("historicoContagemToggle");
+    historicoContagemPlanilhasAberto = !historicoContagemPlanilhasAberto;
+    panel?.classList.toggle("aberto", historicoContagemPlanilhasAberto);
+    toggle?.setAttribute("aria-expanded", historicoContagemPlanilhasAberto ? "true" : "false");
+    renderizarHistoricoContagemPlanilhas();
+    if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas();
+}
+
+function nomeArquivoHistoricoContagem(sessao){
+    const limpar = valor => String(valor || "")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    const sufixo = sessao.timestamp ? `_${new Date(sessao.timestamp).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }).replace(":", "h")}` : "";
+    return `contagem_${limpar(sessao.data)}_${limpar(sessao.usuario)}${sufixo}.xlsx`;
+}
+
+function baixarHistoricoContagemPlanilha(indice){
+    if(typeof XLSX === "undefined"){
+        mostrarNotificacao("Biblioteca XLSX nao encontrada.");
+        return;
+    }
+    const sessao = historicoContagemSessoes[indice];
+    if(!sessao){
+        mostrarNotificacao("Contagem nao encontrada.");
+        return;
+    }
+    const linhas = linhasRegistroContagemPlanilha(sessao);
+    const ws = XLSX.utils.json_to_sheet(linhas);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Contagem");
+    XLSX.writeFile(wb, nomeArquivoHistoricoContagem(sessao));
+}
+
 (function iniciarEventosContagem(){
     const area = document.getElementById("contagemCardArea");
     if(area){
@@ -5008,6 +5299,10 @@ window.finalizarContagem = finalizarContagem;
 window.abrirRelatorioContagem = abrirRelatorioContagem;
 window.fecharRelatorioContagem = fecharRelatorioContagem;
 window.exportarRelatorioContagemXlsx = exportarRelatorioContagemXlsx;
+window.toggleHistoricoContagemPlanilhas = toggleHistoricoContagemPlanilhas;
+window.carregarHistoricoContagemPlanilhas = carregarHistoricoContagemPlanilhas;
+window.renderizarHistoricoContagemPlanilhas = renderizarHistoricoContagemPlanilhas;
+window.baixarHistoricoContagemPlanilha = baixarHistoricoContagemPlanilha;
 
 
 /* ====== PESQUISA INDIVIDUAL POR COLUNA ====== */
