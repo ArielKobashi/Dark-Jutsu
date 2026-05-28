@@ -4037,6 +4037,10 @@ let contagemEscutaAte = 0;
 let contagemReiniciando = false;
 let contagemNarradorFalando = false;
 let contagemIgnorarVozAte = 0;
+let contagemEscutaRestartTimer = null;
+let contagemTranscricaoTimer = null;
+let contagemUltimaTranscricaoProcessada = "";
+let contagemUltimoProcessamentoVoz = 0;
 const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
 
 function parsearEnderecoContagem(endereco){
@@ -4381,12 +4385,16 @@ function atualizarBotoesVozContagem(){
         narrador.classList.toggle("active", contagemNarradorAtivo);
     }
     if(locutor){
-        const suportado = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+        const suportado = !!obterReconhecimentoVozContagem();
         locutor.textContent = `Locutor: ${contagemLocutorAtivo ? "on" : "off"}`;
         locutor.classList.toggle("active", contagemLocutorAtivo);
         locutor.disabled = !suportado;
         locutor.title = suportado ? "Escutar quantidade depois do narrador" : "Microfone por voz nao suportado neste navegador";
     }
+}
+
+function obterReconhecimentoVozContagem(){
+    return window.webkitSpeechRecognition || window.SpeechRecognition || null;
 }
 
 function toggleNarradorContagem(){
@@ -4402,7 +4410,7 @@ function toggleNarradorContagem(){
 }
 
 function toggleLocutorContagem(){
-    const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const Reconhecimento = obterReconhecimentoVozContagem();
     if(!Reconhecimento){
         mostrarNotificacao("Reconhecimento de voz nao suportado neste navegador.");
         return;
@@ -4450,6 +4458,12 @@ function atualizarStatusEscutaAtualContagem(){
 
 function abrirJanelaEscutaContagem(){
     if(!contagemLocutorAtivo) return;
+    contagemUltimaTranscricaoProcessada = "";
+    contagemUltimoProcessamentoVoz = 0;
+    if(contagemTranscricaoTimer){
+        clearTimeout(contagemTranscricaoTimer);
+        contagemTranscricaoTimer = null;
+    }
     contagemEscutaAte = Date.now() + CONTAGEM_TOLERANCIA_VOZ_MS;
     if(contagemEscutaTimer) clearTimeout(contagemEscutaTimer);
     contagemEscutaTimer = setTimeout(() => {
@@ -4588,7 +4602,6 @@ function falarEnderecoContagem(infoEndereco, item){
         fala.onstart = () => {
             contagemNarradorFalando = true;
             contagemIgnorarVozAte = Date.now() + 1000;
-            iniciarEscutaContagem();
             atualizarStatusEscutaAtualContagem();
         };
         fala.onend = () => {
@@ -4637,13 +4650,72 @@ function normalizarSimNaoFaladoContagem(texto){
     return null;
 }
 
+function podeProcessarVozContagem(texto){
+    if(contagemNarradorFalando || Date.now() < contagemIgnorarVozAte || Date.now() > contagemEscutaAte) return false;
+    const normalizado = String(texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if(!normalizado) return false;
+    const agora = Date.now();
+    if(normalizado === contagemUltimaTranscricaoProcessada && agora - contagemUltimoProcessamentoVoz < 900) return false;
+    contagemUltimaTranscricaoProcessada = normalizado;
+    contagemUltimoProcessamentoVoz = agora;
+    return true;
+}
+
+function aplicarNumeroFaladoContagem(numero){
+    if(numero === null || !Number.isFinite(numero) || numero < 0) return false;
+    contagemEscutaAte = 0;
+    contagemIgnorarVozAte = Date.now() + 900;
+    preencherContagemRapida(numero, true);
+    return true;
+}
+
+function processarVozContagem(texto, finalizado){
+    if(!podeProcessarVozContagem(texto)) return;
+    const item = contagemItensMaquina[contagemIndice];
+    if(!item) return;
+
+    if(isVerificacaoVazioContagem(item)){
+        const resposta = normalizarSimNaoFaladoContagem(texto);
+        if(resposta === true){
+            contagemEscutaAte = 0;
+            contagemIgnorarVozAte = Date.now() + 900;
+            registrarVerificacaoVazioContagem("livre");
+            return;
+        }
+        if(resposta === false){
+            contagemEscutaAte = 0;
+            contagemIgnorarVozAte = Date.now() + 900;
+            registrarVerificacaoVazioContagem("item fantasma");
+            return;
+        }
+        if(finalizado) atualizarStatusEscutaContagem("Diga sim ou nao.");
+        return;
+    }
+
+    const numero = normalizarNumeroFaladoContagem(texto);
+    if(finalizado){
+        aplicarNumeroFaladoContagem(numero);
+        return;
+    }
+    if(numero === null || !Number.isFinite(numero) || numero < 0) return;
+
+    const keyAtual = itemKeyContagem(item);
+    if(contagemTranscricaoTimer) clearTimeout(contagemTranscricaoTimer);
+    contagemTranscricaoTimer = setTimeout(() => {
+        contagemTranscricaoTimer = null;
+        const itemAgora = contagemItensMaquina[contagemIndice];
+        if(!itemAgora || itemKeyContagem(itemAgora) !== keyAtual) return;
+        aplicarNumeroFaladoContagem(numero);
+    }, 420);
+}
+
 function iniciarEscutaContagem(){
     if(!contagemLocutorAtivo || !contagemEstaAberta()) return;
 
-    const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const Reconhecimento = obterReconhecimentoVozContagem();
     if(!Reconhecimento) return;
 
-    if(contagemEscutando || contagemReiniciando) return;
+    if(contagemReconhecimento || contagemEscutando || contagemReiniciando) return;
 
     iniciarCicloEscutaContagem();
 }
@@ -4651,57 +4723,55 @@ function iniciarEscutaContagem(){
 function iniciarCicloEscutaContagem(){
     if(!contagemLocutorAtivo || !contagemEstaAberta()) return;
 
-    const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const Reconhecimento = obterReconhecimentoVozContagem();
 
     try{
         const rec = new Reconhecimento();
 
         contagemReconhecimento = rec;
-        contagemEscutando = true;
+        contagemEscutando = false;
 
         rec.lang = "pt-BR";
-        rec.interimResults = false;
+        rec.interimResults = true;
         rec.continuous = true;
         rec.maxAlternatives = 5;
 
         atualizarStatusEscutaAtualContagem();
 
+        rec.onstart = () => {
+            contagemEscutando = true;
+            contagemReiniciando = false;
+            atualizarStatusEscutaAtualContagem();
+        };
+
         rec.onresult = (event) => {
-            if(contagemNarradorFalando || Date.now() < contagemIgnorarVozAte || Date.now() > contagemEscutaAte) return;
-
-            let texto = "";
-
+            let finalTexto = "";
+            let parcialTexto = "";
             for(let i = event.resultIndex; i < event.results.length; i++){
-                texto += event.results[i][0].transcript + " ";
-            }
-
-            const item = contagemItensMaquina[contagemIndice];
-            if(isVerificacaoVazioContagem(item)){
-                const resposta = normalizarSimNaoFaladoContagem(texto);
-                if(resposta === true){
-                    contagemEscutaAte = 0;
-                    registrarVerificacaoVazioContagem("livre");
-                    return;
+                const resultado = event.results[i];
+                const texto = Array.from(resultado)
+                    .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0]?.transcript || "";
+                if(resultado.isFinal){
+                    finalTexto += `${texto} `;
+                }else{
+                    parcialTexto += `${texto} `;
                 }
-                if(resposta === false){
-                    contagemEscutaAte = 0;
-                    registrarVerificacaoVazioContagem("item fantasma");
-                    return;
-                }
-                atualizarStatusEscutaContagem("Diga sim ou nao.");
-                return;
             }
-
-            const numero = normalizarNumeroFaladoContagem(texto);
-
-            if(numero !== null && Number.isFinite(numero) && numero >= 0){
-                preencherContagemRapida(numero, true);
-                contagemEscutaAte = 0;
+            if(finalTexto.trim()){
+                processarVozContagem(finalTexto, true);
+            }else if(parcialTexto.trim()){
+                processarVozContagem(parcialTexto, false);
             }
         };
 
         rec.onerror = (e) => {
             console.warn("Erro na escuta:", e.error);
+            if(["not-allowed", "service-not-allowed", "audio-capture"].includes(e.error)){
+                contagemLocutorAtivo = false;
+                localStorage.setItem("contagemLocutorAtivo", "0");
+                atualizarBotoesVozContagem();
+                atualizarStatusEscutaContagem("Microfone bloqueado pelo navegador.");
+            }
         };
 
         rec.onend = () => {
@@ -4710,11 +4780,12 @@ function iniciarCicloEscutaContagem(){
 
             if(contagemLocutorAtivo && contagemEstaAberta()){
                 contagemReiniciando = true;
-
-                setTimeout(() => {
+                if(contagemEscutaRestartTimer) clearTimeout(contagemEscutaRestartTimer);
+                contagemEscutaRestartTimer = setTimeout(() => {
+                    contagemEscutaRestartTimer = null;
                     contagemReiniciando = false;
                     iniciarEscutaContagem();
-                }, 250);
+                }, 120);
             }
         };
 
@@ -4734,6 +4805,14 @@ function pararEscutaContagem(){
         clearTimeout(contagemEscutaTimer);
         contagemEscutaTimer = null;
     }
+    if(contagemEscutaRestartTimer){
+        clearTimeout(contagemEscutaRestartTimer);
+        contagemEscutaRestartTimer = null;
+    }
+    if(contagemTranscricaoTimer){
+        clearTimeout(contagemTranscricaoTimer);
+        contagemTranscricaoTimer = null;
+    }
 
     if(contagemReconhecimento){
         try{ contagemReconhecimento.stop(); }catch(e){}
@@ -4742,6 +4821,8 @@ function pararEscutaContagem(){
 
     contagemEscutando = false;
     contagemReconhecimento = null;
+    contagemUltimaTranscricaoProcessada = "";
+    contagemUltimoProcessamentoVoz = 0;
 
     atualizarStatusEscutaContagem("");
 }
