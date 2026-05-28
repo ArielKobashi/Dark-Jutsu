@@ -638,7 +638,10 @@ tr:hover {
     flex:1;
     z-index:2;
     position:relative;
-    overflow:auto;
+    overflow-y:auto;
+    overflow-x:hidden;
+    box-sizing:border-box;
+    padding-right:7px;
     transform: translateZ(0);
     backface-visibility: hidden;
 

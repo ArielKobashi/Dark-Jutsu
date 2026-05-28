@@ -105,12 +105,12 @@
         <table>
             <colgroup>
                 <col style="width:18px">
-                <col style="width:70px">
-                <col style="width:62px">
-                <col style="width:42px">
+                <col style="width:66px">
+                <col style="width:56px">
+                <col style="width:36px">
                 <col>
-                <col style="width:96px">
-                <col style="width:50px">
+                <col style="width:88px">
+                <col style="width:58px">
             </colgroup>
 
             <thead>
@@ -932,25 +932,25 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
         if(solicitacao){
             if(!solicitacao.aceitoPor && solicitacao.quantidadeEmPedido <= 0){
                 status = "aguardando_liberacao";
-                titulo = "Etapa MATA110: aguardando liberação da solicitação";
-                detalhe = `Solicitado por: ${solicitacao.solicitante || "-"} | Quantidade solicitada: ${formatarNumeroPlanilha(solicitacao.quantidadeSolicitada || 0)}`;
+                titulo = "Aguardando liberação...";
+                detalhe = `Solicitado por: ${solicitacao.solicitante || "-"}`;
             }else if(!pedidoAtivo && solicitacao.aceitoPor){
                 status = "aguardando_pedido";
-                titulo = "Etapa MATA110 liberada: aguardando virar pedido MATA111";
-                detalhe = `Liberado por: ${solicitacao.aceitoPor || "-"} | Quantidade em pedido: ${formatarNumeroPlanilha(solicitacao.quantidadeEmPedido || 0)}`;
+                titulo = "Aguardando pedido de compra...";
+                detalhe = `Aceito por: ${solicitacao.aceitoPor || "-"}`;
             }else if(pedidoAtivo && pedidoAtivo.quantidadeRecebida <= 0){
                 status = "aguardando_recebimento";
-                titulo = "Etapa MATA111: aguardando recebimento da compra";
-                detalhe = `Pedido feito em: ${pedidoAtivo.dataPedido || "-"} | Quantidade pedida: ${formatarNumeroPlanilha(pedidoAtivo.quantidadePedida || 0)}`;
-            }else if(pedidoAtivo && entradaAtiva && entradaAtiva.saldoAEnderecar > 0){
-                status = "aguardando_enderecamento";
-                titulo = "Etapa MATA112: aguardando endereçamento";
-                detalhe = `Entrou dia: ${entradaAtiva.dataEntrada || "-"} - ${formatarNumeroPlanilha(entradaAtiva.quantidadeEntrada)} unidades`;
+                titulo = "Aguardando recebimento...";
+                detalhe = `Pedido feito em: ${pedidoAtivo.dataPedido || "-"}`;
             }else if(pedidoAtivo && pedidoAtivo.quantidadeRecebida > 0){
                 status = "aguardando_contagem";
-                titulo = "Etapa de nota: aguardando contagem/conferencia";
-                detalhe = `Recebido no pedido em: ${pedidoAtivo.dataPedido || "-"} | Quantidade recebida: ${formatarNumeroPlanilha(pedidoAtivo.quantidadeRecebida || 0)}`;
+                titulo = "Aguardando contagem de nota...";
+                detalhe = `Recebido em: ${pedidoAtivo.dataPedido || "-"}`;
                 recebidoSemEntrada = pedidoAtivo.quantidadeRecebida;
+            }else if(pedidoAtivo && entradaAtiva && entradaAtiva.saldoAEnderecar > 0){
+                status = "aguardando_enderecamento";
+                titulo = "Aguardando endereçamento...";
+                detalhe = `Entrou dia: ${entradaAtiva.dataEntrada || "-"} - ${formatarNumeroPlanilha(entradaAtiva.quantidadeEntrada)} unidades`;
             }
         }
 
@@ -3385,22 +3385,6 @@ function renderTabela(){
     });
 
     atualizarEstadoHeader();
-    ajustarDescricaoEmUmaLinha(document.getElementById("tableBody"));
-}
-function ajustarDescricaoEmUmaLinha(container = document){
-    requestAnimationFrame(() => {
-        const raiz = container || document;
-        raiz.querySelectorAll("td.descricaoPrincipal").forEach(td => {
-            td.style.fontSize = "";
-            const base = parseFloat(getComputedStyle(td).fontSize) || 8.5;
-            let tamanho = base;
-            const minimo = 4.5;
-            while(td.scrollWidth > td.clientWidth && tamanho > minimo){
-                tamanho -= 0.25;
-                td.style.fontSize = `${tamanho}px`;
-            }
-        });
-    });
 }
 document.getElementById("selectAllHeader").addEventListener("change", function(){
 

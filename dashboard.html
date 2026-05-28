@@ -364,21 +364,6 @@
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
         }
-        function ajustarDescricaoEmUmaLinha(container = root){
-            requestAnimationFrame(() => {
-                const raiz = container || root;
-                raiz.querySelectorAll("td.descricao").forEach(td => {
-                    td.style.fontSize = "";
-                    const base = parseFloat(getComputedStyle(td).fontSize) || 13;
-                    let tamanho = base;
-                    const minimo = 5;
-                    while(td.scrollWidth > td.clientWidth && tamanho > minimo){
-                        tamanho -= 0.5;
-                        td.style.fontSize = `${tamanho}px`;
-                    }
-                });
-            });
-        }
         function num(valor){
             if(valor === null || valor === undefined || valor === "") return null;
             const n = Number(String(valor).replace(/\./g,"").replace(",","."));
@@ -907,7 +892,6 @@
                 ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
-            ajustarDescricaoEmUmaLinha(root);
         }
         function movimentoValor(e, campo, idx){
             if(campo === "rank") return idx + 1;
@@ -1186,7 +1170,6 @@
                 ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
-            ajustarDescricaoEmUmaLinha(root);
         }
 
         onAuthStateChanged(auth, user => {
