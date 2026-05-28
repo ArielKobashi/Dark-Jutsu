@@ -212,6 +212,10 @@
         min-height: 34px;
     }
 
+    #historicoContagemResetBtn {
+        min-height: 32px;
+    }
+
     #historicoContagemToolbar select,
     #historicoContagemToolbar button {
         font-size: 11px;

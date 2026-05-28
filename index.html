@@ -232,6 +232,7 @@ xmlns="http://www.w3.org/2000/svg">
             <select id="historicoContagemData" onchange="renderizarHistoricoContagemPlanilhas()"></select>
             <select id="historicoContagemUsuario" onchange="renderizarHistoricoContagemPlanilhas()"></select>
             <button type="button" onclick="carregarHistoricoContagemPlanilhas(true)">Atualizar</button>
+            <button type="button" id="historicoContagemResetBtn" onclick="resetarContagemGlobalAdmin()" style="display:none;">Zerar todos</button>
         </div>
         <div id="historicoContagemLista">
             <p>Abra para carregar as contagens salvas.</p>
@@ -4027,6 +4028,9 @@ let contagemVerificacoesVazio = {};
 let contagemSwipeStartX = 0;
 let contagemSwipeActive = false;
 let relContagens = {};
+let contagemFinalizadaSemSessao = false;
+let contagemResetGlobalUnsub = null;
+let contagemAplicandoResetGlobal = false;
 let contagemUltimoEnderecoFalado = "";
 let contagemNarradorAtivo = localStorage.getItem("contagemNarradorAtivo") === "1";
 let contagemLocutorAtivo = localStorage.getItem("contagemLocutorAtivo") === "1";
@@ -4088,6 +4092,72 @@ function chaveSessaoContagem(){
     return `contagemSessao:${uid}`;
 }
 
+function chaveResetGlobalContagemAplicado(){
+    const uid = window.auth?.currentUser?.uid || window.meuNickname || "local";
+    return `contagemResetGlobalAplicado:${uid}`;
+}
+
+function dataContagemSessaoAtual(){
+    const sessao = carregarSessaoContagem();
+    return sessao.dataInicio || dataContagemHoje();
+}
+
+function limparRascunhoSessaoContagemLocal(){
+    try{
+        localStorage.removeItem(chaveRascunhoContagem());
+        localStorage.removeItem(chaveVerificacoesContagem());
+        localStorage.removeItem(chaveSessaoContagem());
+    }catch(e){}
+    contagemValores = {};
+    contagemVerificacoesVazio = {};
+    contagemMaquinaAtual = "";
+    contagemItensMaquina = [];
+    contagemIndice = 0;
+}
+
+function aplicarResetGlobalContagem(resetInfo, avisar = true){
+    const resetAt = Number(resetInfo?.resetAt || 0);
+    if(!resetAt) return;
+    const aplicado = Number(localStorage.getItem(chaveResetGlobalContagemAplicado()) || 0);
+    if(aplicado >= resetAt) return;
+    contagemAplicandoResetGlobal = true;
+    limparRascunhoSessaoContagemLocal();
+    localStorage.setItem(chaveResetGlobalContagemAplicado(), String(resetAt));
+    if(document.getElementById("contagemScreen")?.style.display !== "none"){
+        pararEscutaContagem();
+        try{ window.speechSynthesis?.cancel(); }catch(e){}
+        document.getElementById("contagemScreen").style.display = "none";
+        document.getElementById("main").style.display = "";
+        document.body?.classList.remove("contagem-open");
+    }
+    contagemAplicandoResetGlobal = false;
+    if(avisar){
+        const por = resetInfo?.resetPor ? ` por ${resetInfo.resetPor}` : "";
+        mostrarNotificacao(`Contagem reiniciada do zero${por}.`);
+    }
+}
+
+async function checarResetGlobalContagem(){
+    if(!window.get || !window.ref || !window.db) return;
+    try{
+        const snap = await window.get(window.ref(window.db, "contagemControle/resetGlobal"));
+        if(snap.exists()) aplicarResetGlobalContagem(snap.val(), false);
+    }catch(e){
+        console.warn("Falha ao checar reset global da contagem:", e);
+    }
+}
+
+function iniciarListenerResetGlobalContagem(){
+    if(contagemResetGlobalUnsub || !window.onValue || !window.ref || !window.db) return;
+    try{
+        contagemResetGlobalUnsub = window.onValue(window.ref(window.db, "contagemControle/resetGlobal"), snap => {
+            if(snap.exists()) aplicarResetGlobalContagem(snap.val(), true);
+        });
+    }catch(e){
+        console.warn("Falha ao iniciar listener de reset global da contagem:", e);
+    }
+}
+
 function salvarRascunhoContagem(){
     try{
         localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
@@ -4124,6 +4194,7 @@ function salvarSessaoContagem(extra = {}){
         const atual = carregarSessaoContagem();
         localStorage.setItem(chaveSessaoContagem(), JSON.stringify({
             ...atual,
+            dataInicio: atual.dataInicio || extra.dataInicio || dataContagemHoje(),
             maquina: contagemMaquinaAtual || atual.maquina || "",
             indice: Number.isFinite(contagemIndice) ? contagemIndice : (atual.indice || 0),
             updatedAt: Date.now(),
@@ -4237,7 +4308,8 @@ function inserirVerificacoesSequenciaContagem(linhas){
     return saida;
 }
 
-function abrirContagem(){
+async function abrirContagem(){
+    await checarResetGlobalContagem();
     const itens = Array.isArray(window.dados) ? window.dados : [];
     contagemItens = inserirVerificacoesSequenciaContagem(criarLinhasContagemPermitidas(itens))
         .sort(compararItensContagem);
@@ -4270,22 +4342,23 @@ function abrirContagem(){
 }
 
 function fecharContagem(){
-    salvarAtualContagem();
-    marcarContagemAberta(false);
+    if(contagemAplicandoResetGlobal) return;
+    if(contagemFinalizadaSemSessao){
+        contagemFinalizadaSemSessao = false;
+    }else{
+        salvarAtualContagem();
+        marcarContagemAberta(false);
+    }
     pararEscutaContagem();
     try{ window.speechSynthesis?.cancel(); }catch(e){}
     document.getElementById("contagemScreen").style.display = "none";
     document.getElementById("main").style.display = "";
 }
 
-function tentarRetomarContagemPendente(){
+async function tentarRetomarContagemPendente(){
+    await checarResetGlobalContagem();
     const sessao = carregarSessaoContagem();
     if(!sessao.aberta) return;
-    const idade = Date.now() - Number(sessao.updatedAt || 0);
-    if(idade > 1000 * 60 * 60 * 18){
-        salvarSessaoContagem({ aberta:false });
-        return;
-    }
     setTimeout(()=>abrirContagem(), 80);
 }
 
@@ -4988,7 +5061,7 @@ async function finalizarContagem(){
         return;
     }
     const nick = window.meuNickname || "desconhecido";
-    const data = dataContagemHoje();
+    const data = dataContagemSessaoAtual();
     const payload = {
         usuario:nick,
         data,
@@ -5029,6 +5102,7 @@ async function finalizarContagem(){
         localStorage.removeItem(chaveSessaoContagem());
         contagemValores = {};
         contagemVerificacoesVazio = {};
+        contagemFinalizadaSemSessao = true;
         mostrarNotificacao(`Contagem salva: ${itensContados.length} itens.`);
         fecharContagem();
     }catch(e){
@@ -5037,14 +5111,71 @@ async function finalizarContagem(){
     }
 }
 
+function criarPayloadRascunhoRelatorioContagem(){
+    salvarAtualContagem();
+    const itensContados = contagemItens.filter(item => !isVerificacaoVazioContagem(item) && contagemValores[itemKeyContagem(item)] !== undefined);
+    const verificacoesRegistradas = contagemItens.filter(item => isVerificacaoVazioContagem(item) && contagemVerificacoesVazio[itemKeyContagem(item)] !== undefined);
+    if(!itensContados.length && !verificacoesRegistradas.length) return null;
+    const nick = window.meuNickname || "desconhecido";
+    const payload = {
+        usuario:nick,
+        data:dataContagemSessaoAtual(),
+        timestamp:Date.now(),
+        rascunho:true,
+        totalItens:contagemItens.length,
+        itens:{},
+        verificacoesVazio:{}
+    };
+    itensContados.forEach(item => {
+        const key = itemKeyContagem(item);
+        payload.itens[chaveFirebaseContagem(key)] = {
+            protheus:item.protheus || "",
+            cooperat:item.cooperat || "",
+            descricao:item.descricao || "",
+            armazem:item.armazemPrincipal || "",
+            endereco:item.enderecoPrincipal || "",
+            saldoSistema:parsePlanilhaNumero(item.saldo),
+            contado:contagemValores[key]
+        };
+    });
+    verificacoesRegistradas.forEach(item => {
+        const key = itemKeyContagem(item);
+        payload.verificacoesVazio[chaveFirebaseContagem(key)] = {
+            endereco:item.enderecoPrincipal || "",
+            maquina:item.maquina || "",
+            prateleira:item.prateleira || "",
+            caixa:item.caixa || "",
+            status:contagemVerificacoesVazio[key],
+            registradoEm:Date.now()
+        };
+    });
+    return payload;
+}
+
+function mesclarRascunhoAtualRelatorioContagem(contagens){
+    const base = JSON.parse(JSON.stringify(contagens || {}));
+    const rascunho = criarPayloadRascunhoRelatorioContagem();
+    if(!rascunho) return base;
+    const data = rascunho.data || dataContagemHoje();
+    const usuario = chaveFirebaseContagem(rascunho.usuario || "desconhecido");
+    if(!base[data]) base[data] = {};
+    if(!base[data][usuario]){
+        base[data][usuario] = {};
+    }else if(base[data][usuario].itens || base[data][usuario].verificacoesVazio){
+        base[data][usuario] = { registro_salvo:base[data][usuario] };
+    }
+    base[data][usuario].rascunho_atual = rascunho;
+    return base;
+}
+
 function coletarLinhasRelatorioContagem(){
     const linhas = [];
     Object.entries(relContagens || {}).forEach(([data, porUsuario]) => {
         Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
-            const lista = registros?.itens ? [registros] : Object.values(registros || {});
+            const lista = registros?.itens || registros?.verificacoesVazio ? [registros] : Object.values(registros || {});
             lista.forEach(registro => {
-                if(!registro?.itens) return;
-                Object.values(registro.itens).forEach(item => {
+                if(!registro?.itens && !registro?.verificacoesVazio) return;
+                Object.values(registro.itens || {}).forEach(item => {
                     const saldo = parsePlanilhaNumero(item.saldoSistema);
                     const contado = parsePlanilhaNumero(item.contado);
                     const diverge = saldo !== null && contado !== null && saldo !== contado;
@@ -5073,11 +5204,12 @@ function coletarLinhasRelatorioContagem(){
 }
 
 async function abrirRelatorioContagem(){
+    salvarAtualContagem();
     document.getElementById("contagemRelatorioModal").style.display = "flex";
     document.getElementById("contagemRelatorioTabela").innerHTML = "<p class='contagemEmpty'>Carregando...</p>";
     try{
         const snap = await window.get(window.ref(window.db, "contagens"));
-        relContagens = snap.exists() ? snap.val() : {};
+        relContagens = mesclarRascunhoAtualRelatorioContagem(snap.exists() ? snap.val() : {});
         popularFiltrosRelatorioContagem();
         renderizarRelatorioContagem();
     }catch(e){
@@ -5092,25 +5224,33 @@ function fecharRelatorioContagem(){
 
 function popularFiltrosRelatorioContagem(){
     const linhas = coletarLinhasRelatorioContagem();
-    const datas = [...new Set(linhas.map(l => l.data))].sort().reverse();
-    const usuarios = [...new Set(linhas.map(l => l.usuario))].sort();
+    const dataPadrao = dataContagemSessaoAtual();
+    const usuarioAtual = window.meuNickname || "";
+    const datas = [...new Set([...linhas.map(l => l.data), dataPadrao])].filter(Boolean).sort().reverse();
+    const usuarios = [...new Set([...linhas.map(l => l.usuario), usuarioAtual].filter(Boolean))].sort();
     document.getElementById("contagemFiltroData").innerHTML = "<option value=''>Todas as datas</option>" + datas.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
     document.getElementById("contagemFiltroUsuario").innerHTML = "<option value=''>Todos usuarios</option>" + usuarios.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join("");
+    document.getElementById("contagemFiltroData").value = dataPadrao;
+    if(usuarioAtual && usuarios.includes(usuarioAtual)) document.getElementById("contagemFiltroUsuario").value = usuarioAtual;
     document.getElementById("contagemFiltroData").onchange = renderizarRelatorioContagem;
     document.getElementById("contagemFiltroUsuario").onchange = renderizarRelatorioContagem;
     document.getElementById("contagemFiltroSoDivergentes").onchange = renderizarRelatorioContagem;
 }
 
-function renderizarRelatorioContagem(){
+function linhasFiltradasRelatorioContagem(){
     const soDivergentes = document.getElementById("contagemFiltroSoDivergentes").checked;
     const dataFiltro = document.getElementById("contagemFiltroData").value;
     const usuarioFiltro = document.getElementById("contagemFiltroUsuario").value;
-    const linhas = coletarLinhasRelatorioContagem().filter(l => {
+    return coletarLinhasRelatorioContagem().filter(l => {
         if(soDivergentes && !l.diverge) return false;
         if(dataFiltro && l.data !== dataFiltro) return false;
         if(usuarioFiltro && l.usuario !== usuarioFiltro) return false;
         return true;
     });
+}
+
+function renderizarRelatorioContagem(){
+    const linhas = linhasFiltradasRelatorioContagem();
     if(!linhas.length){
         document.getElementById("contagemRelatorioTabela").innerHTML = "<p class='contagemEmpty'>Nenhum registro encontrado.</p>";
         return;
@@ -5136,7 +5276,7 @@ function exportarRelatorioContagemXlsx(){
         mostrarNotificacao("Biblioteca XLSX nao encontrada.");
         return;
     }
-    const linhas = coletarLinhasRelatorioContagem().map(l => ({
+    const linhas = linhasFiltradasRelatorioContagem().map(l => ({
         Data:l.data,
         Usuario:l.usuario,
         Endereco:l.item.endereco || "",
@@ -5150,7 +5290,8 @@ function exportarRelatorioContagemXlsx(){
     const ws = XLSX.utils.json_to_sheet(linhas);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Divergencias");
-    XLSX.writeFile(wb, `divergencias_contagem_${dataContagemHoje()}.xlsx`);
+    const dataArquivo = document.getElementById("contagemFiltroData")?.value || dataContagemSessaoAtual();
+    XLSX.writeFile(wb, `divergencias_contagem_${dataArquivo}.xlsx`);
 }
 
 let historicoContagemPlanilhasAberto = false;
@@ -5240,10 +5381,17 @@ function popularFiltrosHistoricoContagem(){
     usuarioSelect.innerHTML = "<option value=''>Todos usuarios</option>" + usuarios.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join("");
     if(datas.includes(dataAtual)) dataSelect.value = dataAtual;
     if(usuarios.includes(usuarioAtual)) usuarioSelect.value = usuarioAtual;
+    atualizarBotaoResetGlobalContagem();
+}
+
+function atualizarBotaoResetGlobalContagem(){
+    const btn = document.getElementById("historicoContagemResetBtn");
+    if(btn) btn.style.display = window.nivelUsuario === "admin" ? "" : "none";
 }
 
 async function carregarHistoricoContagemPlanilhas(forcar = false){
     const lista = document.getElementById("historicoContagemLista");
+    atualizarBotaoResetGlobalContagem();
     if(!lista) return;
     if(historicoContagemPlanilhasCarregado && !forcar){
         renderizarHistoricoContagemPlanilhas();
@@ -5318,8 +5466,36 @@ function toggleHistoricoContagemPlanilhas(){
     historicoContagemPlanilhasAberto = !historicoContagemPlanilhasAberto;
     panel?.classList.toggle("aberto", historicoContagemPlanilhasAberto);
     toggle?.setAttribute("aria-expanded", historicoContagemPlanilhasAberto ? "true" : "false");
+    atualizarBotaoResetGlobalContagem();
     renderizarHistoricoContagemPlanilhas();
     if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas();
+}
+
+async function resetarContagemGlobalAdmin(){
+    if(window.nivelUsuario !== "admin"){
+        mostrarNotificacao("Apenas admin pode zerar a contagem.");
+        return;
+    }
+    if(!window.set || !window.ref || !window.db){
+        mostrarNotificacao("Firebase ainda nao esta pronto.");
+        return;
+    }
+    const ok = confirm("Zerar a contagem de todo mundo?\n\nIsso apaga rascunho, posicao e sessoes abertas quando cada usuario abrir/estiver no app. O historico ja finalizado continua salvo.");
+    if(!ok) return;
+    const resetInfo = {
+        resetAt:Date.now(),
+        resetPor:window.meuNickname || "admin"
+    };
+    try{
+        await window.set(window.ref(window.db, "contagemControle/resetGlobal"), resetInfo);
+        aplicarResetGlobalContagem(resetInfo, false);
+        historicoContagemPlanilhasCarregado = false;
+        carregarHistoricoContagemPlanilhas(true);
+        mostrarNotificacao("Contagem reiniciada do zero para todos.");
+    }catch(e){
+        console.error("Erro ao zerar contagem global:", e);
+        mostrarNotificacao("Erro ao zerar contagem global.");
+    }
 }
 
 function nomeArquivoHistoricoContagem(sessao){
@@ -5395,6 +5571,7 @@ window.toggleHistoricoContagemPlanilhas = toggleHistoricoContagemPlanilhas;
 window.carregarHistoricoContagemPlanilhas = carregarHistoricoContagemPlanilhas;
 window.renderizarHistoricoContagemPlanilhas = renderizarHistoricoContagemPlanilhas;
 window.baixarHistoricoContagemPlanilha = baixarHistoricoContagemPlanilha;
+window.resetarContagemGlobalAdmin = resetarContagemGlobalAdmin;
 
 
 /* ====== PESQUISA INDIVIDUAL POR COLUNA ====== */
@@ -8196,6 +8373,10 @@ onAuthStateChanged(auth, async (user) => {
 
     if (!user) {
         pararMonitoramentoChat();
+        if(contagemResetGlobalUnsub){
+            try{ contagemResetGlobalUnsub(); }catch(e){}
+            contagemResetGlobalUnsub = null;
+        }
         window.meuNickname = null;
         window.meuCracha = "";
         window.meuSetor = "";
@@ -8294,6 +8475,8 @@ onAuthStateChanged(auth, async (user) => {
 
         const nivelUsuario = (dadosUsuario.nivel || "op").toString().toLowerCase();
         window.nivelUsuario = nivelUsuario;
+        iniciarListenerResetGlobalContagem();
+        atualizarBotaoResetGlobalContagem();
         const updateControls = document.getElementById("updateControls");
         if(updateControls){
             updateControls.style.display = (nivelUsuario === "admin" || nivelUsuario === "mod") ? "block" : "none";

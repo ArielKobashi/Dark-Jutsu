@@ -250,6 +250,12 @@ body:not(.app-ready) .historicoContagemPanel{
     font-weight:800;
 }
 
+#historicoContagemResetBtn{
+    border-color:rgba(248,113,113,0.45) !important;
+    background:rgba(127,29,29,0.88) !important;
+    color:#FEE2E2 !important;
+}
+
 #historicoContagemLista{
     max-height:126px;
     overflow:auto;
