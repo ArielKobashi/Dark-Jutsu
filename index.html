@@ -932,24 +932,24 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
         if(solicitacao){
             if(!solicitacao.aceitoPor && solicitacao.quantidadeEmPedido <= 0){
                 status = "aguardando_liberacao";
-                titulo = "Aguardando liberação...";
-                detalhe = `Solicitado por: ${solicitacao.solicitante || "-"}`;
+                titulo = "Etapa MATA110: aguardando liberação da solicitação";
+                detalhe = `Solicitado por: ${solicitacao.solicitante || "-"} | Quantidade solicitada: ${formatarNumeroPlanilha(solicitacao.quantidadeSolicitada || 0)}`;
             }else if(!pedidoAtivo && solicitacao.aceitoPor){
                 status = "aguardando_pedido";
-                titulo = "Aguardando pedido de compra...";
-                detalhe = `Aceito por: ${solicitacao.aceitoPor || "-"}`;
+                titulo = "Etapa MATA110 liberada: aguardando virar pedido MATA111";
+                detalhe = `Liberado por: ${solicitacao.aceitoPor || "-"} | Quantidade em pedido: ${formatarNumeroPlanilha(solicitacao.quantidadeEmPedido || 0)}`;
             }else if(pedidoAtivo && pedidoAtivo.quantidadeRecebida <= 0){
                 status = "aguardando_recebimento";
-                titulo = "Aguardando recebimento...";
-                detalhe = `Pedido feito em: ${pedidoAtivo.dataPedido || "-"}`;
+                titulo = "Etapa MATA111: aguardando recebimento da compra";
+                detalhe = `Pedido feito em: ${pedidoAtivo.dataPedido || "-"} | Quantidade pedida: ${formatarNumeroPlanilha(pedidoAtivo.quantidadePedida || 0)}`;
             }else if(pedidoAtivo && entradaAtiva && entradaAtiva.saldoAEnderecar > 0){
                 status = "aguardando_enderecamento";
-                titulo = "Aguardando endereçamento...";
+                titulo = "Etapa MATA112: aguardando endereçamento";
                 detalhe = `Entrou dia: ${entradaAtiva.dataEntrada || "-"} - ${formatarNumeroPlanilha(entradaAtiva.quantidadeEntrada)} unidades`;
             }else if(pedidoAtivo && pedidoAtivo.quantidadeRecebida > 0){
                 status = "aguardando_contagem";
-                titulo = "Aguardando contagem de nota...";
-                detalhe = `Recebido em: ${pedidoAtivo.dataPedido || "-"}`;
+                titulo = "Etapa de nota: aguardando contagem/conferencia";
+                detalhe = `Recebido no pedido em: ${pedidoAtivo.dataPedido || "-"} | Quantidade recebida: ${formatarNumeroPlanilha(pedidoAtivo.quantidadeRecebida || 0)}`;
                 recebidoSemEntrada = pedidoAtivo.quantidadeRecebida;
             }
         }
@@ -6147,6 +6147,25 @@ function aplicarTodosFiltros(){
         return t;
     };
     const escaparRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const codigoArmazemBusca = (valor) => {
+        const texto = (valor || "").toString().trim().toLowerCase();
+        const match = texto.match(/\d+/);
+        return match ? String(parseInt(match[0], 10)) : texto;
+    };
+    const armazensDoItem = (item) => [
+        item.armazemPrincipal,
+        item.armazem,
+        ...(Array.isArray(item.enderecos) ? item.enderecos.map(e => e?.armazem) : [])
+    ].map(codigoArmazemBusca).filter(Boolean);
+    const regexArmazemPergunta = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
+    const filtroArmazemPergunta = (() => {
+        const m = termoOriginal.match(regexArmazemPergunta);
+        return m ? codigoArmazemBusca(m[1]) : "";
+    })();
+    const termoBuscaOriginal = filtroArmazemPergunta
+        ? termoOriginal.replace(regexArmazemPergunta, "").replace(/\s+/g, " ").trim()
+        : termoOriginal;
+    const palavrasIgnoradasPergunta = new Set(["item", "itens", "peca", "pecas", "peça", "peças", "mostrar", "mostra", "so", "só", "apenas", "somente", "que", "sao", "são", "de", "do", "da", "dos", "das", "com"]);
     const correspondeTermo = (texto, termoBruto) => {
         const termo = normalizarTermo(termoBruto);
         if(!termo) return true;
@@ -6159,7 +6178,11 @@ function aplicarTodosFiltros(){
         return texto.includes(termo);
     };
 
-    let palavras = termoOriginal ? termoOriginal.split(/\s+/) : [];
+    let palavras = termoBuscaOriginal ? termoBuscaOriginal.split(/\s+/) : [];
+    if(filtroArmazemPergunta){
+        palavras = palavras.filter(p => !palavrasIgnoradasPergunta.has(p));
+    }
+    const termoComparacaoBusca = filtroArmazemPergunta ? palavras.join(" ") : termoBuscaOriginal;
 
     const incluirMortos = document.getElementById("mostrarDadosMortos")?.checked || false;
     const baseDados = incluirMortos
@@ -6186,19 +6209,22 @@ function aplicarTodosFiltros(){
 
         /* ===== FILTRO PESQUISA GERAL ===== */
 
-        if(termoOriginal){
+        if(termoComparacaoBusca){
 
             let textoOriginal = (
                 (item.protheus || "") + " " +
                 (item.cooperat || "") + " " +
-                (item.descricao || "")
+                (item.descricao || "") + " " +
+                (item.enderecoPrincipal || "") + " " +
+                (item.armazemPrincipal || "") + " " +
+                (Array.isArray(item.enderecos) ? item.enderecos.map(e => `${e?.armazem || ""} ${e?.endereco || ""}`).join(" ") : "")
             ).toLowerCase();
 
             let texto = normalizarTexto(textoOriginal);
 
             let passouBusca = false;
 
-            if(general){
+            if(general || filtroArmazemPergunta){
 
                 passouBusca = palavras.every(p => {
                     return correspondeTermo(texto, p);
@@ -6206,10 +6232,14 @@ function aplicarTodosFiltros(){
 
             } else {
 
-                passouBusca = correspondeTermo(texto, termoOriginal);
+                passouBusca = correspondeTermo(texto, termoComparacaoBusca);
             }
 
             if(!passouBusca) return false;
+        }
+
+        if(filtroArmazemPergunta && !armazensDoItem(item).includes(filtroArmazemPergunta)){
+            return false;
         }
 
         /* ===== FILTROS POR COLUNA ===== */
@@ -6221,7 +6251,11 @@ function aplicarTodosFiltros(){
             if(col === "endereco"){
                 valor = item.enderecoPrincipal || "";
             } else if(col === "armazem"){
-                valor = item.armazemPrincipal || "";
+                valor = [
+                    item.armazemPrincipal || "",
+                    item.armazem || "",
+                    ...(Array.isArray(item.enderecos) ? item.enderecos.map(e => e?.armazem || "") : [])
+                ].join(" ");
             } else {
                 valor = item[col] || "";
             }

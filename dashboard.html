@@ -166,8 +166,8 @@
             box-shadow:0 0 22px rgba(122,60,255,.18);
         }
         table{
-            width:100%;
-            min-width:920px;
+            width:max-content;
+            min-width:max(100%, 920px);
             border-collapse:collapse;
         }
         th,td{
@@ -190,7 +190,7 @@
         tr:last-child td{border-bottom:0}
         .codigo{font-weight:800;color:#e2e8f0;white-space:nowrap}
         .descricao{min-width:280px}
-        .descricao{white-space:normal}
+        .descricao{white-space:nowrap;overflow:visible;text-overflow:clip;min-width:max-content}
         .num{text-align:right;white-space:nowrap}
         .vizGrid{
             display:grid;
@@ -206,7 +206,8 @@
         }
         .vizPanel h2{font-size:14px;margin:0 0 10px;color:#EDE9FE}
         .bars{display:grid;gap:7px}
-        .barRow{display:grid;grid-template-columns:minmax(140px,1fr) 3fr auto;gap:8px;align-items:center;font-size:12px}
+        .barRow{display:grid;grid-template-columns:auto minmax(120px,1fr) 3fr auto;gap:8px;align-items:center;font-size:12px}
+        .barRank{color:var(--muted);font-weight:800;min-width:26px;text-align:right}
         .barLabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dbe3ef}
         .barTrack{height:10px;background:#1F1F2A;border-radius:999px;overflow:hidden;border:1px solid #2A2A35}
         .barFill{height:100%;background:linear-gradient(90deg,#7A3CFF,#00D9FF)}
@@ -306,12 +307,24 @@
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
             origem: (params.get("origem") || "").toLowerCase(),
+            armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "").split(",").map(v => v.trim()).filter(Boolean),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
             busca: (params.get("busca") || "").toLowerCase(),
             limite: Math.max(1, Math.min(50000, Number(params.get("limite") || 50000) || 50000)),
             ordenar: parametroPermitido((params.get("ordenar") || "reposicao").toLowerCase(), ["reposicao","saldo","descricao","codigo"], "reposicao"),
             direcao: parametroPermitido((params.get("direcao") || "desc").toLowerCase(), ["asc","desc"], "desc")
         };
+        const regexArmazemBusca = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
+        const armazemNaBusca = cfg.busca.match(regexArmazemBusca);
+        if(armazemNaBusca && !cfg.armazens.length){
+            cfg.armazens = [armazemNaBusca[1]];
+            cfg.busca = cfg.busca
+                .replace(regexArmazemBusca, "")
+                .split(/\s+/)
+                .filter(p => !["item","itens","peca","pecas","peça","peças","mostrar","mostra","so","só","apenas","somente","que","sao","são","de","do","da","dos","das","com"].includes(p))
+                .join(" ")
+                .trim();
+        }
         let bancoAtual = null;
         document.getElementById("titulo").textContent = cfg.titulo;
         btnAtualizar.addEventListener("click", () => carregar());
@@ -396,6 +409,18 @@
             const codigo = key(item);
             const b64 = btoa(unescape(encodeURIComponent(codigo))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
             return pedidos?.[b64] || pedidos?.[codigo] || null;
+        }
+        function rotuloPedido(pedido){
+            if(!pedidoAtivo(pedido)) return "Sem solicitacao";
+            const status = String(pedido?.status || "");
+            const etapas = {
+                aguardando_liberacao: "MATA110: aguardando liberacao da solicitacao",
+                aguardando_pedido: "MATA110 liberada: aguardando pedido MATA111",
+                aguardando_recebimento: "MATA111: aguardando recebimento da compra",
+                aguardando_enderecamento: "MATA112: aguardando enderecamento",
+                aguardando_contagem: "Nota recebida: aguardando contagem/conferencia"
+            };
+            return etapas[status] || pedido?.titulo || "Com solicitacao";
         }
         function origemItem(item){
             return String(item?.limitesOrigem || item?.minimoOrigem || item?.maximoOrigem || item?.reposicaoOrigem || "").toLowerCase();
@@ -518,7 +543,34 @@
         }
         function itemTemSuposicao(item){
             const origem = origemItem(item);
-            return origem === "automatico" || origem === "calculada" || !!item?.sugestaoEstoque;
+            return origem === "automatico"
+                || origem === "calculada"
+                || origem.includes("auto")
+                || origem.includes("calcul")
+                || origem.includes("estim")
+                || origem.includes("sugest")
+                || !!item?.sugestaoEstoque;
+        }
+        function codigoArmazem(valor){
+            const texto = String(valor ?? "").trim().toLowerCase();
+            if(!texto) return "";
+            const match = texto.match(/\d+/);
+            if(match) return String(parseInt(match[0], 10));
+            return normalizarTexto(texto);
+        }
+        function armazensItem(item){
+            const valores = [
+                item?.armazemPrincipal,
+                item?.armazem,
+                ...(Array.isArray(item?.enderecos) ? item.enderecos.map(e => e?.armazem) : [])
+            ];
+            return [...new Set(valores.map(codigoArmazem).filter(Boolean))];
+        }
+        function passaFiltroArmazem(item){
+            if(!cfg.armazens.length) return true;
+            const desejados = new Set(cfg.armazens.map(codigoArmazem).filter(Boolean));
+            if(!desejados.size) return true;
+            return armazensItem(item).some(a => desejados.has(a));
         }
         function calcularLeadTimes(mata111, mata112, dados){
             const descPorCodigo = new Map();
@@ -651,6 +703,8 @@
                     const nome = el.dataset.filter;
                     if(nome === "semSolicitacao"){
                         cfg.semSolicitacao = el.value === "1";
+                    }else if(nome === "armazens"){
+                        cfg.armazens = el.value.split(",").map(v => v.trim()).filter(Boolean);
                     }else if(nome === "limite"){
                         cfg.limite = Math.max(1, Math.min(50000, Number(el.value) || 50000));
                     }else{
@@ -686,8 +740,9 @@
                 <section class="vizPanel">
                     <h2>${esc(titulo)}</h2>
                     <div class="bars">
-                        ${top.length ? top.map(l => `
+                        ${top.length ? top.map((l, idx) => `
                             <div class="barRow" title="${esc(l.descricao || "")}">
+                                <div class="barRank">${idx + 1}.</div>
                                 <div class="barLabel">${esc(l.codigo || l.item?.protheus || "-")}</div>
                                 <div class="barTrack"><div class="barFill" style="width:${Math.max(2, (Number(l[campoValor] || 0) / max) * 100)}%"></div></div>
                                 <strong>${esc(fmt(l[campoValor]))}</strong>
@@ -751,19 +806,46 @@
                         </tbody>
                     </table>
                 </div>
+                <h2 class="sectionTitle">Historico de movimentacao do dia anterior</h2>
+                ${renderMovimentacaoTabela(movimentacao.lista)}
                 <h2 class="sectionTitle">Pedidos com maior tempo ate chegada</h2>
                 ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
         }
+        function renderMovimentacaoTabela(lista){
+            const ordenada = [...lista].sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
+            return `
+                <div class="tableWrap">
+                    <table>
+                        <thead><tr><th>#</th><th>Codigo</th><th>Descricao</th><th>Tipo</th><th class="num">Anterior</th><th class="num">Atual</th><th class="num">Mov.</th><th>Data</th></tr></thead>
+                        <tbody>
+                            ${ordenada.length ? ordenada.map((e, idx) => `
+                                <tr>
+                                    <td class="num">${idx + 1}</td>
+                                    <td class="codigo">${esc(e.item?.protheus || e.item?.cooperat || "-")}</td>
+                                    <td class="descricao">${esc(e.item?.descricao || "-")}</td>
+                                    <td>${Number(e.delta || 0) >= 0 ? "Entrada" : "Saida"}</td>
+                                    <td class="num">${fmt(e.saldoAnterior)}</td>
+                                    <td class="num">${fmt(e.saldoAtual)}</td>
+                                    <td class="num">${fmt(e.delta)}</td>
+                                    <td>${esc(e.data || new Date(e.timestamp).toLocaleDateString("pt-BR"))}</td>
+                                </tr>
+                            `).join("") : `<tr><td colspan="8">Sem movimentacao registrada no dia anterior encontrado.</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
         function renderLeadTimesTabela(leadTimes){
             return `
                 <div class="tableWrap">
                     <table>
-                        <thead><tr><th>Codigo</th><th>Descricao</th><th>Pedido</th><th>Chegada</th><th class="num">Dias</th><th class="num">Qtd.</th></tr></thead>
+                        <thead><tr><th>#</th><th>Codigo</th><th>Descricao</th><th>Pedido</th><th>Chegada</th><th class="num">Dias</th><th class="num">Qtd.</th></tr></thead>
                         <tbody>
-                            ${leadTimes.slice(0, 30).map(l => `
+                            ${leadTimes.slice(0, 30).map((l, idx) => `
                                 <tr>
+                                    <td class="num">${idx + 1}</td>
                                     <td class="codigo">${esc(l.codigo)}</td>
                                     <td class="descricao">${esc(l.descricao)}</td>
                                     <td>${esc(l.dataPedido)}</td>
@@ -771,7 +853,7 @@
                                     <td class="num">${fmt(l.dias)}</td>
                                     <td class="num">${fmt(l.quantidade)}</td>
                                 </tr>
-                            `).join("") || `<tr><td colspan="6">Sem pedidos com chegada localizada.</td></tr>`}
+                            `).join("") || `<tr><td colspan="7">Sem pedidos com chegada localizada.</td></tr>`}
                         </tbody>
                     </table>
                 </div>
@@ -790,6 +872,10 @@
                     <div class="filter">
                         <label for="fBusca">Busca</label>
                         <input id="fBusca" data-filter="busca" value="${esc(cfg.busca)}" placeholder="codigo, descricao, armazem...">
+                    </div>
+                    <div class="filter">
+                        <label for="fArmazens">Armazem</label>
+                        <input id="fArmazens" data-filter="armazens" value="${esc(cfg.armazens.join(","))}" placeholder="ex: 4,5 ou MATA112">
                     </div>
                     <div class="filter">
                         <label for="fStatus">Status</label>
@@ -865,6 +951,7 @@
             }).filter(linha => {
                 const codigo = key(linha.item);
                 if(cfg.itens.length && !cfg.itens.includes(codigo) && !cfg.itens.includes(String(linha.item.cooperat || "").toLowerCase())) return false;
+                if(!passaFiltroArmazem(linha.item)) return false;
                 if(!passaStatus(linha.status)) return false;
                 if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
                 if(cfg.suposicao === "com" && !itemTemSuposicao(linha.item)) return false;
@@ -877,7 +964,8 @@
                         linha.item.descricao,
                         linha.item.enderecoPrincipal,
                         linha.item.armazemPrincipal,
-                        linha.item.armazem
+                        linha.item.armazem,
+                        ...armazensItem(linha.item)
                     ].join(" "));
                     if(!texto.includes(normalizarTexto(cfg.busca))) return false;
                 }
@@ -920,6 +1008,7 @@
                     <span class="chip">suposicao=${esc(cfg.suposicao)}</span>
                     <span class="chip">ordenar=${esc(cfg.ordenar)} ${esc(cfg.direcao)}</span>
                     <span class="chip">limite=${cfg.limite}</span>
+                    ${cfg.armazens.length ? `<span class="chip">armazem=${esc(cfg.armazens.join(","))}</span>` : ""}
                     <span class="chip">sem solicitacao na lista: ${semPedido}</span>
                     <span class="chip">base carregada: ${dados.length}</span>
                     <span class="chip">com estoque minimo: ${dados.filter(item => limite(item.minimo) !== null || limite(item.maximo) !== null).length}</span>
@@ -958,7 +1047,7 @@
                                         <td class="num">${fmt(item.maximo)}</td>
                                         <td class="num">${fmt(reposicao)}</td>
                                         <td><span class="status ${esc(status)}">${esc(statusRotulo(status))}</span></td>
-                                        <td class="pedido ${pedidoAtivo(pedido) ? "" : "semPedido"}">${esc(pedidoAtivo(pedido) ? (pedido.titulo || "Com solicitacao") : "Sem solicitacao")}</td>
+                                        <td class="pedido ${pedidoAtivo(pedido) ? "" : "semPedido"}">${esc(rotuloPedido(pedido))}</td>
                                         <td class="origem">${esc(origem || "-")}</td>
                                     </tr>
                                 `).join("")}

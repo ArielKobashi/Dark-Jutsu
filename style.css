@@ -604,6 +604,12 @@ table{
    
 }
 
+#tableContainer table{
+    width:max-content;
+    min-width:100%;
+    table-layout:auto;
+}
+
 td.descricaoPrincipal{
     white-space:nowrap;
     overflow:visible;
