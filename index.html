@@ -7172,6 +7172,7 @@ function updateMobileOverlaysState(){
     document.body.classList.toggle("pending-open", !!pendingOpen);
     document.body.classList.toggle("cadastro-open", !!cadastroOpen);
     const showHandle = appReady && !authOpen && !loadingOpen && !pendingOpen && !cadastroOpen;
+    document.body.classList.toggle("app-ready", !!showHandle);
     document.body.classList.toggle("show-handle", !!showHandle);
 }
 

@@ -163,7 +163,7 @@
     .historicoContagemPanel {
         position: fixed;
         left: 50%;
-        top: calc(4px + env(safe-area-inset-top));
+        top: env(safe-area-inset-top);
         width: min(360px, calc(100vw - 24px));
         max-width: calc(100vw - 24px);
         z-index: 32;
@@ -178,6 +178,11 @@
         min-width: 0;
         background: rgba(17, 24, 39, 0.08);
         border-color: rgba(103, 232, 249, 0.06);
+    }
+
+    .historicoContagemPanel:not(.aberto):active,
+    .historicoContagemPanel:not(.aberto):focus-within {
+        transform: translate(-50%, 0);
     }
 
     #historicoContagemToggle {

@@ -142,7 +142,7 @@ display:none;
 
 .historicoContagemPanel{
     position:absolute;
-    top:4px;
+    top:0;
     left:50%;
     transform:translateX(-50%);
     width:min(420px, calc(100% - 18px));
@@ -156,6 +156,11 @@ display:none;
     backdrop-filter:blur(6px);
     -webkit-backdrop-filter:blur(6px);
     z-index:12;
+    transition:transform 0.18s ease, width 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+body:not(.app-ready) .historicoContagemPanel{
+    display:none !important;
 }
 
 .historicoContagemPanel:not(.aberto){
@@ -163,6 +168,12 @@ display:none;
     background:rgba(17,24,39,0.08);
     border-color:rgba(103,232,249,0.06);
     box-shadow:0 0 6px rgba(34,211,238,0.03);
+    transform:translate(-50%, -90%);
+}
+
+.historicoContagemPanel:not(.aberto):hover,
+.historicoContagemPanel:not(.aberto):focus-within{
+    transform:translate(-50%, 0);
 }
 
 #historicoContagemToggle{
@@ -187,9 +198,7 @@ display:none;
 }
 
 .historicoContagemPanel:not(.aberto) #historicoContagemToggle span{
-    overflow:hidden;
-    white-space:nowrap;
-    text-overflow:ellipsis;
+    display:none;
 }
 
 .historicoContagemPanel:not(.aberto) #historicoContagemToggle strong{
