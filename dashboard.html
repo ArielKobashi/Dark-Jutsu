@@ -242,6 +242,44 @@
         .legend{display:grid;gap:6px;font-size:12px;color:var(--soft)}
         .legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--c)}
         .sectionTitle{font-size:15px;margin:16px 0 8px;color:#EDE9FE}
+        .contagemProgressPanel{
+            margin-bottom:14px;
+            padding:14px;
+            border:1px solid rgba(34,211,238,.34);
+            border-radius:8px;
+            background:linear-gradient(135deg, rgba(8,47,73,.88), rgba(21,21,29,.92));
+            box-shadow:0 0 22px rgba(34,211,238,.18);
+        }
+        .contagemProgressTop{
+            display:flex;
+            align-items:flex-end;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:10px;
+        }
+        .contagemProgressTop span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;font-weight:800}
+        .contagemProgressTop strong{display:block;font-size:28px;color:#CFFAFE}
+        .contagemProgressMeta{color:#cbd5e1;font-size:12px;text-align:right}
+        .contagemProgressTrack{
+            position:relative;
+            height:16px;
+            overflow:hidden;
+            border-radius:999px;
+            border:1px solid rgba(103,232,249,.35);
+            background:#0F172A;
+        }
+        .contagemProgressFill{
+            height:100%;
+            border-radius:999px;
+            background:linear-gradient(90deg,#22C55E,#00D9FF,#7A3CFF);
+            box-shadow:0 0 14px rgba(34,211,238,.42);
+            animation:contagemProgressPulse 1.6s ease-in-out infinite;
+            transition:width .45s ease;
+        }
+        @keyframes contagemProgressPulse{
+            0%,100%{filter:brightness(1)}
+            50%{filter:brightness(1.22)}
+        }
         .status{
             display:inline-flex;
             border-radius:999px;
@@ -482,6 +520,15 @@
         function origemItem(item){
             return String(item?.limitesOrigem || item?.minimoOrigem || item?.maximoOrigem || item?.reposicaoOrigem || "").toLowerCase();
         }
+        function origemTemSuposicao(valor){
+            const origem = normalizarTexto(valor);
+            return origem === "automatico"
+                || origem === "calculada"
+                || origem.includes("auto")
+                || origem.includes("calcul")
+                || origem.includes("estim")
+                || origem.includes("sugest");
+        }
         function listaDados(valor){
             if(Array.isArray(valor)) return valor;
             if(valor && typeof valor === "object") return Object.values(valor);
@@ -563,6 +610,14 @@
         }
         function aplicarLimitesDashboard(item, mapaMinimo, ajustes){
             const novo = {...(item || {})};
+            let temSuposicao = !!novo.sugestaoEstoque
+                || [
+                    novo.limitesOrigem,
+                    novo.minimoOrigem,
+                    novo.maximoOrigem,
+                    novo.reposicaoOrigem,
+                    novo.origem
+                ].some(origemTemSuposicao);
             const codigoCooperat = normalizarCodigo(novo.cooperat);
             const extra = mapaMinimo.get(codigoCooperat);
             if(extra){
@@ -604,17 +659,25 @@
                 }
                 novo.limitesOrigem = "manual";
             }
-            const repo = limite(novo.reposicao) ?? calcularReposicaoMedia(novo.minimo, novo.maximo);
+            const reposicaoInformada = limite(novo.reposicao);
+            const repo = reposicaoInformada ?? calcularReposicaoMedia(novo.minimo, novo.maximo);
             if(repo !== null){
                 novo.reposicao = repo;
-                novo.reposicaoOrigem = novo.reposicaoOrigem || novo.limitesOrigem || "calculada";
+                if(reposicaoInformada === null){
+                    temSuposicao = true;
+                    novo.reposicaoOrigem = novo.reposicaoOrigem || "calculada";
+                }else{
+                    novo.reposicaoOrigem = novo.reposicaoOrigem || novo.limitesOrigem || "calculada";
+                }
             }
+            novo.temSuposicaoEstoque = !!temSuposicao;
             return novo;
         }
         function normalizarTexto(valor){
             return String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         }
         function itemTemSuposicao(item){
+            if(item?.temSuposicaoEstoque) return true;
             const origens = [
                 item?.limitesOrigem,
                 item?.minimoOrigem,
@@ -622,14 +685,7 @@
                 item?.reposicaoOrigem,
                 item?.origem
             ].map(v => normalizarTexto(v));
-            const origemSugestiva = origens.some(origem =>
-                origem === "automatico"
-                || origem === "calculada"
-                || origem.includes("auto")
-                || origem.includes("calcul")
-                || origem.includes("estim")
-                || origem.includes("sugest")
-            );
+            const origemSugestiva = origens.some(origemTemSuposicao);
             return origemSugestiva || !!item?.sugestaoEstoque;
         }
         function codigoArmazem(valor){
@@ -638,6 +694,40 @@
             const match = texto.match(/\d+/);
             if(match) return String(parseInt(match[0], 10));
             return normalizarTexto(texto);
+        }
+        function armazemPermitidoProgresso(valor){
+            const codigo = codigoArmazem(valor);
+            return codigo === "4" || codigo === "5";
+        }
+        function normalizarEnderecoProgresso(valor){
+            return normalizarTexto(valor).replace(/\s+/g, " ").trim() || "sem endereco";
+        }
+        function chaveLinhaContagemProgresso(codigo, armazem, endereco){
+            return [
+                normalizarCodigo(codigo),
+                codigoArmazem(armazem),
+                normalizarEnderecoProgresso(endereco)
+            ].join("||");
+        }
+        function linhasContagemProgresso(dados){
+            const linhas = new Map();
+            (Array.isArray(dados) ? dados : []).forEach(item => {
+                const codigo = item?.protheus || item?.protheusKey || item?.cooperat || "";
+                if(!codigo) return;
+                const enderecos = Array.isArray(item?.enderecos) ? item.enderecos : [];
+                if(enderecos.length){
+                    enderecos.forEach(end => {
+                        if(!armazemPermitidoProgresso(end?.armazem)) return;
+                        const chave = chaveLinhaContagemProgresso(codigo, end?.armazem, end?.endereco || item?.enderecoPrincipal);
+                        linhas.set(chave, true);
+                    });
+                    return;
+                }
+                if(!armazemPermitidoProgresso(item?.armazemPrincipal)) return;
+                const chave = chaveLinhaContagemProgresso(codigo, item?.armazemPrincipal, item?.enderecoPrincipal);
+                linhas.set(chave, true);
+            });
+            return linhas;
         }
         function armazensItem(item){
             const valores = [
@@ -703,9 +793,9 @@
             (Array.isArray(mata110) ? mata110.slice(2) : []).forEach(row => {
                 const solicitante = (row?.[7] ?? "").toString().trim();
                 if(!solicitante) return;
-                incrementarRanking(mapa, solicitante, num(row?.[5]) || 0);
+                incrementarRanking(mapa, solicitante, 1);
             });
-            return [...mapa.values()].sort((a,b) => (b.eventos - a.eventos) || (b.quantidade - a.quantidade));
+            return [...mapa.values()].sort((a,b) => (b.quantidade - a.quantidade) || (b.eventos - a.eventos));
         }
         function rankingContagens(contagens){
             const mapa = new Map();
@@ -713,12 +803,47 @@
                 Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
                     Object.values(registros || {}).forEach(registro => {
                         const itens = Object.keys(registro?.itens || {}).length;
-                        const vazios = Object.keys(registro?.verificacoesVazio || {}).length;
-                        incrementarRanking(mapa, registro?.usuario || usuarioKey, itens + vazios);
+                        incrementarRanking(mapa, registro?.usuario || usuarioKey, itens);
                     });
                 });
             });
             return [...mapa.values()].sort((a,b) => (b.quantidade - a.quantidade) || (b.eventos - a.eventos));
+        }
+        function calcularProgressoContagem(dados, contagens){
+            const totalLinhas = linhasContagemProgresso(dados);
+            const contadas = new Set();
+            Object.entries(contagens || {}).forEach(([, porUsuario]) => {
+                Object.values(porUsuario || {}).forEach(registros => {
+                    Object.values(registros || {}).forEach(registro => {
+                        Object.values(registro?.itens || {}).forEach(item => {
+                            const codigo = item?.protheus || item?.cooperat || "";
+                            const chave = chaveLinhaContagemProgresso(codigo, item?.armazem, item?.endereco);
+                            if(totalLinhas.has(chave)) contadas.add(chave);
+                        });
+                    });
+                });
+            });
+            const total = totalLinhas.size;
+            const feitas = contadas.size;
+            const percentual = total ? Math.min(100, (feitas / total) * 100) : 0;
+            return { total, feitas, percentual };
+        }
+        function renderProgressoContagem(progresso){
+            const pct = Math.round((progresso?.percentual || 0) * 10) / 10;
+            return `
+                <section class="contagemProgressPanel">
+                    <div class="contagemProgressTop">
+                        <div>
+                            <span>Progresso de contagem - armazens 04 e 05</span>
+                            <strong>${esc(fmt(pct))}%</strong>
+                        </div>
+                        <div class="contagemProgressMeta">${esc(fmt(progresso?.feitas || 0))} de ${esc(fmt(progresso?.total || 0))} itens/endereco contados</div>
+                    </div>
+                    <div class="contagemProgressTrack">
+                        <div class="contagemProgressFill" style="width:${Math.max(0, Math.min(100, pct))}%"></div>
+                    </div>
+                </section>
+            `;
         }
         function rankingEtiquetas(etiquetasGeradas){
             const mapa = new Map();
@@ -883,6 +1008,9 @@
                         cfg.limite = Math.max(1, Math.min(50000, Number(el.value) || 50000));
                     }else{
                         cfg[nome] = el.value.toLowerCase();
+                        if(nome === "suposicao" && cfg.suposicao !== "todos" && cfg.status === "fora"){
+                            cfg.status = "todos";
+                        }
                     }
                     renderDashboardAtual(foco);
                 };
@@ -987,15 +1115,15 @@
         function renderRankingsOperacao(rankings){
             return `
                 <section class="vizGrid">
-                    ${renderRankingUsuarios("Quem mais pede reposicao", rankings.reposicao || [], "Pecas solicitadas")}
-                    ${renderRankingUsuarios("Quem mais conta pecas", rankings.contagem || [], "Pecas contadas/verificadas")}
+                    ${renderRankingUsuarios("Quem mais pede reposicao", rankings.reposicao || [], "Solicitacoes feitas")}
+                    ${renderRankingUsuarios("Quem mais conta pecas", rankings.contagem || [], "Itens contados")}
                 </section>
                 <section class="vizGrid">
                     ${renderRankingUsuarios("Quem mais faz etiqueta", rankings.etiqueta || [], "Etiquetas geradas")}
                 </section>
             `;
         }
-        function renderMovimentacao(banco, dados, movimentacao, leadTimes, rankings){
+        function renderMovimentacao(banco, dados, movimentacao, leadTimes, rankings, progressoContagem){
             const zeraram = movimentacao.zeraram
                 .sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
             const totalSaidas = movimentacao.saidas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
@@ -1008,6 +1136,7 @@
                     <article class="card"><span>Saidas</span><strong>${fmt(totalSaidas)}</strong></article>
                     <article class="card green"><span>Entradas</span><strong>${fmt(totalEntradas)}</strong></article>
                 </section>
+                ${renderProgressoContagem(progressoContagem)}
                 ${renderFiltros([], dados.length)}
                 <section class="vizGrid">
                     ${renderBarras(`Itens que zeraram apos movimentacao - ${movimentacao.faixa.nome}`, zeraram.map(e => ({...e, codigo:e.item.protheus || e.item.cooperat, descricao:e.item.descricao || "", dias:Math.abs(Number(e.delta || 0))})), "dias")}
@@ -1211,6 +1340,7 @@
                 contagem: rankingContagens(extras.contagens || {}),
                 etiqueta: rankingEtiquetas(extras.etiquetasGeradas || {})
             };
+            const progressoContagem = calcularProgressoContagem(dados, extras.contagens || {});
             const movimentacao = calcularMovimentacaoPeriodo(banco, dadosEscopo);
             const origens = [...new Set(dadosEscopo.map(origemItem).filter(Boolean))].sort((a,b) => a.localeCompare(b, "pt-BR"));
             let linhas = dadosEscopo.map(item => {
@@ -1262,7 +1392,7 @@
             const dt = banco?.ultimaAtualizacao ? new Date(banco.ultimaAtualizacao).toLocaleString("pt-BR") : "-";
             document.getElementById("ultimaAtualizacao").textContent = `Ultima atualizacao: ${dt}`;
             if(cfg.ambiente === "movimentacao"){
-                renderMovimentacao(banco, dadosEscopo, movimentacao, leadTimes, rankings);
+                renderMovimentacao(banco, dadosEscopo, movimentacao, leadTimes, rankings, progressoContagem);
                 return;
             }
 
@@ -1273,6 +1403,7 @@
                     <article class="card green"><span>Acima do maximo</span><strong>${acima}</strong></article>
                     <article class="card"><span>Reposicao total</span><strong>${fmt(totalReposicao)}</strong></article>
                 </section>
+                ${renderProgressoContagem(progressoContagem)}
                 <div class="toolbar">
                     <span class="chip">status=${esc(cfg.status)}</span>
                     <span class="chip">semSolicitacao=${cfg.semSolicitacao ? "1" : "0"}</span>
