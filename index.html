@@ -105,12 +105,12 @@
         <table>
             <colgroup>
                 <col style="width:18px">
-                <col style="width:66px">
-                <col style="width:56px">
-                <col style="width:36px">
-                <col>
-                <col style="width:88px">
-                <col style="width:58px">
+                <col style="width:64px">
+                <col style="width:52px">
+                <col style="width:34px">
+                <col id="colDescricaoPrincipal">
+                <col style="width:86px">
+                <col style="width:60px">
             </colgroup>
 
             <thead>
@@ -3385,7 +3385,35 @@ function renderTabela(){
     });
 
     atualizarEstadoHeader();
+    ajustarLarguraDescricaoTabela();
 }
+function ajustarLarguraDescricaoTabela(){
+    const app = document.getElementById("app");
+    const main = document.getElementById("main");
+    const table = document.querySelector("#tableContainer table");
+    const colDescricao = document.getElementById("colDescricaoPrincipal");
+    const descricoes = Array.from(document.querySelectorAll("td.descricaoPrincipal"));
+    if(!app || !main || !table || !colDescricao || !descricoes.length) return;
+
+    const canvas = ajustarLarguraDescricaoTabela.canvas || (ajustarLarguraDescricaoTabela.canvas = document.createElement("canvas"));
+    const ctx = canvas.getContext("2d");
+    const estilo = getComputedStyle(descricoes[0]);
+    ctx.font = `${estilo.fontWeight} ${estilo.fontSize} ${estilo.fontFamily}`;
+
+    const maiorDescricao = descricoes.reduce((max, td) => {
+        const largura = Math.ceil(ctx.measureText(td.textContent || "").width) + 12;
+        return Math.max(max, largura);
+    }, 0);
+
+    const larguraDescricao = Math.max(130, Math.min(maiorDescricao, window.innerWidth - 328));
+    const larguraTabela = 18 + 64 + 52 + 34 + larguraDescricao + 86 + 60 + 18;
+    const larguraConsole = Math.min(window.innerWidth, Math.max(800, larguraTabela + 12));
+
+    colDescricao.style.width = `${larguraDescricao}px`;
+    app.style.width = `${larguraConsole}px`;
+    table.style.setProperty("--descricao-col-width", `${larguraDescricao}px`);
+}
+window.addEventListener("resize", () => ajustarLarguraDescricaoTabela());
 document.getElementById("selectAllHeader").addEventListener("change", function(){
 
     let marcar = this.checked;

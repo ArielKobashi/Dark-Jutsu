@@ -14,8 +14,8 @@ body {
 /* CONSOLE */
 #app {
     min-width: 0;
-    width: min(800px, 95vw);
-    max-width: 95vw;
+    width: min(800px, 100vw);
+    max-width: 100vw;
      /* antes 530 */
     height: 600px;    /* antes 600 */
     background: #15151D;
@@ -130,14 +130,14 @@ display:none;
 }
 
 #btnDashboard{
-    background:linear-gradient(145deg,#7A3CFF,#5A2CBB);
-    border-color:#9A5CFF;
-    color:#F3E8FF;
+    background:linear-gradient(145deg,#0891B2,#0E7490);
+    border-color:#67E8F9;
+    color:#ECFEFF;
 }
 
 #btnDashboard:hover{
     filter:brightness(1.08);
-    box-shadow:0 0 12px rgba(122,60,255,0.42);
+    box-shadow:0 0 12px rgba(34,211,238,0.42);
 }
 
 #adminBtn{
