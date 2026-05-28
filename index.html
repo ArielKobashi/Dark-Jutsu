@@ -372,7 +372,7 @@ document.addEventListener("keydown", function(e){
         </div>
         <div id="contagemRelatorioTabela"></div>
         <div id="contagemRelatorioRodape">
-            <button onclick="exportarRelatorioContagemXlsx()">Exportar XLSX</button>
+            <button onclick="salvarContagemPeloRelatorio()">Salvar Contagem</button>
         </div>
     </div>
 </div>
@@ -4045,6 +4045,7 @@ let contagemEscutaRestartTimer = null;
 let contagemTranscricaoTimer = null;
 let contagemUltimaTranscricaoProcessada = "";
 let contagemUltimoProcessamentoVoz = 0;
+let contagemMicStream = null;
 const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
 
 function parsearEnderecoContagem(endereco){
@@ -4197,6 +4198,7 @@ function salvarSessaoContagem(extra = {}){
             dataInicio: atual.dataInicio || extra.dataInicio || dataContagemHoje(),
             maquina: contagemMaquinaAtual || atual.maquina || "",
             indice: Number.isFinite(contagemIndice) ? contagemIndice : (atual.indice || 0),
+            itemKey: itemKeyContagem(contagemItensMaquina[contagemIndice]) || atual.itemKey || "",
             updatedAt: Date.now(),
             ...extra
         }));
@@ -4337,7 +4339,7 @@ async function abrirContagem(){
     marcarContagemAberta(true);
 
     if(sessao.maquina && contagemMaquinas.includes(sessao.maquina)){
-        selecionarMaquinaContagem(sessao.maquina, true, Number(sessao.indice || 0));
+        selecionarMaquinaContagem(sessao.maquina, true, Number(sessao.indice || 0), sessao.itemKey || "");
     }
 }
 
@@ -4470,6 +4472,36 @@ function obterReconhecimentoVozContagem(){
     return window.webkitSpeechRecognition || window.SpeechRecognition || null;
 }
 
+function isMobileVozContagem(){
+    return isMobileLayout() || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+}
+
+async function prepararMicrofoneContagem(){
+    if(contagemMicStream || !navigator.mediaDevices?.getUserMedia) return true;
+    try{
+        contagemMicStream = await navigator.mediaDevices.getUserMedia({
+            audio:{
+                echoCancellation:true,
+                noiseSuppression:true,
+                autoGainControl:true
+            }
+        });
+        return true;
+    }catch(e){
+        console.warn("Falha ao ativar microfone:", e);
+        mostrarNotificacao("Microfone bloqueado ou indisponivel.");
+        return false;
+    }
+}
+
+function liberarMicrofoneContagem(){
+    if(!contagemMicStream) return;
+    try{
+        contagemMicStream.getTracks().forEach(track => track.stop());
+    }catch(e){}
+    contagemMicStream = null;
+}
+
 function toggleNarradorContagem(){
     contagemNarradorAtivo = !contagemNarradorAtivo;
     localStorage.setItem("contagemNarradorAtivo", contagemNarradorAtivo ? "1" : "0");
@@ -4482,13 +4514,17 @@ function toggleNarradorContagem(){
     if(contagemLocutorAtivo) iniciarEscutaContagem();
 }
 
-function toggleLocutorContagem(){
+async function toggleLocutorContagem(){
     const Reconhecimento = obterReconhecimentoVozContagem();
     if(!Reconhecimento){
         mostrarNotificacao("Reconhecimento de voz nao suportado neste navegador.");
         return;
     }
     contagemLocutorAtivo = !contagemLocutorAtivo;
+    if(contagemLocutorAtivo){
+        const micOk = await prepararMicrofoneContagem();
+        if(!micOk) contagemLocutorAtivo = false;
+    }
     localStorage.setItem("contagemLocutorAtivo", contagemLocutorAtivo ? "1" : "0");
     if(contagemLocutorAtivo){
         iniciarEscutaContagem();
@@ -4546,11 +4582,14 @@ function abrirJanelaEscutaContagem(){
     atualizarStatusEscutaAtualContagem();
 }
 
-function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null){
+function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null, itemKeyPreferido = ""){
     contagemMaquinaAtual = maquina;
     contagemItensMaquina = contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquina);
     const primeiroPendente = contagemItensMaquina.findIndex(item => contagemValores[itemKeyContagem(item)] === undefined);
-    if(Number.isFinite(indicePreferido)){
+    const indicePorItem = itemKeyPreferido ? contagemItensMaquina.findIndex(item => itemKeyContagem(item) === itemKeyPreferido) : -1;
+    if(indicePorItem >= 0){
+        contagemIndice = indicePorItem;
+    }else if(Number.isFinite(indicePreferido)){
         contagemIndice = Math.max(0, Math.min(Number(indicePreferido), Math.max(contagemItensMaquina.length - 1, 0)));
     }else{
         contagemIndice = primeiroPendente >= 0 ? primeiroPendente : 0;
@@ -4558,7 +4597,7 @@ function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null
     contagemUltimoEnderecoFalado = "";
     if(atualizarBar) renderizarMaquinasContagem();
     mostrarCardContagem();
-    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
+    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:itemKeyContagem(contagemItensMaquina[contagemIndice]) });
     renderizarCardContagem();
 }
 
@@ -4614,7 +4653,7 @@ function renderizarCardContagem(){
         iniciarEscutaContagem();
         abrirJanelaEscutaContagem();
     }
-    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
+    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:key });
     if(!isVerificacao){
         setTimeout(() => input.focus({ preventScroll:true }), 60);
     }
@@ -4675,6 +4714,9 @@ function falarEnderecoContagem(infoEndereco, item){
         fala.onstart = () => {
             contagemNarradorFalando = true;
             contagemIgnorarVozAte = Date.now() + 1000;
+            if(isMobileVozContagem() && contagemReconhecimento){
+                try{ contagemReconhecimento.abort(); }catch(e){}
+            }
             atualizarStatusEscutaAtualContagem();
         };
         fala.onend = () => {
@@ -4795,10 +4837,14 @@ function iniciarEscutaContagem(){
 
 function iniciarCicloEscutaContagem(){
     if(!contagemLocutorAtivo || !contagemEstaAberta()) return;
+    if(contagemNarradorFalando) return;
 
     const Reconhecimento = obterReconhecimentoVozContagem();
 
     try{
+        if(isMobileVozContagem() && !contagemMicStream){
+            prepararMicrofoneContagem();
+        }
         const rec = new Reconhecimento();
 
         contagemReconhecimento = rec;
@@ -4806,7 +4852,7 @@ function iniciarCicloEscutaContagem(){
 
         rec.lang = "pt-BR";
         rec.interimResults = true;
-        rec.continuous = true;
+        rec.continuous = !isMobileVozContagem();
         rec.maxAlternatives = 5;
 
         atualizarStatusEscutaAtualContagem();
@@ -4851,14 +4897,14 @@ function iniciarCicloEscutaContagem(){
             contagemEscutando = false;
             contagemReconhecimento = null;
 
-            if(contagemLocutorAtivo && contagemEstaAberta()){
+            if(contagemLocutorAtivo && contagemEstaAberta() && !contagemNarradorFalando){
                 contagemReiniciando = true;
                 if(contagemEscutaRestartTimer) clearTimeout(contagemEscutaRestartTimer);
                 contagemEscutaRestartTimer = setTimeout(() => {
                     contagemEscutaRestartTimer = null;
                     contagemReiniciando = false;
                     iniciarEscutaContagem();
-                }, 120);
+                }, isMobileVozContagem() ? 260 : 120);
             }
         };
 
@@ -4891,6 +4937,7 @@ function pararEscutaContagem(){
         try{ contagemReconhecimento.stop(); }catch(e){}
         try{ contagemReconhecimento.abort(); }catch(e){}
     }
+    liberarMicrofoneContagem();
 
     contagemEscutando = false;
     contagemReconhecimento = null;
@@ -4978,7 +5025,7 @@ function registrarVerificacaoVazioContagem(status){
     const key = itemKeyContagem(item);
     contagemVerificacoesVazio[key] = status;
     salvarRascunhoContagem();
-    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
+    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:key });
     atualizarProgressoContagem();
     contagemProximo();
 }
@@ -4988,8 +5035,9 @@ function salvarAtualContagem(){
     const input = document.getElementById("contagemInput");
     if(!item || !input) return;
     if(isVerificacaoVazioContagem(item)){
+        const key = itemKeyContagem(item);
         salvarRascunhoContagem();
-        salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
+        salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:key });
         atualizarProgressoContagem();
         return;
     }
@@ -5002,7 +5050,7 @@ function salvarAtualContagem(){
         if(Number.isFinite(valor) && valor >= 0) contagemValores[key] = valor;
     }
     salvarRascunhoContagem();
-    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
+    salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:key });
     atualizarProgressoContagem();
 }
 
@@ -5027,7 +5075,7 @@ function contagemProximo(){
                 return;
             }
         }
-        salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
+        salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:itemKeyContagem(contagemItensMaquina[contagemIndice]) });
         renderizarMaquinasContagem();
         renderizarCardContagem();
     });
@@ -5046,56 +5094,28 @@ function contagemAnterior(){
                 contagemIndice = Math.max(contagemItensMaquina.length - 1, 0);
             }
         }
-        salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice });
+        salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:itemKeyContagem(contagemItensMaquina[contagemIndice]) });
         renderizarMaquinasContagem();
         renderizarCardContagem();
     });
 }
 
 async function finalizarContagem(){
-    salvarAtualContagem();
-    const itensContados = contagemItens.filter(item => !isVerificacaoVazioContagem(item) && contagemValores[itemKeyContagem(item)] !== undefined);
-    const verificacoesRegistradas = contagemItens.filter(item => isVerificacaoVazioContagem(item) && contagemVerificacoesVazio[itemKeyContagem(item)] !== undefined);
-    if(!itensContados.length && !verificacoesRegistradas.length){
+    const payload = criarPayloadRascunhoRelatorioContagem(false);
+    if(!payload){
         mostrarNotificacao("Nenhum item foi contado ainda.");
         return;
     }
-    const nick = window.meuNickname || "desconhecido";
-    const data = dataContagemSessaoAtual();
-    const payload = {
-        usuario:nick,
-        data,
-        timestamp:Date.now(),
-        totalItens:contagemItens.length,
-        itens:{},
-        verificacoesVazio:{}
-    };
-    itensContados.forEach(item => {
-        const key = itemKeyContagem(item);
-        payload.itens[chaveFirebaseContagem(key)] = {
-            protheus:item.protheus || "",
-            cooperat:item.cooperat || "",
-            descricao:item.descricao || "",
-            armazem:item.armazemPrincipal || "",
-            endereco:item.enderecoPrincipal || "",
-            saldoSistema:parsePlanilhaNumero(item.saldo),
-            contado:contagemValores[key]
-        };
-    });
-    verificacoesRegistradas.forEach(item => {
-        const key = itemKeyContagem(item);
-        payload.verificacoesVazio[chaveFirebaseContagem(key)] = {
-            endereco:item.enderecoPrincipal || "",
-            maquina:item.maquina || "",
-            prateleira:item.prateleira || "",
-            caixa:item.caixa || "",
-            status:contagemVerificacoesVazio[key],
-            registradoEm:Date.now()
-        };
-    });
-    if(!confirm(`Finalizar contagem?\n\nItens contados: ${itensContados.length}\nVazios verificados: ${verificacoesRegistradas.length}.`)) return;
+    const linhasExportacao = ordenarLinhasRelatorioContagem(linhasRegistroContagemPlanilha({
+        data:payload.data,
+        usuario:payload.usuario,
+        registro:payload
+    }));
+    const totalItens = Object.keys(payload.itens || {}).length;
+    const totalVazios = Object.keys(payload.verificacoesVazio || {}).length;
+    if(!confirm(`Finalizar contagem?\n\nItens contados: ${totalItens}\nVazios verificados: ${totalVazios}.`)) return;
     try{
-        const baseRef = window.ref(window.db, `contagens/${data}/${chaveFirebaseContagem(nick)}`);
+        const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
         await window.push(baseRef, payload);
         localStorage.removeItem(chaveRascunhoContagem());
         localStorage.removeItem(chaveVerificacoesContagem());
@@ -5103,15 +5123,18 @@ async function finalizarContagem(){
         contagemValores = {};
         contagemVerificacoesVazio = {};
         contagemFinalizadaSemSessao = true;
-        mostrarNotificacao(`Contagem salva: ${itensContados.length} itens.`);
+        mostrarNotificacao(`Contagem salva: ${totalItens} itens.`);
         fecharContagem();
+        if(confirm("Contagem salva. Quer exportar o XLSX agora?")){
+            exportarLinhasRelatorioContagemXlsx(linhasExportacao, payload.data);
+        }
     }catch(e){
         console.error("Erro ao salvar contagem:", e);
         mostrarNotificacao("Erro ao salvar contagem. Verifique as regras do Firebase.");
     }
 }
 
-function criarPayloadRascunhoRelatorioContagem(){
+function criarPayloadRascunhoRelatorioContagem(rascunho = true){
     salvarAtualContagem();
     const itensContados = contagemItens.filter(item => !isVerificacaoVazioContagem(item) && contagemValores[itemKeyContagem(item)] !== undefined);
     const verificacoesRegistradas = contagemItens.filter(item => isVerificacaoVazioContagem(item) && contagemVerificacoesVazio[itemKeyContagem(item)] !== undefined);
@@ -5121,11 +5144,11 @@ function criarPayloadRascunhoRelatorioContagem(){
         usuario:nick,
         data:dataContagemSessaoAtual(),
         timestamp:Date.now(),
-        rascunho:true,
         totalItens:contagemItens.length,
         itens:{},
         verificacoesVazio:{}
     };
+    if(rascunho) payload.rascunho = true;
     itensContados.forEach(item => {
         const key = itemKeyContagem(item);
         payload.itens[chaveFirebaseContagem(key)] = {
@@ -5203,6 +5226,23 @@ function coletarLinhasRelatorioContagem(){
     return linhas;
 }
 
+function compararEnderecoRelatorioContagem(a, b){
+    const ea = parsearEnderecoContagem(a?.item?.endereco || "");
+    const eb = parsearEnderecoContagem(b?.item?.endereco || "");
+    if(ea.maquina !== eb.maquina) return ea.maquina.localeCompare(eb.maquina, "pt-BR", { numeric:true, sensitivity:"base" });
+    if(ea.prateleira !== eb.prateleira) return ea.prateleira.localeCompare(eb.prateleira, "pt-BR", { numeric:true, sensitivity:"base" });
+    if(ea.caixa !== eb.caixa) return ea.caixa - eb.caixa;
+    return String(a?.item?.endereco || "").localeCompare(String(b?.item?.endereco || ""), "pt-BR", { numeric:true, sensitivity:"base" });
+}
+
+function ordenarLinhasRelatorioContagem(linhas){
+    return [...(linhas || [])].sort((a, b) => {
+        const porEndereco = compararEnderecoRelatorioContagem(a, b);
+        if(porEndereco) return porEndereco;
+        return String(a?.item?.descricao || "").localeCompare(String(b?.item?.descricao || ""), "pt-BR", { numeric:true, sensitivity:"base" });
+    });
+}
+
 async function abrirRelatorioContagem(){
     salvarAtualContagem();
     document.getElementById("contagemRelatorioModal").style.display = "flex";
@@ -5241,12 +5281,12 @@ function linhasFiltradasRelatorioContagem(){
     const soDivergentes = document.getElementById("contagemFiltroSoDivergentes").checked;
     const dataFiltro = document.getElementById("contagemFiltroData").value;
     const usuarioFiltro = document.getElementById("contagemFiltroUsuario").value;
-    return coletarLinhasRelatorioContagem().filter(l => {
+    return ordenarLinhasRelatorioContagem(coletarLinhasRelatorioContagem().filter(l => {
         if(soDivergentes && !l.diverge) return false;
         if(dataFiltro && l.data !== dataFiltro) return false;
         if(usuarioFiltro && l.usuario !== usuarioFiltro) return false;
         return true;
-    });
+    }));
 }
 
 function renderizarRelatorioContagem(){
@@ -5271,12 +5311,12 @@ function renderizarRelatorioContagem(){
     document.getElementById("contagemRelatorioTabela").innerHTML = html;
 }
 
-function exportarRelatorioContagemXlsx(){
+function exportarLinhasRelatorioContagemXlsx(linhasOrigem, dataArquivo = ""){
     if(typeof XLSX === "undefined"){
         mostrarNotificacao("Biblioteca XLSX nao encontrada.");
-        return;
+        return false;
     }
-    const linhas = linhasFiltradasRelatorioContagem().map(l => ({
+    const linhas = ordenarLinhasRelatorioContagem(linhasOrigem).map(l => ({
         Data:l.data,
         Usuario:l.usuario,
         Endereco:l.item.endereco || "",
@@ -5290,8 +5330,48 @@ function exportarRelatorioContagemXlsx(){
     const ws = XLSX.utils.json_to_sheet(linhas);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Divergencias");
+    XLSX.writeFile(wb, `divergencias_contagem_${dataArquivo || dataContagemSessaoAtual()}.xlsx`);
+    return true;
+}
+
+function exportarRelatorioContagemXlsx(){
     const dataArquivo = document.getElementById("contagemFiltroData")?.value || dataContagemSessaoAtual();
-    XLSX.writeFile(wb, `divergencias_contagem_${dataArquivo}.xlsx`);
+    exportarLinhasRelatorioContagemXlsx(linhasFiltradasRelatorioContagem(), dataArquivo);
+}
+
+async function salvarContagemPeloRelatorio(){
+    const payload = criarPayloadRascunhoRelatorioContagem(false);
+    if(!payload){
+        mostrarNotificacao("Nenhum item foi contado ainda.");
+        return;
+    }
+    const linhasExportacao = ordenarLinhasRelatorioContagem(linhasRegistroContagemPlanilha({
+        data:payload.data,
+        usuario:payload.usuario,
+        registro:payload
+    }));
+    const totalItens = Object.keys(payload.itens || {}).length;
+    const totalVazios = Object.keys(payload.verificacoesVazio || {}).length;
+    if(!confirm(`Salvar contagem?\n\nItens contados: ${totalItens}\nVazios verificados: ${totalVazios}.`)) return;
+    try{
+        const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
+        await window.push(baseRef, payload);
+        localStorage.removeItem(chaveRascunhoContagem());
+        localStorage.removeItem(chaveVerificacoesContagem());
+        localStorage.removeItem(chaveSessaoContagem());
+        contagemValores = {};
+        contagemVerificacoesVazio = {};
+        contagemFinalizadaSemSessao = true;
+        document.getElementById("contagemRelatorioModal").style.display = "none";
+        mostrarNotificacao(`Contagem salva: ${totalItens} itens.`);
+        fecharContagem();
+        if(confirm("Contagem salva. Quer exportar o XLSX agora?")){
+            exportarLinhasRelatorioContagemXlsx(linhasExportacao, payload.data);
+        }
+    }catch(e){
+        console.error("Erro ao salvar contagem:", e);
+        mostrarNotificacao("Erro ao salvar contagem. Verifique as regras do Firebase.");
+    }
 }
 
 let historicoContagemPlanilhasAberto = false;
@@ -5567,6 +5647,7 @@ window.finalizarContagem = finalizarContagem;
 window.abrirRelatorioContagem = abrirRelatorioContagem;
 window.fecharRelatorioContagem = fecharRelatorioContagem;
 window.exportarRelatorioContagemXlsx = exportarRelatorioContagemXlsx;
+window.salvarContagemPeloRelatorio = salvarContagemPeloRelatorio;
 window.toggleHistoricoContagemPlanilhas = toggleHistoricoContagemPlanilhas;
 window.carregarHistoricoContagemPlanilhas = carregarHistoricoContagemPlanilhas;
 window.renderizarHistoricoContagemPlanilhas = renderizarHistoricoContagemPlanilhas;
