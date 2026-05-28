@@ -159,15 +159,15 @@
             font-size:12px;
         }
         .tableWrap{
-            overflow:auto;
+            overflow:hidden;
             border:1px solid rgba(122,60,255,.28);
             border-radius:8px;
             background:rgba(21,21,29,.88);
             box-shadow:0 0 22px rgba(122,60,255,.18);
         }
         table{
-            width:max-content;
-            min-width:max(100%, 920px);
+            width:100%;
+            table-layout:auto;
             border-collapse:collapse;
         }
         th,td{
@@ -189,8 +189,7 @@
         tr:hover td{background:rgba(122,60,255,.16)}
         tr:last-child td{border-bottom:0}
         .codigo{font-weight:800;color:#e2e8f0;white-space:nowrap}
-        .descricao{min-width:280px}
-        .descricao{white-space:nowrap;overflow:visible;text-overflow:clip;min-width:max-content}
+        .descricao{width:42%;white-space:nowrap;overflow:hidden;text-overflow:clip}
         .num{text-align:right;white-space:nowrap}
         .vizGrid{
             display:grid;
@@ -341,6 +340,21 @@
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
+        }
+        function ajustarDescricaoEmUmaLinha(container = root){
+            requestAnimationFrame(() => {
+                const raiz = container || root;
+                raiz.querySelectorAll("td.descricao").forEach(td => {
+                    td.style.fontSize = "";
+                    const base = parseFloat(getComputedStyle(td).fontSize) || 13;
+                    let tamanho = base;
+                    const minimo = 5;
+                    while(td.scrollWidth > td.clientWidth && tamanho > minimo){
+                        tamanho -= 0.5;
+                        td.style.fontSize = `${tamanho}px`;
+                    }
+                });
+            });
         }
         function num(valor){
             if(valor === null || valor === undefined || valor === "") return null;
@@ -816,6 +830,7 @@
                 ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
+            ajustarDescricaoEmUmaLinha(root);
         }
         function renderMovimentacaoTabela(lista){
             const ordenada = [...lista].sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
@@ -1064,6 +1079,7 @@
                 ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
+            ajustarDescricaoEmUmaLinha(root);
         }
 
         onAuthStateChanged(auth, user => {

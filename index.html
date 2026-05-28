@@ -3385,6 +3385,22 @@ function renderTabela(){
     });
 
     atualizarEstadoHeader();
+    ajustarDescricaoEmUmaLinha(document.getElementById("tableBody"));
+}
+function ajustarDescricaoEmUmaLinha(container = document){
+    requestAnimationFrame(() => {
+        const raiz = container || document;
+        raiz.querySelectorAll("td.descricaoPrincipal").forEach(td => {
+            td.style.fontSize = "";
+            const base = parseFloat(getComputedStyle(td).fontSize) || 8.5;
+            let tamanho = base;
+            const minimo = 4.5;
+            while(td.scrollWidth > td.clientWidth && tamanho > minimo){
+                tamanho -= 0.25;
+                td.style.fontSize = `${tamanho}px`;
+            }
+        });
+    });
 }
 document.getElementById("selectAllHeader").addEventListener("change", function(){
 

@@ -604,18 +604,11 @@ table{
    
 }
 
-#tableContainer table{
-    width:max-content;
-    min-width:100%;
-    table-layout:auto;
-}
-
 td.descricaoPrincipal{
     white-space:nowrap;
-    overflow:visible;
+    overflow:hidden;
     text-overflow:clip;
     line-height:1.15;
-    min-width:max-content;
 }
 
 th, td {
