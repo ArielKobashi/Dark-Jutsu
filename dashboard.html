@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Estoque</title>
+    <style>
+        :root{
+            color-scheme:dark;
+            --bg:#0b1020;
+            --panel:#111827;
+            --line:#243044;
+            --text:#e5e7eb;
+            --muted:#94a3b8;
+            --red:#ef4444;
+            --green:#22c55e;
+            --amber:#f59e0b;
+            --blue:#38bdf8;
+        }
+        *{box-sizing:border-box}
+        body{
+            margin:0;
+            min-height:100vh;
+            background:var(--bg);
+            color:var(--text);
+            font-family:Segoe UI, Arial, sans-serif;
+        }
+        header{
+            display:flex;
+            align-items:flex-end;
+            justify-content:space-between;
+            gap:18px;
+            padding:22px 26px 14px;
+            border-bottom:1px solid var(--line);
+            background:#0f172a;
+        }
+        h1{margin:0;font-size:22px}
+        .sub{color:var(--muted);font-size:12px;margin-top:4px}
+        main{padding:18px 26px 28px}
+        .login,.erro{
+            max-width:420px;
+            margin:60px auto;
+            padding:18px;
+            background:var(--panel);
+            border:1px solid var(--line);
+            border-radius:8px;
+        }
+        label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+        input,button{
+            width:100%;
+            border:1px solid var(--line);
+            background:#0f172a;
+            color:var(--text);
+            padding:10px 11px;
+            border-radius:6px;
+            font:inherit;
+        }
+        button{
+            margin-top:14px;
+            cursor:pointer;
+            font-weight:700;
+            background:#2563eb;
+            border-color:#3b82f6;
+        }
+        .cards{
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:10px;
+            margin-bottom:14px;
+        }
+        .card{
+            background:var(--panel);
+            border:1px solid var(--line);
+            border-radius:8px;
+            padding:12px;
+        }
+        .card span{display:block;color:var(--muted);font-size:11px}
+        .card strong{display:block;font-size:24px;margin-top:6px}
+        .toolbar{
+            display:flex;
+            flex-wrap:wrap;
+            gap:8px;
+            margin-bottom:12px;
+        }
+        .chip{
+            border:1px solid var(--line);
+            border-radius:999px;
+            padding:6px 9px;
+            font-size:12px;
+            color:var(--muted);
+            background:#0f172a;
+        }
+        table{
+            width:100%;
+            border-collapse:collapse;
+            background:var(--panel);
+            border:1px solid var(--line);
+            border-radius:8px;
+            overflow:hidden;
+        }
+        th,td{
+            padding:9px 10px;
+            border-bottom:1px solid var(--line);
+            text-align:left;
+            font-size:13px;
+            vertical-align:top;
+        }
+        th{
+            color:#cbd5e1;
+            background:#162033;
+            font-size:11px;
+            text-transform:uppercase;
+        }
+        tr:last-child td{border-bottom:0}
+        .num{text-align:right;white-space:nowrap}
+        .status{
+            display:inline-flex;
+            border-radius:999px;
+            padding:3px 7px;
+            font-size:11px;
+            font-weight:700;
+            white-space:nowrap;
+        }
+        .abaixo{background:rgba(239,68,68,.16);color:#fecaca}
+        .acima{background:rgba(34,197,94,.16);color:#bbf7d0}
+        .ok{background:rgba(56,189,248,.14);color:#bae6fd}
+        .sem{background:rgba(148,163,184,.14);color:#cbd5e1}
+        .pedido{color:#cbd5e1}
+        .pedido.semPedido{color:#fca5a5;font-weight:700}
+        @media (max-width:800px){
+            header{display:block}
+            .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+            main{padding:14px}
+            th,td{font-size:12px;padding:8px}
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1 id="titulo">Dashboard de Estoque</h1>
+            <div class="sub" id="subtitulo">Carregando dados...</div>
+        </div>
+        <div class="sub" id="ultimaAtualizacao"></div>
+    </header>
+    <main id="app"></main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChPIkc1NxpxtpvOU92NxyXsxCFpe3mzgE",
+            authDomain: "chat-fiasul.firebaseapp.com",
+            databaseURL: "https://chat-fiasul-default-rtdb.firebaseio.com",
+            projectId: "chat-fiasul",
+            storageBucket: "chat-fiasul.firebasestorage.app",
+            messagingSenderId: "263776720116",
+            appId: "1:263776720116:web:713fd43f4cb196b0527aa1",
+            measurementId: "G-KC5F0QT711"
+        };
+
+        const params = new URLSearchParams(location.search);
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const auth = getAuth(app);
+        const root = document.getElementById("app");
+
+        const cfg = {
+            titulo: params.get("titulo") || "Dashboard de Estoque",
+            status: (params.get("status") || "fora").toLowerCase(),
+            semSolicitacao: ["1","true","sim"].includes((params.get("semSolicitacao") || params.get("semPedido") || "").toLowerCase()),
+            origem: (params.get("origem") || "").toLowerCase(),
+            itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
+            limite: Math.max(1, Math.min(500, Number(params.get("limite") || 80))),
+            ordenar: (params.get("ordenar") || "reposicao").toLowerCase(),
+            direcao: (params.get("direcao") || "desc").toLowerCase()
+        };
+        document.getElementById("titulo").textContent = cfg.titulo;
+
+        function fmt(valor){
+            const n = Number(valor);
+            if(!Number.isFinite(n)) return "-";
+            return new Intl.NumberFormat("pt-BR", { maximumFractionDigits:2 }).format(n);
+        }
+        function esc(valor){
+            return String(valor ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+        function num(valor){
+            if(valor === null || valor === undefined || valor === "") return null;
+            const n = Number(String(valor).replace(/\./g,"").replace(",","."));
+            return Number.isFinite(n) ? n : null;
+        }
+        function key(item){
+            return String(item?.protheusKey || item?.protheus || item?.cooperat || "").trim().toLowerCase();
+        }
+        function reposicao(item){
+            const pronta = num(item?.reposicao);
+            if(pronta !== null) return pronta;
+            const min = num(item?.minimo);
+            const max = num(item?.maximo);
+            return min !== null && max !== null && max > min ? max - min : null;
+        }
+        function statusEstoque(item){
+            const saldo = num(item?.saldo);
+            const min = num(item?.minimo);
+            const max = num(item?.maximo);
+            if(saldo !== null && min !== null && saldo < min) return "abaixo";
+            if(saldo !== null && max !== null && saldo > max) return "acima";
+            if(min !== null || max !== null) return "ok";
+            return "sem";
+        }
+        function pedidoAtivo(pedido){
+            if(!pedido) return false;
+            const status = String(pedido.status || "");
+            if(!status || status === "sem") return false;
+            return !!(pedido.pedido || pedido.solicitacao || pedido.entradaEndereco || pedido.recebidoSemEntrada > 0 || status.startsWith("aguardando"));
+        }
+        function pedidoItem(item, pedidos){
+            const codigo = key(item);
+            const b64 = btoa(unescape(encodeURIComponent(codigo))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+            return pedidos?.[b64] || pedidos?.[codigo] || null;
+        }
+        function origemItem(item){
+            return String(item?.limitesOrigem || item?.minimoOrigem || item?.maximoOrigem || item?.reposicaoOrigem || "").toLowerCase();
+        }
+        function passaStatus(status){
+            if(cfg.status === "todos" || cfg.status === "all") return true;
+            if(cfg.status === "fora") return status === "abaixo" || status === "acima";
+            if(cfg.status === "sem-faixa") return status === "sem";
+            return status === cfg.status;
+        }
+        function renderLogin(){
+            root.innerHTML = `
+                <section class="login">
+                    <h2>Entrar</h2>
+                    <label>Login</label>
+                    <input id="login" autocomplete="username" placeholder="usuario ou email">
+                    <label>Senha</label>
+                    <input id="senha" type="password" autocomplete="current-password">
+                    <button id="entrar">Carregar dashboard</button>
+                </section>
+            `;
+            document.getElementById("entrar").onclick = async () => {
+                const login = document.getElementById("login").value.trim();
+                const email = login.includes("@") ? login : `${login}@sistema.com`;
+                const senha = document.getElementById("senha").value;
+                await signInWithEmailAndPassword(auth, email, senha);
+            };
+        }
+        function renderErro(msg){
+            root.innerHTML = `<section class="erro"><h2>Não foi possível carregar</h2><p>${msg}</p></section>`;
+        }
+        function renderDashboard(banco){
+            const dados = Array.isArray(banco?.dados) ? banco.dados : [];
+            const pedidos = banco?.pedidosCompra || {};
+            let linhas = dados.map(item => {
+                const pedido = pedidoItem(item, pedidos);
+                return { item, pedido, status: statusEstoque(item), reposicao: reposicao(item), origem: origemItem(item) };
+            }).filter(linha => {
+                if(cfg.itens.length && !cfg.itens.includes(key(linha.item)) && !cfg.itens.includes(String(linha.item.cooperat || "").toLowerCase())) return false;
+                if(!passaStatus(linha.status)) return false;
+                if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
+                if(cfg.origem && linha.origem !== cfg.origem) return false;
+                return true;
+            });
+
+            const dir = cfg.direcao === "asc" ? 1 : -1;
+            linhas.sort((a,b) => {
+                if(cfg.ordenar === "saldo") return ((num(a.item.saldo) || 0) - (num(b.item.saldo) || 0)) * dir;
+                if(cfg.ordenar === "descricao") return String(a.item.descricao || "").localeCompare(String(b.item.descricao || ""), "pt-BR") * dir;
+                if(cfg.ordenar === "codigo") return key(a.item).localeCompare(key(b.item)) * dir;
+                return ((a.reposicao || 0) - (b.reposicao || 0)) * dir;
+            });
+            linhas = linhas.slice(0, cfg.limite);
+
+            const abaixo = linhas.filter(l => l.status === "abaixo").length;
+            const acima = linhas.filter(l => l.status === "acima").length;
+            const semPedido = linhas.filter(l => !pedidoAtivo(l.pedido)).length;
+            const totalReposicao = linhas.reduce((s,l) => s + (l.reposicao || 0), 0);
+
+            document.getElementById("subtitulo").textContent = `${linhas.length} item(ns) conforme parâmetros da URL`;
+            const dt = banco?.ultimaAtualizacao ? new Date(banco.ultimaAtualizacao).toLocaleString("pt-BR") : "-";
+            document.getElementById("ultimaAtualizacao").textContent = `Última atualização: ${dt}`;
+
+            root.innerHTML = `
+                <section class="cards">
+                    <article class="card"><span>Itens</span><strong>${linhas.length}</strong></article>
+                    <article class="card"><span>Abaixo do mínimo</span><strong>${abaixo}</strong></article>
+                    <article class="card"><span>Acima do máximo</span><strong>${acima}</strong></article>
+                    <article class="card"><span>Reposição total</span><strong>${fmt(totalReposicao)}</strong></article>
+                </section>
+                <div class="toolbar">
+                    <span class="chip">status=${esc(cfg.status)}</span>
+                    <span class="chip">semSolicitacao=${cfg.semSolicitacao ? "1" : "0"}</span>
+                    <span class="chip">ordenar=${esc(cfg.ordenar)}</span>
+                    <span class="chip">limite=${cfg.limite}</span>
+                    <span class="chip">sem pedido na lista: ${semPedido}</span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th class="num">Saldo</th>
+                            <th class="num">Mín.</th>
+                            <th class="num">Máx.</th>
+                            <th class="num">Reposição</th>
+                            <th>Status</th>
+                            <th>Pedido</th>
+                            <th>Origem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${linhas.map(({item,pedido,status,reposicao,origem}) => `
+                            <tr>
+                                <td>${esc(item.protheus || item.cooperat || "-")}</td>
+                                <td>${esc(item.descricao || "-")}</td>
+                                <td class="num">${fmt(item.saldo)}</td>
+                                <td class="num">${fmt(item.minimo)}</td>
+                                <td class="num">${fmt(item.maximo)}</td>
+                                <td class="num">${fmt(reposicao)}</td>
+                                <td><span class="status ${esc(status)}">${esc(status)}</span></td>
+                                <td class="pedido ${pedidoAtivo(pedido) ? "" : "semPedido"}">${esc(pedidoAtivo(pedido) ? (pedido.titulo || "Com solicitação") : "Sem solicitação")}</td>
+                                <td>${esc(origem || "-")}</td>
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        onAuthStateChanged(auth, async user => {
+            if(!user){
+                document.getElementById("subtitulo").textContent = "Login necessário para ler o estoque";
+                renderLogin();
+                return;
+            }
+            try{
+                const snap = await get(ref(db, "estoqueGlobal"));
+                renderDashboard(snap.val() || {});
+            }catch(err){
+                renderErro(err.message || String(err));
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1122,6 +1122,30 @@ th.col-ordenada.col-filtrada {
     animation:enderecoForaPulse 1s infinite;
 }
 
+.saldoAbaixoSemPedidoCell{
+    position:relative;
+    padding-right:22px;
+}
+
+.saldoAbaixoSemPedidoCell::after{
+    content:"!";
+    position:absolute;
+    right:6px;
+    top:50%;
+    width:14px;
+    height:14px;
+    transform:translateY(-50%);
+    border-radius:50%;
+    background:#EF4444;
+    color:#FFF;
+    font-size:10px;
+    font-weight:900;
+    line-height:14px;
+    text-align:center;
+    box-shadow:0 0 0 0 rgba(239,68,68,0.68);
+    animation:enderecoForaPulse 1s infinite;
+}
+
 @keyframes enderecoForaPulse{
     0%{box-shadow:0 0 0 0 rgba(239,68,68,0.68); opacity:1;}
     70%{box-shadow:0 0 0 7px rgba(239,68,68,0); opacity:.72;}

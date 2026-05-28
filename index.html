@@ -3127,7 +3127,13 @@ function renderTabela(){
         tdArm.ondblclick = ()=> abrirModalSaldos(item);
 
         // DESCRIÇÃO
-        criarTd(row, item.descricao || "");
+        const tdDescricao = criarTd(row, item.descricao || "");
+        tdDescricao.style.cursor = "pointer";
+        tdDescricao.title = [tdDescricao.title, "Clique duas vezes para abrir o perfil do item."].filter(Boolean).join("\n");
+        tdDescricao.ondblclick = (e)=> {
+            e.stopPropagation();
+            abrirModalSaldos(item);
+        };
 
         // ENDEREÇO
         let tdEnd = criarTd(row, item.enderecoPrincipal || "");
@@ -3162,6 +3168,10 @@ function renderTabela(){
         const statusEstoque = obterStatusEstoque(item);
         if(statusEstoque === "abaixo"){
             tdSaldo.classList.add("estoqueAbaixoMinimo");
+            if(!itemTemPedidoCompraAtivo(item)){
+                tdSaldo.classList.add("saldoAbaixoSemPedidoCell");
+                tdSaldo.title = [tdSaldo.title, "Abaixo do mínimo sem solicitação de pedido."].filter(Boolean).join("\n");
+            }
         }else if(statusEstoque === "acima"){
             tdSaldo.classList.add("estoqueAcimaMaximo");
         }
@@ -3223,8 +3233,133 @@ document.getElementById("tableContainer").addEventListener("scroll", function(){
 carregarCapturadosSalvos();
 atualizarBadge();
 
+function escapeRelatorioHtml(texto){
+    return String(texto ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function itemUsaLimiteCooperat(item){
+    return ["limitesOrigem", "minimoOrigem", "maximoOrigem", "reposicaoOrigem"]
+        .some(campo => String(item?.[campo] || "").toLowerCase() === "cooperat");
+}
+
+function gerarRelatorioReposicaoSemPedido(itens){
+    const lista = (Array.isArray(itens) ? itens : []).filter(Boolean);
+    if(!lista.length){
+        alert("Nenhum item fora da faixa sem solicitação de pedido.");
+        return;
+    }
+
+    const linhas = lista.map(item => {
+        const reposicao = parseLimiteEstoque(item.reposicao) ?? calcularReposicaoMedia(item.minimo, item.maximo);
+        return {
+            codigo: item.protheus || item.cooperat || "",
+            descricao: item.descricao || "",
+            reposicao: reposicao === null ? "Sem reposição" : formatarNumeroPlanilha(reposicao),
+            cooperat: itemUsaLimiteCooperat(item) ? "Sim" : "Não"
+        };
+    });
+
+    const totalReposicao = linhas.reduce((soma, linha) => {
+        const num = parsePlanilhaNumero(linha.reposicao);
+        return soma + (num || 0);
+    }, 0);
+
+    const novaJanela = window.open("", "_blank", "width=1000,height=800");
+    novaJanela.document.write(`
+        <html>
+        <head>
+            <title>Relatorio de Reposicao</title>
+            <style>
+                @page{ size:A4 portrait; margin:14mm; }
+                body{ font-family:Arial, sans-serif; color:#111827; padding:18px; }
+                h2{ margin:0 0 8px; color:#111827; }
+                .meta{ font-size:12px; margin-bottom:14px; color:#4B5563; }
+                .painel{ margin-bottom:14px; }
+                button{ padding:8px 12px; font-weight:bold; cursor:pointer; }
+                table{ width:100%; border-collapse:collapse; font-size:13px; }
+                th,td{ border:1px solid #D1D5DB; padding:7px 8px; vertical-align:top; }
+                th{ background:#F3F4F6; text-align:left; }
+                td.qtd, td.cooperat{ text-align:center; white-space:nowrap; }
+                tfoot td{ font-weight:bold; background:#F9FAFB; }
+                @media print{
+                    .painel{ display:none; }
+                    body{ padding:0; }
+                    table{ font-size:12px; }
+                }
+            </style>
+        </head>
+        <body>
+            <h2>Reposição - Fora da faixa sem solicitação de pedido</h2>
+            <div class="meta">Gerado em: ${escapeRelatorioHtml(new Date().toLocaleString())} | Itens: ${linhas.length}</div>
+            <div class="painel">
+                <button onclick="window.print()">Imprimir</button>
+                <button onclick="exportarXlsx()">Exportar .xlsx</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Quantidade de reposição</th>
+                        <th>Cooperat?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${linhas.map(linha => `
+                        <tr>
+                            <td>${escapeRelatorioHtml(linha.codigo)}</td>
+                            <td>${escapeRelatorioHtml(linha.descricao)}</td>
+                            <td class="qtd">${escapeRelatorioHtml(linha.reposicao)}</td>
+                            <td class="cooperat">${escapeRelatorioHtml(linha.cooperat)}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="2">Total</td>
+                        <td class="qtd">${escapeRelatorioHtml(formatarNumeroPlanilha(totalReposicao))}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+            <script>
+                const linhasRelatorio = ${JSON.stringify(linhas)};
+                function exportarXlsx(){
+                    const XLSXLib = window.opener && window.opener.XLSX;
+                    if(!XLSXLib){
+                        alert("Biblioteca XLSX não disponível.");
+                        return;
+                    }
+                    const dados = linhasRelatorio.map(linha => ({
+                        "Código": linha.codigo,
+                        "Descrição": linha.descricao,
+                        "Quantidade de reposição": linha.reposicao,
+                        "Cooperat?": linha.cooperat
+                    }));
+                    const wb = XLSXLib.utils.book_new();
+                    const ws = XLSXLib.utils.json_to_sheet(dados);
+                    XLSXLib.utils.book_append_sheet(wb, ws, "Reposicao");
+                    XLSXLib.writeFile(wb, "reposicao_sem_solicitacao.xlsx");
+                }
+            <\/script>
+        </body>
+        </html>
+    `);
+    novaJanela.document.close();
+}
+
 
 function gerarRelatorio(){
+
+    if(filtroSaldoExtremosModo === 2){
+        gerarRelatorioReposicaoSemPedido(visiveis);
+        return;
+    }
 
     let selecionadosItens = [];
 
@@ -3341,6 +3476,7 @@ function gerarRelatorio(){
 
         <div class="painel">
             <button onclick="window.print()">🖨️ Imprimir</button>
+            <button onclick="exportarXlsx()">📥 Exportar .xlsx</button>
             <button onclick="copiarProtheus()">📋 Copiar Protheus</button>
 
             <label><input type="checkbox" id="arm4"> Armazém 4</label>
@@ -3573,6 +3709,35 @@ function gerarRelatorio(){
                 }
                 document.body.removeChild(temp);
             }
+        }
+
+        function exportarXlsx(){
+            const XLSXLib = window.opener && window.opener.XLSX;
+            if(!XLSXLib){
+                alert("Biblioteca XLSX não disponível.");
+                return;
+            }
+            capturarContagens();
+            const dados = linhasAtuais.map(l => {
+                const key = chaveLinha(l);
+                const contagem = contagens[key] !== undefined ? contagens[key] : "";
+                const contNum = Number(contagem);
+                const diferenca = (contagem !== "" && !isNaN(contNum)) ? (contNum - Number(l.saldo || 0)) : "";
+                return {
+                    "Protheus": l.protheus || "",
+                    "Cooperat": l.cooperat || "",
+                    "Descrição": l.descricao || "",
+                    "Armazém": l.armazem || "",
+                    "Endereço": l.endereco || "",
+                    "Saldo": Number(l.saldo || 0),
+                    "Contagem": contagem,
+                    "Diferença": diferenca
+                };
+            });
+            const wb = XLSXLib.utils.book_new();
+            const ws = XLSXLib.utils.json_to_sheet(dados);
+            XLSXLib.utils.book_append_sheet(wb, ws, "Conferencia");
+            XLSXLib.writeFile(wb, "relatorio_conferencia.xlsx");
         }
 
         montarTabela();

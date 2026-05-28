@@ -5,6 +5,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 ## Estrutura
 
 - `index.html` - aplicacao principal, Firebase, tabela de estoque, chat, painel admin, relatorios, contagem, editor de limites e gerador de etiquetas.
+- `dashboard.html` - dashboard de estoque com filtros por parametros de URL.
 - `style.css` - estilos desktop da aplicacao.
 - `mobile.css` - ajustes responsivos/mobile.
 - `downloads/` - planilhas e assets usados pelo sistema:
@@ -96,6 +97,27 @@ No painel admin do Dark-Jutsu existem tres acoes:
 - Atualizar nivel 1: roda macros 001-005 e envia mata105/mata225/mata226.
 - Atualizar nivel 2: roda macros 007-009 e envia dados de pedido, compra e enderecamento.
 - Atualizar os dois: executa nivel 1, envia, depois executa nivel 2 e envia.
+
+## Dashboard
+
+Abra `dashboard.html` para uma visao resumida do estoque. A pagina usa Firebase Auth e aceita os mesmos logins do sistema.
+
+Parametros de URL:
+
+- `status`: `fora`, `abaixo`, `acima`, `ok`, `sem-faixa` ou `todos`. Padrao: `fora`.
+- `semSolicitacao=1`: mostra apenas itens sem solicitacao/pedido ativo.
+- `itens=COD1,COD2`: limita o dashboard a codigos especificos.
+- `origem`: filtra por origem dos limites, como `cooperat`, `manual`, `automatico` ou `anterior`.
+- `limite`: quantidade maxima de linhas, de 1 a 500. Padrao: 80.
+- `ordenar`: `reposicao`, `saldo`, `descricao` ou `codigo`. Padrao: `reposicao`.
+- `direcao`: `asc` ou `desc`. Padrao: `desc`.
+- `titulo`: titulo exibido no topo.
+
+Exemplo:
+
+```text
+dashboard.html?status=fora&semSolicitacao=1&limite=50&ordenar=reposicao&direcao=desc
+```
 
 ## Como executar scripts
 
