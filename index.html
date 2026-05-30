@@ -2810,8 +2810,15 @@ async function registrarGeracaoEtiquetas(totalGeradas, codigosPorTamanho, naoEnc
         porTamanho:Object.fromEntries(Object.entries(codigosPorTamanho || {}).map(([tamanho, lista]) => [tamanho, Array.isArray(lista) ? lista.length : 0])),
         teveNaoEncontrados:!!(naoEncontradosLinhas && naoEncontradosLinhas.length)
     };
-    await window.push(window.ref(window.db, `etiquetasGeradas/${data}/${usuarioKey}`), payload);
-    if(window.runTransaction){
+    let salvouEmContagens = false;
+    try{
+        await window.push(window.ref(window.db, `etiquetasGeradas/${data}/${usuarioKey}`), payload);
+    }catch(err){
+        console.warn("Caminho etiquetasGeradas bloqueado; salvando ranking de etiquetas dentro de contagens.", err);
+        await window.push(window.ref(window.db, `contagens/${data}/${usuarioKey}/_etiquetas`), payload);
+        salvouEmContagens = true;
+    }
+    if(window.runTransaction && !salvouEmContagens){
         try{
             await window.runTransaction(window.ref(window.db, `rankingEtiquetas/${usuarioKey}`), atual => {
                 const base = atual && typeof atual === "object" ? atual : {};

@@ -818,7 +818,8 @@
             const mapa = new Map();
             Object.entries(contagens || {}).forEach(([, porUsuario]) => {
                 Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
-                    Object.values(registros || {}).forEach(registro => {
+                    Object.entries(registros || {}).forEach(([registroKey, registro]) => {
+                        if(String(registroKey).startsWith("_")) return;
                         const itens = Object.keys(registro?.itens || {}).length;
                         incrementarRanking(mapa, registro?.usuario || usuarioKey, itens);
                     });
@@ -831,7 +832,8 @@
             const contadas = new Set();
             Object.entries(contagens || {}).forEach(([, porUsuario]) => {
                 Object.values(porUsuario || {}).forEach(registros => {
-                    Object.values(registros || {}).forEach(registro => {
+                    Object.entries(registros || {}).forEach(([registroKey, registro]) => {
+                        if(String(registroKey).startsWith("_")) return;
                         Object.values(registro?.itens || {}).forEach(item => {
                             const codigo = item?.protheus || item?.cooperat || "";
                             const chave = chaveLinhaContagemProgresso(codigo, item?.armazem, item?.endereco);
@@ -862,7 +864,7 @@
                 </section>
             `;
         }
-        function rankingEtiquetas(etiquetasGeradas, rankingAgregado = {}){
+        function rankingEtiquetas(etiquetasGeradas, rankingAgregado = {}, contagensCompat = {}){
             const mapa = new Map();
             const visitarRegistroEtiqueta = (registro, usuarioKey = "") => {
                 if(!registro || typeof registro !== "object") return;
@@ -873,6 +875,11 @@
                 Object.entries(registro).forEach(([chave, valor]) => visitarRegistroEtiqueta(valor, chave || usuarioKey));
             };
             visitarRegistroEtiqueta(etiquetasGeradas || {});
+            Object.entries(contagensCompat || {}).forEach(([, porUsuario]) => {
+                Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
+                    if(registros?._etiquetas) visitarRegistroEtiqueta(registros._etiquetas, usuarioKey);
+                });
+            });
             Object.entries(rankingAgregado || {}).forEach(([usuarioKey, registro]) => {
                 if(!registro || typeof registro !== "object") return;
                 const nome = registro.usuario || usuarioKey;
@@ -1367,7 +1374,7 @@
             const rankings = {
                 reposicao: rankingReposicao(extras.mata110 || []),
                 contagem: rankingContagens(extras.contagens || {}),
-                etiqueta: rankingEtiquetas(extras.etiquetasGeradas || {}, extras.rankingEtiquetas || {})
+                etiqueta: rankingEtiquetas(extras.etiquetasGeradas || {}, extras.rankingEtiquetas || {}, extras.contagens || {})
             };
             const progressoContagem = calcularProgressoContagem(dados, extras.contagens || {});
             const movimentacao = calcularMovimentacaoPeriodo(banco, dadosEscopo);
