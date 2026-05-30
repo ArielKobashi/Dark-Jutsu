@@ -101,9 +101,16 @@
 
     <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descrição" oninput="if(['/dashboard','dashboard','dash'].includes(this.value.toLowerCase().trim())){this.value='';location.href='dashboard.html?armazem=04';}">
 
-    <div id="vencaBanner" aria-label="Vença">
+    <div id="contagemHomePopup" aria-live="polite">
         <img src="logo.png" alt="">
-        <strong>Vença</strong>
+        <div>
+            <span>Contagem geral</span>
+            <strong id="contagemHomePct">0%</strong>
+            <small id="contagemHomeMeta">0 de 0 itens/endereco</small>
+            <div class="contagemHomeTrack">
+                <div id="contagemHomeFill"></div>
+            </div>
+        </div>
     </div>
 
     <div id="tableContainer">
@@ -229,7 +236,7 @@ xmlns="http://www.w3.org/2000/svg">
 
 <section id="historicoContagemPanel" class="historicoContagemPanel">
     <button type="button" id="historicoContagemToggle" onclick="toggleHistoricoContagemPlanilhas()" aria-expanded="false">
-        <span>Historico de planilhas de contagem</span>
+        <span>Histórico</span>
         <strong id="historicoContagemResumo">abrir</strong>
     </button>
     <div id="historicoContagemConteudo">
@@ -1593,6 +1600,9 @@ window.setDados = function(novosDados){
     window.dados = dados;
     window.dadosMortos = dadosMortos;
     aplicarTodosFiltros();
+    if(typeof atualizarPopupProgressoContagemPrincipal === "function"){
+        atualizarPopupProgressoContagemPrincipal();
+    }
 }
 function getLimiteTabelaInicial(){
     return isMobileLayout() ? 20 : 50;
@@ -2274,25 +2284,41 @@ const ETIQUETA_MOLDES = {
         nome: "5cm",
         w: 5.0,
         h: 1.48,
-        espessura_borda: 13
+        espessura_borda: 13,
+        fonte_codigo_pt: 13.5,
+        fonte_desc_pt: 8,
+        fonte_antigo_pt: 8,
+        logo_largura_ratio: 0.175
     },
     "7": {
         nome: "7cm",
         w: 7.01,
         h: 2.09,
-        espessura_borda: 13
+        espessura_borda: 13,
+        fonte_codigo_pt: 13.5,
+        fonte_desc_pt: 8,
+        fonte_antigo_pt: 8,
+        logo_largura_ratio: 0.175
     },
     "10": {
         nome: "10cm",
         w: 10.01,
         h: 2.8,
-        espessura_borda: 13
+        espessura_borda: 13,
+        fonte_codigo_pt: 22,
+        fonte_desc_pt: 12,
+        fonte_antigo_pt: 12,
+        logo_largura_ratio: 0.18
     },
     "15": {
         nome: "15cm",
         w: 15.01,
         h: 4.2,
-        espessura_borda: 13
+        espessura_borda: 13,
+        fonte_codigo_pt: 36,
+        fonte_desc_pt: 18,
+        fonte_antigo_pt: 18,
+        logo_largura_ratio: 0.18
     }
 };
 
@@ -2535,9 +2561,9 @@ async function criarBlobEtiqueta(item, cfg){
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
 
-    const fonteDesc = `${Math.trunc(8 * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
-    const fonteCodigo = `${Math.trunc(13.5 * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
-    const fonteAntigo = fonteDesc;
+    const fonteDesc = `${Math.trunc((cfg.fonte_desc_pt || 8) * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
+    const fonteCodigo = `${Math.trunc((cfg.fonte_codigo_pt || 13.5) * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
+    const fonteAntigo = `${Math.trunc((cfg.fonte_antigo_pt || cfg.fonte_desc_pt || 8) * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
 
     const yCodNovo = topoMoldura - (6 * ETIQUETA_ESCALA);
     const bboxCod = medirTextoEtiqueta(ctx, item.protheus, fonteCodigo);
@@ -2554,7 +2580,7 @@ async function criarBlobEtiqueta(item, cfg){
     let yLogo = baseMoldura;
 
     if(logo){
-        const logoW = Math.trunc(canvasHd.width * 0.175);
+        const logoW = Math.trunc(canvasHd.width * (cfg.logo_largura_ratio || 0.175));
         const logoH = Math.trunc(logo.height * (logoW / logo.width));
         yLogo = baseMoldura - logoH - (1 * ETIQUETA_ESCALA);
         ctx.drawImage(logo, centroX - logoW / 2, yLogo, logoW, logoH);
@@ -4196,6 +4222,9 @@ function armazemPermitidoContagem(valor){
     return codigo === "4" || codigo === "5";
 }
 
+let contagemHomeRegistros = {};
+let contagemHomeUnsub = null;
+
 function criarLinhasContagemPermitidas(itens){
     const linhas = [];
     itens.forEach(item => {
@@ -4227,6 +4256,82 @@ function criarLinhasContagemPermitidas(itens){
     });
     return linhas;
 }
+
+function normalizarEnderecoProgressoContagem(valor){
+    return String(valor ?? "")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim() || "sem endereco";
+}
+
+function chaveProgressoContagemPrincipal(codigo, armazem, endereco){
+    return [
+        normalizarCodigoItem(codigo),
+        codigoArmazemContagem(armazem),
+        normalizarEnderecoProgressoContagem(endereco)
+    ].join("||");
+}
+
+function calcularProgressoContagemPrincipal(){
+    const totalLinhas = new Set();
+    criarLinhasContagemPermitidas(Array.isArray(window.dados) ? window.dados : []).forEach(item => {
+        const codigo = item.protheus || item.protheusKey || item.cooperat || "";
+        const chave = chaveProgressoContagemPrincipal(codigo, item.armazemPrincipal, item.enderecoPrincipal);
+        if(codigo && chave) totalLinhas.add(chave);
+    });
+
+    const contadas = new Set();
+    const visitarRegistro = registro => {
+        if(!registro || typeof registro !== "object") return;
+        if(registro.itens){
+            Object.values(registro.itens || {}).forEach(item => {
+                const codigo = item?.protheus || item?.cooperat || "";
+                const chave = chaveProgressoContagemPrincipal(codigo, item?.armazem, item?.endereco);
+                if(totalLinhas.has(chave)) contadas.add(chave);
+            });
+            return;
+        }
+        Object.values(registro).forEach(visitarRegistro);
+    };
+    visitarRegistro(contagemHomeRegistros || {});
+
+    const total = totalLinhas.size;
+    const feitas = contadas.size;
+    const percentual = total ? Math.min(100, (feitas / total) * 100) : 0;
+    return { total, feitas, percentual };
+}
+
+function atualizarPopupProgressoContagemPrincipal(){
+    const popup = document.getElementById("contagemHomePopup");
+    const pctEl = document.getElementById("contagemHomePct");
+    const metaEl = document.getElementById("contagemHomeMeta");
+    const fill = document.getElementById("contagemHomeFill");
+    if(!popup || !pctEl || !metaEl || !fill) return;
+    const progresso = calcularProgressoContagemPrincipal();
+    const pct = Math.round((progresso.percentual || 0) * 10) / 10;
+    pctEl.textContent = `${formatarNumeroPlanilha(pct)}%`;
+    metaEl.textContent = `${formatarNumeroPlanilha(progresso.feitas)} de ${formatarNumeroPlanilha(progresso.total)} itens/endereco`;
+    fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    popup.classList.toggle("semDados", !progresso.total);
+}
+
+function iniciarPopupProgressoContagemPrincipal(){
+    atualizarPopupProgressoContagemPrincipal();
+    if(contagemHomeUnsub || !window.onValue || !window.ref || !window.db) return;
+    try{
+        contagemHomeUnsub = window.onValue(window.ref(window.db, "contagens"), snap => {
+            contagemHomeRegistros = snap.exists() ? snap.val() : {};
+            atualizarPopupProgressoContagemPrincipal();
+        }, err => {
+            console.warn("Falha ao ler progresso de contagem da tela principal:", err);
+        });
+    }catch(e){
+        console.warn("Falha ao iniciar progresso de contagem da tela principal:", e);
+    }
+}
+window.atualizarPopupProgressoContagemPrincipal = atualizarPopupProgressoContagemPrincipal;
+window.iniciarPopupProgressoContagemPrincipal = iniciarPopupProgressoContagemPrincipal;
 
 function inserirVerificacoesSequenciaContagem(linhas){
     const saida = [...linhas];
@@ -7879,6 +7984,9 @@ window.logout = async function() {
 
 window.auth = auth;
 window.db = db;
+if(typeof window.iniciarPopupProgressoContagemPrincipal === "function"){
+    window.iniciarPopupProgressoContagemPrincipal();
+}
 
 function iniciarSolicitacoesAdmin(){
 

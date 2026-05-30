@@ -140,32 +140,102 @@ display:none;
     box-shadow:0 0 12px rgba(34,211,238,0.42);
 }
 
-#vencaBanner{
+#contagemHomePopup{
     position:absolute;
     top:50px;
     right:18px;
     z-index:9;
     display:flex;
-    align-items:center;
+    align-items:flex-start;
     gap:8px;
-    padding:7px 10px;
+    width:220px;
+    padding:9px 10px;
     border:1px solid rgba(103,232,249,0.24);
     border-radius:8px;
     background:rgba(11,18,32,0.74);
     box-shadow:0 0 18px rgba(34,211,238,0.18);
     color:#E0F2FE;
-    font-size:14px;
-    font-weight:900;
     pointer-events:none;
     animation:vencaFloat 2.4s ease-in-out infinite;
 }
 
-#vencaBanner img{
+#contagemHomePopup img{
     width:34px;
     height:34px;
     object-fit:contain;
+    flex:0 0 auto;
     filter:drop-shadow(0 0 8px rgba(103,232,249,0.36));
     animation:vencaImagePulse 1.8s ease-in-out infinite;
+}
+
+#contagemHomePopup > div{
+    min-width:0;
+    flex:1;
+}
+
+#contagemHomePopup span{
+    display:block;
+    color:#93C5FD;
+    font-size:9px;
+    font-weight:900;
+    text-transform:uppercase;
+}
+
+#contagemHomePopup strong{
+    display:block;
+    margin-top:1px;
+    color:#F8FAFC;
+    font-size:20px;
+    line-height:1;
+}
+
+#contagemHomePopup small{
+    display:block;
+    margin-top:3px;
+    color:#BAE6FD;
+    font-size:10px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.contagemHomeTrack{
+    position:relative;
+    height:8px;
+    margin-top:7px;
+    border:1px solid rgba(103,232,249,0.28);
+    border-radius:999px;
+    background:#0F172A;
+    overflow:hidden;
+}
+
+#contagemHomeFill{
+    position:relative;
+    height:100%;
+    width:0;
+    border-radius:999px;
+    background:linear-gradient(90deg,#22C55E,#00D9FF,#7A3CFF);
+    box-shadow:0 0 12px rgba(34,211,238,0.36);
+    overflow:hidden;
+    transition:width 0.45s ease;
+}
+
+#contagemHomeFill::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    width:45%;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,0.42), transparent);
+    transform:translateX(-130%);
+    animation:contagemHomeShine 1.2s linear infinite;
+}
+
+#contagemHomePopup.semDados{
+    opacity:0.78;
+}
+
+@keyframes contagemHomeShine{
+    to{transform:translateX(260%)}
 }
 
 @keyframes vencaFloat{
@@ -202,7 +272,7 @@ body:not(.app-ready) .historicoContagemPanel{
 }
 
 .historicoContagemPanel:not(.aberto){
-    width:min(105px, calc(100% - 18px));
+    width:min(118px, calc(100% - 18px));
     background:rgba(17,24,39,0.08);
     border-color:rgba(103,232,249,0.06);
     box-shadow:0 0 6px rgba(34,211,238,0.03);
@@ -236,7 +306,13 @@ body:not(.app-ready) .historicoContagemPanel{
 }
 
 .historicoContagemPanel:not(.aberto) #historicoContagemToggle span{
-    display:none;
+    display:block;
+    width:100%;
+    text-align:center;
+    color:rgba(224,242,254,0.86);
+    font-size:10px;
+    letter-spacing:0;
+    text-transform:none;
 }
 
 .historicoContagemPanel:not(.aberto) #historicoContagemToggle strong{
@@ -345,14 +421,23 @@ body:not(.app-ready) .historicoContagemPanel{
 }
 
 .historicoContagemRow button{
-    border:1px solid rgba(34,197,94,0.55);
-    border-radius:6px;
-    background:#14532D;
-    color:#ECFDF5;
-    padding:6px 8px;
-    font-size:10px;
+    min-height:22px;
+    border:1px solid rgba(34,197,94,0.42);
+    border-radius:999px;
+    background:rgba(20,83,45,0.72);
+    color:#D1FAE5;
+    padding:3px 8px;
+    font-size:9px;
+    line-height:1;
     font-weight:800;
+    box-shadow:0 0 8px rgba(34,197,94,0.12);
     cursor:pointer;
+}
+
+.historicoContagemRow button:hover{
+    border-color:rgba(134,239,172,0.68);
+    background:rgba(22,101,52,0.9);
+    color:#F0FDF4;
 }
 
 #adminBtn{
