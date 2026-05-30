@@ -625,7 +625,93 @@
             if(min === null || max === null || max <= min) return null;
             return max - min;
         }
-        function aplicarLimitesDashboard(item, mapaMinimo, ajustes){
+        function arredondarLimiteEstoque(valor){
+            const numero = num(valor);
+            if(numero === null || numero <= 0) return null;
+            return Math.max(1, Math.ceil(numero));
+        }
+        function historicoSaldoItemDashboard(item, banco){
+            const historico = banco?.historicoSaldo || {};
+            const candidatos = [
+                key(item),
+                item?.protheus,
+                item?.protheusKey,
+                item?.cooperat
+            ].map(normalizarCodigo).filter(Boolean);
+            for(const candidato of candidatos){
+                const direto = historico[candidato];
+                if(Array.isArray(direto)) return direto;
+                const codificado = historico[ajusteKey(candidato)];
+                if(Array.isArray(codificado)) return codificado;
+            }
+            return [];
+        }
+        function estatisticasConsumoDashboard(item, banco){
+            const consumos = historicoSaldoItemDashboard(item, banco)
+                .filter(h => Number(h?.delta || 0) < 0)
+                .slice(-12)
+                .map(h => Math.abs(Number(h.delta || 0)))
+                .filter(v => Number.isFinite(v) && v > 0);
+            if(!consumos.length) return { media:0, pico:0, desvio:0, eventos:0 };
+            const media = consumos.reduce((acc, v) => acc + v, 0) / consumos.length;
+            const variancia = consumos.reduce((acc, v) => acc + Math.pow(v - media, 2), 0) / consumos.length;
+            return { media, pico:Math.max(...consumos), desvio:Math.sqrt(variancia), eventos:consumos.length };
+        }
+        function calcularSugestaoLimitesDashboard(item, banco, pedidos){
+            const pedido = pedidoItem(item, pedidos);
+            const consumo = estatisticasConsumoDashboard(item, banco);
+            const saldoAtual = num(item?.saldo) ?? 0;
+            const saldoAnteriorPlanilha = num(item?.limitesCooperat?.saldoAnterior);
+            const consumoEntrePlanilhas = saldoAnteriorPlanilha !== null ? Math.max(0, saldoAnteriorPlanilha - saldoAtual) : 0;
+            const mediaPedido = num(pedido?.mediaPedido) ?? 0;
+            const minimoPorCompra = mediaPedido > 0 ? mediaPedido * 0.35 : 0;
+            const candidatosConsumo = [
+                consumo.media,
+                consumo.pico * 0.65,
+                consumoEntrePlanilhas
+            ].filter(v => Number.isFinite(v) && v > 0);
+            const candidatosDemanda = [
+                ...candidatosConsumo,
+                minimoPorCompra
+            ].filter(v => Number.isFinite(v) && v > 0);
+            if(!candidatosDemanda.length) return null;
+            const demandaBase = Math.max(...candidatosDemanda);
+            const estoqueSeguranca = Math.max(
+                consumo.desvio,
+                demandaBase * 0.35,
+                consumo.pico * 0.25,
+                minimoPorCompra
+            );
+            const minimoEstimado = candidatosConsumo.length
+                ? Math.max(demandaBase + estoqueSeguranca, minimoPorCompra)
+                : minimoPorCompra;
+            const minimo = arredondarLimiteEstoque(minimoEstimado);
+            if(minimo === null) return null;
+            const loteReposicao = arredondarLimiteEstoque(Math.max(
+                mediaPedido,
+                demandaBase * 1.5,
+                minimo * 0.8
+            ));
+            const repos = loteReposicao || minimo;
+            const maximo = Math.max(minimo + repos, minimo + 1);
+            return {
+                minimo,
+                maximo,
+                reposicao:maximo - minimo,
+                criterio:{
+                    demandaBase,
+                    estoqueSeguranca,
+                    consumoMedio:consumo.media,
+                    consumoPico:consumo.pico,
+                    eventosConsumo:consumo.eventos,
+                    consumoEntrePlanilhas,
+                    mediaPedido,
+                    minimoPorCompra,
+                    fontePrincipal:mediaPedido > 0 && !candidatosConsumo.length ? "pedido_compra" : "consumo"
+                }
+            };
+        }
+        function aplicarLimitesDashboard(item, mapaMinimo, ajustes, banco, pedidos){
             const novo = {...(item || {})};
             let temSuposicao = !!novo.sugestaoEstoque
                 || [
@@ -675,6 +761,24 @@
                     novo.reposicaoOrigem = "manual";
                 }
                 novo.limitesOrigem = "manual";
+            }
+            const sugestao = calcularSugestaoLimitesDashboard(novo, banco, pedidos);
+            if(sugestao){
+                if(novo.minimo === undefined || novo.minimo === null || novo.minimo === ""){
+                    novo.minimo = sugestao.minimo;
+                    novo.minimoOrigem = "automatico";
+                    novo.limitesOrigem = novo.limitesOrigem || "automatico";
+                    temSuposicao = true;
+                }
+                if(novo.maximo === undefined || novo.maximo === null || novo.maximo === ""){
+                    novo.maximo = sugestao.maximo;
+                    novo.maximoOrigem = "automatico";
+                    novo.limitesOrigem = novo.limitesOrigem || "automatico";
+                    temSuposicao = true;
+                }
+                if(novo.limitesOrigem === "automatico"){
+                    novo.sugestaoEstoque = sugestao.criterio;
+                }
             }
             const reposicaoInformada = limite(novo.reposicao);
             const repo = reposicaoInformada ?? calcularReposicaoMedia(novo.minimo, novo.maximo);
@@ -1367,9 +1471,9 @@
             bancoAtual = banco;
             extrasAtual = extras || {};
             const ajustes = banco?.ajustesItens || {};
-            const dados = listaDados(banco?.dados).map(item => aplicarLimitesDashboard(item, mapaMinimo, ajustes));
-            const dadosEscopo = dados.filter(item => passaFiltroArmazem(item));
             const pedidos = banco?.pedidosCompra || {};
+            const dados = listaDados(banco?.dados).map(item => aplicarLimitesDashboard(item, mapaMinimo, ajustes, banco, pedidos));
+            const dadosEscopo = dados.filter(item => passaFiltroArmazem(item));
             const leadTimes = calcularLeadTimes(mata111, mata112, dadosEscopo);
             const rankings = {
                 reposicao: rankingReposicao(extras.mata110 || []),
