@@ -119,7 +119,7 @@
                 <col style="width:18px">
                 <col style="width:64px">
                 <col style="width:52px">
-                <col style="width:34px">
+                <col style="width:41px">
                 <col id="colDescricaoPrincipal">
                 <col style="width:86px">
                 <col style="width:60px">
@@ -2274,6 +2274,7 @@ async function carregarEstoqueMinimoPadrao(){
 
 let etiquetaMata105Cache = null;
 let etiquetaLogoCache = null;
+let etiquetaZipHandle = null;
 let etiquetaCodigosPorTamanho = { "5": "", "7": "", "10": "", "15": "" };
 const ETIQUETA_MEMORIA_STORAGE_KEY = "darkjutsu_etiqueta_tamanho_por_codigo_v1";
 const ETIQUETA_DPI = 300;
@@ -2288,7 +2289,8 @@ const ETIQUETA_MOLDES = {
         fonte_codigo_pt: 13.5,
         fonte_desc_pt: 8,
         fonte_antigo_pt: 8,
-        logo_largura_ratio: 0.175
+        logo_largura_ratio: 0.175,
+        codigo_topo_px: -6
     },
     "7": {
         nome: "7cm",
@@ -2298,7 +2300,8 @@ const ETIQUETA_MOLDES = {
         fonte_codigo_pt: 13.5,
         fonte_desc_pt: 8,
         fonte_antigo_pt: 8,
-        logo_largura_ratio: 0.175
+        logo_largura_ratio: 0.175,
+        codigo_topo_px: -6
     },
     "10": {
         nome: "10cm",
@@ -2308,7 +2311,8 @@ const ETIQUETA_MOLDES = {
         fonte_codigo_pt: 22,
         fonte_desc_pt: 12,
         fonte_antigo_pt: 12,
-        logo_largura_ratio: 0.18
+        logo_largura_ratio: 0.18,
+        codigo_topo_px: 10
     },
     "15": {
         nome: "15cm",
@@ -2318,7 +2322,8 @@ const ETIQUETA_MOLDES = {
         fonte_codigo_pt: 36,
         fonte_desc_pt: 18,
         fonte_antigo_pt: 18,
-        logo_largura_ratio: 0.18
+        logo_largura_ratio: 0.18,
+        codigo_topo_px: 16
     }
 };
 
@@ -2565,7 +2570,7 @@ async function criarBlobEtiqueta(item, cfg){
     const fonteCodigo = `${Math.trunc((cfg.fonte_codigo_pt || 13.5) * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
     const fonteAntigo = `${Math.trunc((cfg.fonte_antigo_pt || cfg.fonte_desc_pt || 8) * ETIQUETA_DPI / 72 * ETIQUETA_ESCALA)}px OswaldEtiqueta, Arial, sans-serif`;
 
-    const yCodNovo = topoMoldura - (6 * ETIQUETA_ESCALA);
+    const yCodNovo = topoMoldura + Math.trunc((cfg.codigo_topo_px ?? -6) * ETIQUETA_ESCALA);
     const bboxCod = medirTextoEtiqueta(ctx, item.protheus, fonteCodigo);
     ctx.font = fonteCodigo;
     ctx.fillText(item.protheus, centroX - bboxCod.width / 2, yCodNovo);
@@ -2741,14 +2746,7 @@ async function baixarEtiquetas(){
 
         setEtiquetasStatus("Compactando etiquetas...");
         const pacote = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-        const url = URL.createObjectURL(pacote);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "etiquetas.zip";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(()=>URL.revokeObjectURL(url), 1000);
+        const sobrescreveuArquivo = await salvarPacoteEtiquetasZip(pacote);
         setEtiquetasStatus(naoEncontradosLinhas.length ? "Baixado com alguns códigos não encontrados. Registrando ranking..." : "Pacote baixado. Registrando ranking...");
         let rankingRegistrado = true;
         await registrarGeracaoEtiquetas(geradas, codigosPorTamanho, naoEncontradosLinhas).catch(err => {
@@ -2756,8 +2754,8 @@ async function baixarEtiquetas(){
             console.warn("Nao foi possivel registrar ranking de etiquetas:", err);
         });
         setEtiquetasStatus(rankingRegistrado
-            ? (naoEncontradosLinhas.length ? "Baixado com alguns códigos não encontrados. Ranking atualizado." : "Pacote baixado e ranking atualizado.")
-            : (naoEncontradosLinhas.length ? "Baixado com alguns códigos não encontrados. Ranking não registrado." : "Pacote baixado. Ranking não registrado.")
+            ? (naoEncontradosLinhas.length ? `${sobrescreveuArquivo ? "Arquivo substituido" : "Baixado"} com alguns códigos não encontrados. Ranking atualizado.` : `${sobrescreveuArquivo ? "Arquivo substituido" : "Pacote baixado"} e ranking atualizado.`)
+            : (naoEncontradosLinhas.length ? `${sobrescreveuArquivo ? "Arquivo substituido" : "Baixado"} com alguns códigos não encontrados. Ranking não registrado.` : `${sobrescreveuArquivo ? "Arquivo substituido" : "Pacote baixado"}. Ranking não registrado.`)
         );
     }catch(e){
         console.error("Falha ao gerar etiquetas:", e);
@@ -2765,6 +2763,37 @@ async function baixarEtiquetas(){
     }
 }
 window.baixarEtiquetas = baixarEtiquetas;
+
+async function salvarPacoteEtiquetasZip(blob){
+    if(window.showSaveFilePicker){
+        try{
+            const handle = etiquetaZipHandle || await window.showSaveFilePicker({
+                suggestedName: "etiquetas.zip",
+                types: [{
+                    description: "Arquivo ZIP",
+                    accept: { "application/zip": [".zip"] }
+                }]
+            });
+            etiquetaZipHandle = handle;
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            return true;
+        }catch(e){
+            if(e?.name === "AbortError") throw new Error("Download cancelado.");
+            console.warn("Nao foi possivel substituir etiquetas.zip diretamente:", e);
+        }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "etiquetas.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    return false;
+}
 
 async function registrarGeracaoEtiquetas(totalGeradas, codigosPorTamanho, naoEncontradosLinhas){
     if(!window.db || !window.ref || !window.push) return;
