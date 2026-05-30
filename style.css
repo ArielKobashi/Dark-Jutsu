@@ -142,43 +142,80 @@ display:none;
 
 #contagemHomePopup{
     position:absolute;
-    top:128px;
+    top:114px;
     right:10px;
     z-index:9;
-    display:flex;
-    align-items:flex-start;
-    gap:5px;
-    width:118px;
-    padding:5px;
+    width:18px;
+    height:18px;
+    padding:0;
+    border:0;
+    background:transparent;
+    color:#E0F2FE;
+    pointer-events:auto;
+}
+
+#contagemHomeTrigger{
+    width:18px;
+    height:18px;
+    border:1px solid rgba(103,232,249,0.7);
+    border-radius:50%;
+    background:rgba(11,18,32,0.62);
+    box-shadow:0 0 0 0 rgba(34,211,238,0.55), 0 0 10px rgba(34,211,238,0.32);
+    cursor:default;
+    animation:contagemMousePulse 1.35s ease-out infinite;
+}
+
+#contagemHomeTrigger::after{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:5px;
+    height:5px;
+    border-radius:50%;
+    background:#67E8F9;
+    transform:translate(-50%, -50%);
+}
+
+#contagemHomePopup > div{
+    position:absolute;
+    right:0;
+    top:22px;
+    width:116px;
+    padding:5px 6px;
     border:1px solid rgba(103,232,249,0.34);
     border-radius:8px;
     background:rgba(11,18,32,0.6);
     box-shadow:0 0 14px rgba(34,211,238,0.22);
-    color:#E0F2FE;
+    opacity:0;
+    transform:translateY(-4px) scale(0.96);
+    transform-origin:top right;
     pointer-events:none;
-    animation:vencaFloat 2.4s ease-in-out infinite;
-}
-
-#contagemHomePopup img{
-    width:16px;
-    height:16px;
-    object-fit:contain;
-    flex:0 0 auto;
-    filter:drop-shadow(0 0 8px rgba(103,232,249,0.36));
-    animation:vencaImagePulse 1.8s ease-in-out infinite;
-}
-
-#contagemHomePopup > div{
+    transition:opacity 0.16s ease, transform 0.16s ease;
     min-width:0;
-    flex:1;
     display:grid;
-    gap:2px;
+    grid-template-columns:1fr auto;
+    gap:3px 6px;
+    align-items:center;
+}
+
+#contagemHomePopup:hover > div,
+#contagemHomePopup:focus-within > div{
+    opacity:1;
+    transform:translateY(0) scale(1);
+}
+
+#contagemHomePopup:hover #contagemHomeTrigger,
+#contagemHomePopup:focus-within #contagemHomeTrigger{
+    animation:none;
+    border-color:rgba(186,230,253,0.9);
+    background:rgba(15,23,42,0.82);
 }
 
 #contagemHomePopup span{
     display:block;
     color:#93C5FD;
-    font-size:6px;
+    font-size:7px;
     font-weight:900;
     line-height:1.05;
     text-transform:uppercase;
@@ -188,15 +225,17 @@ display:none;
 #contagemHomePopup strong{
     display:block;
     color:#F8FAFC;
-    font-size:11px;
+    font-size:15px;
     line-height:1.05;
+    text-align:right;
     text-shadow:0 0 6px rgba(15,23,42,0.95);
 }
 
 #contagemHomePopup small{
     display:block;
+    grid-column:1 / -1;
     color:#BAE6FD;
-    font-size:6px;
+    font-size:7px;
     line-height:1.1;
     white-space:nowrap;
     overflow:hidden;
@@ -206,6 +245,7 @@ display:none;
 
 .contagemHomeTrack{
     position:relative;
+    grid-column:1 / -1;
     height:4px;
     margin-top:1px;
     border:1px solid rgba(103,232,249,0.36);
@@ -241,6 +281,12 @@ display:none;
 
 @keyframes contagemHomeShine{
     to{transform:translateX(260%)}
+}
+
+@keyframes contagemMousePulse{
+    0%{box-shadow:0 0 0 0 rgba(34,211,238,0.52), 0 0 10px rgba(34,211,238,0.32)}
+    70%{box-shadow:0 0 0 10px rgba(34,211,238,0), 0 0 10px rgba(34,211,238,0.32)}
+    100%{box-shadow:0 0 0 0 rgba(34,211,238,0), 0 0 10px rgba(34,211,238,0.32)}
 }
 
 @keyframes vencaFloat{

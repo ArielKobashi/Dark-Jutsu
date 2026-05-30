@@ -102,7 +102,7 @@
     <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descrição" oninput="if(['/dashboard','dashboard','dash'].includes(this.value.toLowerCase().trim())){this.value='';location.href='dashboard.html?armazem=04';}">
 
     <div id="contagemHomePopup" aria-live="polite">
-        <img src="logo.png" alt="">
+        <button type="button" id="contagemHomeTrigger" aria-label="Mostrar progresso da contagem"></button>
         <div>
             <span>Contagem geral</span>
             <strong id="contagemHomePct">0%</strong>
@@ -119,7 +119,7 @@
                 <col style="width:18px">
                 <col style="width:64px">
                 <col style="width:52px">
-                <col style="width:41px">
+                <col style="width:54px">
                 <col id="colDescricaoPrincipal">
                 <col style="width:86px">
                 <col style="width:60px">
