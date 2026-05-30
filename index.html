@@ -2812,15 +2812,19 @@ async function registrarGeracaoEtiquetas(totalGeradas, codigosPorTamanho, naoEnc
     };
     await window.push(window.ref(window.db, `etiquetasGeradas/${data}/${usuarioKey}`), payload);
     if(window.runTransaction){
-        await window.runTransaction(window.ref(window.db, `rankingEtiquetas/${usuarioKey}`), atual => {
-            const base = atual && typeof atual === "object" ? atual : {};
-            return {
-                usuario:nick,
-                totalEtiquetas:Number(base.totalEtiquetas || 0) + Number(totalGeradas || 0),
-                eventos:Number(base.eventos || 0) + 1,
-                atualizadoEm:Date.now()
-            };
-        });
+        try{
+            await window.runTransaction(window.ref(window.db, `rankingEtiquetas/${usuarioKey}`), atual => {
+                const base = atual && typeof atual === "object" ? atual : {};
+                return {
+                    usuario:nick,
+                    totalEtiquetas:Number(base.totalEtiquetas || 0) + Number(totalGeradas || 0),
+                    eventos:Number(base.eventos || 0) + 1,
+                    atualizadoEm:Date.now()
+                };
+            });
+        }catch(err){
+            console.warn("Ranking agregado de etiquetas indisponivel; o evento principal foi salvo.", err);
+        }
     }
     return true;
 }
@@ -3114,7 +3118,7 @@ function criarTooltipHistoricoSaldo(td, item){
 
 async function carregarPlanilhaPadrao(tipo, arquivo, guia = null){
     try{
-        const candidatos = [`downloads/${arquivo}`, `data/${arquivo}`, arquivo];
+        const candidatos = [`data/${arquivo}`, `downloads/${arquivo}`, arquivo];
         for(const url of candidatos){
             const response = await fetch(url, { cache: "no-store" });
             if(!response.ok) continue;
@@ -8006,7 +8010,11 @@ window.updatePassword = updatePassword;
 
 import { setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-await setPersistence(auth, browserSessionPersistence);
+try{
+    await setPersistence(auth, browserSessionPersistence);
+}catch(err){
+    console.warn("Persistencia de sessao Firebase indisponivel neste navegador.", err);
+}
 
 window.logout = async function() {
     try{
