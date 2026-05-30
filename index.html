@@ -529,6 +529,7 @@ Usuários do Sistema
             <div class="etiquetasActions">
                 <button type="button" onclick="baixarEtiquetas()">Baixar pacote</button>
                 <button type="button" onclick="selecionadosParaEtiquetas()">Usar selecionados</button>
+                <a href="label-editor.html" target="_blank" rel="noopener">Editor visual</a>
             </div>
             <div id="etiquetasStatus"></div>
         </div>
@@ -2796,8 +2797,9 @@ async function salvarPacoteEtiquetasZip(blob){
 }
 
 async function registrarGeracaoEtiquetas(totalGeradas, codigosPorTamanho, naoEncontradosLinhas){
-    if(!window.db || !window.ref || !window.push) return;
+    if(!window.db || !window.ref || !window.push) throw new Error("Firebase ainda nao esta pronto para registrar etiquetas.");
     const nick = window.meuNickname || "desconhecido";
+    const usuarioKey = chaveFirebaseContagem(nick);
     const data = new Date().toISOString().slice(0, 10);
     const payload = {
         usuario:nick,
@@ -2808,7 +2810,19 @@ async function registrarGeracaoEtiquetas(totalGeradas, codigosPorTamanho, naoEnc
         porTamanho:Object.fromEntries(Object.entries(codigosPorTamanho || {}).map(([tamanho, lista]) => [tamanho, Array.isArray(lista) ? lista.length : 0])),
         teveNaoEncontrados:!!(naoEncontradosLinhas && naoEncontradosLinhas.length)
     };
-    await window.push(window.ref(window.db, `etiquetasGeradas/${data}/${chaveFirebaseContagem(nick)}`), payload);
+    await window.push(window.ref(window.db, `etiquetasGeradas/${data}/${usuarioKey}`), payload);
+    if(window.runTransaction){
+        await window.runTransaction(window.ref(window.db, `rankingEtiquetas/${usuarioKey}`), atual => {
+            const base = atual && typeof atual === "object" ? atual : {};
+            return {
+                usuario:nick,
+                totalEtiquetas:Number(base.totalEtiquetas || 0) + Number(totalGeradas || 0),
+                eventos:Number(base.eventos || 0) + 1,
+                atualizadoEm:Date.now()
+            };
+        });
+    }
+    return true;
 }
 
 document.querySelectorAll("input[name='etiquetaTamanho']").forEach(input=>{
@@ -7985,6 +7999,7 @@ window.onValue = onValue;
 window.get = get;
 window.set = set;
 window.update = update;
+window.runTransaction = runTransaction;
 window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
 window.updatePassword = updatePassword;
 

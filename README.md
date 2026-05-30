@@ -6,6 +6,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 
 - `index.html` - aplicacao principal, Firebase, tabela de estoque, chat, painel admin, relatorios, contagem, editor de limites e gerador de etiquetas.
 - `dashboard.html` - dashboard de estoque com filtros por parametros de URL.
+- `label-editor.html` - mini editor visual para simular e ajustar a formatacao das etiquetas.
 - `dashboard-nav.js` - atalhos e comandos para abrir o dashboard, por padrao no armazem 04.
 - `style.css` - estilos desktop da aplicacao.
 - `mobile.css` - ajustes responsivos/mobile.
@@ -52,8 +53,10 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
   - usa a mata105 nativa (`downloads/incluir.xlsx`);
   - tamanhos `5cm`, `7cm`, `10cm` e `15cm`;
   - cada tamanho guarda sua propria lista de codigos;
+  - possui editor visual simples (`label-editor.html`) com arrastar, redimensionar, guias e exportacao de JSON de layout;
   - download unico `etiquetas.zip`;
   - quando o navegador permite, reutiliza/substitui o mesmo `etiquetas.zip` durante a sessao;
+  - registra ranking em `etiquetasGeradas` e no agregado `rankingEtiquetas`;
   - pastas internas `5cm`, `7cm`, `10cm`, `15cm`;
   - lixeira para limpar a lista do tamanho atual.
 

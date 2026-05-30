@@ -1321,10 +1321,23 @@ th.col-ordenada.col-filtrada {
     margin-top:8px;
 }
 
-#etiquetasPanel button{
+#etiquetasPanel button,
+#etiquetasPanel a{
     border-radius:6px;
     padding:8px 6px;
     font-size:11px;
+}
+
+#etiquetasPanel a{
+    grid-column:1 / -1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:1px solid #2D3A52;
+    background:#172033;
+    color:#E6F0FF;
+    text-decoration:none;
+    font-weight:800;
 }
 
 #etiquetasStatus{

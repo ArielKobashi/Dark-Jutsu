@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de Etiquetas</title>
+    <style>
+        :root{
+            color-scheme:dark;
+            --bg:#0b0d12;
+            --panel:#151922;
+            --line:#2d3442;
+            --text:#f8fafc;
+            --muted:#aab4c5;
+            --accent:#f8fafc;
+            --paper:#ffffff;
+            --ink:#111827;
+        }
+        *{box-sizing:border-box}
+        body{
+            margin:0;
+            min-height:100vh;
+            background:#0b0d12;
+            color:var(--text);
+            font-family:Segoe UI, Arial, sans-serif;
+        }
+        header{
+            height:54px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            padding:0 16px;
+            border-bottom:1px solid var(--line);
+            background:#10141d;
+        }
+        h1{
+            margin:0;
+            font-size:16px;
+            letter-spacing:0;
+        }
+        a,button,input,select{
+            font:inherit;
+        }
+        .topActions{
+            display:flex;
+            align-items:center;
+            gap:8px;
+        }
+        a,button{
+            border:1px solid #3b4454;
+            border-radius:7px;
+            background:#1d2430;
+            color:var(--text);
+            min-height:34px;
+            padding:7px 10px;
+            text-decoration:none;
+            cursor:pointer;
+            font-weight:800;
+            font-size:12px;
+        }
+        button.primary{
+            background:#f8fafc;
+            color:#111827;
+            border-color:#ffffff;
+        }
+        main{
+            display:grid;
+            grid-template-columns:260px minmax(0,1fr) 290px;
+            gap:12px;
+            padding:12px;
+            height:calc(100vh - 54px);
+            min-height:560px;
+        }
+        aside,.stageShell{
+            border:1px solid var(--line);
+            border-radius:8px;
+            background:var(--panel);
+            overflow:hidden;
+        }
+        aside{
+            padding:12px;
+            overflow:auto;
+        }
+        .group{
+            border-bottom:1px solid rgba(148,163,184,.18);
+            padding-bottom:12px;
+            margin-bottom:12px;
+        }
+        .group:last-child{
+            border-bottom:0;
+            margin-bottom:0;
+            padding-bottom:0;
+        }
+        .group h2{
+            margin:0 0 10px;
+            font-size:12px;
+            color:#e5e7eb;
+            text-transform:uppercase;
+        }
+        label{
+            display:block;
+            color:var(--muted);
+            font-size:11px;
+            margin:9px 0 4px;
+        }
+        input,select,textarea{
+            width:100%;
+            border:1px solid #343c4b;
+            border-radius:6px;
+            background:#0f141d;
+            color:var(--text);
+            padding:8px;
+            outline:none;
+        }
+        textarea{
+            min-height:82px;
+            resize:vertical;
+            font-family:Consolas, monospace;
+            font-size:11px;
+        }
+        .two{
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:8px;
+        }
+        .stageShell{
+            display:grid;
+            grid-template-rows:auto minmax(0,1fr);
+            min-width:0;
+        }
+        .stageToolbar{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
+            padding:9px 10px;
+            border-bottom:1px solid var(--line);
+            color:var(--muted);
+            font-size:12px;
+        }
+        .stageWrap{
+            position:relative;
+            min-width:0;
+            min-height:0;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:30px;
+            overflow:auto;
+            background:
+                linear-gradient(45deg, rgba(255,255,255,.04) 25%, transparent 25%),
+                linear-gradient(-45deg, rgba(255,255,255,.04) 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, rgba(255,255,255,.04) 75%),
+                linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.04) 75%);
+            background-size:22px 22px;
+            background-position:0 0,0 11px,11px -11px,-11px 0;
+        }
+        #labelStage{
+            position:relative;
+            width:900px;
+            height:252px;
+            flex:0 0 auto;
+            background:var(--paper);
+            color:var(--ink);
+            border:2px solid #111827;
+            box-shadow:0 16px 50px rgba(0,0,0,.45);
+            overflow:hidden;
+        }
+        #labelStage::before{
+            content:"";
+            position:absolute;
+            inset:12px;
+            border:1px dashed rgba(17,24,39,.42);
+            pointer-events:none;
+            z-index:2;
+        }
+        #labelStage::after{
+            content:"";
+            position:absolute;
+            inset:26px;
+            border:1px dotted rgba(17,24,39,.22);
+            pointer-events:none;
+            z-index:2;
+        }
+        .midGuideX,.midGuideY{
+            position:absolute;
+            pointer-events:none;
+            z-index:1;
+            opacity:.32;
+        }
+        .midGuideX{
+            left:0;
+            top:50%;
+            width:100%;
+            border-top:1px solid #111827;
+        }
+        .midGuideY{
+            top:0;
+            left:50%;
+            height:100%;
+            border-left:1px solid #111827;
+        }
+        .piece{
+            position:absolute;
+            min-width:28px;
+            min-height:18px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border:1px solid transparent;
+            color:#111827;
+            user-select:none;
+            cursor:move;
+            padding:2px;
+            text-align:center;
+            line-height:1.05;
+            font-weight:700;
+            white-space:pre-wrap;
+            overflow:hidden;
+        }
+        .piece.selected{
+            border-color:#111827;
+            outline:1px dashed rgba(17,24,39,.42);
+            background:rgba(17,24,39,.04);
+        }
+        .piece .resize{
+            position:absolute;
+            right:-5px;
+            bottom:-5px;
+            width:10px;
+            height:10px;
+            border:1px solid #111827;
+            background:#fff;
+            cursor:nwse-resize;
+            display:none;
+        }
+        .piece.selected .resize{
+            display:block;
+        }
+        .piece.logo{
+            border-color:rgba(17,24,39,.2);
+            font-weight:900;
+            letter-spacing:0;
+        }
+        .piece.logo::before{
+            content:"";
+            width:22px;
+            height:34px;
+            margin-right:8px;
+            border:2px solid #111827;
+            border-radius:50%;
+            transform:skew(-8deg);
+        }
+        .rowBtns{
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:8px;
+            margin-top:10px;
+        }
+        .hint{
+            color:var(--muted);
+            font-size:11px;
+            line-height:1.45;
+        }
+        .selectedName{
+            padding:8px;
+            border:1px solid #343c4b;
+            border-radius:6px;
+            background:#0f141d;
+            color:#e5e7eb;
+            font-size:12px;
+            font-weight:800;
+        }
+        .kbd{
+            display:inline-block;
+            border:1px solid #3b4454;
+            border-radius:4px;
+            padding:1px 5px;
+            background:#0f141d;
+            color:#e5e7eb;
+            font-size:10px;
+        }
+        @media (max-width:980px){
+            main{
+                grid-template-columns:1fr;
+                height:auto;
+            }
+            aside,.stageShell{
+                min-height:auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Editor de formato das etiquetas</h1>
+        <div class="topActions">
+            <a href="index.html">Voltar</a>
+            <button class="primary" type="button" id="copyJson">Copiar layout</button>
+        </div>
+    </header>
+
+    <main>
+        <aside>
+            <div class="group">
+                <h2>Etiqueta</h2>
+                <label for="sizeSelect">Tamanho</label>
+                <select id="sizeSelect">
+                    <option value="5">5 cm</option>
+                    <option value="7" selected>7 cm</option>
+                    <option value="10">10 cm</option>
+                    <option value="15">15 cm</option>
+                </select>
+                <div class="two">
+                    <div>
+                        <label for="labelW">Largura cm</label>
+                        <input id="labelW" type="number" step="0.01">
+                    </div>
+                    <div>
+                        <label for="labelH">Altura cm</label>
+                        <input id="labelH" type="number" step="0.01">
+                    </div>
+                </div>
+                <label for="borderSize">Borda</label>
+                <input id="borderSize" type="range" min="1" max="18" value="5">
+                <div class="rowBtns">
+                    <button type="button" id="toggleGuides">Guias</button>
+                    <button type="button" id="resetLayout">Reset</button>
+                </div>
+            </div>
+
+            <div class="group">
+                <h2>Elementos</h2>
+                <button type="button" data-select="code">Codigo novo</button>
+                <button type="button" data-select="desc">Descricao</button>
+                <button type="button" data-select="old">Cooperat</button>
+                <button type="button" data-select="logo">Logo</button>
+                <p class="hint">Arraste no quadro. Use o canto inferior direito para esticar. Setas movem 1px, <span class="kbd">Shift</span> + setas movem 10px.</p>
+            </div>
+        </aside>
+
+        <section class="stageShell">
+            <div class="stageToolbar">
+                <span id="stageInfo">Simulacao em preto e branco</span>
+                <span>Linhas tracejadas = limites de seguranca</span>
+            </div>
+            <div class="stageWrap">
+                <div id="labelStage">
+                    <div class="midGuideX"></div>
+                    <div class="midGuideY"></div>
+                    <div class="piece" data-id="code"><span></span><i class="resize"></i></div>
+                    <div class="piece" data-id="desc"><span></span><i class="resize"></i></div>
+                    <div class="piece" data-id="old"><span></span><i class="resize"></i></div>
+                    <div class="piece logo" data-id="logo"><span></span><i class="resize"></i></div>
+                </div>
+            </div>
+        </section>
+
+        <aside>
+            <div class="group">
+                <h2>Selecionado</h2>
+                <div class="selectedName" id="selectedName">Codigo novo</div>
+                <label for="textValue">Texto</label>
+                <textarea id="textValue"></textarea>
+                <div class="two">
+                    <div>
+                        <label for="posX">X</label>
+                        <input id="posX" type="number" step="1">
+                    </div>
+                    <div>
+                        <label for="posY">Y</label>
+                        <input id="posY" type="number" step="1">
+                    </div>
+                </div>
+                <div class="two">
+                    <div>
+                        <label for="boxW">Largura</label>
+                        <input id="boxW" type="number" step="1">
+                    </div>
+                    <div>
+                        <label for="boxH">Altura</label>
+                        <input id="boxH" type="number" step="1">
+                    </div>
+                </div>
+                <label for="fontSize">Fonte</label>
+                <input id="fontSize" type="range" min="8" max="90" value="32">
+                <div class="two">
+                    <div>
+                        <label for="fontWeight">Peso</label>
+                        <select id="fontWeight">
+                            <option value="400">Normal</option>
+                            <option value="700" selected>Negrito</option>
+                            <option value="900">Pesado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="alignText">Alinhar</label>
+                        <select id="alignText">
+                            <option value="left">Esq.</option>
+                            <option value="center" selected>Centro</option>
+                            <option value="right">Dir.</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="rowBtns">
+                    <button type="button" id="centerX">Centro X</button>
+                    <button type="button" id="centerY">Centro Y</button>
+                </div>
+            </div>
+
+            <div class="group">
+                <h2>Layout salvo</h2>
+                <textarea id="layoutJson" readonly></textarea>
+                <p class="hint">Esse JSON e uma referencia visual para copiar medidas e ajustar a funcao de geracao no sistema principal.</p>
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        const cmScale = 118;
+        const presets = {
+            "5": { w:5.0, h:1.48, border:5 },
+            "7": { w:7.01, h:2.09, border:5 },
+            "10": { w:10.01, h:2.8, border:5 },
+            "15": { w:15.01, h:4.2, border:5 }
+        };
+        const labels = {
+            code:"Codigo novo",
+            desc:"Descricao",
+            old:"Cooperat",
+            logo:"Logo"
+        };
+        const sample = {
+            code:"3106000074",
+            desc:"EMP-OLEO LUBRAX 15W40 P/ TRATOR",
+            old:"COOPERAT: 31.060.0",
+            logo:"FIASUL\nQualidade Fio a Fio"
+        };
+        const defaultLayout = {
+            code:{ x:310, y:14, w:280, h:46, font:38, weight:"700", align:"center", text:sample.code },
+            desc:{ x:230, y:70, w:440, h:34, font:22, weight:"700", align:"center", text:sample.desc },
+            old:{ x:335, y:135, w:230, h:34, font:22, weight:"700", align:"center", text:sample.old },
+            logo:{ x:320, y:188, w:260, h:54, font:26, weight:"900", align:"center", text:sample.logo }
+        };
+        let layout = JSON.parse(localStorage.getItem("labelEditorLayout") || "null") || structuredClone(defaultLayout);
+        let selected = "code";
+        let guides = true;
+        let drag = null;
+
+        const stage = document.getElementById("labelStage");
+        const sizeSelect = document.getElementById("sizeSelect");
+        const labelW = document.getElementById("labelW");
+        const labelH = document.getElementById("labelH");
+        const borderSize = document.getElementById("borderSize");
+        const selectedName = document.getElementById("selectedName");
+        const textValue = document.getElementById("textValue");
+        const posX = document.getElementById("posX");
+        const posY = document.getElementById("posY");
+        const boxW = document.getElementById("boxW");
+        const boxH = document.getElementById("boxH");
+        const fontSize = document.getElementById("fontSize");
+        const fontWeight = document.getElementById("fontWeight");
+        const alignText = document.getElementById("alignText");
+        const layoutJson = document.getElementById("layoutJson");
+
+        function currentPreset(){
+            return presets[sizeSelect.value] || presets["7"];
+        }
+
+        function renderStageSize(){
+            const p = currentPreset();
+            labelW.value = p.w;
+            labelH.value = p.h;
+            borderSize.value = p.border;
+            stage.style.width = Math.round(p.w * cmScale) + "px";
+            stage.style.height = Math.round(p.h * cmScale) + "px";
+            stage.style.borderWidth = p.border + "px";
+            document.getElementById("stageInfo").textContent = `${p.w}cm x ${p.h}cm`;
+        }
+
+        function applyPiece(id){
+            const el = stage.querySelector(`[data-id="${id}"]`);
+            const cfg = layout[id];
+            el.style.left = cfg.x + "px";
+            el.style.top = cfg.y + "px";
+            el.style.width = cfg.w + "px";
+            el.style.height = cfg.h + "px";
+            el.style.fontSize = cfg.font + "px";
+            el.style.fontWeight = cfg.weight;
+            el.style.justifyContent = cfg.align === "left" ? "flex-start" : cfg.align === "right" ? "flex-end" : "center";
+            el.style.textAlign = cfg.align;
+            el.querySelector("span").textContent = cfg.text;
+            el.classList.toggle("selected", id === selected);
+        }
+
+        function render(){
+            renderStageSize();
+            Object.keys(layout).forEach(applyPiece);
+            renderControls();
+            save();
+        }
+
+        function renderControls(){
+            const cfg = layout[selected];
+            selectedName.textContent = labels[selected];
+            textValue.value = cfg.text;
+            posX.value = Math.round(cfg.x);
+            posY.value = Math.round(cfg.y);
+            boxW.value = Math.round(cfg.w);
+            boxH.value = Math.round(cfg.h);
+            fontSize.value = cfg.font;
+            fontWeight.value = cfg.weight;
+            alignText.value = cfg.align;
+            layoutJson.value = JSON.stringify({
+                size:sizeSelect.value,
+                etiqueta:currentPreset(),
+                elementos:layout
+            }, null, 2);
+        }
+
+        function save(){
+            localStorage.setItem("labelEditorLayout", JSON.stringify(layout));
+            if(layoutJson){
+                layoutJson.value = JSON.stringify({
+                    size:sizeSelect.value,
+                    etiqueta:currentPreset(),
+                    elementos:layout
+                }, null, 2);
+            }
+        }
+
+        function setSelected(id){
+            selected = id;
+            render();
+        }
+
+        function patchSelected(values){
+            layout[selected] = { ...layout[selected], ...values };
+            render();
+        }
+
+        stage.querySelectorAll(".piece").forEach(piece => {
+            piece.addEventListener("pointerdown", e => {
+                const id = piece.dataset.id;
+                setSelected(id);
+                const isResize = e.target.classList.contains("resize");
+                const cfg = layout[id];
+                drag = {
+                    id,
+                    resize:isResize,
+                    startX:e.clientX,
+                    startY:e.clientY,
+                    x:cfg.x,
+                    y:cfg.y,
+                    w:cfg.w,
+                    h:cfg.h
+                };
+                piece.setPointerCapture(e.pointerId);
+                e.preventDefault();
+            });
+        });
+
+        window.addEventListener("pointermove", e => {
+            if(!drag) return;
+            const dx = e.clientX - drag.startX;
+            const dy = e.clientY - drag.startY;
+            const cfg = layout[drag.id];
+            if(drag.resize){
+                cfg.w = Math.max(28, drag.w + dx);
+                cfg.h = Math.max(18, drag.h + dy);
+            }else{
+                cfg.x = drag.x + dx;
+                cfg.y = drag.y + dy;
+            }
+            applyPiece(drag.id);
+            renderControls();
+            save();
+        });
+
+        window.addEventListener("pointerup", () => {
+            drag = null;
+        });
+
+        window.addEventListener("keydown", e => {
+            if(["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)) return;
+            const step = e.shiftKey ? 10 : 1;
+            const cfg = layout[selected];
+            if(e.key === "ArrowLeft") cfg.x -= step;
+            else if(e.key === "ArrowRight") cfg.x += step;
+            else if(e.key === "ArrowUp") cfg.y -= step;
+            else if(e.key === "ArrowDown") cfg.y += step;
+            else return;
+            e.preventDefault();
+            render();
+        });
+
+        document.querySelectorAll("[data-select]").forEach(btn => {
+            btn.addEventListener("click", () => setSelected(btn.dataset.select));
+        });
+        [textValue,posX,posY,boxW,boxH,fontSize,fontWeight,alignText].forEach(input => {
+            input.addEventListener("input", () => {
+                patchSelected({
+                    text:textValue.value,
+                    x:Number(posX.value) || 0,
+                    y:Number(posY.value) || 0,
+                    w:Number(boxW.value) || 28,
+                    h:Number(boxH.value) || 18,
+                    font:Number(fontSize.value) || 12,
+                    weight:fontWeight.value,
+                    align:alignText.value
+                });
+            });
+        });
+        sizeSelect.addEventListener("change", render);
+        [labelW,labelH,borderSize].forEach(input => {
+            input.addEventListener("input", () => {
+                const p = currentPreset();
+                p.w = Number(labelW.value) || p.w;
+                p.h = Number(labelH.value) || p.h;
+                p.border = Number(borderSize.value) || p.border;
+                render();
+            });
+        });
+        document.getElementById("centerX").addEventListener("click", () => {
+            const cfg = layout[selected];
+            cfg.x = (stage.clientWidth - cfg.w) / 2;
+            render();
+        });
+        document.getElementById("centerY").addEventListener("click", () => {
+            const cfg = layout[selected];
+            cfg.y = (stage.clientHeight - cfg.h) / 2;
+            render();
+        });
+        document.getElementById("toggleGuides").addEventListener("click", () => {
+            guides = !guides;
+            stage.classList.toggle("noGuides", !guides);
+            stage.querySelector(".midGuideX").style.display = guides ? "" : "none";
+            stage.querySelector(".midGuideY").style.display = guides ? "" : "none";
+        });
+        document.getElementById("resetLayout").addEventListener("click", () => {
+            layout = structuredClone(defaultLayout);
+            render();
+        });
+        document.getElementById("copyJson").addEventListener("click", async () => {
+            await navigator.clipboard.writeText(layoutJson.value);
+            const btn = document.getElementById("copyJson");
+            btn.textContent = "Copiado";
+            setTimeout(() => btn.textContent = "Copiar layout", 900);
+        });
+
+        render();
+    </script>
+</body>
+</html>
