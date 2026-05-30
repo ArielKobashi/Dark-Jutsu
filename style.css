@@ -140,6 +140,44 @@ display:none;
     box-shadow:0 0 12px rgba(34,211,238,0.42);
 }
 
+#vencaBanner{
+    position:absolute;
+    top:50px;
+    right:18px;
+    z-index:9;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:7px 10px;
+    border:1px solid rgba(103,232,249,0.24);
+    border-radius:8px;
+    background:rgba(11,18,32,0.74);
+    box-shadow:0 0 18px rgba(34,211,238,0.18);
+    color:#E0F2FE;
+    font-size:14px;
+    font-weight:900;
+    pointer-events:none;
+    animation:vencaFloat 2.4s ease-in-out infinite;
+}
+
+#vencaBanner img{
+    width:34px;
+    height:34px;
+    object-fit:contain;
+    filter:drop-shadow(0 0 8px rgba(103,232,249,0.36));
+    animation:vencaImagePulse 1.8s ease-in-out infinite;
+}
+
+@keyframes vencaFloat{
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-5px)}
+}
+
+@keyframes vencaImagePulse{
+    0%,100%{transform:scale(1)}
+    50%{transform:scale(1.08)}
+}
+
 .historicoContagemPanel{
     position:absolute;
     top:0;
@@ -271,11 +309,16 @@ body:not(.app-ready) .historicoContagemPanel{
 
 .historicoContagemRow{
     display:grid;
-    grid-template-columns:1fr auto;
+    grid-template-columns:1fr;
     gap:7px;
     align-items:center;
     padding:7px 0;
     border-top:1px solid rgba(148,163,184,0.16);
+}
+
+.historicoContagemActions{
+    display:flex;
+    justify-content:flex-end;
 }
 
 .historicoContagemInfo{

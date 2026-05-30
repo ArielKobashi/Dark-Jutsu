@@ -1,6 +1,6 @@
 (function(){
     function abrirDashboard(){
-        window.location.href = "dashboard.html";
+        window.location.href = "dashboard.html?armazem=04";
     }
 
     function executarComando(valor){

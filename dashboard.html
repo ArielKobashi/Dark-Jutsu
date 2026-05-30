@@ -269,16 +269,30 @@
             background:#0F172A;
         }
         .contagemProgressFill{
+            position:relative;
             height:100%;
             border-radius:999px;
             background:linear-gradient(90deg,#22C55E,#00D9FF,#7A3CFF);
             box-shadow:0 0 14px rgba(34,211,238,.42);
+            overflow:hidden;
             animation:contagemProgressPulse 1.6s ease-in-out infinite;
             transition:width .45s ease;
+        }
+        .contagemProgressFill::after{
+            content:"";
+            position:absolute;
+            inset:0;
+            width:42%;
+            background:linear-gradient(90deg, transparent, rgba(255,255,255,.42), transparent);
+            transform:translateX(-130%);
+            animation:contagemProgressShine 1.25s linear infinite;
         }
         @keyframes contagemProgressPulse{
             0%,100%{filter:brightness(1)}
             50%{filter:brightness(1.22)}
+        }
+        @keyframes contagemProgressShine{
+            to{transform:translateX(260%)}
         }
         .status{
             display:inline-flex;
@@ -364,7 +378,7 @@
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
             origem: (params.get("origem") || "").toLowerCase(),
-            armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
+            armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "04").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
             busca: (params.get("busca") || "").toLowerCase(),
             limite: Math.max(1, Math.min(50000, Number(params.get("limite") || 50000) || 50000)),
@@ -847,13 +861,15 @@
         }
         function rankingEtiquetas(etiquetasGeradas){
             const mapa = new Map();
-            Object.entries(etiquetasGeradas || {}).forEach(([, porUsuario]) => {
-                Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
-                    Object.values(registros || {}).forEach(registro => {
-                        incrementarRanking(mapa, registro?.usuario || usuarioKey, registro?.totalEtiquetas || 0);
-                    });
-                });
-            });
+            const visitarRegistroEtiqueta = (registro, usuarioKey = "") => {
+                if(!registro || typeof registro !== "object") return;
+                if(registro.totalEtiquetas !== undefined || registro.totalCodigosInformados !== undefined){
+                    incrementarRanking(mapa, registro.usuario || usuarioKey, registro.totalEtiquetas || registro.totalCodigosInformados || 0);
+                    return;
+                }
+                Object.entries(registro).forEach(([chave, valor]) => visitarRegistroEtiqueta(valor, chave || usuarioKey));
+            };
+            visitarRegistroEtiqueta(etiquetasGeradas || {});
             return [...mapa.values()].sort((a,b) => (b.quantidade - a.quantidade) || (b.eventos - a.eventos));
         }
         function renderRankingUsuarios(titulo, linhas, rotuloQtd){
