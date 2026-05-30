@@ -1,4 +1,8 @@
 _backups/
+__pycache__/
+*.pyc
+*.pyo
+*.log
 scripts/controlador_config.json
 Automus/scripts/controlador_config.json
 Automus/scripts/atualizacao/automus_config.json

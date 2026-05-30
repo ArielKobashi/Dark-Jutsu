@@ -11,7 +11,7 @@ from pynput import mouse, keyboard  # type: ignore
 # ============================================================
 # Deixe a planilha na mesma pasta deste arquivo .py
 # ou informe o caminho completo abaixo.
-PLANILHA_DADOS = "levantamento0706 antigo.xlsx"
+PLANILHA_DADOS = Path(__file__).resolve().parents[2] / "data" / "levantamento0706 antigo.xlsx"
 ABA_DADOS = None  # None = primeira aba da planilha
 LINHA_INICIAL = 2  # 2 = ignora cabeçalho
 

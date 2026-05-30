@@ -6,8 +6,14 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 
 - `index.html` - aplicacao principal, Firebase, tabela de estoque, chat, painel admin, relatorios, contagem, editor de limites e gerador de etiquetas.
 - `dashboard.html` - dashboard de estoque com filtros por parametros de URL.
+- `dashboard-nav.js` - atalhos e comandos para abrir o dashboard, por padrao no armazem 04.
 - `style.css` - estilos desktop da aplicacao.
 - `mobile.css` - ajustes responsivos/mobile.
+- `data/` - planilhas auxiliares usadas pela aplicacao e pelo dashboard:
+  - `mata110.xlsx`
+  - `mata111.xlsx`
+  - `mata112.xlsx`
+  - `levantamento0706 antigo.xlsx`
 - `downloads/` - planilhas e assets usados pelo sistema:
   - `incluir.xlsx` - base mata105 nativa usada no estoque e nas etiquetas.
   - `Saldo Atual.xlsx`
@@ -16,7 +22,9 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
   - `etiquetas_logo.png`
   - `Oswald-Regular.ttf`
   - `Oswald-Bold.ttf`
+- `assets/screenshots/` - capturas de tela de apoio e diagnostico.
 - `scripts/` - automacao Python, macros e atualizador Automus.
+- `tools/planilhas/` - motores e utilitarios antigos de tratamento de planilhas, mantidos fora da raiz.
 
 ## Funcionalidades principais
 
@@ -25,6 +33,9 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 - Captura de itens pelo modo magnet.
 - Relatorio imprimivel dos itens selecionados.
 - Tela de contagem de estoque por maquina/endereco, limitada aos armazens 04 e 05, com rascunho local, botoes rapidos, divergencias e exportacao XLSX.
+- Indicador flutuante de progresso da contagem na tela principal: fica recolhido como um ponto pulsante e abre ao passar o mouse.
+- Historico de contagens com download individual da planilha XLSX de cada sessao.
+- Dashboard abre inicialmente filtrado no armazem 04 e mostra o progresso geral da contagem.
 - Modal de perfil do item com saldo, endereco, minimo, maximo e reposicao.
 - Edicao item a item de minimo e maximo dentro do modal.
 - Reposicao calculada como quantidade para voltar do minimo ao maximo; sugestoes automaticas usam consumo, pedido medio e saldo das planilhas.
@@ -42,6 +53,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
   - tamanhos `5cm`, `7cm`, `10cm` e `15cm`;
   - cada tamanho guarda sua propria lista de codigos;
   - download unico `etiquetas.zip`;
+  - quando o navegador permite, reutiliza/substitui o mesmo `etiquetas.zip` durante a sessao;
   - pastas internas `5cm`, `7cm`, `10cm`, `15cm`;
   - lixeira para limpar a lista do tamanho atual.
 
@@ -57,7 +69,7 @@ Os scripts Python ficam em `scripts/`.
 - `scripts/totvs_news_reference.json` e `scripts/totvs_news_reference.png` - referencia do detector TOTVS.
 - `scripts/atualizacao/automus_update.py` - atualizacao do Firebase sem depender do navegador.
 - `scripts/atualizacao/automus_config.json` - credenciais/configuracao local do Automus.
-- `scripts/executar_tudo.log` - log gerado pela automacao.
+- Logs e caches (`*.log`, `__pycache__/`, `*.pyc`) sao artefatos gerados e ficam fora do versionamento.
 
 ## Regras de Estoque
 

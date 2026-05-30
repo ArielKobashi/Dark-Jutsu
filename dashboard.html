@@ -556,6 +556,9 @@
                 if(typeof XLSX === "undefined") return [];
                 let response = await fetch(`downloads/${nome}`, { cache: "no-store" });
                 if(!response.ok){
+                    response = await fetch(`data/${nome}`, { cache: "no-store" });
+                }
+                if(!response.ok){
                     response = await fetch(nome, { cache: "no-store" });
                 }
                 if(!response.ok) return [];

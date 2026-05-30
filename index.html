@@ -3100,7 +3100,7 @@ function criarTooltipHistoricoSaldo(td, item){
 
 async function carregarPlanilhaPadrao(tipo, arquivo, guia = null){
     try{
-        const candidatos = [`downloads/${arquivo}`, arquivo];
+        const candidatos = [`downloads/${arquivo}`, `data/${arquivo}`, arquivo];
         for(const url of candidatos){
             const response = await fetch(url, { cache: "no-store" });
             if(!response.ok) continue;

@@ -181,11 +181,11 @@
     }
 
     #contagemHomePopup > div {
-        width: 112px;
+        width: 126px;
     }
 
     #contagemHomePopup strong {
-        font-size: 14px;
+        font-size: 17px;
     }
 
     .historicoContagemPanel:not(.aberto) {
