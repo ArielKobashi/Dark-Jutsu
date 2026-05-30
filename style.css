@@ -142,26 +142,26 @@ display:none;
 
 #contagemHomePopup{
     position:absolute;
-    top:50px;
-    right:18px;
+    top:128px;
+    right:10px;
     z-index:9;
     display:flex;
     align-items:flex-start;
-    gap:6px;
-    width:154px;
-    padding:6px 7px;
-    border:1px solid rgba(103,232,249,0.24);
+    gap:5px;
+    width:118px;
+    padding:5px;
+    border:1px solid rgba(103,232,249,0.34);
     border-radius:8px;
-    background:rgba(11,18,32,0.74);
-    box-shadow:0 0 18px rgba(34,211,238,0.18);
+    background:rgba(11,18,32,0.6);
+    box-shadow:0 0 14px rgba(34,211,238,0.22);
     color:#E0F2FE;
     pointer-events:none;
     animation:vencaFloat 2.4s ease-in-out infinite;
 }
 
 #contagemHomePopup img{
-    width:24px;
-    height:24px;
+    width:16px;
+    height:16px;
     object-fit:contain;
     flex:0 0 auto;
     filter:drop-shadow(0 0 8px rgba(103,232,249,0.36));
@@ -171,39 +171,44 @@ display:none;
 #contagemHomePopup > div{
     min-width:0;
     flex:1;
+    display:grid;
+    gap:2px;
 }
 
 #contagemHomePopup span{
     display:block;
     color:#93C5FD;
-    font-size:7px;
+    font-size:6px;
     font-weight:900;
+    line-height:1.05;
     text-transform:uppercase;
+    text-shadow:0 0 5px rgba(15,23,42,0.9);
 }
 
 #contagemHomePopup strong{
     display:block;
-    margin-top:1px;
     color:#F8FAFC;
-    font-size:14px;
-    line-height:1;
+    font-size:11px;
+    line-height:1.05;
+    text-shadow:0 0 6px rgba(15,23,42,0.95);
 }
 
 #contagemHomePopup small{
     display:block;
-    margin-top:2px;
     color:#BAE6FD;
-    font-size:7px;
+    font-size:6px;
+    line-height:1.1;
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
+    text-shadow:0 0 5px rgba(15,23,42,0.9);
 }
 
 .contagemHomeTrack{
     position:relative;
-    height:6px;
-    margin-top:5px;
-    border:1px solid rgba(103,232,249,0.28);
+    height:4px;
+    margin-top:1px;
+    border:1px solid rgba(103,232,249,0.36);
     border-radius:999px;
     background:#0F172A;
     overflow:hidden;

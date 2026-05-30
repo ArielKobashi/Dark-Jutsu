@@ -174,19 +174,19 @@
     }
 
     #contagemHomePopup {
-        top: 58px;
-        right: 10px;
-        width: 132px;
-        padding: 5px 6px;
+        top: 104px;
+        right: 8px;
+        width: 112px;
+        padding: 5px;
     }
 
     #contagemHomePopup img {
-        width: 20px;
-        height: 20px;
+        width: 16px;
+        height: 16px;
     }
 
     #contagemHomePopup strong {
-        font-size: 12px;
+        font-size: 11px;
     }
 
     .historicoContagemPanel:not(.aberto) {
