@@ -16,6 +16,14 @@
             --paper:#ffffff;
             --ink:#111827;
         }
+        @font-face{
+            font-family:OswaldEtiqueta;
+            src:url("downloads/Oswald-Regular.ttf");
+        }
+        @font-face{
+            font-family:OswaldEtiquetaBold;
+            src:url("downloads/Oswald-Bold.ttf");
+        }
         *{box-sizing:border-box}
         body{
             margin:0;
@@ -216,6 +224,7 @@
             text-align:center;
             line-height:1.05;
             font-weight:700;
+            font-family:OswaldEtiqueta, Arial, sans-serif;
             white-space:pre-wrap;
             overflow:hidden;
         }
@@ -240,17 +249,14 @@
         }
         .piece.logo{
             border-color:rgba(17,24,39,.2);
-            font-weight:900;
-            letter-spacing:0;
+            padding:0;
         }
-        .piece.logo::before{
-            content:"";
-            width:22px;
-            height:34px;
-            margin-right:8px;
-            border:2px solid #111827;
-            border-radius:50%;
-            transform:skew(-8deg);
+        .piece.logo img{
+            display:block;
+            width:100%;
+            height:100%;
+            object-fit:contain;
+            pointer-events:none;
         }
         .rowBtns{
             display:grid;
@@ -352,7 +358,7 @@
                     <div class="piece" data-id="code"><span></span><i class="resize"></i></div>
                     <div class="piece" data-id="desc"><span></span><i class="resize"></i></div>
                     <div class="piece" data-id="old"><span></span><i class="resize"></i></div>
-                    <div class="piece logo" data-id="logo"><span></span><i class="resize"></i></div>
+                    <div class="piece logo" data-id="logo"><img src="downloads/etiquetas_logo.png" alt="FIASUL Qualidade Fio a Fio"><span></span><i class="resize"></i></div>
                 </div>
             </div>
         </section>
@@ -435,15 +441,39 @@
             code:"3106000074",
             desc:"EMP-OLEO LUBRAX 15W40 P/ TRATOR",
             old:"COOPERAT: 31.060.0",
-            logo:"FIASUL\nQualidade Fio a Fio"
+            logo:""
         };
-        const defaultLayout = {
-            code:{ x:310, y:14, w:280, h:46, font:38, weight:"700", align:"center", text:sample.code },
-            desc:{ x:230, y:70, w:440, h:34, font:22, weight:"700", align:"center", text:sample.desc },
-            old:{ x:335, y:135, w:230, h:34, font:22, weight:"700", align:"center", text:sample.old },
-            logo:{ x:320, y:188, w:260, h:54, font:26, weight:"900", align:"center", text:sample.logo }
+        const defaultLayouts = {
+            "5": {
+                code:{ x:185, y:0, w:220, h:42, font:38, weight:"400", align:"center", text:sample.code },
+                desc:{ x:120, y:58, w:350, h:56, font:22, weight:"400", align:"center", text:sample.desc },
+                old:{ x:185, y:126, w:220, h:32, font:22, weight:"400", align:"center", text:sample.old },
+                logo:{ x:172, y:164, w:248, h:70, font:26, weight:"900", align:"center", text:sample.logo }
+            },
+            "7": {
+                code:{ x:274, y:0, w:280, h:46, font:38, weight:"400", align:"center", text:sample.code },
+                desc:{ x:190, y:74, w:450, h:60, font:22, weight:"400", align:"center", text:sample.desc },
+                old:{ x:290, y:154, w:250, h:34, font:22, weight:"400", align:"center", text:sample.old },
+                logo:{ x:224, y:194, w:384, h:84, font:26, weight:"900", align:"center", text:sample.logo }
+            },
+            "10": {
+                code:{ x:410, y:22, w:360, h:62, font:58, weight:"400", align:"center", text:sample.code },
+                desc:{ x:250, y:110, w:680, h:86, font:34, weight:"400", align:"center", text:sample.desc },
+                old:{ x:410, y:224, w:360, h:48, font:34, weight:"400", align:"center", text:sample.old },
+                logo:{ x:360, y:286, w:462, h:112, font:26, weight:"900", align:"center", text:sample.logo }
+            },
+            "15": {
+                code:{ x:640, y:34, w:500, h:90, font:94, weight:"400", align:"center", text:sample.code },
+                desc:{ x:410, y:164, w:900, h:126, font:52, weight:"400", align:"center", text:sample.desc },
+                old:{ x:650, y:330, w:500, h:72, font:52, weight:"400", align:"center", text:sample.old },
+                logo:{ x:520, y:424, w:730, h:168, font:26, weight:"900", align:"center", text:sample.logo }
+            }
         };
-        let layout = JSON.parse(localStorage.getItem("labelEditorLayout") || "null") || structuredClone(defaultLayout);
+        let layouts = JSON.parse(localStorage.getItem("labelEditorLayoutsBySize") || "null") || structuredClone(defaultLayouts);
+        Object.keys(defaultLayouts).forEach(size => {
+            layouts[size] = { ...structuredClone(defaultLayouts[size]), ...(layouts[size] || {}) };
+        });
+        let layout = layouts["7"];
         let selected = "code";
         let guides = true;
         let drag = null;
@@ -468,6 +498,12 @@
             return presets[sizeSelect.value] || presets["7"];
         }
 
+        function currentLayout(){
+            const size = sizeSelect.value;
+            layouts[size] = layouts[size] || structuredClone(defaultLayouts[size] || defaultLayouts["7"]);
+            return layouts[size];
+        }
+
         function renderStageSize(){
             const p = currentPreset();
             labelW.value = p.w;
@@ -490,7 +526,8 @@
             el.style.fontWeight = cfg.weight;
             el.style.justifyContent = cfg.align === "left" ? "flex-start" : cfg.align === "right" ? "flex-end" : "center";
             el.style.textAlign = cfg.align;
-            el.querySelector("span").textContent = cfg.text;
+            const span = el.querySelector("span");
+            if(span) span.textContent = id === "logo" ? "" : cfg.text;
             el.classList.toggle("selected", id === selected);
         }
 
@@ -520,7 +557,8 @@
         }
 
         function save(){
-            localStorage.setItem("labelEditorLayout", JSON.stringify(layout));
+            layouts[sizeSelect.value] = layout;
+            localStorage.setItem("labelEditorLayoutsBySize", JSON.stringify(layouts));
             if(layoutJson){
                 layoutJson.value = JSON.stringify({
                     size:sizeSelect.value,
@@ -612,7 +650,10 @@
                 });
             });
         });
-        sizeSelect.addEventListener("change", render);
+        sizeSelect.addEventListener("change", () => {
+            layout = currentLayout();
+            render();
+        });
         [labelW,labelH,borderSize].forEach(input => {
             input.addEventListener("input", () => {
                 const p = currentPreset();
@@ -639,7 +680,8 @@
             stage.querySelector(".midGuideY").style.display = guides ? "" : "none";
         });
         document.getElementById("resetLayout").addEventListener("click", () => {
-            layout = structuredClone(defaultLayout);
+            layout = structuredClone(defaultLayouts[sizeSelect.value] || defaultLayouts["7"]);
+            layouts[sizeSelect.value] = layout;
             render();
         });
         document.getElementById("copyJson").addEventListener("click", async () => {

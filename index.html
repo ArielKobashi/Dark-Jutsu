@@ -2297,8 +2297,10 @@ const ETIQUETA_MOLDES = {
         fonte_codigo_pt: 13.5,
         fonte_desc_pt: 8,
         fonte_antigo_pt: 8,
-        logo_largura_ratio: 0.175,
-        codigo_topo_px: -6
+        logo_largura_ratio: 0.42,
+        codigo_topo_px: -6,
+        descricao_offset_cm: 0.10,
+        logo_margem_baixo_cm: 0.03
     },
     "7": {
         nome: "7cm",
@@ -2308,8 +2310,10 @@ const ETIQUETA_MOLDES = {
         fonte_codigo_pt: 13.5,
         fonte_desc_pt: 8,
         fonte_antigo_pt: 8,
-        logo_largura_ratio: 0.175,
-        codigo_topo_px: -6
+        logo_largura_ratio: 0.46,
+        codigo_topo_px: -6,
+        descricao_offset_cm: 0.14,
+        logo_margem_baixo_cm: 0.05
     },
     "10": {
         nome: "10cm",
@@ -2319,8 +2323,10 @@ const ETIQUETA_MOLDES = {
         fonte_codigo_pt: 22,
         fonte_desc_pt: 12,
         fonte_antigo_pt: 12,
-        logo_largura_ratio: 0.18,
-        codigo_topo_px: 10
+        logo_largura_ratio: 0.46,
+        codigo_topo_px: 10,
+        descricao_offset_cm: 0.16,
+        logo_margem_baixo_cm: 0.06
     },
     "15": {
         nome: "15cm",
@@ -2330,8 +2336,10 @@ const ETIQUETA_MOLDES = {
         fonte_codigo_pt: 36,
         fonte_desc_pt: 18,
         fonte_antigo_pt: 18,
-        logo_largura_ratio: 0.18,
-        codigo_topo_px: 16
+        logo_largura_ratio: 0.46,
+        codigo_topo_px: 16,
+        descricao_offset_cm: 0.20,
+        logo_margem_baixo_cm: 0.08
     }
 };
 
@@ -2550,6 +2558,27 @@ function medirTextoEtiqueta(ctx, texto, font){
     };
 }
 
+function quebrarDescricaoEtiquetaDuasLinhas(ctx, texto, font, larguraMax){
+    const palavras = String(texto || "").split(/\s+/).filter(Boolean);
+    if(!palavras.length) return ["", ""];
+    ctx.font = font;
+    let primeira = "";
+    let segunda = "";
+    for(let i = 0; i < palavras.length; i++){
+        const teste = `${primeira} ${palavras[i]}`.trim();
+        if(ctx.measureText(teste).width <= larguraMax || !primeira){
+            primeira = teste;
+        }else{
+            segunda = palavras.slice(i).join(" ");
+            break;
+        }
+    }
+    while(segunda && ctx.measureText(segunda).width > larguraMax){
+        segunda = segunda.slice(0, -1).trim();
+    }
+    return [primeira, segunda];
+}
+
 async function criarBlobEtiqueta(item, cfg){
     await carregarFontesEtiquetas();
     const logo = await carregarLogoEtiqueta();
@@ -2584,18 +2613,23 @@ async function criarBlobEtiqueta(item, cfg){
     ctx.fillText(item.protheus, centroX - bboxCod.width / 2, yCodNovo);
 
     const descricao = String(item.descricao || "");
-    const yDesc = yCodNovo + bboxCod.height + (6 * ETIQUETA_ESCALA) + Math.trunc(cmParaPxEtiqueta(0.1) * ETIQUETA_ESCALA);
-    const bboxDesc = medirTextoEtiqueta(ctx, descricao, fonteDesc);
+    const yDesc = yCodNovo + bboxCod.height + (6 * ETIQUETA_ESCALA) + Math.trunc(cmParaPxEtiqueta(cfg.descricao_offset_cm ?? 0.1) * ETIQUETA_ESCALA);
+    const alturaLinhaDesc = alturaFonteEtiqueta(ctx, fonteDesc);
+    const entreLinhasDesc = Math.max(2, Math.trunc(alturaLinhaDesc * 0.18));
+    const linhasDesc = quebrarDescricaoEtiquetaDuasLinhas(ctx, descricao, fonteDesc, canvasHd.width - (espBorda * 4));
     ctx.font = fonteDesc;
-    ctx.fillText(descricao, centroX - bboxDesc.width / 2, yDesc + Math.trunc(cmParaPxEtiqueta(0.02) * ETIQUETA_ESCALA));
+    linhasDesc.forEach((linha, idx) => {
+        const larguraLinha = ctx.measureText(linha).width;
+        ctx.fillText(linha, centroX - larguraLinha / 2, yDesc + Math.trunc(cmParaPxEtiqueta(0.02) * ETIQUETA_ESCALA) + (idx * (alturaLinhaDesc + entreLinhasDesc)));
+    });
 
-    const fimDesc = yDesc + bboxDesc.height;
+    const fimDesc = yDesc + (alturaLinhaDesc * 2) + entreLinhasDesc;
     let yLogo = baseMoldura;
 
     if(logo){
         const logoW = Math.trunc(canvasHd.width * (cfg.logo_largura_ratio || 0.175));
         const logoH = Math.trunc(logo.height * (logoW / logo.width));
-        yLogo = baseMoldura - logoH - (1 * ETIQUETA_ESCALA);
+        yLogo = baseMoldura - logoH - Math.trunc(cmParaPxEtiqueta(cfg.logo_margem_baixo_cm ?? 0.03) * ETIQUETA_ESCALA);
         ctx.drawImage(logo, centroX - logoW / 2, yLogo, logoW, logoH);
     }
 
