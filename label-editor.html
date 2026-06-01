@@ -418,13 +418,16 @@
             <div class="group">
                 <h2>Layout salvo</h2>
                 <textarea id="layoutJson" readonly></textarea>
-                <p class="hint">Esse JSON e uma referencia visual para copiar medidas e ajustar a funcao de geracao no sistema principal.</p>
+                <p class="hint">Esse JSON e salvo automaticamente e usado na geracao das etiquetas do sistema principal.</p>
             </div>
         </aside>
     </main>
 
     <script>
         const cmScale = 118;
+        const storageLayoutsKey = "labelEditorLayoutsBySize";
+        const storagePresetsKey = "labelEditorPresetsBySize";
+        const firebaseConfigPath = "estoqueGlobal/configuracoesEtiquetas";
         const presets = {
             "5": { w:5.0, h:1.48, border:5 },
             "7": { w:7.01, h:2.09, border:5 },
@@ -445,31 +448,44 @@
         };
         const defaultLayouts = {
             "5": {
-                code:{ x:185, y:0, w:220, h:42, font:38, weight:"400", align:"center", text:sample.code },
-                desc:{ x:120, y:58, w:350, h:56, font:22, weight:"400", align:"center", text:sample.desc },
-                old:{ x:185, y:126, w:220, h:32, font:22, weight:"400", align:"center", text:sample.old },
-                logo:{ x:172, y:164, w:248, h:70, font:26, weight:"900", align:"center", text:sample.logo }
+                code:{ x:180, y:4, w:220, h:38, font:34, weight:"400", align:"center", text:sample.code },
+                desc:{ x:75, y:48, w:430, h:48, font:20, weight:"400", align:"center", text:sample.desc },
+                old:{ x:180, y:100, w:220, h:28, font:20, weight:"400", align:"center", text:sample.old },
+                logo:{ x:140, y:130, w:300, h:38, font:26, weight:"900", align:"center", text:sample.logo }
             },
             "7": {
-                code:{ x:274, y:0, w:280, h:46, font:38, weight:"400", align:"center", text:sample.code },
-                desc:{ x:190, y:74, w:450, h:60, font:22, weight:"400", align:"center", text:sample.desc },
-                old:{ x:290, y:154, w:250, h:34, font:22, weight:"400", align:"center", text:sample.old },
-                logo:{ x:224, y:194, w:384, h:84, font:26, weight:"900", align:"center", text:sample.logo }
+                code:{ x:269, y:15, w:280, h:46, font:38, weight:"400", align:"center", text:sample.code },
+                desc:{ x:98, y:62, w:620, h:52, font:22, weight:"400", align:"center", text:sample.desc },
+                old:{ x:283, y:114, w:250, h:34, font:22, weight:"400", align:"center", text:sample.old },
+                logo:{ x:216, y:152, w:384, h:78, font:26, weight:"900", align:"center", text:sample.logo }
             },
             "10": {
-                code:{ x:410, y:22, w:360, h:62, font:58, weight:"400", align:"center", text:sample.code },
-                desc:{ x:250, y:110, w:680, h:86, font:34, weight:"400", align:"center", text:sample.desc },
-                old:{ x:410, y:224, w:360, h:48, font:34, weight:"400", align:"center", text:sample.old },
-                logo:{ x:360, y:286, w:462, h:112, font:26, weight:"900", align:"center", text:sample.logo }
+                code:{ x:405, y:20, w:360, h:62, font:58, weight:"400", align:"center", text:sample.code },
+                desc:{ x:185, y:90, w:800, h:76, font:34, weight:"400", align:"center", text:sample.desc },
+                old:{ x:405, y:168, w:360, h:48, font:34, weight:"400", align:"center", text:sample.old },
+                logo:{ x:325, y:218, w:520, h:96, font:26, weight:"900", align:"center", text:sample.logo }
             },
             "15": {
-                code:{ x:640, y:34, w:500, h:90, font:94, weight:"400", align:"center", text:sample.code },
-                desc:{ x:410, y:164, w:900, h:126, font:52, weight:"400", align:"center", text:sample.desc },
-                old:{ x:650, y:330, w:500, h:72, font:52, weight:"400", align:"center", text:sample.old },
-                logo:{ x:520, y:424, w:730, h:168, font:26, weight:"900", align:"center", text:sample.logo }
+                code:{ x:630, y:34, w:500, h:90, font:90, weight:"400", align:"center", text:sample.code },
+                desc:{ x:330, y:140, w:1100, h:120, font:52, weight:"400", align:"center", text:sample.desc },
+                old:{ x:630, y:264, w:500, h:72, font:52, weight:"400", align:"center", text:sample.old },
+                logo:{ x:500, y:340, w:760, h:140, font:26, weight:"900", align:"center", text:sample.logo }
             }
         };
-        let layouts = JSON.parse(localStorage.getItem("labelEditorLayoutsBySize") || "null") || structuredClone(defaultLayouts);
+        function readStorageJson(key, fallback){
+            try{
+                const raw = localStorage.getItem(key);
+                return raw ? JSON.parse(raw) : fallback;
+            }catch(e){
+                console.warn("Layout salvo invalido:", key, e);
+                return fallback;
+            }
+        }
+        const savedPresets = readStorageJson(storagePresetsKey, {});
+        Object.keys(presets).forEach(size => {
+            presets[size] = { ...presets[size], ...(savedPresets?.[size] || {}) };
+        });
+        let layouts = readStorageJson(storageLayoutsKey, null) || structuredClone(defaultLayouts);
         Object.keys(defaultLayouts).forEach(size => {
             layouts[size] = { ...structuredClone(defaultLayouts[size]), ...(layouts[size] || {}) };
         });
@@ -477,6 +493,7 @@
         let selected = "code";
         let guides = true;
         let drag = null;
+        let bloquearSalvamentoCompartilhado = false;
 
         const stage = document.getElementById("labelStage");
         const sizeSelect = document.getElementById("sizeSelect");
@@ -504,6 +521,44 @@
             return layouts[size];
         }
 
+        function montarConfigCompartilhada(){
+            return {
+                versao: 1,
+                layouts: structuredClone(layouts),
+                presets: structuredClone(presets),
+                atualizadoEm: Date.now()
+            };
+        }
+
+        function aplicarConfigCompartilhada(config){
+            if(!config || typeof config !== "object") return false;
+            bloquearSalvamentoCompartilhado = true;
+            try{
+                if(config.presets && typeof config.presets === "object"){
+                    Object.keys(presets).forEach(size => {
+                        presets[size] = { ...presets[size], ...(config.presets[size] || {}) };
+                    });
+                }
+                if(config.layouts && typeof config.layouts === "object"){
+                    Object.keys(defaultLayouts).forEach(size => {
+                        layouts[size] = {
+                            ...structuredClone(defaultLayouts[size]),
+                            ...(config.layouts[size] || layouts[size] || {})
+                        };
+                    });
+                }
+                layout = currentLayout();
+                render();
+                return true;
+            }finally{
+                bloquearSalvamentoCompartilhado = false;
+            }
+        }
+
+        window.getEtiquetaEditorConfigCompartilhada = montarConfigCompartilhada;
+        window.aplicarEtiquetaEditorConfigCompartilhada = aplicarConfigCompartilhada;
+        window.etiquetaEditorFirebaseConfigPath = firebaseConfigPath;
+
         function renderStageSize(){
             const p = currentPreset();
             labelW.value = p.w;
@@ -513,6 +568,12 @@
             stage.style.height = Math.round(p.h * cmScale) + "px";
             stage.style.borderWidth = p.border + "px";
             document.getElementById("stageInfo").textContent = `${p.w}cm x ${p.h}cm`;
+        }
+
+        function previewText(id, text){
+            if(id !== "desc") return text;
+            const value = String(text || "");
+            return value.includes("\n") ? value : `${value}\n `;
         }
 
         function applyPiece(id){
@@ -527,7 +588,7 @@
             el.style.justifyContent = cfg.align === "left" ? "flex-start" : cfg.align === "right" ? "flex-end" : "center";
             el.style.textAlign = cfg.align;
             const span = el.querySelector("span");
-            if(span) span.textContent = id === "logo" ? "" : cfg.text;
+            if(span) span.textContent = id === "logo" ? "" : previewText(id, cfg.text);
             el.classList.toggle("selected", id === selected);
         }
 
@@ -558,13 +619,17 @@
 
         function save(){
             layouts[sizeSelect.value] = layout;
-            localStorage.setItem("labelEditorLayoutsBySize", JSON.stringify(layouts));
+            localStorage.setItem(storageLayoutsKey, JSON.stringify(layouts));
+            localStorage.setItem(storagePresetsKey, JSON.stringify(presets));
             if(layoutJson){
                 layoutJson.value = JSON.stringify({
                     size:sizeSelect.value,
                     etiqueta:currentPreset(),
                     elementos:layout
                 }, null, 2);
+            }
+            if(!bloquearSalvamentoCompartilhado && typeof window.agendarSalvarEtiquetaEditorCompartilhado === "function"){
+                window.agendarSalvarEtiquetaEditorCompartilhado();
             }
         }
 
@@ -692,6 +757,82 @@
         });
 
         render();
+    </script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getAuth, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChPIkc1NxpxtpvOU92NxyXsxCFpe3mzgE",
+            authDomain: "chat-fiasul.firebaseapp.com",
+            databaseURL: "https://chat-fiasul-default-rtdb.firebaseio.com",
+            projectId: "chat-fiasul",
+            storageBucket: "chat-fiasul.firebasestorage.app",
+            messagingSenderId: "263776720116",
+            appId: "1:263776720116:web:713fd43f4cb196b0527aa1",
+            measurementId: "G-KC5F0QT711"
+        };
+
+        const app = initializeApp(firebaseConfig, "labelEditorApp");
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+        const configRef = ref(db, window.etiquetaEditorFirebaseConfigPath || "estoqueGlobal/configuracoesEtiquetas");
+        let timerSalvarCompartilhado = null;
+        let usuarioCompartilhado = "";
+
+        try{
+            await setPersistence(auth, browserSessionPersistence);
+        }catch(e){
+            console.warn("Persistencia Firebase indisponivel no editor de etiquetas:", e);
+        }
+
+        async function carregarNomeUsuario(user){
+            if(!user) return "";
+            try{
+                const snap = await get(ref(db, "usuarios/" + user.uid));
+                const dados = snap.exists() ? snap.val() : null;
+                return dados?.nickname || dados?.nome || (user.email || "").split("@")[0] || user.uid;
+            }catch(e){
+                return (user.email || "").split("@")[0] || user.uid;
+            }
+        }
+
+        async function salvarConfigCompartilhada(){
+            if(!auth.currentUser || typeof window.getEtiquetaEditorConfigCompartilhada !== "function") return;
+            const config = window.getEtiquetaEditorConfigCompartilhada();
+            config.atualizadoPor = usuarioCompartilhado || (auth.currentUser.email || "").split("@")[0] || auth.currentUser.uid;
+            try{
+                await set(configRef, config);
+            }catch(e){
+                console.warn("Nao foi possivel salvar layout compartilhado das etiquetas:", e);
+            }
+        }
+
+        window.agendarSalvarEtiquetaEditorCompartilhado = function(){
+            clearTimeout(timerSalvarCompartilhado);
+            timerSalvarCompartilhado = setTimeout(salvarConfigCompartilhada, 800);
+        };
+
+        onAuthStateChanged(auth, async user => {
+            if(!user) return;
+            usuarioCompartilhado = await carregarNomeUsuario(user);
+            try{
+                const snap = await get(configRef);
+                if(snap.exists() && typeof window.aplicarEtiquetaEditorConfigCompartilhada === "function"){
+                    window.aplicarEtiquetaEditorConfigCompartilhada(snap.val());
+                }else{
+                    await salvarConfigCompartilhada();
+                }
+            }catch(e){
+                console.warn("Nao foi possivel carregar layout compartilhado das etiquetas:", e);
+            }
+            onValue(configRef, snapshot => {
+                if(snapshot.exists() && typeof window.aplicarEtiquetaEditorConfigCompartilhada === "function"){
+                    window.aplicarEtiquetaEditorConfigCompartilhada(snapshot.val());
+                }
+            });
+        });
     </script>
 </body>
 </html>
