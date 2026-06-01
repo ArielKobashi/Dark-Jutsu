@@ -954,6 +954,7 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
             return s.quantidadeEmPedido > 0 || s.aceitoPor;
         }) || null;
         const pedidosRecebidos = pedidos.filter(p => p.quantidadeRecebida > 0);
+        const ultimoPedido = pedidos[0] || null;
         const mediaPedido = pedidosRecebidos.length
             ? pedidosRecebidos.reduce((s,p)=>s + (p.quantidadeRecebida || p.quantidadePedida || 0), 0) / pedidosRecebidos.length
             : null;
@@ -1001,6 +1002,7 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
             detalhe,
             solicitacao,
             pedido: pedidoAtivo || null,
+            ultimoPedido,
             entradaEndereco: entradaAtiva || null,
             mediaPedido,
             recebidoSemEntrada,
@@ -3574,10 +3576,23 @@ function gerarRelatorioReposicaoSemPedido(itens){
 
     const linhas = lista.map(item => {
         const reposicao = parseLimiteEstoque(item.reposicao) ?? calcularReposicaoMedia(item.minimo, item.maximo);
+        const saldo = parsePlanilhaNumero(item.saldo);
+        const minimo = parseLimiteEstoque(item.minimo);
+        const urgente = saldo !== null && minimo !== null && (saldo <= 0 || saldo < (minimo / 2));
+        const pedido = getPedidoCompraItem(item);
+        const ultimoPedido = pedido?.ultimoPedido || null;
+        const saldoUltimoPedido = ultimoPedido
+            ? (parsePlanilhaNumero(ultimoPedido.quantidadeRecebida) || parsePlanilhaNumero(ultimoPedido.quantidadePedida))
+            : null;
         return {
             codigo: item.protheus || item.cooperat || "",
             descricao: item.descricao || "",
+            saldo: saldo === null ? "" : formatarNumeroPlanilha(saldo),
+            minimo: minimo === null ? "" : formatarNumeroPlanilha(minimo),
+            ultimoPedido: saldoUltimoPedido === null ? "" : formatarNumeroPlanilha(saldoUltimoPedido),
             reposicao: reposicao === null ? "Sem reposição" : formatarNumeroPlanilha(reposicao),
+            urgente: urgente ? "Sim" : "Não",
+            contar: "",
             cooperat: itemUsaLimiteCooperat(item) ? "Sim" : "Não"
         };
     });
@@ -3602,7 +3617,9 @@ function gerarRelatorioReposicaoSemPedido(itens){
                 table{ width:100%; border-collapse:collapse; font-size:13px; }
                 th,td{ border:1px solid #D1D5DB; padding:7px 8px; vertical-align:top; }
                 th{ background:#F3F4F6; text-align:left; }
-                td.qtd, td.cooperat{ text-align:center; white-space:nowrap; }
+                td.qtd, td.cooperat, td.urgente, td.contar{ text-align:center; white-space:nowrap; }
+                td.contar{ min-width:72px; }
+                .urgenteSim{ color:#991B1B; font-weight:bold; }
                 tfoot td{ font-weight:bold; background:#F9FAFB; }
                 @media print{
                     .painel{ display:none; }
@@ -3612,7 +3629,7 @@ function gerarRelatorioReposicaoSemPedido(itens){
             </style>
         </head>
         <body>
-            <h2>Reposição - Fora da faixa sem solicitação de pedido</h2>
+            <h2>ITENS ABAIXO DO MINIMO, PARA PEDIR REPOSIÇÃO:</h2>
             <div class="meta">Gerado em: ${escapeRelatorioHtml(new Date().toLocaleString())} | Itens: ${linhas.length}</div>
             <div class="painel">
                 <button onclick="window.print()">Imprimir</button>
@@ -3623,7 +3640,12 @@ function gerarRelatorioReposicaoSemPedido(itens){
                     <tr>
                         <th>Código</th>
                         <th>Descrição</th>
+                        <th>Saldo</th>
+                        <th>Mínimo</th>
+                        <th>Último pedido</th>
                         <th>Quantidade de reposição</th>
+                        <th>Urgente?</th>
+                        <th>Contar</th>
                         <th>Cooperat?</th>
                     </tr>
                 </thead>
@@ -3632,15 +3654,22 @@ function gerarRelatorioReposicaoSemPedido(itens){
                         <tr>
                             <td>${escapeRelatorioHtml(linha.codigo)}</td>
                             <td>${escapeRelatorioHtml(linha.descricao)}</td>
+                            <td class="qtd">${escapeRelatorioHtml(linha.saldo)}</td>
+                            <td class="qtd">${escapeRelatorioHtml(linha.minimo)}</td>
+                            <td class="qtd">${escapeRelatorioHtml(linha.ultimoPedido)}</td>
                             <td class="qtd">${escapeRelatorioHtml(linha.reposicao)}</td>
+                            <td class="urgente ${linha.urgente === "Sim" ? "urgenteSim" : ""}">${escapeRelatorioHtml(linha.urgente)}</td>
+                            <td class="contar">${escapeRelatorioHtml(linha.contar)}</td>
                             <td class="cooperat">${escapeRelatorioHtml(linha.cooperat)}</td>
                         </tr>
                     `).join("")}
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colspan="2">Total</td>
+                        <td colspan="5">Total</td>
                         <td class="qtd">${escapeRelatorioHtml(formatarNumeroPlanilha(totalReposicao))}</td>
+                        <td></td>
+                        <td></td>
                         <td></td>
                     </tr>
                 </tfoot>
@@ -3656,7 +3685,12 @@ function gerarRelatorioReposicaoSemPedido(itens){
                     const dados = linhasRelatorio.map(linha => ({
                         "Código": linha.codigo,
                         "Descrição": linha.descricao,
+                        "Saldo": linha.saldo,
+                        "Mínimo": linha.minimo,
+                        "Último pedido": linha.ultimoPedido,
                         "Quantidade de reposição": linha.reposicao,
+                        "Urgente?": linha.urgente,
+                        "Contar": linha.contar,
                         "Cooperat?": linha.cooperat
                     }));
                     const wb = XLSXLib.utils.book_new();
@@ -3675,7 +3709,13 @@ function gerarRelatorioReposicaoSemPedido(itens){
 function gerarRelatorio(){
 
     if(filtroSaldoExtremosModo === 2){
-        gerarRelatorioReposicaoSemPedido(visiveis);
+        const origemSelecao = modoCaptura && capturados.size > 0 ? capturados : selecionados;
+        const selecionadosReposicao = visiveis.filter(item => origemSelecao.has(getItemKey(item)));
+        if(selecionadosReposicao.length === 0){
+            alert("Nenhum item selecionado.");
+            return;
+        }
+        gerarRelatorioReposicaoSemPedido(selecionadosReposicao);
         return;
     }
 
