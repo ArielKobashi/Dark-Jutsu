@@ -4166,6 +4166,30 @@ function limparRascunhoSessaoContagemLocal(){
     contagemIndice = 0;
 }
 
+function limparRascunhoContagemMaquina(maquina){
+    const alvo = maquina || contagemMaquinaAtual || carregarSessaoContagem().maquina || "";
+    if(!alvo){
+        limparRascunhoSessaoContagemLocal();
+        return;
+    }
+    contagemItens
+        .filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === alvo)
+        .forEach(item => {
+            const key = itemKeyContagem(item);
+            delete contagemValores[key];
+            delete contagemVerificacoesVazio[key];
+        });
+    salvarRascunhoContagem();
+    if(!Object.keys(contagemValores).length && !Object.keys(contagemVerificacoesVazio).length){
+        localStorage.removeItem(chaveRascunhoContagem());
+        localStorage.removeItem(chaveVerificacoesContagem());
+        localStorage.removeItem(chaveSessaoContagem());
+        contagemMaquinaAtual = "";
+        contagemItensMaquina = [];
+        contagemIndice = 0;
+    }
+}
+
 function aplicarResetGlobalContagem(resetInfo, avisar = true){
     const resetAt = Number(resetInfo?.resetAt || 0);
     if(!resetAt) return;
@@ -5258,22 +5282,14 @@ async function finalizarContagem(){
         mostrarNotificacao("Nenhum item foi contado ainda.");
         return;
     }
-    const linhasExportacao = ordenarLinhasRelatorioContagem(linhasRegistroContagemPlanilha({
-        data:payload.data,
-        usuario:payload.usuario,
-        registro:payload
-    }));
+    const linhasExportacao = linhasRelatorioContagemPayload(payload);
     const totalItens = Object.keys(payload.itens || {}).length;
     const totalVazios = Object.keys(payload.verificacoesVazio || {}).length;
     if(!confirm(`Finalizar contagem?\n\nItens contados: ${totalItens}\nVazios verificados: ${totalVazios}.`)) return;
     try{
         const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
         await window.push(baseRef, payload);
-        localStorage.removeItem(chaveRascunhoContagem());
-        localStorage.removeItem(chaveVerificacoesContagem());
-        localStorage.removeItem(chaveSessaoContagem());
-        contagemValores = {};
-        contagemVerificacoesVazio = {};
+        limparRascunhoContagemMaquina(payload.maquina);
         contagemFinalizadaSemSessao = true;
         historicoContagemPlanilhasCarregado = false;
         if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas(true);
@@ -5290,15 +5306,19 @@ async function finalizarContagem(){
 
 function criarPayloadRascunhoRelatorioContagem(rascunho = true){
     salvarAtualContagem();
-    const itensContados = contagemItens.filter(item => !isVerificacaoVazioContagem(item) && contagemValores[itemKeyContagem(item)] !== undefined);
-    const verificacoesRegistradas = contagemItens.filter(item => isVerificacaoVazioContagem(item) && contagemVerificacoesVazio[itemKeyContagem(item)] !== undefined);
-    if(!itensContados.length && !verificacoesRegistradas.length) return null;
+    const maquinaBase = contagemMaquinaAtual || carregarSessaoContagem().maquina || "";
+    const itensBase = maquinaBase
+        ? contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquinaBase)
+        : [...contagemItensMaquina];
+    const itensContados = itensBase.filter(item => !isVerificacaoVazioContagem(item) && contagemValores[itemKeyContagem(item)] !== undefined);
+    if(!itensContados.length) return null;
     const nick = window.meuNickname || "desconhecido";
     const payload = {
         usuario:nick,
         data:dataContagemSessaoAtual(),
         timestamp:Date.now(),
-        totalItens:contagemItens.length,
+        maquina:maquinaBase,
+        totalItens:itensBase.filter(item => !isVerificacaoVazioContagem(item)).length,
         itens:{},
         verificacoesVazio:{}
     };
@@ -5316,18 +5336,14 @@ function criarPayloadRascunhoRelatorioContagem(rascunho = true){
             contado:contagemValores[key]
         };
     });
-    verificacoesRegistradas.forEach(item => {
-        const key = itemKeyContagem(item);
-        payload.verificacoesVazio[chaveFirebaseContagem(key)] = {
-            endereco:item.enderecoPrincipal || "",
-            maquina:item.maquina || "",
-            prateleira:item.prateleira || "",
-            caixa:item.caixa || "",
-            status:contagemVerificacoesVazio[key],
-            registradoEm:Date.now()
-        };
-    });
     return payload;
+}
+
+function linhaEhDaMaquinaContagemAtual(linha){
+    const maquina = contagemMaquinaAtual || carregarSessaoContagem().maquina || "";
+    if(!maquina) return true;
+    const endereco = linha?.item?.endereco || "";
+    return parsearEnderecoContagem(endereco).maquina === maquina;
 }
 
 function mesclarRascunhoAtualRelatorioContagem(contagens){
@@ -5439,6 +5455,8 @@ function linhasFiltradasRelatorioContagem(){
     const dataFiltro = document.getElementById("contagemFiltroData").value;
     const usuarioFiltro = document.getElementById("contagemFiltroUsuario").value;
     return ordenarLinhasRelatorioContagem(coletarLinhasRelatorioContagem().filter(l => {
+        if(l.verificacao) return false;
+        if(!linhaEhDaMaquinaContagemAtual(l)) return false;
         if(soDivergentes && !l.diverge) return false;
         if(dataFiltro && l.data !== dataFiltro) return false;
         if(usuarioFiltro && l.usuario !== usuarioFiltro) return false;
@@ -5473,7 +5491,7 @@ function exportarLinhasRelatorioContagemXlsx(linhasOrigem, dataArquivo = ""){
         mostrarNotificacao("Biblioteca XLSX nao encontrada.");
         return false;
     }
-    const linhas = ordenarLinhasRelatorioContagem(linhasOrigem).map(l => ({
+    const linhas = ordenarLinhasRelatorioContagem((linhasOrigem || []).filter(l => !l.verificacao && linhaEhDaMaquinaContagemAtual(l))).map(l => ({
         Data:l.data,
         Usuario:l.usuario,
         Endereco:l.item.endereco || "",
@@ -5502,22 +5520,14 @@ async function salvarContagemPeloRelatorio(){
         mostrarNotificacao("Nenhum item foi contado ainda.");
         return;
     }
-    const linhasExportacao = ordenarLinhasRelatorioContagem(linhasRegistroContagemPlanilha({
-        data:payload.data,
-        usuario:payload.usuario,
-        registro:payload
-    }));
+    const linhasExportacao = linhasRelatorioContagemPayload(payload);
     const totalItens = Object.keys(payload.itens || {}).length;
     const totalVazios = Object.keys(payload.verificacoesVazio || {}).length;
     if(!confirm(`Salvar contagem?\n\nItens contados: ${totalItens}\nVazios verificados: ${totalVazios}.`)) return;
     try{
         const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
         await window.push(baseRef, payload);
-        localStorage.removeItem(chaveRascunhoContagem());
-        localStorage.removeItem(chaveVerificacoesContagem());
-        localStorage.removeItem(chaveSessaoContagem());
-        contagemValores = {};
-        contagemVerificacoesVazio = {};
+        limparRascunhoContagemMaquina(payload.maquina);
         contagemFinalizadaSemSessao = true;
         historicoContagemPlanilhasCarregado = false;
         if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas(true);
@@ -5560,22 +5570,32 @@ function linhasRegistroContagemPlanilha(sessao){
             Status:diverge ? "DIVERGENTE" : "OK"
         });
     });
-    Object.values(registro.verificacoesVazio || {}).forEach(item => {
-        linhas.push({
-            Data:sessao.data,
-            Usuario:sessao.usuario,
-            Tipo:"Verificacao de vazio",
-            Endereco:item.endereco || "",
-            Armazem:"",
-            Protheus:"",
-            Cooperat:"",
-            Descricao:"Caixa esta vazia?",
-            SaldoSistema:"",
-            Contado:"",
-            Status:item.status || ""
-        });
+    return linhas.sort((a, b) => {
+        const ea = parsearEnderecoContagem(a.Endereco || "");
+        const eb = parsearEnderecoContagem(b.Endereco || "");
+        if(ea.maquina !== eb.maquina) return ea.maquina.localeCompare(eb.maquina, "pt-BR", { numeric:true, sensitivity:"base" });
+        if(ea.prateleira !== eb.prateleira) return ea.prateleira.localeCompare(eb.prateleira, "pt-BR", { numeric:true, sensitivity:"base" });
+        if(ea.caixa !== eb.caixa) return ea.caixa - eb.caixa;
+        return String(a.Descricao || "").localeCompare(String(b.Descricao || ""), "pt-BR", { numeric:true, sensitivity:"base" });
     });
-    return linhas;
+}
+
+function linhasRelatorioContagemPayload(payload){
+    const data = payload?.data || dataContagemSessaoAtual();
+    const usuario = payload?.usuario || window.meuNickname || "desconhecido";
+    return ordenarLinhasRelatorioContagem(Object.values(payload?.itens || {}).map(item => {
+        const saldo = parsePlanilhaNumero(item.saldoSistema);
+        const contado = parsePlanilhaNumero(item.contado);
+        return {
+            data,
+            usuario,
+            item,
+            saldo,
+            contado,
+            reposicao:buscarReposicaoRelatorioItem(item),
+            diverge:saldo !== null && contado !== null && saldo !== contado
+        };
+    }));
 }
 
 function montarSessoesHistoricoContagem(contagens){
