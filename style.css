@@ -383,7 +383,7 @@ body:not(.app-ready) .historicoContagemPanel{
 }
 
 .historicoContagemPanel.aberto #historicoContagemConteudo{
-    max-height:190px;
+    max-height:250px;
 }
 
 #historicoContagemToolbar,
@@ -399,8 +399,23 @@ body:not(.app-ready) .historicoContagemPanel{
     border-top:1px solid rgba(103,232,249,0.14);
 }
 
+#historicoContagemCorrecao{
+    display:grid;
+    grid-template-columns:1.4fr 1fr auto;
+    gap:5px;
+    padding:0 7px 7px;
+    background:rgba(11,17,32,0.88);
+    border-top:1px dashed rgba(250,204,21,0.28);
+}
+
+#historicoContagemCorrecao[hidden]{
+    display:none !important;
+}
+
 #historicoContagemToolbar select,
-#historicoContagemToolbar button{
+#historicoContagemToolbar button,
+#historicoContagemCorrecao select,
+#historicoContagemCorrecao button{
     min-width:0;
     border:1px solid rgba(103,232,249,0.25);
     border-radius:6px;
@@ -410,9 +425,16 @@ body:not(.app-ready) .historicoContagemPanel{
     font-size:10px;
 }
 
-#historicoContagemToolbar button{
+#historicoContagemToolbar button,
+#historicoContagemCorrecao button{
     cursor:pointer;
     font-weight:800;
+}
+
+#historicoContagemCorrecao button{
+    border-color:rgba(250,204,21,0.45);
+    background:rgba(113,63,18,0.82);
+    color:#FEF3C7;
 }
 
 #historicoContagemResetBtn{

@@ -212,13 +212,20 @@
     }
 
     .historicoContagemPanel.aberto #historicoContagemConteudo {
-        max-height: 220px;
+        max-height: 300px;
     }
 
     #historicoContagemToolbar {
         grid-template-columns: 1fr 1fr;
         gap: 6px;
         padding: 6px;
+        background: rgba(11, 17, 32, 0.86);
+    }
+
+    #historicoContagemCorrecao {
+        grid-template-columns: 1fr;
+        gap: 6px;
+        padding: 0 6px 6px;
         background: rgba(11, 17, 32, 0.86);
     }
 
@@ -232,7 +239,9 @@
     }
 
     #historicoContagemToolbar select,
-    #historicoContagemToolbar button {
+    #historicoContagemToolbar button,
+    #historicoContagemCorrecao select,
+    #historicoContagemCorrecao button {
         font-size: 11px;
     }
 

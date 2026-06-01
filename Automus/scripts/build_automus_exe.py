@@ -15,6 +15,8 @@ STAGE_SCRIPTS = STAGE / "scripts"
 DIST = ROOT / "dist"
 ICON = BUILD / "automus.ico"
 FIREBASE_CONFIG = SCRIPTS / "firebase_config.json"
+AUTOMUS_CONFIG = SCRIPTS / "atualizacao" / "automus_config.json"
+LEGACY_AUTOMUS_CONFIG = ROOT.parent / "scripts" / "atualizacao" / "automus_config.json"
 RUNTIME_TMPDIR = Path(os.environ.get("PUBLIC") or r"C:\Users\Public") / "AutomusRuntimeTemp"
 
 
@@ -95,6 +97,34 @@ def prepare_stage():
     )
 
 
+def prepare_encrypted_automus_config():
+    source_config = AUTOMUS_CONFIG if AUTOMUS_CONFIG.exists() else LEGACY_AUTOMUS_CONFIG
+    if not source_config.exists():
+        print("Aviso: automus_config.json nao encontrado; o exe dependera do login da sessao.")
+        return
+
+    sys.path.insert(0, str(SCRIPTS))
+    from atualizacao.automus_crypto import encrypt_config, read_json
+
+    firebase_stage = STAGE_SCRIPTS / "firebase_config.json"
+    firebase_cfg = read_json(firebase_stage)
+    api_key = str(firebase_cfg.get("apiKey") or "").strip()
+    db_url = str(firebase_cfg.get("databaseURL") or "").strip().rstrip("/")
+    if not api_key or not db_url:
+        raise RuntimeError("firebase_config.json invalido para criptografar automus_config.")
+
+    plain_cfg = read_json(source_config)
+    email = str(plain_cfg.get("email") or "").strip()
+    password = str(plain_cfg.get("password") or "").strip()
+    if not email or not password:
+        raise RuntimeError(f"Preencha email e password em {source_config} antes do build.")
+
+    encrypted = encrypt_config(plain_cfg, api_key, db_url)
+    target = STAGE_SCRIPTS / "atualizacao" / "automus_config.enc.json"
+    target.write_text(json.dumps(encrypted, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Credenciais Automus criptografadas no pacote: {target}")
+
+
 def install_dependencies():
     python_exe = python_console_executable()
     requirements = ROOT / "requirements.txt"
@@ -110,6 +140,7 @@ def main():
     install_dependencies()
     build_icon(ICON)
     prepare_stage()
+    prepare_encrypted_automus_config()
     subprocess.check_call(
         [
             python_exe,
@@ -133,6 +164,8 @@ def main():
             "--hidden-import",
             "atualizacao.automus_update",
             "--hidden-import",
+            "atualizacao.automus_crypto",
+            "--hidden-import",
             "pystray",
             "--distpath",
             str(DIST),
@@ -145,7 +178,7 @@ def main():
         cwd=ROOT,
     )
     print(f"Automus pronto: {DIST / 'Automus.exe'}")
-    print("Pode copiar apenas esse arquivo. Ele criara a pasta AutomusData ao lado dele no primeiro uso.")
+    print(r"Pode copiar apenas esse arquivo. Os complementos ficam em %APPDATA%\Automus\complemento.")
 
 
 if __name__ == "__main__":

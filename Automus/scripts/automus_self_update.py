@@ -195,7 +195,7 @@ def install_downloaded_update(new_exe: Path) -> None:
         f'set "DESKTOP_EXE={desktop_exe}"\r\n'
         f'set "PID={pid}"\r\n'
         f'set "AUTO_REOPEN={"1" if auto_reopen else "0"}"\r\n'
-        'set "AUTOMUS_RUNTIME_TEMP=%CURRENT_DIR%\\AutomusData\\RuntimeTemp"\r\n'
+        'set "AUTOMUS_RUNTIME_TEMP=%APPDATA%\\Automus\\complemento\\RuntimeTemp"\r\n'
         "echo Atualizando Automus. Aguarde...\r\n"
         "echo Novo EXE: %NEW_EXE%\r\n"
         "echo EXE atual: %CURRENT_EXE%\r\n"

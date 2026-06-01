@@ -73,7 +73,7 @@ releases\Automus-vVERSAO.zip
 
 Esse `.zip` leva o `Automus.exe`, o manifesto `latest.json` e a versao usada.
 
-Com `updateManifestUrl` configurado, o Automus verifica automaticamente depois do login ADM. Se houver versao nova, o app baixa o pacote, confere o SHA256, fecha, troca o executavel e abre novamente. A `AutomusData` nao e alterada. O botao `Verificar update` continua disponivel para conferir manualmente.
+Com `updateManifestUrl` configurado, o Automus verifica automaticamente depois do login ADM. Se houver versao nova, o app baixa o pacote, confere o SHA256, fecha, troca o executavel e abre novamente. Os complementos ficam em `%APPDATA%\Automus\complemento`, sem criar `AutomusData` ao lado do exe. O botao `Verificar update` continua disponivel para conferir manualmente.
 
 ## Arquivos principais
 

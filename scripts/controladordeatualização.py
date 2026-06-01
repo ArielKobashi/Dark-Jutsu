@@ -6,6 +6,7 @@ import msvcrt
 import os
 import queue
 import re
+import shutil
 import sys
 import tempfile
 import threading
@@ -33,13 +34,18 @@ except Exception:
 if getattr(sys, "frozen", False):
     APP_DIR = Path(sys.executable).resolve().parent
     BUNDLE_ROOT = Path(getattr(sys, "_MEIPASS", APP_DIR))
-    PROJECT_ROOT = APP_DIR / "AutomusData"
+    APPDATA_DIR = Path(os.environ.get("APPDATA") or APP_DIR)
+    PROJECT_ROOT = APPDATA_DIR / "Automus" / "complemento"
+    LEGACY_PROJECT_ROOT = APP_DIR / "AutomusData"
     SCRIPT_DIR = PROJECT_ROOT / "scripts"
     BUNDLED_SCRIPT_DIR = BUNDLE_ROOT / "scripts"
 else:
     SCRIPT_DIR = Path(__file__).resolve().parent
     BUNDLED_SCRIPT_DIR = SCRIPT_DIR
     PROJECT_ROOT = SCRIPT_DIR.parent
+    LEGACY_PROJECT_ROOT = None
+if LEGACY_PROJECT_ROOT and LEGACY_PROJECT_ROOT.exists() and not PROJECT_ROOT.exists():
+    shutil.copytree(LEGACY_PROJECT_ROOT, PROJECT_ROOT, dirs_exist_ok=True)
 PROJECT_ROOT.mkdir(parents=True, exist_ok=True)
 SCRIPT_DIR.mkdir(parents=True, exist_ok=True)
 (PROJECT_ROOT / "downloads").mkdir(parents=True, exist_ok=True)

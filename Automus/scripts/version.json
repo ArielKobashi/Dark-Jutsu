@@ -1,12 +1,12 @@
 {
   "app": "Automus",
-  "version": "1.0.27",
-  "releasedAt": "2026-05-27",
+  "version": "1.0.28",
+  "releasedAt": "2026-06-01",
   "updateManifestUrl": "",
   "updateManifestFirebasePath": "automus/releases/latest",
   "updateBaseUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "publishDir": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "notes": [
-    "ajuste niveis"
+    "correção login firebase"
   ]
 }

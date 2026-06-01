@@ -15,6 +15,11 @@ from urllib.request import Request, urlopen
 
 from openpyxl import load_workbook
 
+try:
+    from atualizacao.automus_crypto import decrypt_config, read_json
+except ModuleNotFoundError:
+    from automus_crypto import decrypt_config, read_json
+
 FILE_MAP = {
     "mata105": "incluir.xlsx",
     "mata225": "Saldo Atual.xlsx",
@@ -98,6 +103,20 @@ def _extract_firebase_config(index_html_path: Path) -> tuple[str, str]:
     if not api_match or not db_match:
         raise RuntimeError("Nao foi possivel extrair apiKey/databaseURL do index.html")
     return api_match.group(1), db_match.group(1).rstrip("/")
+
+
+def _load_automus_config(config_path: Path, api_key: str, db_url: str) -> tuple[dict[str, Any], Path | None]:
+    if config_path.exists():
+        cfg = read_json(config_path)
+        if cfg.get("format") == "automus-config-v1":
+            return decrypt_config(cfg, api_key, db_url), config_path
+        return cfg, config_path
+
+    encrypted_path = config_path.with_name("automus_config.enc.json")
+    if encrypted_path.exists():
+        return decrypt_config(read_json(encrypted_path), api_key, db_url), encrypted_path
+
+    return {}, None
 
 
 def _read_sheet(path: Path) -> list[list[Any]]:
@@ -629,22 +648,21 @@ def run_automus_update(
 ) -> None:
     log = logger or logging.getLogger("automus_update")
 
-    if not config_path.exists() and not auth_id_token:
+    index_path = project_root / "index.html"
+    api_key, db_url = _extract_firebase_config(index_path)
+    cfg, resolved_config_path = _load_automus_config(config_path, api_key, db_url)
+    if not resolved_config_path and not auth_id_token:
         raise FileNotFoundError(
-            f"Config do Automus nao encontrada em {config_path}. Crie com email e password."
+            f"Config do Automus nao encontrada em {config_path}. Crie automus_config.json ou automus_config.enc.json."
         )
 
-    cfg = json.loads(config_path.read_text(encoding="utf-8-sig")) if config_path.exists() else {}
     email = _safe_text(cfg.get("email"))
     password = _safe_text(cfg.get("password"))
     updated_by = _safe_text(cfg.get("updated_by")) or "atualizado automaticamente via Automus"
 
     if not auth_id_token and (not email or not password):
         raise RuntimeError("Config invalida: preencha 'email' e 'password' em automus_config.json")
-    log.info("TEST_AUTOMUS_CONFIG_OK | config=%s | email=%s", config_path, auth_email or email)
-
-    index_path = project_root / "index.html"
-    api_key, db_url = _extract_firebase_config(index_path)
+    log.info("TEST_AUTOMUS_CONFIG_OK | config=%s | email=%s", resolved_config_path or config_path, auth_email or email)
 
     def autenticar_config() -> tuple[str, str]:
         auth_resp = _http_json(

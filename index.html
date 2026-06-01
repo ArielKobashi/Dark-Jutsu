@@ -246,6 +246,11 @@ xmlns="http://www.w3.org/2000/svg">
             <button type="button" onclick="carregarHistoricoContagemPlanilhas(true)">Atualizar</button>
             <button type="button" id="historicoContagemResetBtn" onclick="resetarContagemGlobalAdmin()" style="display:none;">Zerar todos</button>
         </div>
+        <div id="historicoContagemCorrecao" hidden>
+            <select id="historicoContagemSessaoEditar"></select>
+            <select id="historicoContagemUsuarioEditar"></select>
+            <button type="button" onclick="alterarUsuarioHistoricoContagem()">Alterar perfil</button>
+        </div>
         <div id="historicoContagemLista">
             <p>Abra para carregar as contagens salvas.</p>
         </div>
@@ -5531,6 +5536,8 @@ async function salvarContagemPeloRelatorio(){
 let historicoContagemPlanilhasAberto = false;
 let historicoContagemPlanilhasCarregado = false;
 let historicoContagemSessoes = [];
+let historicoContagemCorrecaoVisivel = false;
+let historicoContagemUsuariosSistema = [];
 
 function linhasRegistroContagemPlanilha(sessao){
     const registro = sessao?.registro || {};
@@ -5583,6 +5590,8 @@ function montarSessoesHistoricoContagem(contagens){
                 const usuario = registro.usuario || usuarioKey;
                 const sessao = {
                     id:`${data}||${usuarioKey}||${registroKey}`,
+                    usuarioKey,
+                    registroKey,
                     data:registro.data || data,
                     usuario,
                     timestamp:Number(registro.timestamp || 0),
@@ -5623,6 +5632,122 @@ function atualizarBotaoResetGlobalContagem(){
     if(btn) btn.style.display = window.nivelUsuario === "admin" ? "" : "none";
 }
 
+function labelSessaoHistoricoContagem(sessao){
+    if(!sessao) return "";
+    const quando = formatarResumoDataHoraContagem(sessao);
+    return `${sessao.usuario} - ${quando} - ${sessao.total || 0} linhas`;
+}
+
+function preencherCorrecaoHistoricoContagem(){
+    const box = document.getElementById("historicoContagemCorrecao");
+    const sessaoSelect = document.getElementById("historicoContagemSessaoEditar");
+    const usuarioSelect = document.getElementById("historicoContagemUsuarioEditar");
+    if(!box || !sessaoSelect || !usuarioSelect) return;
+    box.hidden = !historicoContagemCorrecaoVisivel;
+    if(box.hidden) return;
+    sessaoSelect.innerHTML = historicoContagemSessoes.map((sessao, idx) =>
+        `<option value="${idx}">${escapeHtml(labelSessaoHistoricoContagem(sessao))}</option>`
+    ).join("");
+    usuarioSelect.innerHTML = historicoContagemUsuariosSistema.map(usuario =>
+        `<option value="${escapeHtml(usuario.nickname)}">${escapeHtml(usuario.nickname)}${usuario.cracha ? " - " + escapeHtml(usuario.cracha) : ""}</option>`
+    ).join("");
+}
+
+async function carregarUsuariosCorrecaoHistoricoContagem(){
+    if(historicoContagemUsuariosSistema.length) return;
+    if(!window.get || !window.ref || !window.db) return;
+    const snap = await window.get(window.ref(window.db, "usuarios"));
+    const usuarios = [];
+    if(snap.exists()){
+        snap.forEach(child => {
+            const u = child.val() || {};
+            const nickname = String(u.nickname || "").trim();
+            if(!nickname) return;
+            usuarios.push({
+                uid:child.key,
+                nickname,
+                cracha:u.cracha || "",
+                ativo:u.ativo !== false
+            });
+        });
+    }
+    historicoContagemUsuariosSistema = usuarios
+        .filter(u => u.ativo)
+        .sort((a, b) => a.nickname.localeCompare(b.nickname));
+}
+
+async function toggleCorrecaoHistoricoContagem(){
+    if(!historicoContagemPlanilhasAberto) return;
+    if(window.nivelUsuario !== "admin"){
+        mostrarNotificacao("Apenas admin pode corrigir o perfil do histórico.");
+        return;
+    }
+    historicoContagemCorrecaoVisivel = !historicoContagemCorrecaoVisivel;
+    if(historicoContagemCorrecaoVisivel){
+        if(!historicoContagemPlanilhasCarregado){
+            await carregarHistoricoContagemPlanilhas();
+        }
+        try{
+            await carregarUsuariosCorrecaoHistoricoContagem();
+        }catch(e){
+            console.error("Erro ao carregar usuários:", e);
+            mostrarNotificacao("Erro ao carregar usuários.");
+        }
+    }
+    preencherCorrecaoHistoricoContagem();
+}
+
+async function alterarUsuarioHistoricoContagem(){
+    if(window.nivelUsuario !== "admin"){
+        mostrarNotificacao("Apenas admin pode alterar o perfil da contagem.");
+        return;
+    }
+    const sessaoIdx = Number(document.getElementById("historicoContagemSessaoEditar")?.value);
+    const novoUsuario = document.getElementById("historicoContagemUsuarioEditar")?.value || "";
+    const sessao = historicoContagemSessoes[sessaoIdx];
+    if(!sessao || !novoUsuario){
+        mostrarNotificacao("Selecione a contagem e o usuário.");
+        return;
+    }
+    if(!window.set || !window.ref || !window.db){
+        mostrarNotificacao("Firebase ainda nao esta pronto.");
+        return;
+    }
+    const antigoUsuarioKey = sessao.usuarioKey || chaveFirebaseContagem(sessao.usuario);
+    const novoUsuarioKey = chaveFirebaseContagem(novoUsuario);
+    const registroKey = sessao.registroKey || "registro";
+    const origemPath = registroKey === "registro"
+        ? `contagens/${sessao.data}/${antigoUsuarioKey}`
+        : `contagens/${sessao.data}/${antigoUsuarioKey}/${registroKey}`;
+    if(antigoUsuarioKey === novoUsuarioKey){
+        mostrarNotificacao("Esse histórico já está nesse perfil.");
+        return;
+    }
+    const ok = confirm(`Mover esta contagem?\n\nDe: ${sessao.usuario}\nPara: ${novoUsuario}`);
+    if(!ok) return;
+    try{
+        const payload = {
+            ...(sessao.registro || {}),
+            usuario:novoUsuario,
+            corrigidoPor:window.meuNickname || "",
+            corrigidoEm:Date.now(),
+            usuarioAnterior:sessao.usuario || antigoUsuarioKey
+        };
+        if(typeof window.push === "function"){
+            await window.push(window.ref(window.db, `contagens/${sessao.data}/${novoUsuarioKey}`), payload);
+        }else{
+            await window.set(window.ref(window.db, `contagens/${sessao.data}/${novoUsuarioKey}/${Date.now()}_corrigido`), payload);
+        }
+        await window.set(window.ref(window.db, origemPath), null);
+        historicoContagemPlanilhasCarregado = false;
+        await carregarHistoricoContagemPlanilhas(true);
+        mostrarNotificacao("Perfil da contagem alterado.");
+    }catch(e){
+        console.error("Erro ao alterar perfil da contagem:", e);
+        mostrarNotificacao("Erro ao alterar perfil da contagem.");
+    }
+}
+
 async function carregarHistoricoContagemPlanilhas(forcar = false){
     const lista = document.getElementById("historicoContagemLista");
     atualizarBotaoResetGlobalContagem();
@@ -5642,6 +5767,7 @@ async function carregarHistoricoContagemPlanilhas(forcar = false){
         historicoContagemSessoes = montarSessoesHistoricoContagem(relContagens);
         historicoContagemPlanilhasCarregado = true;
         popularFiltrosHistoricoContagem();
+        preencherCorrecaoHistoricoContagem();
         renderizarHistoricoContagemPlanilhas();
     }catch(e){
         console.error("Erro ao carregar historico de contagens:", e);
@@ -5663,10 +5789,12 @@ function renderizarHistoricoContagemPlanilhas(){
     if(resumo) resumo.textContent = historicoContagemPlanilhasAberto ? `${sessoes.length} planilhas` : "abrir";
     if(!historicoContagemPlanilhasCarregado){
         lista.innerHTML = "<p>Abra para carregar as contagens salvas.</p>";
+        preencherCorrecaoHistoricoContagem();
         return;
     }
     if(!sessoes.length){
         lista.innerHTML = "<p>Nenhuma contagem encontrada.</p>";
+        preencherCorrecaoHistoricoContagem();
         return;
     }
     lista.innerHTML = sessoes.map(sessao => {
@@ -5684,6 +5812,7 @@ function renderizarHistoricoContagemPlanilhas(){
             </div>
         `;
     }).join("");
+    preencherCorrecaoHistoricoContagem();
 }
 
 function formatarResumoDataHoraContagem(sessao){
@@ -5705,7 +5834,18 @@ function toggleHistoricoContagemPlanilhas(){
     atualizarBotaoResetGlobalContagem();
     renderizarHistoricoContagemPlanilhas();
     if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas();
+    if(!historicoContagemPlanilhasAberto){
+        historicoContagemCorrecaoVisivel = false;
+        preencherCorrecaoHistoricoContagem();
+    }
 }
+
+document.addEventListener("keydown", function(e){
+    if(e.key === "F12" && historicoContagemPlanilhasAberto){
+        e.preventDefault();
+        toggleCorrecaoHistoricoContagem();
+    }
+});
 
 async function resetarContagemGlobalAdmin(){
     if(window.nivelUsuario !== "admin"){

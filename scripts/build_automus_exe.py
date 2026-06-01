@@ -16,6 +16,7 @@ STAGE_SCRIPTS = STAGE / "scripts"
 DIST = ROOT / "dist"
 ENTRY = SCRIPTS / "controladordeatualização.py"
 ICON = BUILD / "automus.ico"
+AUTOMUS_CONFIG = SCRIPTS / "atualizacao" / "automus_config.json"
 
 
 def build_icon(path: Path):
@@ -69,9 +70,36 @@ def prepare_stage():
     )
 
 
+def prepare_encrypted_automus_config():
+    if not AUTOMUS_CONFIG.exists():
+        print("Aviso: automus_config.json nao encontrado; o exe dependera do login da sessao.")
+        return
+
+    sys.path.insert(0, str(SCRIPTS))
+    from atualizacao.automus_crypto import encrypt_config, read_json
+
+    firebase_cfg = read_json(STAGE_SCRIPTS / "firebase_config.json")
+    api_key = str(firebase_cfg.get("apiKey") or "").strip()
+    db_url = str(firebase_cfg.get("databaseURL") or "").strip().rstrip("/")
+    if not api_key or not db_url:
+        raise RuntimeError("firebase_config.json invalido para criptografar automus_config.")
+
+    plain_cfg = read_json(AUTOMUS_CONFIG)
+    email = str(plain_cfg.get("email") or "").strip()
+    password = str(plain_cfg.get("password") or "").strip()
+    if not email or not password:
+        raise RuntimeError("Preencha email e password em scripts/atualizacao/automus_config.json antes do build.")
+
+    encrypted = encrypt_config(plain_cfg, api_key, db_url)
+    target = STAGE_SCRIPTS / "atualizacao" / "automus_config.enc.json"
+    target.write_text(json.dumps(encrypted, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Credenciais Automus criptografadas no pacote: {target}")
+
+
 def main():
     build_icon(ICON)
     prepare_stage()
+    prepare_encrypted_automus_config()
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller", "pystray", "pillow", "openpyxl", "pynput"])
     subprocess.check_call(
         [
@@ -94,6 +122,8 @@ def main():
             "--hidden-import",
             "atualizacao.automus_update",
             "--hidden-import",
+            "atualizacao.automus_crypto",
+            "--hidden-import",
             "pystray",
             "--distpath",
             str(DIST),
@@ -106,7 +136,7 @@ def main():
         cwd=ROOT,
     )
     print(f"Automus pronto: {DIST / 'Automus.exe'}")
-    print("Pode copiar apenas esse arquivo. Ele criará a pasta AutomusData ao lado dele no primeiro uso.")
+    print(r"Pode copiar apenas esse arquivo. Os complementos ficam em %APPDATA%\Automus\complemento.")
 
 
 if __name__ == "__main__":
