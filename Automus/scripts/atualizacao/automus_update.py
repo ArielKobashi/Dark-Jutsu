@@ -565,6 +565,16 @@ def _ascii_lower(value: Any) -> str:
     return normalized.encode("ascii", "ignore").decode("ascii")
 
 
+def _code_key(value: Any) -> str:
+    txt = _safe_text(value).replace(" ", "").lower()
+    if not txt:
+        return ""
+    normalized_num = txt.replace(",", ".")
+    if re.fullmatch(r"\d+(?:\.0+)?", normalized_num):
+        return str(int(float(normalized_num)))
+    return txt
+
+
 def _detect_incluir_columns(incluir: list[list[Any]]) -> dict[str, int]:
     header = incluir[1] if len(incluir) > 1 else incluir[0] if incluir else []
     cols = {"protheus": 1, "cooperat": 0, "descricao": 2, "inicio": 2}
@@ -666,16 +676,13 @@ def _build_items(
     for row in saldo_atual[1:]:
         if len(row) < 5:
             continue
-        cod = _safe_text(row[1])
+        cod = _code_key(row[1])
         if cod:
             saldo_atual_idx[cod] = _num(row[5] if len(row) > 5 else row[4])
 
     end_antigo_idx: dict[str, str] = {}
     for row in cooperat[2:]:
         if not row:
-            continue
-        cod = _safe_text(row[0] if len(row) > 0 else "")
-        if not cod:
             continue
         end = " ".join(
             [
@@ -684,14 +691,18 @@ def _build_items(
                 _safe_text(row[5] if len(row) > 5 else ""),
             ]
         ).strip()
-        if _is_endereco_valido(end):
-            end_antigo_idx[cod] = end
+        if not _is_endereco_valido(end):
+            continue
+        for col in (0, 1):
+            cod = _code_key(row[col] if len(row) > col else "")
+            if cod and cod not in end_antigo_idx:
+                end_antigo_idx[cod] = end
 
     enderecos_idx: dict[str, list[dict[str, Any]]] = {}
     for row in saldo_endereco[1:]:
         if len(row) < 9:
             continue
-        cod = _safe_text(row[1])
+        cod = _code_key(row[1])
         if not cod:
             continue
         ent = {
@@ -731,8 +742,8 @@ def _build_items(
     for d in dados_anteriores:
         if not isinstance(d, dict):
             continue
-        p = _safe_text(d.get("protheus"))
-        c = _safe_text(d.get("cooperat"))
+        p = _code_key(d.get("protheus"))
+        c = _code_key(d.get("cooperat"))
         if p and p not in prev_by_protheus:
             prev_by_protheus[p] = d
         if c and c not in prev_by_cooperat:
@@ -749,6 +760,8 @@ def _build_items(
         descricao = _safe_text(row[incluir_cols["descricao"]] if len(row) > incluir_cols["descricao"] else "")
         if not protheus:
             continue
+        protheus_key = _code_key(protheus)
+        cooperat_key = _code_key(cooperat_cod)
 
         item = {
             "protheus": protheus,
@@ -762,25 +775,46 @@ def _build_items(
             "morto": False,
         }
 
-        if protheus in saldo_atual_idx:
-            item["saldo"] = saldo_atual_idx[protheus]
+        if protheus_key in saldo_atual_idx:
+            item["saldo"] = saldo_atual_idx[protheus_key]
 
-        if cooperat_cod in end_antigo_idx:
-            item["enderecoPrincipal"] = end_antigo_idx[cooperat_cod]
+        if cooperat_key in end_antigo_idx:
+            item["enderecoPrincipal"] = end_antigo_idx[cooperat_key]
 
         if not _is_endereco_valido(item["enderecoPrincipal"]):
-            anterior = prev_by_protheus.get(protheus) or prev_by_cooperat.get(cooperat_cod)
+            anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key)
             if anterior and _is_endereco_valido(anterior.get("enderecoPrincipal")):
                 item["enderecoPrincipal"] = _safe_text(anterior.get("enderecoPrincipal"))
 
-        enderecos = enderecos_idx.get(protheus, [])
+        enderecos = enderecos_idx.get(protheus_key, [])
         if enderecos:
             item["enderecos"] = enderecos
             validos = [e for e in enderecos if _is_endereco_valido(e.get("endereco"))]
             if validos:
-                item["enderecoPrincipal"] = _safe_text(validos[0].get("endereco"))
-                item["armazemPrincipal"] = _safe_text(validos[0].get("armazem")) or "ND"
+                item["enderecoPrincipal"] = _safe_text(validos[-1].get("endereco"))
+                item["armazemPrincipal"] = _safe_text(validos[-1].get("armazem")) or "ND"
             item["saldo"] = sum(_num(e.get("saldo")) for e in enderecos)
+
+        anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key)
+        if anterior and isinstance(anterior.get("enderecos"), list):
+            chaves_atuais = {
+                (_ascii_lower(e.get("endereco")), _ascii_lower(e.get("armazem")))
+                for e in item["enderecos"]
+                if isinstance(e, dict)
+            }
+            for end_antigo in anterior["enderecos"]:
+                if not isinstance(end_antigo, dict) or not _is_endereco_valido(end_antigo.get("endereco")):
+                    continue
+                chave = (_ascii_lower(end_antigo.get("endereco")), _ascii_lower(end_antigo.get("armazem")))
+                if chave in chaves_atuais:
+                    continue
+                item["enderecos"].append({
+                    "endereco": _safe_text(end_antigo.get("endereco")),
+                    "armazem": _safe_text(end_antigo.get("armazem")) or "ND",
+                    "saldo": 0.0,
+                    "origem": "Historico",
+                })
+                chaves_atuais.add(chave)
 
         estoque_minimo_item = estoque_minimo_idx.get(cooperat_cod)
         if estoque_minimo_item:
@@ -807,7 +841,7 @@ def _build_items(
             if tem_limite_planilha:
                 item["limitesOrigem"] = "cooperat"
 
-        anterior = prev_by_protheus.get(protheus) or prev_by_cooperat.get(cooperat_cod)
+        anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key)
         if anterior:
             if estoque_minimo is None and not item.get("limitesCooperat") and isinstance(anterior.get("limitesCooperat"), dict):
                 item["limitesCooperat"] = anterior.get("limitesCooperat")

@@ -721,6 +721,16 @@ function normalizarCodigoItem(valor){
     return texto ? texto.toLowerCase() : "";
 }
 
+function normalizarChaveCodigoPlanilha(valor){
+    const texto = (valor ?? "").toString().trim();
+    if(!texto) return "";
+    const semEspaco = texto.replace(/\s+/g, "").toLowerCase();
+    if(/^\d+([,.]0+)?$/.test(semEspaco)){
+        return String(Number(semEspaco.replace(",", ".")));
+    }
+    return semEspaco;
+}
+
 function isDescricaoDadoMorto(valor){
     const texto = (valor ?? "").toString()
         .normalize("NFD")
@@ -6774,7 +6784,9 @@ function abrirModalSaldos(item){
 
         const enderecosHtml = listaEnderecos.map(info => {
             const saldoEndereco = parsePlanilhaNumero(info.saldo);
-            const classeSaldoEndereco = saldoEndereco !== null && saldoEndereco <= 0 ? " addressZero" : "";
+            const classeSaldoEndereco = saldoEndereco !== null && saldoEndereco > 0
+                ? " addressComSaldo"
+                : (saldoEndereco !== null && saldoEndereco <= 0 ? " addressZero" : "");
             return `
             <article class="addressCard${classeSaldoEndereco}">
                 <div class="addressTop">
@@ -7165,6 +7177,9 @@ function abrirModalSaldos(item){
             inset:0 auto 0 0;
             width:4px;
             background:linear-gradient(180deg, var(--accent), rgba(143,91,255,.08));
+        }
+        .addressCard.addressComSaldo::before{
+            background:linear-gradient(180deg, var(--good), rgba(58,214,122,.12));
         }
         .addressCard.addressZero::before{
             background:linear-gradient(180deg, var(--bad), rgba(255,93,108,.12));
@@ -7705,6 +7720,23 @@ function detectarColunasIncluir(basePlanilha){
 function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, marcarMorto){
     let novos = [];
     const colunasIncluir = detectarColunasIncluir(basePlanilha);
+    const enderecosCooperat = new Map();
+
+    for (let j = 2; j < cooperat.length; j++) {
+        const row = cooperat[j] || [];
+        let end = (row[3] || "") + " " +
+                  (row[4] || "") + " " +
+                  (row[5] || "");
+        const endTrim = end.trim();
+        if(!isEnderecoValido(endTrim)) continue;
+
+        [row[0], row[1]].forEach(cod => {
+            const chave = normalizarChaveCodigoPlanilha(cod);
+            if(chave && !enderecosCooperat.has(chave)){
+                enderecosCooperat.set(chave, endTrim);
+            }
+        });
+    }
 
     for (let i = colunasIncluir.inicio; i < basePlanilha.length; i++) {
 
@@ -7734,25 +7766,16 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             }
         }
 
-        // ENDEREÇO ANTIGO
-        for (let j = 2; j < cooperat.length; j++) {
-            if (cooperat[j][0] == cooperatCod) {
-                let end = (cooperat[j][3] || "") + " " +
-                          (cooperat[j][4] || "") + " " +
-                          (cooperat[j][5] || "");
-                const endTrim = end.trim();
-                if(isEnderecoValido(endTrim)){
-                    item.enderecoPrincipal = endTrim;
-                }
-                break;
-            }
+        const enderecoCooperat = enderecosCooperat.get(normalizarChaveCodigoPlanilha(cooperatCod));
+        if(enderecoCooperat){
+            item.enderecoPrincipal = enderecoCooperat;
         }
 
         // FALLBACK: mantém endereço anterior se Cooperat não foi carregada
         if(!isEnderecoValido(item.enderecoPrincipal)){
             const anterior = (dados || []).find(d =>
-                (d?.protheus && d.protheus == item.protheus) ||
-                (d?.cooperat && d.cooperat == item.cooperat)
+                (d?.protheus && normalizarChaveCodigoPlanilha(d.protheus) === normalizarChaveCodigoPlanilha(item.protheus)) ||
+                (d?.cooperat && normalizarChaveCodigoPlanilha(d.cooperat) === normalizarChaveCodigoPlanilha(item.cooperat))
             );
             if(anterior && isEnderecoValido(anterior.enderecoPrincipal)){
                 item.enderecoPrincipal = anterior.enderecoPrincipal;
@@ -7780,16 +7803,39 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
 
         if (encontrouEnderecos && item.enderecos.length > 0) {
             if(encontrouEnderecoValido){
-                const primeiroValido = item.enderecos.find(e => isEnderecoValido(e?.endereco));
-                if(primeiroValido){
-                    item.enderecoPrincipal = primeiroValido.endereco;
-                    item.armazemPrincipal = primeiroValido.armazem;
+                const enderecosValidos = item.enderecos.filter(e => isEnderecoValido(e?.endereco));
+                const ultimoValido = enderecosValidos[enderecosValidos.length - 1];
+                if(ultimoValido){
+                    item.enderecoPrincipal = ultimoValido.endereco;
+                    item.armazemPrincipal = ultimoValido.armazem;
                 }
             }
 
             let soma = 0;
             item.enderecos.forEach(e => soma += e.saldo);
             item.saldo = soma;
+        }
+
+        const anterior = (dados || []).find(d =>
+            (d?.protheus && normalizarChaveCodigoPlanilha(d.protheus) === normalizarChaveCodigoPlanilha(item.protheus)) ||
+            (d?.cooperat && normalizarChaveCodigoPlanilha(d.cooperat) === normalizarChaveCodigoPlanilha(item.cooperat))
+        );
+        if(anterior && Array.isArray(anterior.enderecos)){
+            const chavesAtuais = new Set(item.enderecos.map(e =>
+                normalizarEndereco(e?.endereco) + "|" + normalizarEndereco(e?.armazem || "")
+            ));
+            anterior.enderecos.forEach(endAntigo => {
+                if(!isEnderecoValido(endAntigo?.endereco)) return;
+                const chave = normalizarEndereco(endAntigo.endereco) + "|" + normalizarEndereco(endAntigo.armazem || "");
+                if(chavesAtuais.has(chave)) return;
+                item.enderecos.push({
+                    endereco: endAntigo.endereco,
+                    armazem: endAntigo.armazem || "ND",
+                    saldo: 0,
+                    origem: "Historico"
+                });
+                chavesAtuais.add(chave);
+            });
         }
 
         novos.push(item);
