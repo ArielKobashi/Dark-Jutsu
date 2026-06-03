@@ -731,6 +731,33 @@ function normalizarChaveCodigoPlanilha(valor){
     return semEspaco;
 }
 
+function pareceUnidadeMedida(valor){
+    const texto = normalizarEndereco(valor);
+    return ["PC", "UN", "MT", "M", "KG", "CJ", "JG", "PAR", "RL", "CX"].includes(texto);
+}
+
+function extrairEnderecoAntigoLinha(row){
+    row = row || [];
+    const enderecoColunaPadrao = (row[4] ?? "").toString().trim();
+    const colunaAnterior = (row[3] ?? "").toString().trim();
+    const proximaColuna = row[5];
+
+    if(isEnderecoValido(enderecoColunaPadrao) && (pareceUnidadeMedida(colunaAnterior) || parsePlanilhaNumero(proximaColuna) !== null || enderecoColunaPadrao.includes("/"))){
+        return enderecoColunaPadrao;
+    }
+
+    const enderecoSeparado = [row[3], row[4], row[5]]
+        .map(v => (v ?? "").toString().trim())
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+    if(isEnderecoValido(enderecoSeparado)){
+        return enderecoSeparado;
+    }
+
+    return isEnderecoValido(enderecoColunaPadrao) ? enderecoColunaPadrao : "";
+}
+
 function isDescricaoDadoMorto(valor){
     const texto = (valor ?? "").toString()
         .normalize("NFD")
@@ -1512,6 +1539,8 @@ function isEnderecoValido(valor){
         "SEMENDEREÇO",
         "S/ENDERECO",
         "S/ENDEREÇO",
+        "/",
+        "/ /",
         "-"
     ]);
     return !invalidos.has(norm);
@@ -1608,7 +1637,7 @@ async function salvarAjusteEstoqueItem(itemKey, minimoRaw, maximoRaw){
 window.salvarAjusteEstoqueItem = salvarAjusteEstoqueItem;
 
 window.setDados = function(novosDados){
-    const anteriores = Array.isArray(dados) ? dados : [];
+    const anteriores = getBaseDadosTodos();
     const dadosCorrigidos = Array.isArray(novosDados)
         ? novosDados.map(item => corrigirItemIncluirInvertido({...item}))
         : [];
@@ -3170,7 +3199,9 @@ async function atualizarBanco(btn) {
     }
 
     let incluir = planilhas.incluir;
-    let cooperat = planilhas.cooperat || [];
+    let cooperat = (Array.isArray(planilhas.cooperat) && planilhas.cooperat.length)
+        ? planilhas.cooperat
+        : (planilhas.estoque_minimo || []);
     let saldoAtual = planilhas.saldoAtual || [];
     let saldoEndereco = planilhas.saldoEndereco || [];
     let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereco, false);
@@ -7722,12 +7753,9 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
     const colunasIncluir = detectarColunasIncluir(basePlanilha);
     const enderecosCooperat = new Map();
 
-    for (let j = 2; j < cooperat.length; j++) {
+    for (let j = 1; j < cooperat.length; j++) {
         const row = cooperat[j] || [];
-        let end = (row[3] || "") + " " +
-                  (row[4] || "") + " " +
-                  (row[5] || "");
-        const endTrim = end.trim();
+        const endTrim = extrairEnderecoAntigoLinha(row);
         if(!isEnderecoValido(endTrim)) continue;
 
         [row[0], row[1]].forEach(cod => {
@@ -7766,16 +7794,18 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             }
         }
 
-        const enderecoCooperat = enderecosCooperat.get(normalizarChaveCodigoPlanilha(cooperatCod));
+        const enderecoCooperat = enderecosCooperat.get(normalizarChaveCodigoPlanilha(cooperatCod))
+            || enderecosCooperat.get(normalizarChaveCodigoPlanilha(protheus));
         if(enderecoCooperat){
             item.enderecoPrincipal = enderecoCooperat;
         }
 
         // FALLBACK: mantém endereço anterior se Cooperat não foi carregada
         if(!isEnderecoValido(item.enderecoPrincipal)){
-            const anterior = (dados || []).find(d =>
+            const anterior = getBaseDadosTodos().find(d =>
                 (d?.protheus && normalizarChaveCodigoPlanilha(d.protheus) === normalizarChaveCodigoPlanilha(item.protheus)) ||
-                (d?.cooperat && normalizarChaveCodigoPlanilha(d.cooperat) === normalizarChaveCodigoPlanilha(item.cooperat))
+                (d?.cooperat && normalizarChaveCodigoPlanilha(d.cooperat) === normalizarChaveCodigoPlanilha(item.cooperat)) ||
+                (d?.descricao && normalizarTexto(d.descricao) === normalizarTexto(item.descricao))
             );
             if(anterior && isEnderecoValido(anterior.enderecoPrincipal)){
                 item.enderecoPrincipal = anterior.enderecoPrincipal;
@@ -7816,9 +7846,10 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             item.saldo = soma;
         }
 
-        const anterior = (dados || []).find(d =>
+        const anterior = getBaseDadosTodos().find(d =>
             (d?.protheus && normalizarChaveCodigoPlanilha(d.protheus) === normalizarChaveCodigoPlanilha(item.protheus)) ||
-            (d?.cooperat && normalizarChaveCodigoPlanilha(d.cooperat) === normalizarChaveCodigoPlanilha(item.cooperat))
+            (d?.cooperat && normalizarChaveCodigoPlanilha(d.cooperat) === normalizarChaveCodigoPlanilha(item.cooperat)) ||
+            (d?.descricao && normalizarTexto(d.descricao) === normalizarTexto(item.descricao))
         );
         if(anterior && Array.isArray(anterior.enderecos)){
             const chavesAtuais = new Set(item.enderecos.map(e =>
@@ -7859,17 +7890,18 @@ function gerarItensDadosMortos(basePlanilha){
 
     for (let i = 1; i < basePlanilha.length; i++) {
         const row = basePlanilha[i] || [];
-        const cooperatCod = (row[0] ?? "").toString().trim();
-        if(!cooperatCod) continue;
-        const cabecalho = cooperatCod.toLowerCase();
-        if(cabecalho.includes("cooperat") || cabecalho.includes("código")) continue;
+        const protheusCod = (row[0] ?? "").toString().trim();
+        const cooperatCod = (row[1] ?? row[0] ?? "").toString().trim();
+        if(!cooperatCod && !protheusCod) continue;
+        const cabecalho = `${protheusCod} ${cooperatCod}`.toLowerCase();
+        if(cabecalho.includes("protheus") || cabecalho.includes("cooperat") || cabecalho.includes("código")) continue;
 
-        const descricao = (row[1] ?? "").toString().trim();
-        const enderecoAntigo = (row[3] ?? "").toString().trim();
-        const saldoAntigo = toNumber(row[4]);
+        const descricao = (row[2] ?? row[1] ?? "").toString().trim();
+        const enderecoAntigo = extrairEnderecoAntigoLinha(row);
+        const saldoAntigo = toNumber(row[5] ?? row[4]);
 
         const item = {
-            protheus: cooperatCod,
+            protheus: protheusCod || cooperatCod,
             cooperat: cooperatCod,
             descricao: descricao,
             enderecoPrincipal: enderecoAntigo || "Sem Endereço",
@@ -7912,17 +7944,45 @@ function importarDadosMortos(btn){
 
                 const novosMortosBrutos = gerarItensDadosMortos(json);
 
-                const existentes = new Set(
-                    (dados || []).map(d => (d?.cooperat || "").toString().trim().toLowerCase()).filter(v => v)
-                );
+                const ativosPorChave = new Map();
+                (dados || []).forEach(item => {
+                    [item?.protheus, item?.cooperat].forEach(cod => {
+                        const chave = normalizarChaveCodigoPlanilha(cod);
+                        if(chave && !ativosPorChave.has(chave)){
+                            ativosPorChave.set(chave, item);
+                        }
+                    });
+                });
 
                 const vistos = new Set();
                 const novosMortos = [];
 
                 novosMortosBrutos.forEach(item=>{
-                    const cod = (item.cooperat || "").toString().trim().toLowerCase();
+                    const cod = normalizarChaveCodigoPlanilha(item.cooperat || item.protheus);
                     if(!cod) return;
-                    if(existentes.has(cod)) return; // já existe no banco principal
+                    const ativoExistente = ativosPorChave.get(cod);
+                    if(ativoExistente){
+                        if(isEnderecoValido(item.enderecoPrincipal)){
+                            if(!isEnderecoValido(ativoExistente.enderecoPrincipal)){
+                                ativoExistente.enderecoPrincipal = item.enderecoPrincipal;
+                                ativoExistente.armazemPrincipal = item.armazemPrincipal || "ND";
+                            }
+                            ativoExistente.enderecos = Array.isArray(ativoExistente.enderecos) ? ativoExistente.enderecos : [];
+                            const chaveEndereco = normalizarEndereco(item.enderecoPrincipal) + "|" + normalizarEndereco(item.armazemPrincipal || "ND");
+                            const jaExisteEndereco = ativoExistente.enderecos.some(end =>
+                                normalizarEndereco(end?.endereco) + "|" + normalizarEndereco(end?.armazem || "ND") === chaveEndereco
+                            );
+                            if(!jaExisteEndereco){
+                                ativoExistente.enderecos.push({
+                                    endereco: item.enderecoPrincipal,
+                                    armazem: item.armazemPrincipal || "ND",
+                                    saldo: 0,
+                                    origem: "Dados mortos"
+                                });
+                            }
+                        }
+                        return; // já existe no banco principal
+                    }
                     if(vistos.has(cod)) return;     // duplicado na planilha
                     vistos.add(cod);
 
@@ -7937,6 +7997,7 @@ function importarDadosMortos(btn){
                 aplicarTodosFiltros();
 
                 if(typeof window.set === "function" && typeof window.ref === "function"){
+                    await window.set(window.ref(window.db, "estoqueGlobal/dados"), dados);
                     await window.set(window.ref(window.db, "estoqueGlobal/dadosMortos"), dadosMortos);
                     await window.set(window.ref(window.db, "estoqueGlobal/ultimaAtualizacao"), Date.now());
                     if(window.meuNickname){

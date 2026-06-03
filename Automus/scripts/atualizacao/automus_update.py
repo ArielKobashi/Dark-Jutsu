@@ -182,7 +182,7 @@ def _is_endereco_valido(value: Any) -> bool:
     if not txt:
         return False
     lower = txt.lower()
-    invalid = {"sem endereco", "sem endereço", "nd", "n/d", "na", "n/a", "-", "--"}
+    invalid = {"sem endereco", "sem endereço", "nd", "n/d", "na", "n/a", "-", "--", "/", "/ /"}
     if lower in invalid:
         return False
     return True
@@ -575,6 +575,31 @@ def _code_key(value: Any) -> str:
     return txt
 
 
+def _looks_unit(value: Any) -> bool:
+    return _ascii_lower(value).upper() in {"PC", "UN", "MT", "M", "KG", "CJ", "JG", "PAR", "RL", "CX"}
+
+
+def _old_address_from_row(row: list[Any]) -> str:
+    endereco_coluna_padrao = _safe_text(row[4] if len(row) > 4 else "")
+    coluna_anterior = row[3] if len(row) > 3 else ""
+    proxima_coluna = row[5] if len(row) > 5 else None
+    if (
+        _is_endereco_valido(endereco_coluna_padrao)
+        and (_looks_unit(coluna_anterior) or _optional_num(proxima_coluna) is not None or "/" in endereco_coluna_padrao)
+    ):
+        return endereco_coluna_padrao
+
+    endereco_separado = " ".join(
+        _safe_text(row[index] if len(row) > index else "")
+        for index in (3, 4, 5)
+        if _safe_text(row[index] if len(row) > index else "")
+    ).strip()
+    if _is_endereco_valido(endereco_separado):
+        return endereco_separado
+
+    return endereco_coluna_padrao if _is_endereco_valido(endereco_coluna_padrao) else ""
+
+
 def _detect_incluir_columns(incluir: list[list[Any]]) -> dict[str, int]:
     header = incluir[1] if len(incluir) > 1 else incluir[0] if incluir else []
     cols = {"protheus": 1, "cooperat": 0, "descricao": 2, "inicio": 2}
@@ -681,16 +706,10 @@ def _build_items(
             saldo_atual_idx[cod] = _num(row[5] if len(row) > 5 else row[4])
 
     end_antigo_idx: dict[str, str] = {}
-    for row in cooperat[2:]:
+    for row in list(cooperat[1:]) + list((estoque_minimo or [])[1:]):
         if not row:
             continue
-        end = " ".join(
-            [
-                _safe_text(row[3] if len(row) > 3 else ""),
-                _safe_text(row[4] if len(row) > 4 else ""),
-                _safe_text(row[5] if len(row) > 5 else ""),
-            ]
-        ).strip()
+        end = _old_address_from_row(row)
         if not _is_endereco_valido(end):
             continue
         for col in (0, 1):
@@ -739,15 +758,19 @@ def _build_items(
 
     prev_by_protheus: dict[str, dict[str, Any]] = {}
     prev_by_cooperat: dict[str, dict[str, Any]] = {}
+    prev_by_descricao: dict[str, dict[str, Any]] = {}
     for d in dados_anteriores:
         if not isinstance(d, dict):
             continue
         p = _code_key(d.get("protheus"))
         c = _code_key(d.get("cooperat"))
+        desc = _ascii_lower(d.get("descricao"))
         if p and p not in prev_by_protheus:
             prev_by_protheus[p] = d
         if c and c not in prev_by_cooperat:
             prev_by_cooperat[c] = d
+        if desc and desc not in prev_by_descricao:
+            prev_by_descricao[desc] = d
 
     incluir_cols = _detect_incluir_columns(incluir)
 
@@ -778,11 +801,12 @@ def _build_items(
         if protheus_key in saldo_atual_idx:
             item["saldo"] = saldo_atual_idx[protheus_key]
 
-        if cooperat_key in end_antigo_idx:
-            item["enderecoPrincipal"] = end_antigo_idx[cooperat_key]
+        endereco_antigo = end_antigo_idx.get(cooperat_key) or end_antigo_idx.get(protheus_key)
+        if endereco_antigo:
+            item["enderecoPrincipal"] = endereco_antigo
 
         if not _is_endereco_valido(item["enderecoPrincipal"]):
-            anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key)
+            anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key) or prev_by_descricao.get(_ascii_lower(descricao))
             if anterior and _is_endereco_valido(anterior.get("enderecoPrincipal")):
                 item["enderecoPrincipal"] = _safe_text(anterior.get("enderecoPrincipal"))
 
@@ -795,7 +819,7 @@ def _build_items(
                 item["armazemPrincipal"] = _safe_text(validos[-1].get("armazem")) or "ND"
             item["saldo"] = sum(_num(e.get("saldo")) for e in enderecos)
 
-        anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key)
+        anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key) or prev_by_descricao.get(_ascii_lower(descricao))
         if anterior and isinstance(anterior.get("enderecos"), list):
             chaves_atuais = {
                 (_ascii_lower(e.get("endereco")), _ascii_lower(e.get("armazem")))
@@ -841,7 +865,7 @@ def _build_items(
             if tem_limite_planilha:
                 item["limitesOrigem"] = "cooperat"
 
-        anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key)
+        anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key) or prev_by_descricao.get(_ascii_lower(descricao))
         if anterior:
             if estoque_minimo is None and not item.get("limitesCooperat") and isinstance(anterior.get("limitesCooperat"), dict):
                 item["limitesCooperat"] = anterior.get("limitesCooperat")
@@ -1044,7 +1068,7 @@ def run_automus_update(
         saldo_atual,
         saldo_endereco,
         estoque_minimo,
-        dados_anteriores,
+        dados_anteriores + dados_mortos,
         ajustes_itens,
     )
     if not novos_dados:
