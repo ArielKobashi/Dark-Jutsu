@@ -1100,6 +1100,7 @@ def run_automus_update(
             "mata105": "incluir.xlsx",
             "mata225": "saldo.atual.xlsx",
             "mata226": "saldo.por.endereco.xlsx",
+            **({"dados_mortos": "dados.mortos.xlsx"} if dados_mortos_planilha_path else {}),
             **({"estoque_minimo": "estoque_minimo.xlsx"} if estoque_minimo_path else {}),
             **({"mata110": "mata110.xlsx"} if mata110_path else {}),
             **({"mata111": "mata111.xlsx"} if mata111_path else {}),
