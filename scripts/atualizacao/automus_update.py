@@ -25,6 +25,7 @@ FILE_MAP = {
     "mata225": "Saldo Atual.xlsx",
     "mata226": "Saldo por Endereco.xlsx",
     "estoque_minimo": "estoque_minimo.xlsx",
+    "dados_mortos": "dados.mortos.xlsx",
 }
 
 
@@ -136,6 +137,8 @@ def _is_endereco_valido(value: Any) -> bool:
     if not txt:
         return False
     lower = txt.lower()
+    if not re.search(r"[A-Za-zÀ-ÿ]", txt):
+        return False
     invalid = {"sem endereco", "sem endereço", "nd", "n/d", "na", "n/a", "-", "--", "/", "/ /"}
     if lower in invalid:
         return False
@@ -358,29 +361,23 @@ def _code_key(value: Any) -> str:
     return txt
 
 
-def _looks_unit(value: Any) -> bool:
-    return _ascii_lower(value).upper() in {"PC", "UN", "MT", "M", "KG", "CJ", "JG", "PAR", "RL", "CX"}
+def _dead_address_from_row(row: list[Any]) -> str:
+    endereco = _safe_text(row[3] if len(row) > 3 else "")
+    return endereco if _is_endereco_valido(endereco) else ""
 
 
-def _old_address_from_row(row: list[Any]) -> str:
-    endereco_coluna_padrao = _safe_text(row[4] if len(row) > 4 else "")
-    coluna_anterior = row[3] if len(row) > 3 else ""
-    proxima_coluna = row[5] if len(row) > 5 else None
-    if (
-        _is_endereco_valido(endereco_coluna_padrao)
-        and (_looks_unit(coluna_anterior) or _optional_num(proxima_coluna) is not None or "/" in endereco_coluna_padrao)
-    ):
-        return endereco_coluna_padrao
-
-    endereco_separado = " ".join(
-        _safe_text(row[index] if len(row) > index else "")
-        for index in (3, 4, 5)
-        if _safe_text(row[index] if len(row) > index else "")
-    ).strip()
-    if _is_endereco_valido(endereco_separado):
-        return endereco_separado
-
-    return endereco_coluna_padrao if _is_endereco_valido(endereco_coluna_padrao) else ""
+def _dead_addresses_index(rows: list[list[Any]] | None) -> dict[str, str]:
+    idx: dict[str, str] = {}
+    for row in rows or []:
+        if not row:
+            continue
+        cooperat = _code_key(row[0] if len(row) > 0 else "")
+        if not cooperat or "cooperat" in cooperat or "codigo" in cooperat:
+            continue
+        endereco = _dead_address_from_row(row)
+        if endereco and cooperat not in idx:
+            idx[cooperat] = endereco
+    return idx
 
 
 def _is_descricao_dado_morto(value: Any) -> bool:
@@ -448,10 +445,12 @@ def _build_items(
     saldo_atual: list[list[Any]],
     saldo_endereco: list[list[Any]],
     estoque_minimo: list[list[Any]] | None,
+    dados_mortos_planilha: list[list[Any]] | None,
     dados_anteriores: list[dict[str, Any]],
     ajustes_itens: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     novos: list[dict[str, Any]] = []
+    dados_mortos_endereco_idx = _dead_addresses_index(dados_mortos_planilha)
 
     saldo_atual_idx: dict[str, float] = {}
     for row in saldo_atual[1:]:
@@ -460,18 +459,6 @@ def _build_items(
         cod = _code_key(row[1])
         if cod:
             saldo_atual_idx[cod] = _num(row[5] if len(row) > 5 else row[4])
-
-    end_antigo_idx: dict[str, str] = {}
-    for row in list(cooperat[1:]) + list((estoque_minimo or [])[1:]):
-        if not row:
-            continue
-        end = _old_address_from_row(row)
-        if not _is_endereco_valido(end):
-            continue
-        for col in (0, 1):
-            cod = _code_key(row[col] if len(row) > col else "")
-            if cod and cod not in end_antigo_idx:
-                end_antigo_idx[cod] = end
 
     enderecos_idx: dict[str, list[dict[str, Any]]] = {}
     for row in saldo_endereco[1:]:
@@ -555,23 +542,27 @@ def _build_items(
         if protheus_key in saldo_atual_idx:
             item["saldo"] = saldo_atual_idx[protheus_key]
 
-        endereco_antigo = end_antigo_idx.get(cooperat_key) or end_antigo_idx.get(protheus_key)
-        if endereco_antigo:
-            item["enderecoPrincipal"] = endereco_antigo
-
-        if not _is_endereco_valido(item["enderecoPrincipal"]):
-            anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key) or prev_by_descricao.get(_ascii_lower(descricao))
-            if anterior and _is_endereco_valido(anterior.get("enderecoPrincipal")):
-                item["enderecoPrincipal"] = _safe_text(anterior.get("enderecoPrincipal"))
-
         enderecos = enderecos_idx.get(protheus_key, [])
+        tem_endereco_com_saldo = False
         if enderecos:
             item["enderecos"] = enderecos
-            validos = [e for e in enderecos if _is_endereco_valido(e.get("endereco"))]
+            validos = [e for e in enderecos if _is_endereco_valido(e.get("endereco")) and _num(e.get("saldo")) > 0]
             if validos:
+                tem_endereco_com_saldo = True
                 item["enderecoPrincipal"] = _safe_text(validos[-1].get("endereco"))
                 item["armazemPrincipal"] = _safe_text(validos[-1].get("armazem")) or "ND"
             item["saldo"] = sum(_num(e.get("saldo")) for e in enderecos)
+
+        if not tem_endereco_com_saldo:
+            endereco_morto = dados_mortos_endereco_idx.get(cooperat_key)
+            if endereco_morto:
+                item["enderecoPrincipal"] = endereco_morto
+                item["armazemPrincipal"] = "ND"
+
+        if not tem_endereco_com_saldo and not _is_endereco_valido(item["enderecoPrincipal"]):
+            anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key) or prev_by_descricao.get(_ascii_lower(descricao))
+            if anterior and _is_endereco_valido(anterior.get("enderecoPrincipal")):
+                item["enderecoPrincipal"] = _safe_text(anterior.get("enderecoPrincipal"))
 
         anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key) or prev_by_descricao.get(_ascii_lower(descricao))
         if anterior and isinstance(anterior.get("enderecos"), list):
@@ -653,6 +644,7 @@ def _build_items(
 
 def _resolve_file(base_dir: Path, filename: str) -> Path:
     candidates = [
+        base_dir / filename,
         base_dir / "downloads" / filename,
         base_dir / "data" / filename,
         Path.home() / "Desktop" / "AMBIENTE ROSA" / filename,
@@ -667,6 +659,7 @@ def _resolve_file(base_dir: Path, filename: str) -> Path:
 
 def _resolve_optional_file(base_dir: Path, filename: str) -> Path | None:
     candidates = [
+        base_dir / filename,
         base_dir / "downloads" / filename,
         base_dir / "data" / filename,
         Path.home() / "Desktop" / "AMBIENTE ROSA" / filename,
@@ -740,6 +733,7 @@ def run_automus_update(
     saldo_atual_path = _resolve_file(project_root, FILE_MAP["mata225"])
     saldo_endereco_path = _resolve_file(project_root, FILE_MAP["mata226"])
     estoque_minimo_path = _resolve_optional_file(project_root, FILE_MAP["estoque_minimo"])
+    dados_mortos_planilha_path = _resolve_optional_file(project_root, FILE_MAP["dados_mortos"])
     log.info(
         "TEST_PLANILHAS_RESOLVIDAS_OK | incluir=%s | saldoAtual=%s | saldoEndereco=%s | estoque_minimo=%s",
         incluir_path,
@@ -790,6 +784,7 @@ def run_automus_update(
     saldo_atual = _read_sheet(saldo_atual_path)
     saldo_endereco = _read_sheet(saldo_endereco_path)
     estoque_minimo = _read_sheet(estoque_minimo_path) if estoque_minimo_path else None
+    dados_mortos_planilha = _read_sheet(dados_mortos_planilha_path) if dados_mortos_planilha_path else None
     log.info(
         "TEST_PLANILHAS_LIDAS_OK | incluir_linhas=%s | saldoAtual_linhas=%s | saldoEndereco_linhas=%s | estoque_minimo_linhas=%s",
         len(incluir),
@@ -808,6 +803,7 @@ def run_automus_update(
         saldo_atual,
         saldo_endereco,
         estoque_minimo,
+        dados_mortos_planilha,
         dados_anteriores + dados_mortos,
         ajustes_itens,
     )

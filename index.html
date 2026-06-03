@@ -663,6 +663,7 @@ let planilhas = {
     saldoAtual: null,
     saldoEndereco: null,
     estoque_minimo: null,
+    dados_mortos_planilha: null,
     mata110: null,
     mata111: null,
     mata112: null
@@ -756,6 +757,24 @@ function extrairEnderecoAntigoLinha(row){
     }
 
     return isEnderecoValido(enderecoColunaPadrao) ? enderecoColunaPadrao : "";
+}
+
+function extrairEnderecoDadosMortosLinha(row){
+    const endereco = (row?.[3] ?? "").toString().trim();
+    return isEnderecoValido(endereco) ? endereco : "";
+}
+
+function indexarEnderecosDadosMortosPlanilha(planilha){
+    const mapa = new Map();
+    (Array.isArray(planilha) ? planilha : []).forEach(row => {
+        const cooperat = normalizarChaveCodigoPlanilha(row?.[0]);
+        if(!cooperat || cooperat.includes("cooperat") || cooperat.includes("codigo") || cooperat.includes("código")) return;
+        const endereco = extrairEnderecoDadosMortosLinha(row);
+        if(endereco && !mapa.has(cooperat)){
+            mapa.set(cooperat, endereco);
+        }
+    });
+    return mapa;
 }
 
 function isDescricaoDadoMorto(valor){
@@ -1530,6 +1549,7 @@ function enriquecerItensComEstoqueMinimo(lista, anteriores){
 function isEnderecoValido(valor){
     const norm = normalizarEndereco(valor);
     if(!norm) return false;
+    if(!/[A-ZÀ-Ý]/i.test(norm)) return false;
     const invalidos = new Set([
         "ND",
         "N/D",
@@ -2317,6 +2337,10 @@ async function carregarEstoqueMinimoPadrao(){
         console.warn("Nao foi possivel carregar estoque_minimo automaticamente:", e);
         return false;
     }
+}
+
+async function carregarDadosMortosPlanilhaPadrao(){
+    return carregarPlanilhaPadrao("dados_mortos_planilha", "dados.mortos.xlsx");
 }
 
 let etiquetaMata105Cache = null;
@@ -3204,7 +3228,10 @@ async function atualizarBanco(btn) {
         : (planilhas.estoque_minimo || []);
     let saldoAtual = planilhas.saldoAtual || [];
     let saldoEndereco = planilhas.saldoEndereco || [];
-    let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereco, false);
+    if(!Array.isArray(planilhas.dados_mortos_planilha)){
+        await carregarDadosMortosPlanilhaPadrao();
+    }
+    let novosDados = gerarItensPlanilha(incluir, cooperat, saldoAtual, saldoEndereco, false, planilhas.dados_mortos_planilha);
     historicoSaldoEstoque = definirHistoricoSaldo(novosDados, dados, historicoSaldoEstoque);
     pedidosCompraEstado = calcularPedidosCompraEstado(novosDados, pedidosCompraEstado);
     novosDados = novosDados.map(item => aplicarAjusteManualItem({...item}));
@@ -3226,6 +3253,7 @@ async function atualizarBanco(btn) {
             mata105: "incluir.xlsx",
             mata225: "saldo.atual.xlsx",
             mata226: "saldo.por.endereco.xlsx",
+            ...(planilhas.dados_mortos_planilha ? { dados_mortos: "dados.mortos.xlsx" } : {}),
             ...(planilhas.estoque_minimo ? { estoque_minimo: "estoque_minimo.xlsx" } : {}),
             ...(planilhas.mata110 ? { mata110: "mata110.xlsx" } : {}),
             ...(planilhas.mata111 ? { mata111: "mata111.xlsx" } : {}),
@@ -7748,23 +7776,10 @@ function detectarColunasIncluir(basePlanilha){
     return colunas;
 }
 
-function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, marcarMorto){
+function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, marcarMorto, dadosMortosPlanilha = null){
     let novos = [];
     const colunasIncluir = detectarColunasIncluir(basePlanilha);
-    const enderecosCooperat = new Map();
-
-    for (let j = 1; j < cooperat.length; j++) {
-        const row = cooperat[j] || [];
-        const endTrim = extrairEnderecoAntigoLinha(row);
-        if(!isEnderecoValido(endTrim)) continue;
-
-        [row[0], row[1]].forEach(cod => {
-            const chave = normalizarChaveCodigoPlanilha(cod);
-            if(chave && !enderecosCooperat.has(chave)){
-                enderecosCooperat.set(chave, endTrim);
-            }
-        });
-    }
+    const enderecosDadosMortosPlanilha = indexarEnderecosDadosMortosPlanilha(dadosMortosPlanilha);
 
     for (let i = colunasIncluir.inicio; i < basePlanilha.length; i++) {
 
@@ -7794,46 +7809,29 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             }
         }
 
-        const enderecoCooperat = enderecosCooperat.get(normalizarChaveCodigoPlanilha(cooperatCod))
-            || enderecosCooperat.get(normalizarChaveCodigoPlanilha(protheus));
-        if(enderecoCooperat){
-            item.enderecoPrincipal = enderecoCooperat;
-        }
-
-        // FALLBACK: mantém endereço anterior se Cooperat não foi carregada
-        if(!isEnderecoValido(item.enderecoPrincipal)){
-            const anterior = getBaseDadosTodos().find(d =>
-                (d?.protheus && normalizarChaveCodigoPlanilha(d.protheus) === normalizarChaveCodigoPlanilha(item.protheus)) ||
-                (d?.cooperat && normalizarChaveCodigoPlanilha(d.cooperat) === normalizarChaveCodigoPlanilha(item.cooperat)) ||
-                (d?.descricao && normalizarTexto(d.descricao) === normalizarTexto(item.descricao))
-            );
-            if(anterior && isEnderecoValido(anterior.enderecoPrincipal)){
-                item.enderecoPrincipal = anterior.enderecoPrincipal;
-            }
-        }
-
         // DETALHES POR ENDEREÇO
         let encontrouEnderecos = false;
-        let encontrouEnderecoValido = false;
+        let encontrouEnderecoComSaldo = false;
 
         for (let j = 1; j < saldoEndereco.length; j++) {
             if (saldoEndereco[j][1] == protheus) {
                 encontrouEnderecos = true;
                 const enderecoRaw = (saldoEndereco[j][4] ?? "").toString().trim();
-                if(isEnderecoValido(enderecoRaw)){
-                    encontrouEnderecoValido = true;
+                const saldoEnderecoItem = Number(saldoEndereco[j][8]) || 0;
+                if(isEnderecoValido(enderecoRaw) && saldoEnderecoItem > 0){
+                    encontrouEnderecoComSaldo = true;
                 }
                 item.enderecos.push({
                     endereco: enderecoRaw || "ND",
                     armazem: (saldoEndereco[j][2] ?? "").toString().trim() || "ND",
-                    saldo: Number(saldoEndereco[j][8]) || 0
+                    saldo: saldoEnderecoItem
                 });
             }
         }
 
         if (encontrouEnderecos && item.enderecos.length > 0) {
-            if(encontrouEnderecoValido){
-                const enderecosValidos = item.enderecos.filter(e => isEnderecoValido(e?.endereco));
+            if(encontrouEnderecoComSaldo){
+                const enderecosValidos = item.enderecos.filter(e => isEnderecoValido(e?.endereco) && (parsePlanilhaNumero(e?.saldo) || 0) > 0);
                 const ultimoValido = enderecosValidos[enderecosValidos.length - 1];
                 if(ultimoValido){
                     item.enderecoPrincipal = ultimoValido.endereco;
@@ -7844,6 +7842,26 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             let soma = 0;
             item.enderecos.forEach(e => soma += e.saldo);
             item.saldo = soma;
+        }
+
+        if(!encontrouEnderecoComSaldo){
+            const enderecoMorto = enderecosDadosMortosPlanilha.get(normalizarChaveCodigoPlanilha(item.cooperat));
+            if(enderecoMorto){
+                item.enderecoPrincipal = enderecoMorto;
+                item.armazemPrincipal = "ND";
+            }
+        }
+
+        // FALLBACK: mantém endereço anterior se dados.mortos.xlsx não trouxe endereço.
+        if(!encontrouEnderecoComSaldo && !isEnderecoValido(item.enderecoPrincipal)){
+            const anterior = getBaseDadosTodos().find(d =>
+                (d?.protheus && normalizarChaveCodigoPlanilha(d.protheus) === normalizarChaveCodigoPlanilha(item.protheus)) ||
+                (d?.cooperat && normalizarChaveCodigoPlanilha(d.cooperat) === normalizarChaveCodigoPlanilha(item.cooperat)) ||
+                (d?.descricao && normalizarTexto(d.descricao) === normalizarTexto(item.descricao))
+            );
+            if(anterior && isEnderecoValido(anterior.enderecoPrincipal)){
+                item.enderecoPrincipal = anterior.enderecoPrincipal;
+            }
         }
 
         const anterior = getBaseDadosTodos().find(d =>
@@ -9297,6 +9315,7 @@ onAuthStateChanged(auth, async (user) => {
             await carregarEstoqueInicial();
             await Promise.allSettled([
                 carregarEstoqueMinimoPadrao(),
+                carregarDadosMortosPlanilhaPadrao(),
                 carregarPlanilhaPadrao("mata110", "mata110.xlsx"),
                 carregarPlanilhaPadrao("mata111", "mata111.xlsx"),
                 carregarPlanilhaPadrao("mata112", "mata112.xlsx", "Saldos a Endereçar")
