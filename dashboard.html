@@ -388,7 +388,9 @@
             pedidoDirecao: parametroPermitido((params.get("pedidoDirecao") || "desc").toLowerCase(), ["asc","desc"], "desc"),
             movimentoOrdenar: parametroPermitido((params.get("movimentoOrdenar") || "movimento").toLowerCase(), ["rank","codigo","descricao","tipo","anterior","atual","movimento","data"], "movimento"),
             movimentoDirecao: parametroPermitido((params.get("movimentoDirecao") || "desc").toLowerCase(), ["asc","desc"], "desc"),
-            periodoMovimentacao: parametroPermitido((params.get("periodoMovimentacao") || params.get("periodo") || "dia").toLowerCase(), ["dia","semana","mes"], "dia")
+            periodoMovimentacao: parametroPermitido((params.get("periodoMovimentacao") || params.get("periodo") || "dia").toLowerCase(), ["dia","semana","mes"], "dia"),
+            dataMovimentacao: params.get("dataMovimentacao") || "",
+            maquinaMovimentacao: (params.get("maquinaMovimentacao") || params.get("maquina") || "").trim().toUpperCase()
         };
         const regexArmazemBusca = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
         const armazemNaBusca = cfg.busca.match(regexArmazemBusca);
@@ -1076,6 +1078,104 @@
             const saidas = lista.filter(e => Number(e.delta || 0) < 0);
             return { faixa, lista, zeraram, entradas, saidas };
         }
+        function lotesMata185(banco){
+            return (Array.isArray(banco?.movimentacoesMata185?.lotes) ? banco.movimentacoesMata185.lotes : [])
+                .filter(lote => lote && lote.timestamp)
+                .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
+        }
+        function maquinaEndereco(valor){
+            const texto = String(valor ?? "").trim();
+            if(!texto || !/[A-Za-z]/.test(texto)) return "";
+            return texto.split("/")[0].replace(/\s+/g, " ").trim().toUpperCase();
+        }
+        function mapaItensPorCodigo(dados){
+            const mapa = new Map();
+            (Array.isArray(dados) ? dados : []).forEach(item => {
+                [item?.protheus, item?.protheusKey, item?.cooperat].forEach(codigo => {
+                    const key = normalizarCodigo(codigo);
+                    if(key && !mapa.has(key)) mapa.set(key, item);
+                });
+            });
+            return mapa;
+        }
+        function maquinasItem(item){
+            const maquinas = new Set();
+            const enderecos = Array.isArray(item?.enderecos) ? item.enderecos : [];
+            enderecos.forEach(end => {
+                const saldo = num(end?.saldo);
+                const maq = maquinaEndereco(end?.endereco);
+                if(maq && (saldo === null || saldo > 0)) maquinas.add(maq);
+            });
+            const principal = maquinaEndereco(item?.enderecoPrincipal || item?.endereco);
+            if(principal) maquinas.add(principal);
+            return [...maquinas].sort((a,b) => a.localeCompare(b, "pt-BR", { numeric:true, sensitivity:"base" }));
+        }
+        function enriquecerLinhaMata185(linha, itemPorCodigo){
+            const item = itemPorCodigo.get(normalizarCodigo(linha?.codigo));
+            const maquinas = Array.isArray(linha?.maquinas) && linha.maquinas.length
+                ? linha.maquinas.map(m => String(m).trim().toUpperCase()).filter(Boolean)
+                : maquinasItem(item);
+            const endereco = item?.enderecoPrincipal || (Array.isArray(item?.enderecos) ? item.enderecos.map(e => e?.endereco).filter(Boolean).join(" | ") : "");
+            return {
+                ...linha,
+                item,
+                maquinas,
+                maquina: maquinas[0] || "",
+                descricao: linha?.descricao || item?.descricao || "",
+                unidade: linha?.unidade || item?.unidadeMedida || "",
+                endereco,
+                saldoAtual: num(item?.saldoAtual ?? item?.saldo) || 0
+            };
+        }
+        function filtrarPorMaquina(lista, maquina){
+            if(!maquina) return lista;
+            return lista.filter(l => Array.isArray(l.maquinas) && l.maquinas.includes(maquina));
+        }
+        function calcularMovimentacaoMata185(banco, dados){
+            const lotes = lotesMata185(banco);
+            const lote = lotes.find(l => String(l.timestamp) === String(cfg.dataMovimentacao)) || lotes[0] || null;
+            if(lote && !cfg.dataMovimentacao){
+                cfg.dataMovimentacao = String(lote.timestamp);
+            }
+            const itemPorCodigo = mapaItensPorCodigo(dados);
+            const itensEnriquecidos = (Array.isArray(lote?.itens) ? lote.itens : [])
+                .map(l => enriquecerLinhaMata185(l, itemPorCodigo));
+            const maquinas = [...new Set(itensEnriquecidos.flatMap(l => l.maquinas || []))]
+                .sort((a,b) => a.localeCompare(b, "pt-BR", { numeric:true, sensitivity:"base" }));
+            if(cfg.maquinaMovimentacao && !maquinas.includes(cfg.maquinaMovimentacao)){
+                cfg.maquinaMovimentacao = "";
+            }
+            const pedidos = banco?.pedidosCompra || {};
+            const entradasPendentes = dados
+                .map(item => ({ item, pedido: pedidoItem(item, pedidos) }))
+                .filter(l => {
+                    const status = String(l.pedido?.status || "");
+                    return status === "aguardando_enderecamento" || Number(l.pedido?.entradaEndereco?.saldoAEnderecar || 0) > 0;
+                })
+                .map(l => ({
+                    codigo: l.item.protheus || l.item.cooperat || "",
+                    descricao: l.item.descricao || "",
+                    quantidade: Number(l.pedido?.entradaEndereco?.saldoAEnderecar || l.pedido?.recebidoSemEntrada || 0),
+                    detalhe: l.pedido?.detalhe || l.pedido?.titulo || "Entrada pendente",
+                    maquinas: maquinasItem(l.item),
+                    endereco: l.item.enderecoPrincipal || ""
+                }))
+                .filter(l => !cfg.maquinaMovimentacao || l.maquinas.includes(cfg.maquinaMovimentacao))
+                .sort((a,b) => Number(b.quantidade || 0) - Number(a.quantidade || 0));
+            const itens = filtrarPorMaquina(itensEnriquecidos, cfg.maquinaMovimentacao);
+            const parciais = filtrarPorMaquina(
+                (Array.isArray(lote?.parciais) ? lote.parciais : []).map(l => enriquecerLinhaMata185(l, itemPorCodigo)),
+                cfg.maquinaMovimentacao
+            );
+            return {
+                lotes,
+                lote,
+                maquinas,
+                itens,
+                parciais,
+                entradasPendentes
+            };
+        }
         function passaStatus(status){
             if(cfg.status === "todos" || cfg.status === "all") return true;
             if(cfg.status === "fora") return status === "abaixo" || status === "acima";
@@ -1144,6 +1244,10 @@
                         cfg.armazens = el.value.split(/[,\s]+/).map(v => v.trim()).filter(Boolean);
                     }else if(nome === "limite"){
                         cfg.limite = Math.max(1, Math.min(50000, Number(el.value) || 50000));
+                    }else if(nome === "dataMovimentacao"){
+                        cfg.dataMovimentacao = el.value;
+                    }else if(nome === "maquinaMovimentacao"){
+                        cfg.maquinaMovimentacao = el.value.trim().toUpperCase();
                     }else{
                         cfg[nome] = el.value.toLowerCase();
                         if(nome === "suposicao" && cfg.suposicao !== "todos" && cfg.status === "fora"){
@@ -1184,6 +1288,9 @@
                     renderDashboardAtual();
                 });
             });
+            root.querySelectorAll("[data-action='relatorio-contagem-mata185']").forEach(btn => {
+                btn.addEventListener("click", () => gerarRelatorioContagemMata185(window.__movMata185Atual));
+            });
         }
         async function carregar(){
             if(!auth.currentUser){
@@ -1217,6 +1324,7 @@
             const top = linhas.slice(0, 8);
             const max = Math.max(1, ...top.map(l => Number(l[campoValor] || 0)));
             const meio = max / 2;
+            const unidadeEscala = campoValor === "dias" ? " dias" : "";
             return `
                 <section class="vizPanel">
                     <h2>${esc(titulo)}</h2>
@@ -1229,7 +1337,7 @@
                                 <strong>${esc(fmt(l[campoValor]))}</strong>
                             </div>
                         `).join("") : `<div class="empty">Sem dados para o periodo.</div>`}
-                        ${top.length ? `<div class="barScale"><span>0 dias</span><span>${esc(fmt(meio))} dias</span><span>${esc(fmt(max))} dias</span></div>` : ""}
+                        ${top.length ? `<div class="barScale"><span>0${unidadeEscala}</span><span>${esc(fmt(meio))}${unidadeEscala}</span><span>${esc(fmt(max))}${unidadeEscala}</span></div>` : ""}
                     </div>
                 </section>
             `;
@@ -1263,21 +1371,127 @@
                 </section>
             `;
         }
+        function renderParciaisMata185Tabela(parciais){
+            const linhas = [...(parciais || [])].sort((a,b) => Number(b.faltante || 0) - Number(a.faltante || 0));
+            return `
+                <div class="tableWrap">
+                    <table>
+                        <thead><tr><th>Req.</th><th>Seq.</th><th>Codigo</th><th>Descricao</th><th>Maquina</th><th>Un.</th><th class="num">Req.</th><th class="num">Atend.</th><th class="num">Falta</th><th>Status</th></tr></thead>
+                        <tbody>
+                            ${linhas.length ? linhas.slice(0, 80).map(l => `
+                                <tr>
+                                    <td>${esc(l.requisicao || "-")}</td>
+                                    <td>${esc(l.sequencia || "-")}</td>
+                                    <td class="codigo">${esc(l.codigo || "-")}</td>
+                                    <td class="descricao">${esc(l.descricao || "")}</td>
+                                    <td>${esc((l.maquinas || []).join(", ") || "-")}</td>
+                                    <td>${esc(l.unidade || "-")}</td>
+                                    <td class="num">${fmt(l.requisitado)}</td>
+                                    <td class="num">${fmt(l.atendido)}</td>
+                                    <td class="num">${fmt(l.faltante)}</td>
+                                    <td>${esc(l.status || "Entregue parcialmente")}</td>
+                                </tr>
+                            `).join("") : `<tr><td colspan="10">Sem entregas parciais na MATA185 selecionada.</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        function renderEntradasPendentesTabela(entradas){
+            const linhas = [...(entradas || [])].sort((a,b) => Number(b.quantidade || 0) - Number(a.quantidade || 0));
+            return `
+                <div class="tableWrap">
+                    <table>
+                        <thead><tr><th>Codigo</th><th>Descricao</th><th>Maquina</th><th class="num">Qtd.</th><th>Status</th></tr></thead>
+                        <tbody>
+                            ${linhas.length ? linhas.slice(0, 60).map(l => `
+                                <tr>
+                                    <td class="codigo">${esc(l.codigo || "-")}</td>
+                                    <td class="descricao">${esc(l.descricao || "")}</td>
+                                    <td>${esc((l.maquinas || []).join(", ") || "-")}</td>
+                                    <td class="num">${fmt(l.quantidade)}</td>
+                                    <td>${esc(l.detalhe || "Entrada pendente")}</td>
+                                </tr>
+                            `).join("") : `<tr><td colspan="5">Sem entradas pendentes de enderecamento no armazem filtrado.</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        function baixarCsv(nome, linhas){
+            const cabecalhos = Object.keys(linhas[0] || { Aviso:"Sem itens na selecao" });
+            const csv = [
+                cabecalhos.join(";"),
+                ...linhas.map(l => cabecalhos.map(c => `"${String(l[c] ?? "").replace(/"/g, '""')}"`).join(";"))
+            ].join("\r\n");
+            const blob = new Blob([csv], { type:"text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = nome.replace(/\.xlsx$/i, ".csv");
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        function gerarRelatorioContagemMata185(mov){
+            const linhas = (mov?.itens || []).map((l, idx) => ({
+                "#": idx + 1,
+                "Codigo": l.codigo || "",
+                "Descricao": l.descricao || "",
+                "Maquina": cfg.maquinaMovimentacao || (l.maquinas || []).join(", "),
+                "Unidade": l.unidade || "",
+                "Saida MATA185": Number(l.atendido || 0),
+                "Requisitado MATA185": Number(l.requisitado || 0),
+                "Requisicoes": Number(l.requisicoes || 0),
+                "Parciais": Number(l.parciais || 0),
+                "Endereco atual": l.endereco || "",
+                "Saldo sistema": Number(l.saldoAtual || 0),
+                "Contagem": "",
+                "Observacao": ""
+            }));
+            const maquina = (cfg.maquinaMovimentacao || "todas").replace(/[^\w-]+/g, "_").toLowerCase();
+            const data = mov?.lote?.timestamp ? new Date(Number(mov.lote.timestamp)).toLocaleDateString("pt-BR").replace(/\D/g, "") : "sem_data";
+            const nome = `contagem_mata185_${maquina}_${data}.xlsx`;
+            if(typeof XLSX === "undefined"){
+                baixarCsv(nome, linhas);
+                return;
+            }
+            const ws = XLSX.utils.json_to_sheet(linhas.length ? linhas : [{ Aviso:"Sem itens na selecao" }]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Contagem");
+            XLSX.writeFile(wb, nome);
+        }
         function renderMovimentacao(banco, dados, movimentacao, leadTimes, rankings, progressoContagem){
+            const movMata185 = calcularMovimentacaoMata185(banco, dados);
+            window.__movMata185Atual = movMata185;
             const zeraram = movimentacao.zeraram
                 .sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
             const totalSaidas = movimentacao.saidas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
             const totalEntradas = movimentacao.entradas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
-            document.getElementById("subtitulo").textContent = `Movimentacao da ${movimentacao.faixa.nome}: ${movimentacao.faixa.label}`;
+            const loteLabel = movMata185.lote?.timestamp ? new Date(Number(movMata185.lote.timestamp)).toLocaleString("pt-BR") : "sem lote MATA185";
+            const maquinaLabel = cfg.maquinaMovimentacao || "Todas";
+            document.getElementById("subtitulo").textContent = `Movimentacao da ${movimentacao.faixa.nome}: ${movimentacao.faixa.label} | MATA185: ${loteLabel}`;
             root.innerHTML = `
                 <section class="cards">
                     <article class="card blue"><span>Movimentos</span><strong>${movimentacao.lista.length}</strong></article>
                     <article class="card red"><span>Zeraram</span><strong>${zeraram.length}</strong></article>
-                    <article class="card"><span>Saidas</span><strong>${fmt(totalSaidas)}</strong></article>
-                    <article class="card green"><span>Entradas</span><strong>${fmt(totalEntradas)}</strong></article>
+                    <article class="card"><span>Saidas MATA185</span><strong>${fmt(movMata185.itens.reduce((s,l) => s + Number(l.atendido || 0), 0))}</strong></article>
+                    <article class="card green"><span>Entradas pendentes</span><strong>${movMata185.entradasPendentes.length}</strong></article>
                 </section>
                 ${renderProgressoContagem(progressoContagem)}
                 ${renderFiltros([], dados.length)}
+                <div class="toolbar">
+                    <span class="chip">Maquina: ${esc(maquinaLabel)}</span>
+                    <span class="chip">Itens na selecao: ${esc(fmt(movMata185.itens.length))}</span>
+                    <button class="primaryBtn" type="button" data-action="relatorio-contagem-mata185">Gerar relatorio de contagem</button>
+                </div>
+                <section class="vizGrid">
+                    ${renderBarras("Itens com mais saida do armazem 04 - MATA185", (movMata185.itens || []).map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", atendido:i.atendido || 0})), "atendido")}
+                    ${renderBarras("Maiores faltas em entregas parciais", (movMata185.parciais || []).map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", faltante:i.faltante || 0})), "faltante")}
+                </section>
+                <h2 class="sectionTitle">Requisicoes entregues parcialmente - MATA185</h2>
+                ${renderParciaisMata185Tabela(movMata185.parciais)}
+                <h2 class="sectionTitle">Entradas pendentes de enderecamento - armazem 04</h2>
+                ${renderEntradasPendentesTabela(movMata185.entradasPendentes)}
                 <section class="vizGrid">
                     ${renderBarras(`Itens que zeraram apos movimentacao - ${movimentacao.faixa.nome}`, zeraram.map(e => ({...e, codigo:e.item.protheus || e.item.cooperat, descricao:e.item.descricao || "", dias:Math.abs(Number(e.delta || 0))})), "dias")}
                     ${renderBarras("Pedidos mais demorados ou em aberto", leadTimes, "dias")}
@@ -1377,6 +1591,8 @@
             `;
         }
         function renderFiltros(origens, totalDados){
+            const dadosFiltro = Array.isArray(bancoAtual?.dados) ? bancoAtual.dados : [];
+            const movFiltro = cfg.ambiente === "movimentacao" ? calcularMovimentacaoMata185(bancoAtual, dadosFiltro) : { maquinas:[] };
             return `
                 <section class="filters">
                     <div class="filter">
@@ -1392,6 +1608,23 @@
                             <option value="dia" ${cfg.periodoMovimentacao === "dia" ? "selected" : ""}>Dia anterior</option>
                             <option value="semana" ${cfg.periodoMovimentacao === "semana" ? "selected" : ""}>Semana anterior</option>
                             <option value="mes" ${cfg.periodoMovimentacao === "mes" ? "selected" : ""}>Mes anterior</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fDataMovimentacao">Data MATA185</label>
+                        <select id="fDataMovimentacao" data-filter="dataMovimentacao">
+                            ${lotesMata185(bancoAtual).map(lote => {
+                                const ts = String(lote.timestamp || "");
+                                const label = lote.timestamp ? new Date(Number(lote.timestamp)).toLocaleString("pt-BR") : (lote.data || "-");
+                                return `<option value="${esc(ts)}" ${String(cfg.dataMovimentacao) === ts ? "selected" : ""}>${esc(label)}</option>`;
+                            }).join("") || `<option value="">Sem lote MATA185</option>`}
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fMaquinaMovimentacao">Maquina</label>
+                        <select id="fMaquinaMovimentacao" data-filter="maquinaMovimentacao">
+                            <option value="" ${cfg.maquinaMovimentacao ? "" : "selected"}>Todas</option>
+                            ${(movFiltro.maquinas || []).map(m => `<option value="${esc(m)}" ${cfg.maquinaMovimentacao === m ? "selected" : ""}>${esc(m)}</option>`).join("")}
                         </select>
                     </div>
                     <div class="filter">

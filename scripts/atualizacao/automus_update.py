@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import logging
+import math
 import re
 import sys
 import time
@@ -26,6 +27,7 @@ FILE_MAP = {
     "mata226": "Saldo por Endereco.xlsx",
     "estoque_minimo": "estoque_minimo.xlsx",
     "dados_mortos": "dados.mortos.xlsx",
+    "mata185": "mata185.xlsx",
 }
 
 
@@ -332,7 +334,7 @@ def _atualizar_historico_saldo(
                 "saldoAtual": saldo_atual,
             }
         )
-        historico[hist_key] = lista[-80:]
+        historico[hist_key] = lista[-300:]
 
     return historico
 
@@ -378,6 +380,103 @@ def _dead_addresses_index(rows: list[list[Any]] | None) -> dict[str, str]:
         if endereco and cooperat not in idx:
             idx[cooperat] = endereco
     return idx
+
+
+def _montar_movimentacoes_mata185(
+    mata185: list[list[Any]] | None,
+    itens: list[dict[str, Any]],
+    historico_atual: dict[str, Any] | None,
+    agora_ms: int,
+) -> dict[str, Any]:
+    item_por_codigo: dict[str, dict[str, Any]] = {}
+    for item in itens:
+        if not isinstance(item, dict):
+            continue
+        for campo in ("protheus", "protheusKey"):
+            codigo = _code_key(item.get(campo))
+            if codigo and codigo not in item_por_codigo:
+                item_por_codigo[codigo] = item
+
+    agregados: dict[str, dict[str, Any]] = {}
+    parciais: list[dict[str, Any]] = []
+    linhas_hash: list[dict[str, Any]] = []
+
+    for idx, row in enumerate((mata185 or [])[1:], start=2):
+        if not row:
+            continue
+        requisicao = _safe_text(row[0] if len(row) > 0 else "")
+        sequencia = _safe_text(row[1] if len(row) > 1 else "")
+        codigo = _code_key(row[2] if len(row) > 2 else "")
+        unidade = _safe_text(row[3] if len(row) > 3 else "")
+        requisitada = _num(row[4] if len(row) > 4 else 0)
+        atendida = _num(row[6] if len(row) > 6 else 0)
+        if not codigo or "produto" in codigo or "codigo" in codigo:
+            continue
+        if requisitada <= 0 and atendida <= 0:
+            continue
+
+        item = item_por_codigo.get(codigo)
+        if item is not None and unidade:
+            item["unidadeMedida"] = unidade
+
+        linhas_hash.append({"r": requisicao, "s": sequencia, "c": codigo, "u": unidade, "q": requisitada, "a": atendida})
+        ag = agregados.setdefault(codigo, {
+            "codigo": codigo,
+            "descricao": _safe_text(item.get("descricao")) if item else "",
+            "unidade": unidade,
+            "requisitado": 0.0,
+            "atendido": 0.0,
+            "requisicoes": 0,
+            "parciais": 0,
+        })
+        if unidade and not ag.get("unidade"):
+            ag["unidade"] = unidade
+        ag["requisitado"] += requisitada
+        ag["atendido"] += atendida
+        ag["requisicoes"] += 1
+        if atendida < requisitada:
+            faltante = max(0.0, requisitada - atendida)
+            ag["parciais"] += 1
+            parciais.append({
+                "requisicao": requisicao,
+                "sequencia": sequencia,
+                "codigo": codigo,
+                "descricao": ag.get("descricao") or "",
+                "unidade": unidade,
+                "requisitado": requisitada,
+                "atendido": atendida,
+                "faltante": faltante,
+                "status": "Entregue parcialmente",
+                "rowIndex": idx,
+            })
+
+    assinatura = _json_hash(linhas_hash)
+    data_txt = datetime.fromtimestamp(agora_ms / 1000).strftime("%d/%m/%Y")
+    agregados_lista = sorted(agregados.values(), key=lambda x: float(x.get("atendido") or 0), reverse=True)
+    parciais = sorted(parciais, key=lambda x: float(x.get("faltante") or 0), reverse=True)
+    historico = dict(historico_atual or {})
+    lotes = historico.get("lotes") if isinstance(historico.get("lotes"), list) else []
+    lotes = list(lotes)
+    lote = {
+        "timestamp": agora_ms,
+        "data": data_txt,
+        "armazem": "04",
+        "hash": assinatura,
+        "totalItens": len(agregados_lista),
+        "totalRequisicoes": sum(int(x.get("requisicoes") or 0) for x in agregados_lista),
+        "totalRequisitado": sum(float(x.get("requisitado") or 0) for x in agregados_lista),
+        "totalAtendido": sum(float(x.get("atendido") or 0) for x in agregados_lista),
+        "totalParciais": len(parciais),
+        "itens": agregados_lista[:500],
+        "parciais": parciais[:500],
+    }
+    if linhas_hash and (not lotes or lotes[-1].get("hash") != assinatura):
+        lotes.append(lote)
+    elif lotes:
+        lotes[-1] = {**lotes[-1], **lote, "timestamp": lotes[-1].get("timestamp") or agora_ms, "data": lotes[-1].get("data") or data_txt}
+    elif linhas_hash:
+        lotes.append(lote)
+    return {"armazem": "04", "atualizadoEm": agora_ms, "loteAtual": lote, "lotes": lotes[-120:]}
 
 
 def _is_descricao_dado_morto(value: Any) -> bool:
@@ -734,6 +833,7 @@ def run_automus_update(
     saldo_endereco_path = _resolve_file(project_root, FILE_MAP["mata226"])
     estoque_minimo_path = _resolve_optional_file(project_root, FILE_MAP["estoque_minimo"])
     dados_mortos_planilha_path = _resolve_optional_file(project_root, FILE_MAP["dados_mortos"])
+    mata185_path = _resolve_optional_file(project_root, FILE_MAP["mata185"])
     log.info(
         "TEST_PLANILHAS_RESOLVIDAS_OK | incluir=%s | saldoAtual=%s | saldoEndereco=%s | estoque_minimo=%s",
         incluir_path,
@@ -779,12 +879,14 @@ def run_automus_update(
     dados_mortos = banco.get("dadosMortos") if isinstance(banco.get("dadosMortos"), list) else []
     ajustes_itens = banco.get("ajustesItens") if isinstance(banco.get("ajustesItens"), dict) else {}
     historico_saldo = banco.get("historicoSaldo") if isinstance(banco.get("historicoSaldo"), dict) else {}
+    movimentacoes_mata185_anteriores = banco.get("movimentacoesMata185") if isinstance(banco.get("movimentacoesMata185"), dict) else {}
 
     incluir = _read_sheet(incluir_path)
     saldo_atual = _read_sheet(saldo_atual_path)
     saldo_endereco = _read_sheet(saldo_endereco_path)
     estoque_minimo = _read_sheet(estoque_minimo_path) if estoque_minimo_path else None
     dados_mortos_planilha = _read_sheet(dados_mortos_planilha_path) if dados_mortos_planilha_path else None
+    mata185 = _read_sheet(mata185_path) if mata185_path else None
     log.info(
         "TEST_PLANILHAS_LIDAS_OK | incluir_linhas=%s | saldoAtual_linhas=%s | saldoEndereco_linhas=%s | estoque_minimo_linhas=%s",
         len(incluir),
@@ -824,12 +926,14 @@ def run_automus_update(
         agora_ms,
     )
     _aplicar_sugestoes_estoque(novos_dados, historico_saldo)
+    movimentacoes_mata185 = _montar_movimentacoes_mata185(mata185, novos_dados, movimentacoes_mata185_anteriores, agora_ms)
 
     payload = {
         "dados": novos_dados,
         "dadosMortos": dados_mortos,
         "ajustesItens": ajustes_itens,
         "historicoSaldo": historico_saldo,
+        "movimentacoesMata185": movimentacoes_mata185,
         "ultimaAtualizacao": agora_ms,
         "atualizadoPor": updated_by,
         "atualizacaoAutomatica": True,
@@ -840,6 +944,7 @@ def run_automus_update(
             "mata226": "saldo.por.endereco.xlsx",
             **({"dados_mortos": "dados.mortos.xlsx"} if dados_mortos_planilha_path else {}),
             **({"estoque_minimo": "estoque_minimo.xlsx"} if estoque_minimo_path else {}),
+            **({"mata185": "mata185.xlsx"} if mata185_path else {}),
         },
         "automus": {
             "executadoEm": datetime.now().isoformat(timespec="seconds"),
