@@ -204,6 +204,35 @@
             padding:12px;
         }
         .vizPanel h2{font-size:14px;margin:0 0 10px;color:#EDE9FE}
+        .vizPanelHeader{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:10px;
+            margin-bottom:10px;
+        }
+        .vizPanelHeader h2{margin:0}
+        .vizPanelControls{
+            display:flex;
+            align-items:center;
+            justify-content:flex-end;
+            gap:6px;
+            flex-wrap:wrap;
+        }
+        .vizPanelControls select,
+        .vizPanelControls button{
+            min-height:28px;
+            border:1px solid var(--line);
+            border-radius:6px;
+            background:#1F1F2A;
+            color:var(--text);
+            font:inherit;
+            font-size:11px;
+            font-weight:800;
+            padding:5px 7px;
+            width:auto;
+        }
+        .vizPanelControls button{cursor:pointer}
         .bars{display:grid;gap:7px}
         .barRow{display:grid;grid-template-columns:auto minmax(120px,1fr) 3fr auto;gap:8px;align-items:center;font-size:12px}
         .barRank{color:var(--muted);font-weight:800;min-width:26px;text-align:right}
@@ -340,7 +369,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -405,9 +434,48 @@
         }
         let bancoAtual = null;
         let extrasAtual = {};
+        let dashboardPanelConfig = {};
         document.getElementById("titulo").textContent = cfg.titulo;
         btnAtualizar.addEventListener("click", () => carregar());
 
+        async function salvarDashboardPanelConfig(id){
+            try{
+                const conf = configPainelDashboard(id);
+                await set(ref(db, `dashboardConfig/paineis/${id}`), {
+                    limite: conf.limite,
+                    codigosOcultos: (conf.codigosOcultos || []).join(",")
+                });
+                return true;
+            }catch(e){
+                alert("Nao foi possivel salvar a configuracao compartilhada do dashboard no Firebase.");
+                console.warn("Falha ao salvar painel do dashboard:", e);
+                return false;
+            }
+        }
+        function painelDashboardId(titulo){
+            return String(titulo || "painel")
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "_")
+                .replace(/^_+|_+$/g, "") || "painel";
+        }
+        function configPainelDashboard(id){
+            const atual = dashboardPanelConfig[id] || {};
+            const limite = Math.max(1, Math.min(100, Number(atual.limite || 8) || 8));
+            const codigosRaw = Array.isArray(atual.codigosOcultos)
+                ? atual.codigosOcultos
+                : typeof atual.codigosOcultos === "string"
+                    ? atual.codigosOcultos.split(/[,\s]+/)
+                    : atual.codigosOcultos && typeof atual.codigosOcultos === "object"
+                        ? Object.values(atual.codigosOcultos)
+                        : [];
+            const codigosOcultos = codigosRaw.map(normalizarCodigo).filter(Boolean);
+            dashboardPanelConfig[id] = { limite, codigosOcultos:[...new Set(codigosOcultos)] };
+            return dashboardPanelConfig[id];
+        }
+        function codigoLinhaDashboard(linha){
+            return normalizarCodigo(linha?.codigo || linha?.item?.protheus || linha?.item?.cooperat || linha?.item?.protheusKey || "");
+        }
         function fmt(valor){
             const n = Number(valor);
             if(!Number.isFinite(n)) return "-";
@@ -1291,6 +1359,35 @@
             root.querySelectorAll("[data-action='relatorio-contagem-mata185']").forEach(btn => {
                 btn.addEventListener("click", () => gerarRelatorioContagemMata185(window.__movMata185Atual));
             });
+            root.querySelectorAll("[data-panel-limit]").forEach(el => {
+                el.addEventListener("change", async () => {
+                    const id = el.dataset.panelLimit;
+                    const conf = configPainelDashboard(id);
+                    conf.limite = Math.max(1, Math.min(100, Number(el.value) || 8));
+                    if(await salvarDashboardPanelConfig(id)) renderDashboardAtual();
+                });
+            });
+            root.querySelectorAll("[data-panel-hide-code]").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const id = btn.dataset.panelHideCode;
+                    const entrada = prompt("Codigo que nao deve aparecer neste dashboard:");
+                    const codigos = String(entrada || "").split(/[,\s]+/).map(normalizarCodigo).filter(Boolean);
+                    if(!codigos.length) return;
+                    const conf = configPainelDashboard(id);
+                    codigos.forEach(codigo => {
+                        if(!conf.codigosOcultos.includes(codigo)) conf.codigosOcultos.push(codigo);
+                    });
+                    if(await salvarDashboardPanelConfig(id)) renderDashboardAtual();
+                });
+            });
+            root.querySelectorAll("[data-panel-clear-hidden]").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const id = btn.dataset.panelClearHidden;
+                    const conf = configPainelDashboard(id);
+                    conf.codigosOcultos = [];
+                    if(await salvarDashboardPanelConfig(id)) renderDashboardAtual();
+                });
+            });
         }
         async function carregar(){
             if(!auth.currentUser){
@@ -1299,7 +1396,7 @@
             }
             renderLoading();
             try{
-                const [snap, mapaMinimo, mata110, mata111, mata112, contagensSnap, etiquetasSnap, rankingEtiquetasSnap] = await Promise.all([
+                const [snap, mapaMinimo, mata110, mata111, mata112, contagensSnap, etiquetasSnap, rankingEtiquetasSnap, dashboardConfigSnap] = await Promise.all([
                     get(ref(db, "estoqueGlobal")),
                     carregarEstoqueMinimo(),
                     carregarMata110(),
@@ -1307,8 +1404,10 @@
                     carregarMata112(),
                     get(ref(db, "contagens")).catch(() => null),
                     get(ref(db, "etiquetasGeradas")).catch(() => null),
-                    get(ref(db, "rankingEtiquetas")).catch(() => null)
+                    get(ref(db, "rankingEtiquetas")).catch(() => null),
+                    get(ref(db, "dashboardConfig/paineis")).catch(() => null)
                 ]);
+                dashboardPanelConfig = dashboardConfigSnap?.val?.() || {};
                 renderDashboard(snap.val() || {}, mapaMinimo, mata111, mata112, {
                     mata110,
                     contagens: contagensSnap?.val?.() || {},
@@ -1321,13 +1420,30 @@
             }
         }
         function renderBarras(titulo, linhas, campoValor = "dias"){
-            const top = linhas.slice(0, 8);
+            const id = painelDashboardId(titulo);
+            const conf = configPainelDashboard(id);
+            const ocultos = new Set(conf.codigosOcultos || []);
+            const linhasVisiveis = (linhas || []).filter(l => {
+                const codigo = codigoLinhaDashboard(l);
+                return !codigo || !ocultos.has(codigo);
+            });
+            const top = linhasVisiveis.slice(0, conf.limite || 8);
             const max = Math.max(1, ...top.map(l => Number(l[campoValor] || 0)));
             const meio = max / 2;
             const unidadeEscala = campoValor === "dias" ? " dias" : "";
+            const opcoesLimite = [5,8,10,15,20,30,50,100];
             return `
                 <section class="vizPanel">
-                    <h2>${esc(titulo)}</h2>
+                    <div class="vizPanelHeader">
+                        <h2>${esc(titulo)}</h2>
+                        <div class="vizPanelControls">
+                            <select data-panel-limit="${esc(id)}" title="Linhas exibidas">
+                                ${opcoesLimite.map(v => `<option value="${v}" ${Number(conf.limite || 8) === v ? "selected" : ""}>${v} linhas</option>`).join("")}
+                            </select>
+                            <button type="button" data-panel-hide-code="${esc(id)}" title="Ocultar codigo neste dashboard">Ocultar codigo</button>
+                            ${ocultos.size ? `<button type="button" data-panel-clear-hidden="${esc(id)}" title="Mostrar codigos ocultos">Limpar ocultos (${ocultos.size})</button>` : ""}
+                        </div>
+                    </div>
                     <div class="bars">
                         ${top.length ? top.map((l, idx) => `
                             <div class="barRow" title="${esc(l.descricao || "")}">
