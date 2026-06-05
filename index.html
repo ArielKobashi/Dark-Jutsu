@@ -4431,7 +4431,6 @@ let contagemFinalizadaSemSessao = false;
 let contagemResetGlobalUnsub = null;
 let contagemAplicandoResetGlobal = false;
 let contagemUltimoEnderecoFalado = "";
-let contagemPendenteEspecial = null;
 let contagemNarradorAtivo = localStorage.getItem("contagemNarradorAtivo") === "1";
 let contagemLocutorAtivo = localStorage.getItem("contagemLocutorAtivo") === "1";
 let contagemReconhecimento = null;
@@ -4690,148 +4689,6 @@ function criarLinhasContagemPermitidas(itens){
     return linhas;
 }
 
-function chaveUsuarioContagemPendente(){
-    const nick = String(window.meuNickname || window.auth?.currentUser?.email?.split("@")[0] || "").trim();
-    return chaveFirebaseContagem((nick || "desconhecido").toLowerCase());
-}
-
-async function carregarContagemPendenteEspecial(){
-    if(!window.get || !window.ref || !window.db) return null;
-    const chaveUsuario = chaveUsuarioContagemPendente();
-    if(!chaveUsuario) return null;
-    const normalizarPendencia = pendencia => {
-        if(!pendencia) return null;
-        const itens = Array.isArray(pendencia.itens) ? pendencia.itens : Array.isArray(pendencia.lista) ? pendencia.lista : [];
-        if(!itens.length) return null;
-        return { ...pendencia, itens, usuarioKey:chaveUsuario };
-    };
-    try{
-        const snap = await window.get(window.ref(window.db, `contagensPendentes/${chaveUsuario}`));
-        if(snap.exists()){
-            const direta = normalizarPendencia(snap.val());
-            if(direta) return direta;
-        }
-    }catch(e){}
-    try{
-        const data = dataContagemHoje();
-        const snap = await window.get(window.ref(window.db, `contagens/${data}/${chaveUsuario}/_pendencia_contagem_xlsx`));
-        if(!snap.exists()) return null;
-        const pendencia = normalizarPendencia(snap.val());
-        return pendencia ? { ...pendencia, origemFirebase:`contagens/${data}/${chaveUsuario}/_pendencia_contagem_xlsx` } : null;
-    }catch(e){
-        console.warn("Falha ao carregar pendencia em contagens:", e);
-        return null;
-    }
-}
-
-function normalizarEnderecoPendenciaContagem(valor){
-    return String(valor ?? "")
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .toUpperCase()
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
-function montarChavePendenciaContagem(codigo, endereco){
-    return `${normalizarCodigoItem(codigo)}||${normalizarEnderecoPendenciaContagem(endereco)}`;
-}
-
-function aplicarContagemPendenteEspecial(linhasPermitidas, pendencia){
-    const linhas = Array.isArray(linhasPermitidas) ? linhasPermitidas : [];
-    const porCodigoEndereco = new Map();
-    const porCodigo = new Map();
-    linhas.forEach(item => {
-        const codigos = [item?.protheus, item?.protheusKey, item?.cooperat].map(normalizarCodigoItem).filter(Boolean);
-        codigos.forEach(codigo => {
-            const chaveEndereco = montarChavePendenciaContagem(codigo, item?.enderecoPrincipal || "");
-            if(!porCodigoEndereco.has(chaveEndereco)) porCodigoEndereco.set(chaveEndereco, []);
-            porCodigoEndereco.get(chaveEndereco).push(item);
-            if(!porCodigo.has(codigo)) porCodigo.set(codigo, []);
-            porCodigo.get(codigo).push(item);
-        });
-    });
-    const usados = new Set();
-    const saida = [];
-    (pendencia?.itens || []).forEach((linha, idx) => {
-        const codigo = normalizarCodigoItem(linha.codigo || linha.protheus || linha.cooperat);
-        const endereco = linha.endereco || linha.enderecoAtual || "";
-        const candidatos = porCodigoEndereco.get(montarChavePendenciaContagem(codigo, endereco)) || porCodigo.get(codigo) || [];
-        let item = candidatos.find(c => !usados.has(itemKeyContagem(c)));
-        if(item){
-            usados.add(itemKeyContagem(item));
-        }else{
-            item = {
-                protheus:linha.codigo || linha.protheus || "",
-                cooperat:linha.cooperat || "",
-                descricao:linha.descricao || "",
-                armazemPrincipal:linha.armazem || "04",
-                enderecoPrincipal:endereco || "Sem Endereco",
-                saldo:linha.saldoSistema ?? "",
-                unidadeMedida:linha.unidade || "",
-                contagemBaseKey:linha.codigo || linha.protheus || linha.cooperat || `pendente_${idx}`,
-                contagemKey:`PENDENTE||${linha.rowIndex || idx + 2}||${linha.codigo || ""}||${endereco || ""}`
-            };
-        }
-        saida.push({
-            ...item,
-            descricao:linha.descricao || item.descricao || "",
-            enderecoPrincipal:endereco || item.enderecoPrincipal || "Sem Endereco",
-            saldo:linha.saldoSistema ?? item.saldo,
-            unidadeMedida:linha.unidade || item.unidadeMedida || "",
-            contagemPendenteId:pendencia.id || "",
-            contagemPendenteRowIndex:Number(linha.rowIndex || idx + 2),
-            contagemPendenteOrdem:Number(linha.ordem || idx + 1)
-        });
-    });
-    return saida.sort((a, b) => {
-        const oa = Number(a.contagemPendenteOrdem || 0);
-        const ob = Number(b.contagemPendenteOrdem || 0);
-        if(oa || ob) return oa - ob;
-        return compararItensContagem(a, b);
-    });
-}
-
-function exportarPlanilhaContagemPendente(payload){
-    const pendencia = contagemPendenteEspecial;
-    if(!pendencia || typeof XLSX === "undefined") return false;
-    const cabecalhos = Array.isArray(pendencia.cabecalhos) && pendencia.cabecalhos.length
-        ? [...pendencia.cabecalhos]
-        : ["#","Codigo","Descricao","Maquina","Unidade","Saiu","Requisitado","Requisicoes","Parciais","Endereco atual","Saldo sistema","Contagem","Observacao"];
-    const linhas = (Array.isArray(pendencia.linhas) ? pendencia.linhas : []).map(l => Array.isArray(l) ? [...l] : []);
-    const contagemCol = Number.isFinite(Number(pendencia.contagemCol)) ? Number(pendencia.contagemCol) : 11;
-    const porLinha = new Map();
-    Object.values(payload?.itens || {}).forEach(item => {
-        const rowIndex = Number(item.contagemPendenteRowIndex || 0);
-        if(rowIndex) porLinha.set(rowIndex, item.contado);
-    });
-    linhas.forEach((linha, idx) => {
-        const rowIndex = idx + 2;
-        if(porLinha.has(rowIndex)){
-            while(linha.length <= contagemCol) linha.push("");
-            linha[contagemCol] = porLinha.get(rowIndex);
-        }
-    });
-    const ws = XLSX.utils.aoa_to_sheet([cabecalhos, ...linhas]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, pendencia.sheetName || "Contagem");
-    const dataArquivo = payload?.data || dataContagemSessaoAtual();
-    XLSX.writeFile(wb, `contagem_preenchida_${dataArquivo}.xlsx`);
-    return true;
-}
-
-async function concluirContagemPendenteEspecial(payload){
-    if(!contagemPendenteEspecial) return false;
-    exportarPlanilhaContagemPendente(payload);
-    try{
-        const caminho = contagemPendenteEspecial.origemFirebase || `contagensPendentes/${contagemPendenteEspecial.usuarioKey}`;
-        await window.set(window.ref(window.db, caminho), null);
-    }catch(e){
-        console.warn("Falha ao remover contagem pendente:", e);
-    }
-    contagemPendenteEspecial = null;
-    return true;
-}
-
 function normalizarEnderecoProgressoContagem(valor){
     return String(valor ?? "")
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -4958,25 +4815,15 @@ function inserirVerificacoesSequenciaContagem(linhas){
 async function abrirContagem(){
     await checarResetGlobalContagem();
     const itens = Array.isArray(window.dados) ? window.dados : [];
-    const pendencia = await carregarContagemPendenteEspecial();
-    const linhasPermitidas = criarLinhasContagemPermitidas(itens);
-    contagemPendenteEspecial = pendencia;
-    contagemItens = pendencia
-        ? aplicarContagemPendenteEspecial(linhasPermitidas, pendencia)
-        : inserirVerificacoesSequenciaContagem(linhasPermitidas).sort(compararItensContagem);
+    contagemItens = inserirVerificacoesSequenciaContagem(criarLinhasContagemPermitidas(itens))
+        .sort(compararItensContagem);
 
     if(!contagemItens.length){
         mostrarNotificacao("Nenhum item dos armazens 04 e 05 encontrado para contagem.");
         return;
     }
-    if(pendencia){
-        mostrarNotificacao(`Contagem pendente carregada: ${contagemItens.length} itens.`);
-    }
 
     const sessao = carregarSessaoContagem();
-    if(pendencia && sessao.pendenciaId !== pendencia.id){
-        limparRascunhoSessaoContagemLocal();
-    }
     contagemValores = carregarRascunhoContagem();
     contagemVerificacoesVazio = carregarVerificacoesContagem();
     const maquinas = new Set();
@@ -4992,9 +4839,6 @@ async function abrirContagem(){
     document.getElementById("contagemScreen").style.display = "flex";
     document.getElementById("main").style.display = "none";
     marcarContagemAberta(true);
-    if(pendencia){
-        salvarSessaoContagem({ aberta:true, pendenciaId:pendencia.id });
-    }
 
     if(sessao.maquina && contagemMaquinas.includes(sessao.maquina)){
         selecionarMaquinaContagem(sessao.maquina, true, Number(sessao.indice || 0), sessao.itemKey || "");
@@ -5794,18 +5638,13 @@ async function finalizarContagem(){
     try{
         const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
         await window.push(baseRef, payload);
-        const concluiuPendencia = await concluirContagemPendenteEspecial(payload);
-        if(concluiuPendencia){
-            limparRascunhoSessaoContagemLocal();
-        }else{
-            limparRascunhoContagemMaquina(payload.maquina);
-        }
+        limparRascunhoContagemMaquina(payload.maquina);
         contagemFinalizadaSemSessao = true;
         historicoContagemPlanilhasCarregado = false;
         if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas(true);
         mostrarNotificacao(`Contagem salva: ${totalItens} itens.`);
         fecharContagem();
-        if(!concluiuPendencia && confirm("Contagem salva. Quer exportar o XLSX agora?")){
+        if(confirm("Contagem salva. Quer exportar o XLSX agora?")){
             exportarLinhasRelatorioContagemXlsx(linhasExportacao, payload.data);
         }
     }catch(e){
@@ -5817,9 +5656,7 @@ async function finalizarContagem(){
 function criarPayloadRascunhoRelatorioContagem(rascunho = true){
     salvarAtualContagem();
     const maquinaBase = contagemMaquinaAtual || carregarSessaoContagem().maquina || "";
-    const itensBase = contagemPendenteEspecial
-        ? [...contagemItens]
-        : maquinaBase
+    const itensBase = maquinaBase
         ? contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquinaBase)
         : [...contagemItensMaquina];
     const itensContados = itensBase.filter(item => !isVerificacaoVazioContagem(item) && contagemValores[itemKeyContagem(item)] !== undefined);
@@ -5829,9 +5666,7 @@ function criarPayloadRascunhoRelatorioContagem(rascunho = true){
         usuario:nick,
         data:dataContagemSessaoAtual(),
         timestamp:Date.now(),
-        maquina:contagemPendenteEspecial ? "contagem.xlsx" : maquinaBase,
-        origemPlanilha:contagemPendenteEspecial?.origem || "",
-        pendenciaId:contagemPendenteEspecial?.id || "",
+        maquina:maquinaBase,
         totalItens:itensBase.filter(item => !isVerificacaoVazioContagem(item)).length,
         itens:{},
         verificacoesVazio:{}
@@ -5847,8 +5682,7 @@ function criarPayloadRascunhoRelatorioContagem(rascunho = true){
             endereco:item.enderecoPrincipal || "",
             saldoSistema:parsePlanilhaNumero(item.saldo),
             reposicao:obterReposicaoItemContagem(item),
-            contado:contagemValores[key],
-            contagemPendenteRowIndex:item.contagemPendenteRowIndex || null
+            contado:contagemValores[key]
         };
     });
     return payload;
@@ -6042,19 +5876,14 @@ async function salvarContagemPeloRelatorio(){
     try{
         const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
         await window.push(baseRef, payload);
-        const concluiuPendencia = await concluirContagemPendenteEspecial(payload);
-        if(concluiuPendencia){
-            limparRascunhoSessaoContagemLocal();
-        }else{
-            limparRascunhoContagemMaquina(payload.maquina);
-        }
+        limparRascunhoContagemMaquina(payload.maquina);
         contagemFinalizadaSemSessao = true;
         historicoContagemPlanilhasCarregado = false;
         if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas(true);
         document.getElementById("contagemRelatorioModal").style.display = "none";
         mostrarNotificacao(`Contagem salva: ${totalItens} itens.`);
         fecharContagem();
-        if(!concluiuPendencia && confirm("Contagem salva. Quer exportar o XLSX agora?")){
+        if(confirm("Contagem salva. Quer exportar o XLSX agora?")){
             exportarLinhasRelatorioContagemXlsx(linhasExportacao, payload.data);
         }
     }catch(e){

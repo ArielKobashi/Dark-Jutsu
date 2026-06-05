@@ -1469,6 +1469,12 @@
             const totalEntradas = movimentacao.entradas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
             const loteLabel = movMata185.lote?.timestamp ? new Date(Number(movMata185.lote.timestamp)).toLocaleString("pt-BR") : "sem lote MATA185";
             const maquinaLabel = cfg.maquinaMovimentacao || "Todas";
+            const itensPorUnidadeMata185 = [...(movMata185.itens || [])]
+                .map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", atendido:Number(i.atendido || 0)}))
+                .sort((a,b) => Number(b.atendido || 0) - Number(a.atendido || 0));
+            const itensPorRegistrosMata185 = [...(movMata185.itens || [])]
+                .map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", requisicoes:Number(i.requisicoes || 0)}))
+                .sort((a,b) => Number(b.requisicoes || 0) - Number(a.requisicoes || 0));
             document.getElementById("subtitulo").textContent = `Movimentacao da ${movimentacao.faixa.nome}: ${movimentacao.faixa.label} | MATA185: ${loteLabel}`;
             root.innerHTML = `
                 <section class="cards">
@@ -1485,7 +1491,8 @@
                     <button class="primaryBtn" type="button" data-action="relatorio-contagem-mata185">Gerar relatorio de contagem</button>
                 </div>
                 <section class="vizGrid">
-                    ${renderBarras("Itens com mais saida do armazem 04 - MATA185", (movMata185.itens || []).map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", atendido:i.atendido || 0})), "atendido")}
+                    ${renderBarras("Itens com mais saida em unidades - armazem 04 MATA185", itensPorUnidadeMata185, "atendido")}
+                    ${renderBarras("Itens com mais registros de saida - armazem 04 MATA185", itensPorRegistrosMata185, "requisicoes")}
                     ${renderBarras("Maiores faltas em entregas parciais", (movMata185.parciais || []).map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", faltante:i.faltante || 0})), "faltante")}
                 </section>
                 <h2 class="sectionTitle">Requisicoes entregues parcialmente - MATA185</h2>
