@@ -569,20 +569,34 @@
         line-height: 1.35;
     }
 
+    .contagemMachineIntro {
+        align-items: stretch;
+    }
+
+    .contagemMachineIntro button {
+        min-height: 42px;
+    }
+
+    .contagemAliasFields {
+        grid-template-columns: 1fr;
+    }
+
+    .contagemAliasFields button {
+        min-height: 40px;
+    }
+
+    .contagemAliasItem {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    #contagemSectionGrid,
     #contagemMachineGrid {
+        grid-template-columns: 1fr 1fr;
         gap: 14px;
     }
 
-    .contagemMachineSectionGrid {
-        grid-template-columns: 1fr 1fr;
-        gap: 9px;
-    }
-
-    #contagemResumeActions {
-        grid-template-columns: 1fr;
-        gap: 8px;
-    }
-
+    .contagemSectionCard,
     .contagemMachineCard {
         min-height: 112px;
         border-radius: 14px;
@@ -832,7 +846,8 @@
         height: 28px;
     }
 
-    .contagemMachineSectionGrid {
+    #contagemSectionGrid,
+    #contagemMachineGrid {
         grid-template-columns: 1fr;
     }
 

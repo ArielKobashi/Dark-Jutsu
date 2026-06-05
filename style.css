@@ -2846,9 +2846,16 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 
 .contagemMachineIntro{
     display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+    color:#D1FAE5;
+}
+
+.contagemMachineIntro > div{
+    display:flex;
     flex-direction:column;
     gap:4px;
-    color:#D1FAE5;
 }
 
 .contagemMachineIntro strong{
@@ -2860,55 +2867,99 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     font-size:13px;
 }
 
-#contagemResumeActions{
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    gap:10px;
-}
-
-#contagemResumeActions button{
-    min-height:48px;
-    border-radius:14px;
-    font-weight:900;
-}
-
-#contagemResumeActions .continuar{
-    border-color:rgba(74,222,128,0.42);
+.contagemMachineIntro button,
+.contagemAliasFields button,
+.contagemAliasItem button{
+    border:1px solid rgba(134,239,172,0.34);
+    border-radius:10px;
     background:rgba(15,85,42,0.86);
     color:#D1FAE5;
+    font-size:12px;
+    font-weight:900;
+    padding:9px 12px;
+    cursor:pointer;
 }
 
-#contagemResumeActions .reiniciar{
+#contagemAliasPanel{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    border:1px solid rgba(134,239,172,0.22);
+    border-radius:14px;
+    background:rgba(5,17,12,0.82);
+    padding:12px;
+}
+
+.contagemAliasFields{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(160px, 1fr)) repeat(2, auto);
+    gap:10px;
+    align-items:end;
+}
+
+.contagemAliasFields label{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    color:#8FB8A0;
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+}
+
+.contagemAliasFields select{
+    min-height:38px;
+    border:1px solid rgba(134,239,172,0.26);
+    border-radius:10px;
+    background:#07130D;
+    color:#D1FAE5;
+    padding:0 10px;
+    font-weight:800;
+}
+
+#contagemAliasLista{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+
+.contagemAliasItem{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    border:1px solid rgba(148,163,184,0.18);
+    border-radius:10px;
+    background:rgba(15,23,42,0.52);
+    color:#D1FAE5;
+    padding:8px 10px;
+    font-size:12px;
+}
+
+.contagemAliasItem span{
+    min-width:0;
+}
+
+.contagemAliasItem button{
     border-color:rgba(248,113,113,0.42);
     background:rgba(82,22,22,0.86);
     color:#FEE2E2;
+    flex-shrink:0;
 }
 
+.contagemAliasVazio{
+    color:#8FB8A0;
+    font-size:12px;
+}
+
+#contagemSectionGrid,
 #contagemMachineGrid{
-    display:flex;
-    flex-direction:column;
-    gap:16px;
-}
-
-.contagemMachineSection{
-    display:flex;
-    flex-direction:column;
-    gap:9px;
-}
-
-.contagemMachineSection h3{
-    margin:0;
-    color:#D1FAE5;
-    font-size:14px;
-    text-transform:uppercase;
-    letter-spacing:0;
-}
-
-.contagemMachineSectionGrid{
     display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(135px, 1fr));
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
     gap:10px;
 }
 
+.contagemSectionCard,
 .contagemMachineCard{
     min-height:96px;
     display:flex;
@@ -2925,16 +2976,50 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     cursor:pointer;
 }
 
+.contagemSectionCard{
+    align-items:center;
+    text-align:center;
+    border-color:rgba(59,130,246,0.28);
+    background:rgba(12,31,54,0.82);
+}
+
+.contagemSectionCard.ativa{
+    border-color:rgba(134,239,172,0.74);
+    box-shadow:0 0 0 1px rgba(134,239,172,0.18), 0 0 18px rgba(34,197,94,0.16);
+}
+
+.contagemMachineCard{
+    cursor:default;
+}
+
+.contagemMachineStart{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    justify-content:center;
+    gap:5px;
+    width:100%;
+    border:0;
+    background:transparent;
+    color:inherit;
+    padding:0;
+    text-align:left;
+    cursor:pointer;
+}
+
+.contagemSectionCard strong,
 .contagemMachineCard strong{
     font-size:22px;
     color:#86EFAC;
 }
 
+.contagemSectionCard span,
 .contagemMachineCard span{
     font-size:14px;
     font-weight:800;
 }
 
+.contagemSectionCard small,
 .contagemMachineCard small{
     color:#8FB8A0;
     font-size:11px;
@@ -2943,6 +3028,39 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 .contagemMachineCard.completa{
     border-color:rgba(59,130,246,0.36);
     background:rgba(15,32,55,0.82);
+}
+
+.contagemMachineCardActions{
+    width:100%;
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:8px;
+    margin-top:8px;
+}
+
+.contagemMachineCardActions button{
+    min-height:34px;
+    border-radius:10px;
+    font-size:11px;
+    font-weight:900;
+    cursor:pointer;
+}
+
+.contagemMachineCardActions .continuar{
+    border-color:rgba(74,222,128,0.42);
+    background:rgba(15,85,42,0.86);
+    color:#D1FAE5;
+}
+
+.contagemMachineCardActions .reiniciar{
+    border-color:rgba(248,113,113,0.42);
+    background:rgba(82,22,22,0.86);
+    color:#FEE2E2;
+}
+
+.contagemMachineCardActions button:disabled{
+    opacity:.42;
+    cursor:not-allowed;
 }
 
 .contagemMaqBtn{

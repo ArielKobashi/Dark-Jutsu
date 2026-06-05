@@ -304,13 +304,28 @@ document.addEventListener("keydown", function(e){
 
     <div id="contagemMachineSelect">
         <div class="contagemMachineIntro">
-            <strong>Escolha a maquina</strong>
-            <span>Os itens entram em ordem de endereco dentro da maquina escolhida.</span>
+            <div>
+                <strong>Escolha a maquina</strong>
+                <span>Os itens entram em ordem de endereco dentro da maquina escolhida.</span>
+            </div>
+            <button type="button" onclick="abrirConfigUnificacaoContagem()">Unificar maquinas</button>
         </div>
-        <div id="contagemResumeActions" style="display:none;">
-            <button type="button" class="continuar" onclick="continuarContagemDeOndeParou()">Continuar de onde parei</button>
-            <button type="button" class="reiniciar" onclick="reiniciarContagemAtual()">Reiniciar contagem</button>
+        <div id="contagemAliasPanel" style="display:none;">
+            <div class="contagemAliasFields">
+                <label>
+                    Origem duplicada
+                    <select id="contagemAliasOrigem"></select>
+                </label>
+                <label>
+                    Unificar em
+                    <select id="contagemAliasDestino"></select>
+                </label>
+                <button type="button" onclick="adicionarAliasMaquinaContagem()">Salvar</button>
+                <button type="button" onclick="fecharConfigUnificacaoContagem()">Fechar</button>
+            </div>
+            <div id="contagemAliasLista"></div>
         </div>
+        <div id="contagemSectionGrid"></div>
         <div id="contagemMachineGrid"></div>
     </div>
 
@@ -708,7 +723,7 @@ function setDigitando(roomId, ativo){
 }
 
 function getItemKey(item){
-    return (item && (item.protheusKey || item.protheus)) ? (item.protheusKey || item.protheus) : "";
+    return (item && (item.protheusKey || item.protheus || item.cooperat)) ? (item.protheusKey || item.protheus || item.cooperat) : "";
 }
 
 function getBaseDadosTodos(){
@@ -1571,7 +1586,14 @@ function isEnderecoValido(valor){
 }
 
 function findItemByKey(key){
-    return getBaseDadosTodos().find(d => getItemKey(d) === key);
+    const alvo = normalizarCodigoItem(key);
+    if(!alvo) return null;
+    return getBaseDadosTodos().find(d => {
+        return [getItemKey(d), d?.protheusKey, d?.protheus, d?.cooperat]
+            .map(normalizarCodigoItem)
+            .filter(Boolean)
+            .includes(alvo);
+    }) || null;
 }
 
 function pareceCodigoProtheus(valor){
@@ -2975,17 +2997,49 @@ function toggleEtiquetasPanel(forceOpen = null){
 }
 window.toggleEtiquetasPanel = toggleEtiquetasPanel;
 
+function sincronizarSelecionadosComCheckboxesVisiveis(){
+    document.querySelectorAll('#tableBody input[type="checkbox"][data-key]').forEach(cb => {
+        const key = cb.dataset.key || "";
+        if(!key) return;
+        if(cb.checked){
+            selecionados.add(key);
+        }else{
+            selecionados.delete(key);
+        }
+    });
+    limparSelecionadosInvalidos();
+    atualizarEstadoHeader();
+}
+
+function obterItensSelecionadosParaEtiquetas(){
+    sincronizarSelecionadosComCheckboxesVisiveis();
+    const chaves = [...new Set(Array.from(selecionados || []).filter(Boolean))];
+    const porChave = new Map();
+    getBaseDadosTodos().forEach(item => {
+        [getItemKey(item), item?.protheusKey, item?.protheus, item?.cooperat]
+            .map(normalizarCodigoItem)
+            .filter(Boolean)
+            .forEach(chave => {
+                if(!porChave.has(chave)) porChave.set(chave, item);
+            });
+    });
+    return chaves.map(key => ({
+        key,
+        item: porChave.get(normalizarCodigoItem(key)) || findItemByKey(key)
+    }));
+}
+
 function selecionadosParaEtiquetas(){
     toggleEtiquetasPanel(true);
     salvarCodigosEtiquetaAtual();
     const tamanho = getEtiquetaTamanhoAtual();
-    const novos = Array.from(selecionados || []).map(key=>{
-        const item = findItemByKey(key);
-        return item?.protheus || item?.cooperat || key;
-    }).filter(Boolean);
+    const selecionadosInfo = obterItensSelecionadosParaEtiquetas();
+    const novos = selecionadosInfo.map(({ key, item }) => item?.protheus || item?.cooperat || key).filter(Boolean);
+    const naoEncontrados = selecionadosInfo.filter(({ item }) => !item).length;
     distribuirCodigosPorMemoriaEtiqueta(novos, tamanho);
     const totalAtual = parseCodigosEtiquetasTexto(etiquetaCodigosPorTamanho[getEtiquetaTamanhoAtual()] || "").length;
-    setEtiquetasStatus(`${novos.length} selecionado(s) distribuido(s) por tamanho. Lista atual: ${totalAtual}.`);
+    const aviso = naoEncontrados ? ` ${naoEncontrados} selecao(oes) sem item completo foram mantidas pelo codigo.` : "";
+    setEtiquetasStatus(`${novos.length} selecionado(s) distribuido(s) por tamanho. Lista atual: ${totalAtual}.${aviso}`);
 }
 window.selecionadosParaEtiquetas = selecionadosParaEtiquetas;
 
@@ -4423,6 +4477,7 @@ function gerarRelatorio(){
 
 let contagemItens = [];
 let contagemMaquinas = [];
+let contagemSecaoAtual = "";
 let contagemMaquinaAtual = "";
 let contagemItensMaquina = [];
 let contagemIndice = 0;
@@ -4450,12 +4505,41 @@ let contagemUltimaTranscricaoProcessada = "";
 let contagemUltimoProcessamentoVoz = 0;
 let contagemMicStream = null;
 const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
+const CONTAGEM_ALIAS_STORAGE_KEY = "contagemAliasesMaquinas";
 const CONTAGEM_SECOES = [
     { key:"piso1", label:"Piso 1", ordem:1 },
     { key:"piso2", label:"Piso 2", ordem:2 },
     { key:"barracao", label:"Barrac\u00e3o", ordem:3 }
 ];
 const CONTAGEM_SECOES_MAP = Object.fromEntries(CONTAGEM_SECOES.map(s => [s.key, s]));
+let contagemAliasesMaquinas = carregarAliasesMaquinasContagem();
+
+function carregarAliasesMaquinasContagem(){
+    try{
+        const raw = localStorage.getItem(CONTAGEM_ALIAS_STORAGE_KEY);
+        const parsed = JSON.parse(raw || "{}");
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    }catch(e){
+        return {};
+    }
+}
+
+function salvarAliasesMaquinasContagemLocal(){
+    try{
+        localStorage.setItem(CONTAGEM_ALIAS_STORAGE_KEY, JSON.stringify(contagemAliasesMaquinas || {}));
+    }catch(e){}
+}
+
+function aplicarConfigContagemCompartilhada(config){
+    const aliases = config?.maquinasAlias;
+    if(!aliases || typeof aliases !== "object" || Array.isArray(aliases)) return false;
+    contagemAliasesMaquinas = { ...aliases };
+    salvarAliasesMaquinasContagemLocal();
+    if(contagemItens.length) recalcularMaquinasContagem();
+    renderizarPainelAliasContagem();
+    return true;
+}
+window.aplicarConfigContagemCompartilhada = aplicarConfigContagemCompartilhada;
 
 function parsearEnderecoContagem(endereco){
     const raw = (endereco || "").toString().trim().toUpperCase();
@@ -4519,14 +4603,40 @@ function secaoGrupoContagem(grupo){
     return CONTAGEM_SECOES_MAP[secao] || CONTAGEM_SECOES_MAP.piso1;
 }
 
-function grupoItemContagem(item){
+function grupoCanonicoContagem(grupo){
+    let atual = String(grupo || "");
+    const visitados = new Set();
+    for(let i = 0; i < 12; i++){
+        const proximo = contagemAliasesMaquinas?.[atual];
+        if(!proximo || proximo === atual || visitados.has(proximo)) break;
+        visitados.add(atual);
+        atual = proximo;
+    }
+    return atual;
+}
+
+function grupoOriginalItemContagem(item){
     return parsearEnderecoContagem(item?.enderecoPrincipal).grupo;
+}
+
+function grupoItemContagem(item){
+    return grupoCanonicoContagem(grupoOriginalItemContagem(item));
+}
+
+function compararGruposContagem(a, b){
+    const sa = secaoGrupoContagem(a);
+    const sb = secaoGrupoContagem(b);
+    if(sa.ordem !== sb.ordem) return sa.ordem - sb.ordem;
+    return maquinaGrupoContagem(a).localeCompare(maquinaGrupoContagem(b), "pt-BR", { numeric:true });
 }
 
 function compararItensContagem(a, b){
     const ea = parsearEnderecoContagem(a.enderecoPrincipal);
     const eb = parsearEnderecoContagem(b.enderecoPrincipal);
-    if(ea.secaoOrdem !== eb.secaoOrdem) return ea.secaoOrdem - eb.secaoOrdem;
+    const ga = grupoCanonicoContagem(ea.grupo);
+    const gb = grupoCanonicoContagem(eb.grupo);
+    const grupoCompare = compararGruposContagem(ga, gb);
+    if(grupoCompare) return grupoCompare;
     if(ea.maquina !== eb.maquina) return ea.maquina.localeCompare(eb.maquina, "pt-BR", { numeric:true });
     if(ea.prateleira !== eb.prateleira) return ea.prateleira.localeCompare(eb.prateleira, "pt-BR", { numeric:true });
     if(ea.caixa !== eb.caixa) return ea.caixa - eb.caixa;
@@ -4799,6 +4909,20 @@ function calcularProgressoContagemPrincipal(){
     return { total, feitas, percentual };
 }
 
+function recalcularMaquinasContagem(){
+    contagemItens.sort(compararItensContagem);
+    const grupos = new Set();
+    contagemItens.forEach(item => grupos.add(grupoItemContagem(item)));
+    contagemMaquinas = Array.from(grupos).sort(compararGruposContagem);
+    if(contagemMaquinaAtual) contagemMaquinaAtual = resolverGrupoSessaoContagem(contagemMaquinaAtual);
+    if(contagemItensMaquina.length && contagemMaquinaAtual){
+        contagemItensMaquina = contagemItens.filter(item => grupoItemContagem(item) === contagemMaquinaAtual);
+    }
+    if(!contagemSecaoAtual || !gruposDaSecaoContagem(contagemSecaoAtual).length){
+        contagemSecaoAtual = primeiraSecaoDisponivelContagem();
+    }
+}
+
 function atualizarPopupProgressoContagemPrincipal(){
     const popup = document.getElementById("contagemHomePopup");
     const pctEl = document.getElementById("contagemHomePct");
@@ -4897,9 +5021,8 @@ async function abrirContagem(){
     const sessao = carregarSessaoContagem();
     contagemValores = carregarRascunhoContagem();
     contagemVerificacoesVazio = carregarVerificacoesContagem();
-    const maquinas = new Set();
-    contagemItens.forEach(item => maquinas.add(grupoItemContagem(item)));
-    contagemMaquinas = Array.from(maquinas);
+    recalcularMaquinasContagem();
+    contagemSecaoAtual = primeiraSecaoDisponivelContagem();
     contagemMaquinaAtual = "";
     contagemItensMaquina = [];
     contagemIndice = 0;
@@ -4948,37 +5071,81 @@ function voltarContagem(){
 function resolverGrupoSessaoContagem(valor){
     if(!valor) return "";
     if(contagemMaquinas.includes(valor)) return valor;
+    const canonico = grupoCanonicoContagem(valor);
+    if(contagemMaquinas.includes(canonico)) return canonico;
     const alvo = String(valor).includes("||") ? maquinaGrupoContagem(valor) : String(valor);
     return contagemMaquinas.find(grupo => maquinaGrupoContagem(grupo) === alvo) || "";
 }
 
-function existeContagemInacabada(){
+function gruposDaSecaoContagem(secaoKey){
+    return contagemMaquinas.filter(grupo => secaoGrupoContagem(grupo).key === secaoKey);
+}
+
+function primeiraSecaoDisponivelContagem(){
+    const secao = CONTAGEM_SECOES.find(cfg => gruposDaSecaoContagem(cfg.key).length);
+    return secao?.key || CONTAGEM_SECOES[0]?.key || "piso1";
+}
+
+function totalRegistradoGrupoContagem(grupo){
+    return contagemItens
+        .filter(item => grupoItemContagem(item) === grupo)
+        .filter(item => {
+            const key = itemKeyContagem(item);
+            return isVerificacaoVazioContagem(item)
+                ? contagemVerificacoesVazio[key] !== undefined
+                : contagemValores[key] !== undefined;
+        }).length;
+}
+
+function totalItensGrupoContagem(grupo){
+    return contagemItens.filter(item => grupoItemContagem(item) === grupo).length;
+}
+
+function grupoTemRascunhoContagem(grupo){
+    if(!grupo) return false;
+    const sessao = carregarSessaoContagem();
+    if(resolverGrupoSessaoContagem(sessao.maquina || "") === grupo) return true;
+    return totalRegistradoGrupoContagem(grupo) > 0;
+}
+
+function existeContagemInacabada(grupo = ""){
     const sessao = carregarSessaoContagem();
     const grupoSessao = resolverGrupoSessaoContagem(sessao.maquina || "");
+    if(grupo){
+        const totalGrupo = totalItensGrupoContagem(grupo);
+        const totalRegistradoGrupo = totalRegistradoGrupoContagem(grupo);
+        return grupoSessao === grupo || (totalRegistradoGrupo > 0 && totalRegistradoGrupo < totalGrupo);
+    }
     const totalRegistrado = Object.keys(contagemValores || {}).length + Object.keys(contagemVerificacoesVazio || {}).length;
     const totalItens = Math.max(1, contagemItens.length);
     return !!grupoSessao || (totalRegistrado > 0 && totalRegistrado < totalItens);
 }
 
-function atualizarAcoesRetomadaContagem(){
-    const box = document.getElementById("contagemResumeActions");
-    if(!box) return;
-    box.style.display = existeContagemInacabada() ? "grid" : "none";
-}
-
-function continuarContagemDeOndeParou(){
+function continuarContagemDeOndeParou(grupo = ""){
     const sessao = carregarSessaoContagem();
-    const grupo = resolverGrupoSessaoContagem(sessao.maquina || "") || contagemMaquinas[0];
-    if(!grupo) return;
-    selecionarMaquinaContagem(grupo, true, Number(sessao.indice || 0), sessao.itemKey || "");
+    const grupoSessao = resolverGrupoSessaoContagem(sessao.maquina || "");
+    const alvo = resolverGrupoSessaoContagem(grupo) || grupoSessao || contagemMaquinas[0];
+    if(!alvo) return;
+    const continuarSessao = grupoSessao === alvo;
+    selecionarMaquinaContagem(
+        alvo,
+        true,
+        continuarSessao ? Number(sessao.indice || 0) : null,
+        continuarSessao ? (sessao.itemKey || "") : ""
+    );
 }
 
-function reiniciarContagemAtual(){
-    if(!confirm("Reiniciar a contagem? O rascunho atual sera apagado.")) return;
-    limparRascunhoSessaoContagemLocal();
-    salvarSessaoContagem({ aberta:true, maquina:"", indice:0, itemKey:"", dataInicio:dataContagemHoje() });
-    contagemValores = {};
-    contagemVerificacoesVazio = {};
+function reiniciarContagemAtual(grupo = ""){
+    const sessao = carregarSessaoContagem();
+    const alvo = resolverGrupoSessaoContagem(grupo)
+        || contagemMaquinaAtual
+        || resolverGrupoSessaoContagem(sessao.maquina || "");
+    if(!alvo) return;
+    if(!confirm(`Reiniciar a contagem de ${labelGrupoContagem(alvo)}? O rascunho desta maquina sera apagado.`)) return;
+    limparRascunhoContagemMaquina(alvo);
+    if(resolverGrupoSessaoContagem(sessao.maquina || "") === alvo){
+        salvarSessaoContagem({ aberta:true, maquina:"", indice:0, itemKey:"", dataInicio:dataContagemHoje() });
+    }
     contagemMaquinaAtual = "";
     contagemItensMaquina = [];
     contagemIndice = 0;
@@ -4986,8 +5153,109 @@ function reiniciarContagemAtual(){
     mostrarSelecaoMaquinaContagem();
 }
 
+function gruposOriginaisDisponiveisContagem(){
+    const grupos = new Set();
+    contagemItens.forEach(item => grupos.add(grupoOriginalItemContagem(item)));
+    Object.entries(contagemAliasesMaquinas || {}).forEach(([origem, destino]) => {
+        if(origem) grupos.add(origem);
+        if(destino) grupos.add(destino);
+    });
+    return Array.from(grupos).sort(compararGruposContagem);
+}
+
+function gruposDestinoDisponiveisContagem(){
+    const grupos = new Set(gruposOriginaisDisponiveisContagem());
+    contagemMaquinas.forEach(grupo => grupos.add(grupo));
+    return Array.from(grupos).sort(compararGruposContagem);
+}
+
+function renderizarPainelAliasContagem(){
+    const panel = document.getElementById("contagemAliasPanel");
+    if(!panel || panel.style.display === "none") return;
+    const origemSelect = document.getElementById("contagemAliasOrigem");
+    const destinoSelect = document.getElementById("contagemAliasDestino");
+    const lista = document.getElementById("contagemAliasLista");
+    const origens = gruposOriginaisDisponiveisContagem();
+    const destinos = gruposDestinoDisponiveisContagem();
+    const montarOptions = grupos => grupos.map(grupo => `<option value="${escapeHtml(grupo)}">${escapeHtml(labelGrupoContagem(grupo))}</option>`).join("");
+    if(origemSelect) origemSelect.innerHTML = montarOptions(origens);
+    if(destinoSelect) destinoSelect.innerHTML = montarOptions(destinos);
+    if(lista){
+        const entradas = Object.entries(contagemAliasesMaquinas || {}).sort((a, b) => compararGruposContagem(a[0], b[0]));
+        lista.innerHTML = entradas.length ? entradas.map(([origem, destino]) => `
+            <div class="contagemAliasItem">
+                <span><strong>${escapeHtml(labelGrupoContagem(origem))}</strong> em ${escapeHtml(labelGrupoContagem(destino))}</span>
+                <button type="button" onclick="removerAliasMaquinaContagem('${escapeHtml(origem)}')">Remover</button>
+            </div>
+        `).join("") : `<div class="contagemAliasVazio">Nenhuma unificacao manual cadastrada.</div>`;
+    }
+}
+
+function abrirConfigUnificacaoContagem(){
+    const panel = document.getElementById("contagemAliasPanel");
+    if(panel) panel.style.display = "flex";
+    renderizarPainelAliasContagem();
+}
+
+function fecharConfigUnificacaoContagem(){
+    const panel = document.getElementById("contagemAliasPanel");
+    if(panel) panel.style.display = "none";
+}
+
+async function persistirAliasesMaquinasContagem(){
+    salvarAliasesMaquinasContagemLocal();
+    if(window.firebaseUpdate && window.ref && window.db){
+        try{
+            await window.firebaseUpdate(window.ref(window.db, "estoqueGlobal/configContagem"), {
+                maquinasAlias: contagemAliasesMaquinas || {}
+            });
+            return true;
+        }catch(e){
+            console.warn("Falha ao salvar unificacao de maquinas no Firebase:", e);
+            mostrarNotificacao("Unificacao salva localmente, mas o Firebase negou a gravacao.");
+        }
+    }
+    return false;
+}
+
+async function adicionarAliasMaquinaContagem(){
+    const origem = document.getElementById("contagemAliasOrigem")?.value || "";
+    const destino = document.getElementById("contagemAliasDestino")?.value || "";
+    if(!origem || !destino){
+        mostrarNotificacao("Selecione a maquina duplicada e a maquina principal.");
+        return;
+    }
+    if(origem === destino){
+        mostrarNotificacao("Origem e destino precisam ser maquinas diferentes.");
+        return;
+    }
+    const destinoCanonico = grupoCanonicoContagem(destino) || destino;
+    if(origem === destinoCanonico){
+        mostrarNotificacao("Essa unificacao criaria um ciclo. Escolha uma maquina principal diferente.");
+        return;
+    }
+    contagemAliasesMaquinas = { ...(contagemAliasesMaquinas || {}), [origem]: destinoCanonico };
+    recalcularMaquinasContagem();
+    await persistirAliasesMaquinasContagem();
+    renderizarPainelAliasContagem();
+    renderizarMaquinasContagem();
+}
+
+async function removerAliasMaquinaContagem(origem){
+    const chave = String(origem || "");
+    if(!chave || !contagemAliasesMaquinas?.[chave]) return;
+    const next = { ...(contagemAliasesMaquinas || {}) };
+    delete next[chave];
+    contagemAliasesMaquinas = next;
+    recalcularMaquinasContagem();
+    await persistirAliasesMaquinasContagem();
+    renderizarPainelAliasContagem();
+    renderizarMaquinasContagem();
+}
+
 function renderizarMaquinasContagem(){
     const bar = document.getElementById("contagemMaquinasBar");
+    const sectionGrid = document.getElementById("contagemSectionGrid");
     const grid = document.getElementById("contagemMachineGrid");
     if(!bar) return;
     if(contagemMaquinaAtual && document.getElementById("contagemCardArea")?.style.display !== "none"){
@@ -4995,11 +5263,12 @@ function renderizarMaquinasContagem(){
         return;
     }
     bar.innerHTML = "";
+    if(sectionGrid) sectionGrid.innerHTML = "";
     if(grid) grid.innerHTML = "";
     const itensPorGrupo = grupo => contagemItens.filter(item => grupoItemContagem(item) === grupo);
     contagemMaquinas.forEach(maquina => {
         const itensMaq = itensPorGrupo(maquina);
-        const contados = itensMaq.filter(item => contagemValores[itemKeyContagem(item)] !== undefined).length;
+        const contados = totalRegistradoGrupoContagem(maquina);
         const textoProgresso = `${contados}/${itensMaq.length}`;
 
         const btn = document.createElement("button");
@@ -5009,33 +5278,64 @@ function renderizarMaquinasContagem(){
         bar.appendChild(btn);
     });
 
-    if(grid){
+    if(!contagemSecaoAtual || !gruposDaSecaoContagem(contagemSecaoAtual).length){
+        contagemSecaoAtual = primeiraSecaoDisponivelContagem();
+    }
+
+    if(sectionGrid){
         CONTAGEM_SECOES.forEach(secao => {
-            const grupos = contagemMaquinas.filter(grupo => secaoGrupoContagem(grupo).key === secao.key);
+            const grupos = gruposDaSecaoContagem(secao.key);
             if(!grupos.length) return;
-            const section = document.createElement("section");
-            section.className = "contagemMachineSection";
-            section.innerHTML = `<h3>${escapeHtml(secao.label)}</h3><div class="contagemMachineSectionGrid"></div>`;
-            const sectionGrid = section.querySelector(".contagemMachineSectionGrid");
-            grupos.forEach(maquina => {
-                const itensMaq = itensPorGrupo(maquina);
-                const contados = itensMaq.filter(item => contagemValores[itemKeyContagem(item)] !== undefined).length;
-                const textoProgresso = `${contados}/${itensMaq.length}`;
-                const card = document.createElement("button");
-                card.type = "button";
-                card.className = "contagemMachineCard" + (contados === itensMaq.length ? " completa" : "");
-                card.innerHTML = `
+            const totalItensSecao = grupos.reduce((acc, grupo) => acc + totalItensGrupoContagem(grupo), 0);
+            const totalContadosSecao = grupos.reduce((acc, grupo) => acc + totalRegistradoGrupoContagem(grupo), 0);
+            const card = document.createElement("button");
+            card.type = "button";
+            card.className = "contagemSectionCard" + (contagemSecaoAtual === secao.key ? " ativa" : "");
+            card.innerHTML = `
+                <strong>${escapeHtml(secao.label)}</strong>
+                <span>${grupos.length} maquinas</span>
+                <small>${totalContadosSecao}/${totalItensSecao} contados</small>
+            `;
+            card.onclick = () => {
+                contagemSecaoAtual = secao.key;
+                renderizarMaquinasContagem();
+            };
+            sectionGrid.appendChild(card);
+        });
+    }
+
+    if(grid){
+        const grupos = gruposDaSecaoContagem(contagemSecaoAtual);
+        grupos.forEach(maquina => {
+            const itensMaq = itensPorGrupo(maquina);
+            const contados = totalRegistradoGrupoContagem(maquina);
+            const textoProgresso = `${contados}/${itensMaq.length}`;
+            const temRascunho = grupoTemRascunhoContagem(maquina);
+            const card = document.createElement("div");
+            card.className = "contagemMachineCard" + (contados === itensMaq.length ? " completa" : "");
+            card.innerHTML = `
+                <button type="button" class="contagemMachineStart">
                     <strong>${escapeHtml(maquinaGrupoContagem(maquina))}</strong>
                     <span>${textoProgresso} contados</span>
                     <small>${itensMaq.length} itens em ordem de endereco</small>
-                `;
-                card.onclick = () => selecionarMaquinaContagem(maquina, true);
-                sectionGrid.appendChild(card);
-            });
-            grid.appendChild(section);
+                </button>
+                <div class="contagemMachineCardActions">
+                    <button type="button" class="continuar" ${temRascunho ? "" : "disabled"}>Continuar</button>
+                    <button type="button" class="reiniciar">Reiniciar</button>
+                </div>
+            `;
+            card.querySelector(".contagemMachineStart").onclick = () => selecionarMaquinaContagem(maquina, true);
+            card.querySelector(".continuar").onclick = (ev) => {
+                ev.stopPropagation();
+                continuarContagemDeOndeParou(maquina);
+            };
+            card.querySelector(".reiniciar").onclick = (ev) => {
+                ev.stopPropagation();
+                reiniciarContagemAtual(maquina);
+            };
+            grid.appendChild(card);
         });
     }
-    atualizarAcoesRetomadaContagem();
 }
 
 function renderizarContadorMaquinaAtual(){
@@ -5064,7 +5364,9 @@ function mostrarSelecaoMaquinaContagem(){
     const progresso = document.getElementById("contagemProgresso");
     if(label) label.textContent = "Contagem";
     if(progresso) progresso.textContent = `${contagemMaquinas.length} maquinas`;
-    atualizarAcoesRetomadaContagem();
+    if(!contagemSecaoAtual || !gruposDaSecaoContagem(contagemSecaoAtual).length){
+        contagemSecaoAtual = primeiraSecaoDisponivelContagem();
+    }
 }
 
 function mostrarCardContagem(){
@@ -6427,6 +6729,10 @@ window.fecharContagem = fecharContagem;
 window.voltarContagem = voltarContagem;
 window.continuarContagemDeOndeParou = continuarContagemDeOndeParou;
 window.reiniciarContagemAtual = reiniciarContagemAtual;
+window.abrirConfigUnificacaoContagem = abrirConfigUnificacaoContagem;
+window.fecharConfigUnificacaoContagem = fecharConfigUnificacaoContagem;
+window.adicionarAliasMaquinaContagem = adicionarAliasMaquinaContagem;
+window.removerAliasMaquinaContagem = removerAliasMaquinaContagem;
 window.contagemProximo = contagemProximo;
 window.contagemAnterior = contagemAnterior;
 window.preencherContagemRapida = preencherContagemRapida;
@@ -9547,6 +9853,9 @@ async function carregarEstoqueInicial() {
             if(typeof window.aplicarConfigEtiquetasCompartilhada === "function"){
                 window.aplicarConfigEtiquetasCompartilhada(banco.configuracoesEtiquetas);
             }
+            if(typeof window.aplicarConfigContagemCompartilhada === "function"){
+                window.aplicarConfigContagemCompartilhada(banco.configContagem);
+            }
 
             ajustesItensEstoque = banco.ajustesItens || {};
             historicoSaldoEstoque = banco.historicoSaldo || {};
@@ -9563,6 +9872,9 @@ onValue(window.estoqueRef, snapshot => {
 
     if(typeof window.aplicarConfigEtiquetasCompartilhada === "function"){
         window.aplicarConfigEtiquetasCompartilhada(val.configuracoesEtiquetas);
+    }
+    if(typeof window.aplicarConfigContagemCompartilhada === "function"){
+        window.aplicarConfigContagemCompartilhada(val.configContagem);
     }
 
     const syncToken = val.ultimaAtualizacao || 0;
