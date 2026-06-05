@@ -2860,7 +2860,50 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     font-size:13px;
 }
 
+#contagemResumeActions{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+}
+
+#contagemResumeActions button{
+    min-height:48px;
+    border-radius:14px;
+    font-weight:900;
+}
+
+#contagemResumeActions .continuar{
+    border-color:rgba(74,222,128,0.42);
+    background:rgba(15,85,42,0.86);
+    color:#D1FAE5;
+}
+
+#contagemResumeActions .reiniciar{
+    border-color:rgba(248,113,113,0.42);
+    background:rgba(82,22,22,0.86);
+    color:#FEE2E2;
+}
+
 #contagemMachineGrid{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+}
+
+.contagemMachineSection{
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+}
+
+.contagemMachineSection h3{
+    margin:0;
+    color:#D1FAE5;
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:0;
+}
+
+.contagemMachineSectionGrid{
     display:grid;
     grid-template-columns:repeat(auto-fit, minmax(135px, 1fr));
     gap:10px;

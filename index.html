@@ -307,6 +307,10 @@ document.addEventListener("keydown", function(e){
             <strong>Escolha a maquina</strong>
             <span>Os itens entram em ordem de endereco dentro da maquina escolhida.</span>
         </div>
+        <div id="contagemResumeActions" style="display:none;">
+            <button type="button" class="continuar" onclick="continuarContagemDeOndeParou()">Continuar de onde parei</button>
+            <button type="button" class="reiniciar" onclick="reiniciarContagemAtual()">Reiniciar contagem</button>
+        </div>
         <div id="contagemMachineGrid"></div>
     </div>
 
@@ -4446,22 +4450,83 @@ let contagemUltimaTranscricaoProcessada = "";
 let contagemUltimoProcessamentoVoz = 0;
 let contagemMicStream = null;
 const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
+const CONTAGEM_SECOES = [
+    { key:"piso1", label:"Piso 1", ordem:1 },
+    { key:"piso2", label:"Piso 2", ordem:2 },
+    { key:"barracao", label:"Barrac\u00e3o", ordem:3 }
+];
+const CONTAGEM_SECOES_MAP = Object.fromEntries(CONTAGEM_SECOES.map(s => [s.key, s]));
 
 function parsearEnderecoContagem(endereco){
     const raw = (endereco || "").toString().trim().toUpperCase();
     if(!raw || raw === "SEM ENDERECO" || raw === "SEM ENDEREÇO"){
-        return { maquina:"SEM ENDERECO", prateleira:"", caixa:0, enderecoOriginal:raw || "SEM ENDERECO" };
+        return { secao:"piso1", secaoLabel:"Piso 1", secaoOrdem:1, maquina:"SEM ENDERECO", grupo:"piso1||SEM ENDERECO", prateleira:"", caixa:0, enderecoOriginal:raw || "SEM ENDERECO" };
     }
     const partes = raw.split("/");
     const maquina = partes[0] ? partes[0].substring(0, 4).trim() : "????";
-    const prateleira = partes[1] ? partes[1].replace(/[^A-Z]/g, "") : "";
-    const caixa = parseInt((partes[2] || "").replace(/[^0-9]/g, ""), 10) || 0;
-    return { maquina, prateleira, caixa, enderecoOriginal:raw };
+    const secao = raw.includes("BARR")
+        ? "barracao"
+        : /PI\s*[\.\-]\s*2|GAV|GV\d+/i.test(raw)
+            ? "piso2"
+            : "piso1";
+    const secaoCfg = CONTAGEM_SECOES_MAP[secao] || CONTAGEM_SECOES_MAP.piso1;
+    const ultimaParte = partes[partes.length - 1] || "";
+    const parseUltimaParte = valor => {
+        const texto = String(valor || "").trim().toUpperCase();
+        const match = texto.match(/^(.*?)(\d+)\s*$/);
+        if(match){
+            return {
+                prateleira: match[1].replace(/[^A-Z0-9]/g, "") || texto.replace(/[^A-Z]/g, ""),
+                caixa: parseInt(match[2], 10) || 0
+            };
+        }
+        return {
+            prateleira: texto.replace(/[^A-Z0-9]/g, ""),
+            caixa: parseInt(texto.replace(/[^0-9]/g, ""), 10) || 0
+        };
+    };
+    const especial = secao === "piso2" || secao === "barracao";
+    const local = especial
+        ? parseUltimaParte(ultimaParte)
+        : {
+            prateleira: partes[1] ? partes[1].replace(/[^A-Z]/g, "") : "",
+            caixa: parseInt((partes[2] || "").replace(/[^0-9]/g, ""), 10) || 0
+        };
+    return {
+        secao,
+        secaoLabel: secaoCfg.label,
+        secaoOrdem: secaoCfg.ordem,
+        maquina,
+        grupo: `${secao}||${maquina}`,
+        prateleira: local.prateleira,
+        caixa: local.caixa,
+        enderecoOriginal:raw
+    };
+}
+
+function labelGrupoContagem(grupo){
+    const [secao, maquina] = String(grupo || "").split("||");
+    const secaoCfg = CONTAGEM_SECOES_MAP[secao] || CONTAGEM_SECOES_MAP.piso1;
+    return maquina ? `${secaoCfg.label} - ${maquina}` : secaoCfg.label;
+}
+
+function maquinaGrupoContagem(grupo){
+    return String(grupo || "").split("||")[1] || String(grupo || "");
+}
+
+function secaoGrupoContagem(grupo){
+    const secao = String(grupo || "").split("||")[0] || "piso1";
+    return CONTAGEM_SECOES_MAP[secao] || CONTAGEM_SECOES_MAP.piso1;
+}
+
+function grupoItemContagem(item){
+    return parsearEnderecoContagem(item?.enderecoPrincipal).grupo;
 }
 
 function compararItensContagem(a, b){
     const ea = parsearEnderecoContagem(a.enderecoPrincipal);
     const eb = parsearEnderecoContagem(b.enderecoPrincipal);
+    if(ea.secaoOrdem !== eb.secaoOrdem) return ea.secaoOrdem - eb.secaoOrdem;
     if(ea.maquina !== eb.maquina) return ea.maquina.localeCompare(eb.maquina, "pt-BR", { numeric:true });
     if(ea.prateleira !== eb.prateleira) return ea.prateleira.localeCompare(eb.prateleira, "pt-BR", { numeric:true });
     if(ea.caixa !== eb.caixa) return ea.caixa - eb.caixa;
@@ -4522,7 +4587,7 @@ function limparRascunhoContagemMaquina(maquina){
         return;
     }
     contagemItens
-        .filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === alvo)
+        .filter(item => grupoItemContagem(item) === alvo)
         .forEach(item => {
             const key = itemKeyContagem(item);
             delete contagemValores[key];
@@ -4771,9 +4836,11 @@ function inserirVerificacoesSequenciaContagem(linhas){
     linhas.forEach(item => {
         const info = parsearEnderecoContagem(item.enderecoPrincipal);
         if(!info.prateleira || !info.caixa) return;
-        const chave = `${info.maquina}||${info.prateleira}`;
+        const chave = `${info.grupo}||${info.prateleira}`;
         if(!grupos.has(chave)){
             grupos.set(chave, {
+                grupo: info.grupo,
+                secao: info.secao,
                 maquina: info.maquina,
                 prateleira: info.prateleira,
                 caixas: new Set()
@@ -4791,7 +4858,11 @@ function inserirVerificacoesSequenciaContagem(linhas){
             const faltam = proxima - atual - 1;
             if(faltam <= 0 || faltam > 50) continue;
             for(let caixa = atual + 1; caixa < proxima; caixa++){
-                const endereco = `${grupo.maquina}/${grupo.prateleira}/CX${caixa}`;
+                const endereco = grupo.secao === "piso2"
+                    ? `${grupo.maquina}/PI.2/${grupo.prateleira}${caixa}`
+                    : grupo.secao === "barracao"
+                        ? `${grupo.maquina}/BARR/${grupo.prateleira}${caixa}`
+                        : `${grupo.maquina}/${grupo.prateleira}/CX${caixa}`;
                 saida.push({
                     tipoContagem: "verificacao_vazio",
                     protheus: "",
@@ -4800,7 +4871,7 @@ function inserirVerificacoesSequenciaContagem(linhas){
                     enderecoPrincipal: endereco,
                     armazemPrincipal: "",
                     saldo: "",
-                    contagemKey: `VAZIO||${grupo.maquina}||${grupo.prateleira}||${caixa}`,
+                    contagemKey: `VAZIO||${grupo.grupo}||${grupo.prateleira}||${caixa}`,
                     maquina: grupo.maquina,
                     prateleira: grupo.prateleira,
                     caixa: caixa
@@ -4827,7 +4898,7 @@ async function abrirContagem(){
     contagemValores = carregarRascunhoContagem();
     contagemVerificacoesVazio = carregarVerificacoesContagem();
     const maquinas = new Set();
-    contagemItens.forEach(item => maquinas.add(parsearEnderecoContagem(item.enderecoPrincipal).maquina));
+    contagemItens.forEach(item => maquinas.add(grupoItemContagem(item)));
     contagemMaquinas = Array.from(maquinas);
     contagemMaquinaAtual = "";
     contagemItensMaquina = [];
@@ -4840,9 +4911,6 @@ async function abrirContagem(){
     document.getElementById("main").style.display = "none";
     marcarContagemAberta(true);
 
-    if(sessao.maquina && contagemMaquinas.includes(sessao.maquina)){
-        selecionarMaquinaContagem(sessao.maquina, true, Number(sessao.indice || 0), sessao.itemKey || "");
-    }
 }
 
 function fecharContagem(){
@@ -4877,6 +4945,47 @@ function voltarContagem(){
     fecharContagem();
 }
 
+function resolverGrupoSessaoContagem(valor){
+    if(!valor) return "";
+    if(contagemMaquinas.includes(valor)) return valor;
+    const alvo = String(valor).includes("||") ? maquinaGrupoContagem(valor) : String(valor);
+    return contagemMaquinas.find(grupo => maquinaGrupoContagem(grupo) === alvo) || "";
+}
+
+function existeContagemInacabada(){
+    const sessao = carregarSessaoContagem();
+    const grupoSessao = resolverGrupoSessaoContagem(sessao.maquina || "");
+    const totalRegistrado = Object.keys(contagemValores || {}).length + Object.keys(contagemVerificacoesVazio || {}).length;
+    const totalItens = Math.max(1, contagemItens.length);
+    return !!grupoSessao || (totalRegistrado > 0 && totalRegistrado < totalItens);
+}
+
+function atualizarAcoesRetomadaContagem(){
+    const box = document.getElementById("contagemResumeActions");
+    if(!box) return;
+    box.style.display = existeContagemInacabada() ? "grid" : "none";
+}
+
+function continuarContagemDeOndeParou(){
+    const sessao = carregarSessaoContagem();
+    const grupo = resolverGrupoSessaoContagem(sessao.maquina || "") || contagemMaquinas[0];
+    if(!grupo) return;
+    selecionarMaquinaContagem(grupo, true, Number(sessao.indice || 0), sessao.itemKey || "");
+}
+
+function reiniciarContagemAtual(){
+    if(!confirm("Reiniciar a contagem? O rascunho atual sera apagado.")) return;
+    limparRascunhoSessaoContagemLocal();
+    salvarSessaoContagem({ aberta:true, maquina:"", indice:0, itemKey:"", dataInicio:dataContagemHoje() });
+    contagemValores = {};
+    contagemVerificacoesVazio = {};
+    contagemMaquinaAtual = "";
+    contagemItensMaquina = [];
+    contagemIndice = 0;
+    renderizarMaquinasContagem();
+    mostrarSelecaoMaquinaContagem();
+}
+
 function renderizarMaquinasContagem(){
     const bar = document.getElementById("contagemMaquinasBar");
     const grid = document.getElementById("contagemMachineGrid");
@@ -4887,30 +4996,46 @@ function renderizarMaquinasContagem(){
     }
     bar.innerHTML = "";
     if(grid) grid.innerHTML = "";
+    const itensPorGrupo = grupo => contagemItens.filter(item => grupoItemContagem(item) === grupo);
     contagemMaquinas.forEach(maquina => {
-        const itensMaq = contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquina);
+        const itensMaq = itensPorGrupo(maquina);
         const contados = itensMaq.filter(item => contagemValores[itemKeyContagem(item)] !== undefined).length;
         const textoProgresso = `${contados}/${itensMaq.length}`;
 
         const btn = document.createElement("button");
         btn.className = "contagemMaqBtn" + (maquina === contagemMaquinaAtual ? " ativa" : "");
-        btn.innerHTML = `${escapeHtml(maquina)}<span class="contagemMaqBtnBadge">${textoProgresso}</span>`;
+        btn.innerHTML = `${escapeHtml(labelGrupoContagem(maquina))}<span class="contagemMaqBtnBadge">${textoProgresso}</span>`;
         btn.onclick = () => selecionarMaquinaContagem(maquina, true);
         bar.appendChild(btn);
-
-        if(grid){
-            const card = document.createElement("button");
-            card.type = "button";
-            card.className = "contagemMachineCard" + (contados === itensMaq.length ? " completa" : "");
-            card.innerHTML = `
-                <strong>${escapeHtml(maquina)}</strong>
-                <span>${textoProgresso} contados</span>
-                <small>${itensMaq.length} itens em ordem de endereco</small>
-            `;
-            card.onclick = () => selecionarMaquinaContagem(maquina, true);
-            grid.appendChild(card);
-        }
     });
+
+    if(grid){
+        CONTAGEM_SECOES.forEach(secao => {
+            const grupos = contagemMaquinas.filter(grupo => secaoGrupoContagem(grupo).key === secao.key);
+            if(!grupos.length) return;
+            const section = document.createElement("section");
+            section.className = "contagemMachineSection";
+            section.innerHTML = `<h3>${escapeHtml(secao.label)}</h3><div class="contagemMachineSectionGrid"></div>`;
+            const sectionGrid = section.querySelector(".contagemMachineSectionGrid");
+            grupos.forEach(maquina => {
+                const itensMaq = itensPorGrupo(maquina);
+                const contados = itensMaq.filter(item => contagemValores[itemKeyContagem(item)] !== undefined).length;
+                const textoProgresso = `${contados}/${itensMaq.length}`;
+                const card = document.createElement("button");
+                card.type = "button";
+                card.className = "contagemMachineCard" + (contados === itensMaq.length ? " completa" : "");
+                card.innerHTML = `
+                    <strong>${escapeHtml(maquinaGrupoContagem(maquina))}</strong>
+                    <span>${textoProgresso} contados</span>
+                    <small>${itensMaq.length} itens em ordem de endereco</small>
+                `;
+                card.onclick = () => selecionarMaquinaContagem(maquina, true);
+                sectionGrid.appendChild(card);
+            });
+            grid.appendChild(section);
+        });
+    }
+    atualizarAcoesRetomadaContagem();
 }
 
 function renderizarContadorMaquinaAtual(){
@@ -4919,7 +5044,7 @@ function renderizarContadorMaquinaAtual(){
     const resumo = obterResumoContagemMaquina();
     bar.innerHTML = `
         <div class="contagemMachineProgress">
-            <span>${escapeHtml(contagemMaquinaAtual)}</span>
+            <span>${escapeHtml(labelGrupoContagem(contagemMaquinaAtual))}</span>
             <strong>${resumo.contados}/${resumo.total}</strong>
             <small>contados</small>
         </div>
@@ -4939,6 +5064,7 @@ function mostrarSelecaoMaquinaContagem(){
     const progresso = document.getElementById("contagemProgresso");
     if(label) label.textContent = "Contagem";
     if(progresso) progresso.textContent = `${contagemMaquinas.length} maquinas`;
+    atualizarAcoesRetomadaContagem();
 }
 
 function mostrarCardContagem(){
@@ -5086,7 +5212,7 @@ function abrirJanelaEscutaContagem(){
 
 function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null, itemKeyPreferido = ""){
     contagemMaquinaAtual = maquina;
-    contagemItensMaquina = contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquina);
+    contagemItensMaquina = contagemItens.filter(item => grupoItemContagem(item) === maquina);
     const primeiroPendente = contagemItensMaquina.findIndex(item => contagemValores[itemKeyContagem(item)] === undefined);
     const indicePorItem = itemKeyPreferido ? contagemItensMaquina.findIndex(item => itemKeyContagem(item) === itemKeyPreferido) : -1;
     if(indicePorItem >= 0){
@@ -5107,7 +5233,7 @@ function renderizarCardContagem(){
     const item = contagemItensMaquina[contagemIndice];
     const total = contagemItensMaquina.length;
     const label = document.getElementById("contagemMaquinaLabel");
-    if(label) label.textContent = contagemMaquinaAtual || "Maquina";
+    if(label) label.textContent = contagemMaquinaAtual ? labelGrupoContagem(contagemMaquinaAtual) : "Maquina";
     if(!item) return;
 
     const infoEndereco = parsearEnderecoContagem(item.enderecoPrincipal);
@@ -5615,7 +5741,7 @@ function contagemAnterior(){
             const idx = contagemMaquinas.indexOf(contagemMaquinaAtual);
             if(idx > 0){
                 contagemMaquinaAtual = contagemMaquinas[idx - 1];
-                contagemItensMaquina = contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === contagemMaquinaAtual);
+                contagemItensMaquina = contagemItens.filter(item => grupoItemContagem(item) === contagemMaquinaAtual);
                 contagemIndice = Math.max(contagemItensMaquina.length - 1, 0);
             }
         }
@@ -5657,7 +5783,7 @@ function criarPayloadRascunhoRelatorioContagem(rascunho = true){
     salvarAtualContagem();
     const maquinaBase = contagemMaquinaAtual || carregarSessaoContagem().maquina || "";
     const itensBase = maquinaBase
-        ? contagemItens.filter(item => parsearEnderecoContagem(item.enderecoPrincipal).maquina === maquinaBase)
+        ? contagemItens.filter(item => grupoItemContagem(item) === maquinaBase)
         : [...contagemItensMaquina];
     const itensContados = itensBase.filter(item => !isVerificacaoVazioContagem(item) && contagemValores[itemKeyContagem(item)] !== undefined);
     if(!itensContados.length) return null;
@@ -5692,7 +5818,7 @@ function linhaEhDaMaquinaContagemAtual(linha){
     const maquina = contagemMaquinaAtual || carregarSessaoContagem().maquina || "";
     if(!maquina) return true;
     const endereco = linha?.item?.endereco || "";
-    return parsearEnderecoContagem(endereco).maquina === maquina;
+    return parsearEnderecoContagem(endereco).grupo === maquina;
 }
 
 function mesclarRascunhoAtualRelatorioContagem(contagens){
@@ -5751,6 +5877,7 @@ function coletarLinhasRelatorioContagem(){
 function compararEnderecoRelatorioContagem(a, b){
     const ea = parsearEnderecoContagem(a?.item?.endereco || "");
     const eb = parsearEnderecoContagem(b?.item?.endereco || "");
+    if(ea.secaoOrdem !== eb.secaoOrdem) return ea.secaoOrdem - eb.secaoOrdem;
     if(ea.maquina !== eb.maquina) return ea.maquina.localeCompare(eb.maquina, "pt-BR", { numeric:true, sensitivity:"base" });
     if(ea.prateleira !== eb.prateleira) return ea.prateleira.localeCompare(eb.prateleira, "pt-BR", { numeric:true, sensitivity:"base" });
     if(ea.caixa !== eb.caixa) return ea.caixa - eb.caixa;
@@ -5922,6 +6049,7 @@ function linhasRegistroContagemPlanilha(sessao){
     return linhas.sort((a, b) => {
         const ea = parsearEnderecoContagem(a.Endereco || "");
         const eb = parsearEnderecoContagem(b.Endereco || "");
+        if(ea.secaoOrdem !== eb.secaoOrdem) return ea.secaoOrdem - eb.secaoOrdem;
         if(ea.maquina !== eb.maquina) return ea.maquina.localeCompare(eb.maquina, "pt-BR", { numeric:true, sensitivity:"base" });
         if(ea.prateleira !== eb.prateleira) return ea.prateleira.localeCompare(eb.prateleira, "pt-BR", { numeric:true, sensitivity:"base" });
         if(ea.caixa !== eb.caixa) return ea.caixa - eb.caixa;
@@ -6297,6 +6425,8 @@ function baixarHistoricoContagemPlanilha(indice){
 window.abrirContagem = abrirContagem;
 window.fecharContagem = fecharContagem;
 window.voltarContagem = voltarContagem;
+window.continuarContagemDeOndeParou = continuarContagemDeOndeParou;
+window.reiniciarContagemAtual = reiniciarContagemAtual;
 window.contagemProximo = contagemProximo;
 window.contagemAnterior = contagemAnterior;
 window.preencherContagemRapida = preencherContagemRapida;

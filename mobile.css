@@ -570,8 +570,17 @@
     }
 
     #contagemMachineGrid {
+        gap: 14px;
+    }
+
+    .contagemMachineSectionGrid {
         grid-template-columns: 1fr 1fr;
         gap: 9px;
+    }
+
+    #contagemResumeActions {
+        grid-template-columns: 1fr;
+        gap: 8px;
     }
 
     .contagemMachineCard {
@@ -823,7 +832,7 @@
         height: 28px;
     }
 
-    #contagemMachineGrid {
+    .contagemMachineSectionGrid {
         grid-template-columns: 1fr;
     }
 
