@@ -696,6 +696,11 @@ let ajustesItensEstoque = {};
 let historicoSaldoEstoque = {};
 let pedidosCompraEstado = {};
 let sugestaoAutomaticaEstoqueAtiva = localStorage.getItem("sugestaoAutomaticaEstoqueAtiva") !== "false";
+let contagemModoFocoAtivo = false;
+let estoquePendenteModoFoco = null;
+let estoqueSnapshotPendenteModoFoco = null;
+let filtrosPendentesModoFoco = false;
+window.contagemModoFocoAtivo = contagemModoFocoAtivo;
 var privateRoomGateState = null;
 var salaAtual = window.salaAtual || "publica";
 var roomMessages = window.roomMessages || {};
@@ -1682,7 +1687,12 @@ async function salvarAjusteEstoqueItem(itemKey, minimoRaw, maximoRaw){
 }
 window.salvarAjusteEstoqueItem = salvarAjusteEstoqueItem;
 
-window.setDados = function(novosDados){
+window.setDados = function(novosDados, opcoes = {}){
+    if(window.contagemModoFocoAtivo && !opcoes.forcarModoFoco){
+        estoquePendenteModoFoco = Array.isArray(novosDados) ? novosDados : [];
+        filtrosPendentesModoFoco = true;
+        return;
+    }
     const anteriores = getBaseDadosTodos();
     const dadosCorrigidos = Array.isArray(novosDados)
         ? novosDados.map(item => corrigirItemIncluirInvertido({...item}))
@@ -1692,7 +1702,11 @@ window.setDados = function(novosDados){
     dadosMortos = separados.mortos.map(item => aplicarAjusteManualItem(item));
     window.dados = dados;
     window.dadosMortos = dadosMortos;
-    aplicarTodosFiltros();
+    if(contagemModoFocoAtivo && !opcoes.forcarFiltros){
+        filtrosPendentesModoFoco = true;
+    }else{
+        aplicarTodosFiltros();
+    }
     if(typeof atualizarPopupProgressoContagemPrincipal === "function"){
         atualizarPopupProgressoContagemPrincipal();
     }
@@ -4504,6 +4518,8 @@ let contagemTranscricaoTimer = null;
 let contagemUltimaTranscricaoProcessada = "";
 let contagemUltimoProcessamentoVoz = 0;
 let contagemMicStream = null;
+let contagemRascunhoFirebaseTimer = null;
+let contagemRascunhoFirebaseAvisoErro = false;
 const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
 const CONTAGEM_ALIAS_STORAGE_KEY = "contagemAliasesMaquinas";
 const CONTAGEM_SECOES = [
@@ -4683,6 +4699,7 @@ function limparRascunhoSessaoContagemLocal(){
         localStorage.removeItem(chaveVerificacoesContagem());
         localStorage.removeItem(chaveSessaoContagem());
     }catch(e){}
+    limparRascunhoContagemFirebase();
     contagemValores = {};
     contagemVerificacoesVazio = {};
     contagemMaquinaAtual = "";
@@ -4708,9 +4725,12 @@ function limparRascunhoContagemMaquina(maquina){
         localStorage.removeItem(chaveRascunhoContagem());
         localStorage.removeItem(chaveVerificacoesContagem());
         localStorage.removeItem(chaveSessaoContagem());
+        limparRascunhoContagemFirebase();
         contagemMaquinaAtual = "";
         contagemItensMaquina = [];
         contagemIndice = 0;
+    }else{
+        agendarSalvarRascunhoContagemFirebase();
     }
 }
 
@@ -4728,6 +4748,7 @@ function aplicarResetGlobalContagem(resetInfo, avisar = true){
         document.getElementById("contagemScreen").style.display = "none";
         document.getElementById("main").style.display = "";
         document.body?.classList.remove("contagem-open");
+        desativarModoFocoContagem();
     }
     contagemAplicandoResetGlobal = false;
     if(avisar){
@@ -4757,11 +4778,105 @@ function iniciarListenerResetGlobalContagem(){
     }
 }
 
+function uidRascunhoContagemFirebase(){
+    return window.auth?.currentUser?.uid || "";
+}
+
+function pathRascunhoContagemFirebase(){
+    const uid = uidRascunhoContagemFirebase();
+    return uid ? `contagemRascunhos/${uid}` : "";
+}
+
+function payloadRascunhoContagemFirebase(){
+    return {
+        usuario:window.meuNickname || "",
+        uid:uidRascunhoContagemFirebase(),
+        valores:contagemValores || {},
+        verificacoesVazio:contagemVerificacoesVazio || {},
+        sessao:carregarSessaoContagem(),
+        updatedAt:Date.now()
+    };
+}
+
+async function salvarRascunhoContagemFirebaseAgora(){
+    if(contagemRascunhoFirebaseTimer){
+        clearTimeout(contagemRascunhoFirebaseTimer);
+        contagemRascunhoFirebaseTimer = null;
+    }
+    const path = pathRascunhoContagemFirebase();
+    if(!path || !window.set || !window.ref || !window.db) return false;
+    try{
+        await window.set(window.ref(window.db, path), payloadRascunhoContagemFirebase());
+        contagemRascunhoFirebaseAvisoErro = false;
+        return true;
+    }catch(e){
+        console.warn("Falha ao salvar rascunho da contagem no Firebase:", e);
+        if(!contagemRascunhoFirebaseAvisoErro){
+            contagemRascunhoFirebaseAvisoErro = true;
+            mostrarNotificacao("Rascunho salvo localmente, mas o Firebase negou o backup.");
+        }
+        return false;
+    }
+}
+
+function agendarSalvarRascunhoContagemFirebase(delay = 450){
+    if(!uidRascunhoContagemFirebase() || !window.set || !window.ref || !window.db) return;
+    if(contagemRascunhoFirebaseTimer) clearTimeout(contagemRascunhoFirebaseTimer);
+    contagemRascunhoFirebaseTimer = setTimeout(() => {
+        salvarRascunhoContagemFirebaseAgora();
+    }, delay);
+}
+
+async function limparRascunhoContagemFirebase(){
+    if(contagemRascunhoFirebaseTimer){
+        clearTimeout(contagemRascunhoFirebaseTimer);
+        contagemRascunhoFirebaseTimer = null;
+    }
+    const path = pathRascunhoContagemFirebase();
+    if(!path || !window.set || !window.ref || !window.db) return;
+    try{
+        await window.set(window.ref(window.db, path), null);
+    }catch(e){
+        console.warn("Falha ao limpar rascunho da contagem no Firebase:", e);
+    }
+}
+
+async function carregarRascunhoContagemFirebase(){
+    const path = pathRascunhoContagemFirebase();
+    if(!path || !window.get || !window.ref || !window.db) return false;
+    try{
+        const snap = await window.get(window.ref(window.db, path));
+        if(!snap.exists()) return false;
+        const remoto = snap.val() || {};
+        const sessaoRemota = remoto.sessao && typeof remoto.sessao === "object" ? remoto.sessao : {};
+        const localSessao = carregarSessaoContagem();
+        const remotoTs = Number(remoto.updatedAt || sessaoRemota.updatedAt || 0);
+        const localTs = Number(localSessao.updatedAt || 0);
+        if(remotoTs > localTs){
+            contagemValores = remoto.valores && typeof remoto.valores === "object" ? remoto.valores : {};
+            contagemVerificacoesVazio = remoto.verificacoesVazio && typeof remoto.verificacoesVazio === "object" ? remoto.verificacoesVazio : {};
+            try{
+                localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
+                localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
+                localStorage.setItem(chaveSessaoContagem(), JSON.stringify(sessaoRemota));
+            }catch(e){}
+            return true;
+        }
+        if(localTs > remotoTs){
+            agendarSalvarRascunhoContagemFirebase(50);
+        }
+    }catch(e){
+        console.warn("Falha ao carregar rascunho da contagem no Firebase:", e);
+    }
+    return false;
+}
+
 function salvarRascunhoContagem(){
     try{
         localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
         localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
     }catch(e){}
+    agendarSalvarRascunhoContagemFirebase();
 }
 
 function carregarRascunhoContagem(){
@@ -4801,6 +4916,7 @@ function salvarSessaoContagem(extra = {}){
             ...extra
         }));
     }catch(e){}
+    agendarSalvarRascunhoContagemFirebase();
 }
 
 function marcarContagemAberta(aberta){
@@ -4938,6 +5054,7 @@ function atualizarPopupProgressoContagemPrincipal(){
 }
 
 function iniciarPopupProgressoContagemPrincipal(){
+    if(contagemModoFocoAtivo) return;
     atualizarPopupProgressoContagemPrincipal();
     if(contagemHomeUnsub || !window.onValue || !window.ref || !window.db) return;
     try{
@@ -4953,6 +5070,49 @@ function iniciarPopupProgressoContagemPrincipal(){
 }
 window.atualizarPopupProgressoContagemPrincipal = atualizarPopupProgressoContagemPrincipal;
 window.iniciarPopupProgressoContagemPrincipal = iniciarPopupProgressoContagemPrincipal;
+
+function pausarPopupProgressoContagemPrincipal(){
+    if(typeof contagemHomeUnsub === "function"){
+        try{ contagemHomeUnsub(); }catch(e){}
+    }
+    contagemHomeUnsub = null;
+}
+
+function ativarModoFocoContagem(){
+    if(contagemModoFocoAtivo) return;
+    contagemModoFocoAtivo = true;
+    window.contagemModoFocoAtivo = true;
+    document.body?.classList.add("contagem-focus-mode");
+    pausarPopupProgressoContagemPrincipal();
+    if(typeof window.pausarMonitoramentoChatModoFoco === "function"){
+        window.pausarMonitoramentoChatModoFoco();
+    }
+}
+
+function desativarModoFocoContagem(){
+    if(!contagemModoFocoAtivo) return;
+    contagemModoFocoAtivo = false;
+    window.contagemModoFocoAtivo = false;
+    document.body?.classList.remove("contagem-focus-mode");
+    const snapshotPendente = estoqueSnapshotPendenteModoFoco;
+    estoqueSnapshotPendenteModoFoco = null;
+    const dadosPendentes = estoquePendenteModoFoco;
+    estoquePendenteModoFoco = null;
+    if(snapshotPendente){
+        aplicarSnapshotEstoqueFirebase(snapshotPendente, { forcarModoFoco:true, forcarFiltros:true });
+        filtrosPendentesModoFoco = false;
+    }else if(dadosPendentes){
+        window.setDados(dadosPendentes, { forcarModoFoco:true, forcarFiltros:true });
+        filtrosPendentesModoFoco = false;
+    }else if(filtrosPendentesModoFoco){
+        filtrosPendentesModoFoco = false;
+        aplicarTodosFiltros();
+    }
+    iniciarPopupProgressoContagemPrincipal();
+    if(typeof window.retomarMonitoramentoChatModoFoco === "function"){
+        window.retomarMonitoramentoChatModoFoco();
+    }
+}
 
 function inserirVerificacoesSequenciaContagem(linhas){
     const saida = [...linhas];
@@ -5018,9 +5178,9 @@ async function abrirContagem(){
         return;
     }
 
-    const sessao = carregarSessaoContagem();
     contagemValores = carregarRascunhoContagem();
     contagemVerificacoesVazio = carregarVerificacoesContagem();
+    await carregarRascunhoContagemFirebase();
     recalcularMaquinasContagem();
     contagemSecaoAtual = primeiraSecaoDisponivelContagem();
     contagemMaquinaAtual = "";
@@ -5029,6 +5189,7 @@ async function abrirContagem(){
     renderizarMaquinasContagem();
     mostrarSelecaoMaquinaContagem();
     atualizarBotoesVozContagem();
+    ativarModoFocoContagem();
 
     document.getElementById("contagemScreen").style.display = "flex";
     document.getElementById("main").style.display = "none";
@@ -5048,6 +5209,7 @@ function fecharContagem(){
     try{ window.speechSynthesis?.cancel(); }catch(e){}
     document.getElementById("contagemScreen").style.display = "none";
     document.getElementById("main").style.display = "";
+    desativarModoFocoContagem();
 }
 
 async function tentarRetomarContagemPendente(){
@@ -6744,6 +6906,16 @@ window.limparContagemAtual = limparContagemAtual;
 window.registrarVerificacaoVazioContagem = registrarVerificacaoVazioContagem;
 window.toggleNarradorContagem = toggleNarradorContagem;
 window.toggleLocutorContagem = toggleLocutorContagem;
+window.addEventListener("pagehide", () => {
+    if(document.getElementById("contagemScreen")?.style.display !== "none"){
+        salvarRascunhoContagemFirebaseAgora();
+    }
+});
+window.addEventListener("beforeunload", () => {
+    if(document.getElementById("contagemScreen")?.style.display !== "none"){
+        salvarRascunhoContagemFirebaseAgora();
+    }
+});
 window.finalizarContagem = finalizarContagem;
 window.abrirRelatorioContagem = abrirRelatorioContagem;
 window.fecharRelatorioContagem = fecharRelatorioContagem;
@@ -7928,6 +8100,10 @@ document.addEventListener("click", function(e){
 });
 
 function aplicarTodosFiltros(){
+    if(contagemModoFocoAtivo){
+        filtrosPendentesModoFoco = true;
+        return;
+    }
 
     if (!Array.isArray(dados)) dados = [];
 
@@ -9838,6 +10014,45 @@ function formatarTextoUltimaAtualizacao(data, usuario) {
     );
 }
 
+function atualizarTextoUltimaAtualizacaoEstoque(val){
+    const el = document.getElementById("lastUpdate");
+    if(!el || !val) return;
+    const data = val.ultimaAtualizacao
+        ? new Date(val.ultimaAtualizacao).toLocaleString()
+        : "Nunca";
+    const usuario = val.atualizadoPor || "Sistema";
+    el.innerHTML = formatarTextoUltimaAtualizacao(data, usuario);
+}
+
+function aplicarSnapshotEstoqueFirebase(val, opcoes = {}){
+    if(!val) return;
+    if(typeof window.aplicarConfigEtiquetasCompartilhada === "function"){
+        window.aplicarConfigEtiquetasCompartilhada(val.configuracoesEtiquetas);
+    }
+    if(typeof window.aplicarConfigContagemCompartilhada === "function"){
+        window.aplicarConfigContagemCompartilhada(val.configContagem);
+    }
+    const syncToken = val.ultimaAtualizacao || 0;
+    if(window.contagemModoFocoAtivo && !opcoes.forcarModoFoco){
+        estoqueSnapshotPendenteModoFoco = val;
+        filtrosPendentesModoFoco = true;
+        atualizarTextoUltimaAtualizacaoEstoque(val);
+        return;
+    }
+    if(window.__estoqueSyncToken !== syncToken || opcoes.forcarModoFoco){
+        window.__estoqueSyncToken = syncToken;
+        ajustesItensEstoque = val.ajustesItens || {};
+        historicoSaldoEstoque = val.historicoSaldo || {};
+        pedidosCompraEstado = calcularPedidosCompraEstado(val.dados || [], val.pedidosCompra || {});
+        dadosMortos = Array.isArray(val.dadosMortos) ? val.dadosMortos.map(item => aplicarAjusteManualItem(corrigirItemIncluirInvertido({...item}))) : [];
+        window.dadosMortos = dadosMortos;
+        if(Array.isArray(val.dados)){
+            window.setDados(val.dados, { forcarModoFoco:!!opcoes.forcarModoFoco, forcarFiltros:!!opcoes.forcarFiltros });
+        }
+    }
+    atualizarTextoUltimaAtualizacaoEstoque(val);
+}
+
 // --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
 async function carregarEstoqueInicial() {
 
@@ -9869,35 +10084,7 @@ onValue(window.estoqueRef, snapshot => {
 
     const val = snapshot.val();
     if(!val) return;
-
-    if(typeof window.aplicarConfigEtiquetasCompartilhada === "function"){
-        window.aplicarConfigEtiquetasCompartilhada(val.configuracoesEtiquetas);
-    }
-    if(typeof window.aplicarConfigContagemCompartilhada === "function"){
-        window.aplicarConfigContagemCompartilhada(val.configContagem);
-    }
-
-    const syncToken = val.ultimaAtualizacao || 0;
-    if(window.__estoqueSyncToken !== syncToken){
-        window.__estoqueSyncToken = syncToken;
-        ajustesItensEstoque = val.ajustesItens || {};
-        historicoSaldoEstoque = val.historicoSaldo || {};
-        pedidosCompraEstado = calcularPedidosCompraEstado(val.dados || [], val.pedidosCompra || {});
-        dadosMortos = Array.isArray(val.dadosMortos) ? val.dadosMortos.map(item => aplicarAjusteManualItem(corrigirItemIncluirInvertido({...item}))) : [];
-        window.dadosMortos = dadosMortos;
-        if(Array.isArray(val.dados)){
-            window.setDados(val.dados);
-        }
-    }
-
-    const data = val.ultimaAtualizacao
-        ? new Date(val.ultimaAtualizacao).toLocaleString()
-        : "Nunca";
-
-    const usuario = val.atualizadoPor || "Sistema";
-
-    document.getElementById("lastUpdate").innerHTML =
-        formatarTextoUltimaAtualizacao(data, usuario);
+    aplicarSnapshotEstoqueFirebase(val);
 
 });
 
@@ -10237,6 +10424,7 @@ function atualizarVistaChatAtivo(roomId = salaAtual, marcarComoVista = false){
 window.atualizarVistaChatAtivo = atualizarVistaChatAtivo;
 
 function iniciarMonitoramentoSalas(){
+    if(window.contagemModoFocoAtivo) return;
     salasChat.forEach(room=>{
         if(chatRoomUnsubs[room.id]) return;
         chatRoomUnsubs[room.id] = onValue(getChatRef(room.id), snapshot => {
@@ -10257,6 +10445,7 @@ function iniciarMonitoramentoSalas(){
 }
 
 function iniciarMonitoramentoTyping(roomId){
+    if(window.contagemModoFocoAtivo) return;
     if(chatTypingRoomUnsub){
         chatTypingRoomUnsub();
         chatTypingRoomUnsub = null;
@@ -10267,6 +10456,27 @@ function iniciarMonitoramentoTyping(roomId){
         atualizarDigitandoUI();
     });
 }
+
+function pausarMonitoramentoChatModoFoco(){
+    try{ setDigitando(salaAtual, false); }catch(e){}
+    Object.values(chatRoomUnsubs || {}).forEach(unsub=>{
+        if(typeof unsub === "function") unsub();
+    });
+    chatRoomUnsubs = {};
+    if(chatTypingRoomUnsub){
+        chatTypingRoomUnsub();
+        chatTypingRoomUnsub = null;
+    }
+    typingUsers = {};
+    atualizarDigitandoUI();
+}
+
+function retomarMonitoramentoChatModoFoco(){
+    if(!window.meuNickname) return;
+    iniciarChatSePermitido();
+}
+window.pausarMonitoramentoChatModoFoco = pausarMonitoramentoChatModoFoco;
+window.retomarMonitoramentoChatModoFoco = retomarMonitoramentoChatModoFoco;
 
 function pararMonitoramentoChat(){
     Object.values(chatRoomUnsubs || {}).forEach(unsub=>{
@@ -10535,6 +10745,7 @@ function atualizarGatePublico(){
 }
 
 function iniciarChatSePermitido(){
+    if(window.contagemModoFocoAtivo) return;
     iniciarMonitoramentoSalas();
     if(privateRoomGateState && privateRoomGateState.roomId === salaAtual){
         atualizarGatePrivado();

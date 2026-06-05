@@ -279,6 +279,11 @@ display:none;
     opacity:0.78;
 }
 
+body.contagem-focus-mode #contagemHomePopup,
+body.contagem-focus-mode #chatWrap{
+    display:none !important;
+}
+
 @keyframes contagemHomeShine{
     to{transform:translateX(260%)}
 }
