@@ -938,14 +938,64 @@ function ultimaEntradaSaldoDepois(itemOrKey, timestamp){
     });
 }
 
+function chaveCabecalhoPlanilha(valor){
+    return (valor ?? "").toString()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "");
+}
+
+function indiceCabecalhoPlanilha(planilha, obrigatorios = []){
+    const obrigatoriosNorm = obrigatorios.map(chaveCabecalhoPlanilha).filter(Boolean);
+    const linhas = Array.isArray(planilha) ? planilha : [];
+    const idx = linhas.findIndex(row => {
+        const chaves = new Set((Array.isArray(row) ? row : []).map(chaveCabecalhoPlanilha).filter(Boolean));
+        return obrigatoriosNorm.every(nome => chaves.has(nome));
+    });
+    return idx >= 0 ? idx : (linhas.length > 1 ? 1 : 0);
+}
+
+function mapaColunasPlanilha(planilha, obrigatorios, aliases){
+    const headerIndex = indiceCabecalhoPlanilha(planilha, obrigatorios);
+    const header = Array.isArray(planilha?.[headerIndex]) ? planilha[headerIndex] : [];
+    const porNome = new Map();
+    header.forEach((valor, idx) => {
+        const chave = chaveCabecalhoPlanilha(valor);
+        if(chave) porNome.set(chave, idx);
+    });
+    const colunas = {};
+    Object.entries(aliases || {}).forEach(([nome, lista]) => {
+        for(const alias of lista){
+            const idx = porNome.get(chaveCabecalhoPlanilha(alias));
+            if(idx !== undefined){
+                colunas[nome] = idx;
+                break;
+            }
+        }
+    });
+    return {headerIndex, colunas};
+}
+
+function celulaPlanilha(row, colunas, nome, fallback){
+    const idx = colunas?.[nome] ?? fallback;
+    return Array.isArray(row) && idx !== undefined ? row[idx] : undefined;
+}
+
 function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
+    const mata111Info = mapaColunasPlanilha(mata111, ["Produto"], {
+        codigo: ["Produto"],
+        data: ["Data Emissao", "Data Emissão"],
+        quantidadePedida: ["Quantidade"],
+        quantidadeRecebida: ["Qtd.Entregue", "Qtd Entregue"]
+    });
     const pedidosPorCodigo = new Map();
-    (Array.isArray(mata111) ? mata111.slice(1) : []).forEach((row, idx) => {
-        const codigo = normalizarCodigoItem(row?.[6]);
+    (Array.isArray(mata111) ? mata111.slice(mata111Info.headerIndex + 1) : []).forEach((row, idx) => {
+        const codigo = normalizarCodigoItem(celulaPlanilha(row, mata111Info.colunas, "codigo", 6));
         if(!codigo) return;
-        const quantidadePedida = parsePlanilhaNumero(row?.[9]) || 0;
-        const quantidadeRecebida = parsePlanilhaNumero(row?.[11]) || 0;
-        const timestamp = parsePlanilhaData(row?.[2]) || 0;
+        const quantidadePedida = parsePlanilhaNumero(celulaPlanilha(row, mata111Info.colunas, "quantidadePedida", 9)) || 0;
+        const quantidadeRecebida = parsePlanilhaNumero(celulaPlanilha(row, mata111Info.colunas, "quantidadeRecebida", 11)) || 0;
+        const timestamp = parsePlanilhaData(celulaPlanilha(row, mata111Info.colunas, "data", 2)) || 0;
         const pedido = {
             codigo,
             dataPedido: timestamp ? formatarDataHistoricoSaldo(timestamp) : "",
@@ -960,18 +1010,25 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
 
     pedidosPorCodigo.forEach(lista => lista.sort((a,b) => (b.timestamp - a.timestamp) || (b.rowIndex - a.rowIndex)));
 
+    const mata110Info = mapaColunasPlanilha(mata110, ["Produto"], {
+        codigo: ["Produto"],
+        quantidadeSolicitada: ["Quantidade"],
+        solicitante: ["Solicitante"],
+        quantidadeEmPedido: ["Quant.em Ped", "Quant em Ped"],
+        aceitoPor: ["Nome"]
+    });
     const solicitacoesPorCodigo = new Map();
-    (Array.isArray(mata110) ? mata110.slice(1) : []).forEach((row, idx) => {
-        const codigo = normalizarCodigoItem(row?.[3]);
+    (Array.isArray(mata110) ? mata110.slice(mata110Info.headerIndex + 1) : []).forEach((row, idx) => {
+        const codigo = normalizarCodigoItem(celulaPlanilha(row, mata110Info.colunas, "codigo", 3));
         if(!codigo) return;
-        const quantidadeSolicitada = parsePlanilhaNumero(row?.[5]) || 0;
-        const quantidadeEmPedido = parsePlanilhaNumero(row?.[8]) || 0;
+        const quantidadeSolicitada = parsePlanilhaNumero(celulaPlanilha(row, mata110Info.colunas, "quantidadeSolicitada", 5)) || 0;
+        const quantidadeEmPedido = parsePlanilhaNumero(celulaPlanilha(row, mata110Info.colunas, "quantidadeEmPedido", 8)) || 0;
         const solicitacao = {
             codigo,
             quantidadeSolicitada,
-            solicitante: (row?.[7] ?? "").toString().trim(),
+            solicitante: (celulaPlanilha(row, mata110Info.colunas, "solicitante", 7) ?? "").toString().trim(),
             quantidadeEmPedido,
-            aceitoPor: (row?.[17] ?? "").toString().trim(),
+            aceitoPor: (celulaPlanilha(row, mata110Info.colunas, "aceitoPor", 17) ?? "").toString().trim(),
             rowIndex: idx
         };
         if(!solicitacoesPorCodigo.has(codigo)) solicitacoesPorCodigo.set(codigo, []);
@@ -979,15 +1036,21 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
     });
 
     const estado = {};
+    const mata112Info = mapaColunasPlanilha(mata112, ["Produto"], {
+        codigo: ["Produto"],
+        quantidadeEntrada: ["Quantidade", "Quantidade Original", "Quantidade_x000D_\nOriginal"],
+        saldoAEnderecar: ["Saldo a Enderecar", "Saldo a Endereçar", "Saldo a Distribuir", "Saldo a_x000D_\nDistribuir"],
+        dataEntrada: ["Data", "Dt Digitacao", "Dt Digitação", "Data Digitacao", "Data Digitação"]
+    });
     const entradasPorCodigo = new Map();
-    (Array.isArray(mata112) ? mata112.slice(1) : []).forEach((row, idx) => {
-        const codigo = normalizarCodigoItem(row?.[0]);
+    (Array.isArray(mata112) ? mata112.slice(mata112Info.headerIndex + 1) : []).forEach((row, idx) => {
+        const codigo = normalizarCodigoItem(celulaPlanilha(row, mata112Info.colunas, "codigo", 0));
         if(!codigo) return;
-        const timestamp = parsePlanilhaData(row?.[12]) || 0;
+        const timestamp = parsePlanilhaData(celulaPlanilha(row, mata112Info.colunas, "dataEntrada", 12)) || 0;
         const entrada = {
             codigo,
-            quantidadeEntrada: parsePlanilhaNumero(row?.[3]) || 0,
-            saldoAEnderecar: parsePlanilhaNumero(row?.[4]) || 0,
+            quantidadeEntrada: parsePlanilhaNumero(celulaPlanilha(row, mata112Info.colunas, "quantidadeEntrada", 3)) || 0,
+            saldoAEnderecar: parsePlanilhaNumero(celulaPlanilha(row, mata112Info.colunas, "saldoAEnderecar", 4)) || 0,
             dataEntrada: timestamp ? formatarDataHistoricoSaldo(timestamp) : "",
             timestamp,
             rowIndex: idx
@@ -1063,15 +1126,15 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
                 status = "aguardando_recebimento";
                 titulo = "Aguardando recebimento...";
                 detalhe = `Pedido feito em: ${pedidoAtivo.dataPedido || "-"}`;
+            }else if(pedidoAtivo && entradaAtiva && entradaAtiva.saldoAEnderecar > 0){
+                status = "aguardando_enderecamento";
+                titulo = "Aguardando endereçamento...";
+                detalhe = `Entrou dia: ${entradaAtiva.dataEntrada || "-"} - ${formatarNumeroPlanilha(entradaAtiva.quantidadeEntrada)} unidades`;
             }else if(pedidoAtivo && pedidoAtivo.quantidadeRecebida > 0){
                 status = "aguardando_contagem";
                 titulo = "Aguardando contagem de nota...";
                 detalhe = `Recebido em: ${pedidoAtivo.dataPedido || "-"}`;
                 recebidoSemEntrada = pedidoAtivo.quantidadeRecebida;
-            }else if(pedidoAtivo && entradaAtiva && entradaAtiva.saldoAEnderecar > 0){
-                status = "aguardando_enderecamento";
-                titulo = "Aguardando endereçamento...";
-                detalhe = `Entrou dia: ${entradaAtiva.dataEntrada || "-"} - ${formatarNumeroPlanilha(entradaAtiva.quantidadeEntrada)} unidades`;
             }
         }
 

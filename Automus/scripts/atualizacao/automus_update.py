@@ -179,6 +179,44 @@ def _read_sheet(path: Path, sheet_name: str | None = None) -> list[list[Any]]:
         wb.close()
 
 
+def _header_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", _sheet_name_key(value))
+
+
+def _find_header_index(rows: list[list[Any]] | None, required: tuple[str, ...]) -> int:
+    required_keys = {_header_key(name) for name in required}
+    for idx, row in enumerate(rows or []):
+        keys = {_header_key(value) for value in row if _safe_text(value)}
+        if required_keys.issubset(keys):
+            return idx
+    return 1 if rows and len(rows) > 1 else 0
+
+
+def _column_map(
+    rows: list[list[Any]] | None,
+    required: tuple[str, ...],
+    aliases: dict[str, tuple[str, ...]],
+) -> tuple[int, dict[str, int]]:
+    header_index = _find_header_index(rows, required)
+    header = (rows or [[]])[header_index] if rows else []
+    by_key = {_header_key(value): index for index, value in enumerate(header) if _safe_text(value)}
+    out: dict[str, int] = {}
+    for name, names in aliases.items():
+        for alias in names:
+            key = _header_key(alias)
+            if key in by_key:
+                out[name] = by_key[key]
+                break
+    return header_index, out
+
+
+def _cell(row: list[Any], columns: dict[str, int], name: str, fallback: int | None = None) -> Any:
+    index = columns.get(name, fallback)
+    if index is None or len(row) <= index:
+        return ""
+    return row[index]
+
+
 def _is_endereco_valido(value: Any) -> bool:
     txt = ("" if value is None else str(value)).strip()
     if not txt:
@@ -444,47 +482,66 @@ def _montar_pedidos_compra(
     itens: list[dict[str, Any]],
     historico: dict[str, Any],
 ) -> dict[str, Any]:
+    mata111_header, mata111_cols = _column_map(mata111, ("Produto",), {
+        "codigo": ("Produto",),
+        "data": ("Data Emissao", "Data Emissão"),
+        "quantidade_pedida": ("Quantidade",),
+        "quantidade_recebida": ("Qtd.Entregue", "Qtd Entregue"),
+    })
     pedidos_por_codigo: dict[str, list[dict[str, Any]]] = {}
-    for idx, row in enumerate((mata111 or [])[1:]):
-        codigo = _ascii_lower(row[6] if len(row) > 6 else "")
+    for idx, row in enumerate((mata111 or [])[mata111_header + 1:]):
+        codigo = _ascii_lower(_cell(row, mata111_cols, "codigo", 6))
         if not codigo:
             continue
-        data_txt, ts = _sheet_date(row[2] if len(row) > 2 else "")
+        data_txt, ts = _sheet_date(_cell(row, mata111_cols, "data", 2))
         pedidos_por_codigo.setdefault(codigo, []).append({
             "codigo": codigo,
             "dataPedido": data_txt,
             "timestamp": ts,
-            "quantidadePedida": _num(row[9] if len(row) > 9 else 0),
-            "quantidadeRecebida": _num(row[11] if len(row) > 11 else 0),
+            "quantidadePedida": _num(_cell(row, mata111_cols, "quantidade_pedida", 9)),
+            "quantidadeRecebida": _num(_cell(row, mata111_cols, "quantidade_recebida", 11)),
             "rowIndex": idx,
         })
     for lista in pedidos_por_codigo.values():
         lista.sort(key=lambda p: (p.get("timestamp") or 0, p.get("rowIndex") or 0), reverse=True)
 
+    mata110_header, mata110_cols = _column_map(mata110, ("Produto",), {
+        "codigo": ("Produto",),
+        "quantidade_solicitada": ("Quantidade",),
+        "solicitante": ("Solicitante",),
+        "quantidade_em_pedido": ("Quant.em Ped", "Quant em Ped"),
+        "aceito_por": ("Nome",),
+    })
     solicitacoes_por_codigo: dict[str, list[dict[str, Any]]] = {}
-    for idx, row in enumerate((mata110 or [])[1:]):
-        codigo = _ascii_lower(row[3] if len(row) > 3 else "")
+    for idx, row in enumerate((mata110 or [])[mata110_header + 1:]):
+        codigo = _ascii_lower(_cell(row, mata110_cols, "codigo", 3))
         if not codigo:
             continue
         solicitacoes_por_codigo.setdefault(codigo, []).append({
             "codigo": codigo,
-            "quantidadeSolicitada": _num(row[5] if len(row) > 5 else 0),
-            "solicitante": _safe_text(row[7] if len(row) > 7 else ""),
-            "quantidadeEmPedido": _num(row[8] if len(row) > 8 else 0),
-            "aceitoPor": _safe_text(row[17] if len(row) > 17 else ""),
+            "quantidadeSolicitada": _num(_cell(row, mata110_cols, "quantidade_solicitada", 5)),
+            "solicitante": _safe_text(_cell(row, mata110_cols, "solicitante", 7)),
+            "quantidadeEmPedido": _num(_cell(row, mata110_cols, "quantidade_em_pedido", 8)),
+            "aceitoPor": _safe_text(_cell(row, mata110_cols, "aceito_por", 17)),
             "rowIndex": idx,
         })
 
+    mata112_header, mata112_cols = _column_map(mata112, ("Produto",), {
+        "codigo": ("Produto",),
+        "quantidade_entrada": ("Quantidade", "Quantidade Original", "Quantidade_x000D_\nOriginal"),
+        "saldo_a_enderecar": ("Saldo a Enderecar", "Saldo a Endereçar", "Saldo a Distribuir", "Saldo a_x000D_\nDistribuir"),
+        "data_entrada": ("Data", "Dt Digitacao", "Dt Digitação", "Data Digitacao", "Data Digitação"),
+    })
     entradas_por_codigo: dict[str, list[dict[str, Any]]] = {}
-    for idx, row in enumerate((mata112 or [])[1:]):
-        codigo = _ascii_lower(row[0] if len(row) > 0 else "")
+    for idx, row in enumerate((mata112 or [])[mata112_header + 1:]):
+        codigo = _ascii_lower(_cell(row, mata112_cols, "codigo", 0))
         if not codigo:
             continue
-        data_txt, ts = _sheet_date(row[12] if len(row) > 12 else "")
+        data_txt, ts = _sheet_date(_cell(row, mata112_cols, "data_entrada", 12))
         entradas_por_codigo.setdefault(codigo, []).append({
             "codigo": codigo,
-            "quantidadeEntrada": _num(row[3] if len(row) > 3 else 0),
-            "saldoAEnderecar": _num(row[4] if len(row) > 4 else 0),
+            "quantidadeEntrada": _num(_cell(row, mata112_cols, "quantidade_entrada", 3)),
+            "saldoAEnderecar": _num(_cell(row, mata112_cols, "saldo_a_enderecar", 4)),
             "dataEntrada": data_txt,
             "timestamp": ts,
             "rowIndex": idx,

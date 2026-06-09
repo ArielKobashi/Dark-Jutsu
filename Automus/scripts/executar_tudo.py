@@ -20,6 +20,19 @@ from controladordeatualização import (
 
 MODOS_ATUALIZACAO = {"nivel1", "nivel2", "todos"}
 
+NIVEL1_FINAL_SCAN_RECTANGLE = {
+    "x_min": 13,
+    "x_max": 13,
+    "y_min": 400,
+    "y_max": 715,
+    "blocked_rgb": [(54, 54, 54), (32, 32, 32)],
+    "click_delay": 1.0,
+    "step_delay": 0.0,
+    "follow_cursor": False,
+    "control_check_interval": 128,
+    "label": "nivel 1 scan final",
+}
+
 
 def normalizar_modo_atualizacao(modo: str | None) -> str:
     modo_limpo = str(modo or "todos").strip().lower().replace("-", "").replace("_", "")
@@ -79,6 +92,13 @@ def preparar_transicao_macro(logger: logging.Logger, controller: ExecutionContro
         },
         controller,
     )
+
+
+def executar_scan_final_nivel1(logger: logging.Logger, controller: ExecutionController):
+    logger.info("Executando varredura final do nivel 1.")
+    if not handle_custom_event("scan_click_rectangle", NIVEL1_FINAL_SCAN_RECTANGLE, controller):
+        raise RuntimeError("Falha ao executar varredura final do nivel 1.")
+    logger.info("Varredura final do nivel 1 concluida.")
 
 
 class MacroPanelLogHandler(logging.Handler):
@@ -330,6 +350,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
                 base / "macro_003.py",
                 base / "macro_004.py",
                 base / "macro_005.py",
+                base / "macro_011.py",
             ])
         if modo_atualizacao in {"nivel2", "todos"}:
             macros.extend([
@@ -353,7 +374,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
         time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(started_at_epoch)),
     )
     logger.info(
-        "Fluxo esperado: modo=%s | nivel 1 usa macros 001-005; nivel 2 usa macros 007-009.",
+        "Fluxo esperado: modo=%s | nivel 1 usa macros 001-005 e 011; nivel 2 usa macros 007-009.",
         modo_atualizacao,
     )
 
@@ -390,8 +411,9 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
             break
         else:
             logger.info("Etapa concluida com sucesso: %s", macro.name)
-            if macro.name.lower() == "macro_005.py" and modo_atualizacao in {"nivel1", "todos"}:
+            if macro.name.lower() == "macro_011.py" and modo_atualizacao in {"nivel1", "todos"}:
                 try:
+                    executar_scan_final_nivel1(logger, controller)
                     logger.info(
                         "CONFIRMACAO: primeira parte concluida. Enviando mata105/mata225/mata226 ao Firebase antes de continuar."
                     )
@@ -401,7 +423,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
                         started_at_epoch,
                         project_root,
                         automus_auth,
-                        "primeira parte apos macro_005",
+                        "primeira parte apos macro_011",
                         ("mata105", "mata225", "mata226"),
                     )
                     logger.info(
@@ -411,7 +433,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
                         logger.info("CONFIRMACAO: fluxo encerrado apos nivel 1 por escolha do operador.")
                         break
                 except Exception as exc:
-                    logger.exception("Falha no envio da primeira parte apos macro_005: %s", exc)
+                    logger.exception("Falha no envio da primeira parte apos macro_011: %s", exc)
                     logger.error("Automacao encerrada com erro.")
                     failed = True
                     break

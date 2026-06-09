@@ -866,6 +866,7 @@ class _ControlWindow:
             ("Macro 7", "macro_007.py"),
             ("Macro 8", "macro_008.py"),
             ("Macro 9", "macro_009.py"),
+            ("Macro 11", "macro_011.py"),
         ]
 
         for index, (label, filename) in enumerate(macro_buttons):
