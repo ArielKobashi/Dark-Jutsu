@@ -323,7 +323,13 @@ def _sugerir_limites_estoque(
         pedido = pedidos_compra.get(codigo)
     media_pedido = _optional_num(pedido.get("mediaPedido")) if isinstance(pedido, dict) else None
     media_pedido = media_pedido or 0.0
-    minimo_por_compra = media_pedido * 0.35 if media_pedido > 0 else 0.0
+    ultimo_pedido = pedido.get("ultimoPedido") if isinstance(pedido, dict) and isinstance(pedido.get("ultimoPedido"), dict) else {}
+    ultimo_pedido_base = max(
+        _optional_num(ultimo_pedido.get("quantidadeRecebida")) or 0.0,
+        _optional_num(ultimo_pedido.get("quantidadePedida")) or 0.0,
+    )
+    base_pedido_compra = media_pedido if media_pedido > 0 else ultimo_pedido_base
+    minimo_por_compra = base_pedido_compra * 0.35 if base_pedido_compra > 0 else 0.0
 
     candidatos_consumo = [
         consumo["media"],
@@ -345,7 +351,7 @@ def _sugerir_limites_estoque(
     minimo = _ceil_positive(minimo_estimado)
     if minimo is None:
         return None
-    lote = _ceil_positive(max(media_pedido, demanda_base * 1.5, minimo * 0.8)) or minimo
+    lote = _ceil_positive(max(base_pedido_compra, demanda_base * 1.5, minimo * 0.8)) or minimo
     maximo = max(minimo + lote, minimo + 1)
     return {
         "minimo": minimo,
@@ -359,8 +365,10 @@ def _sugerir_limites_estoque(
             "eventosConsumo": int(consumo["eventos"]),
             "consumoEntrePlanilhas": consumo_entre_planilhas,
             "mediaPedido": media_pedido,
+            "ultimoPedidoQuantidade": ultimo_pedido_base,
+            "basePedidoCompra": base_pedido_compra,
             "minimoPorCompra": minimo_por_compra,
-            "fontePrincipal": "pedido_compra" if media_pedido > 0 and not candidatos_consumo else "consumo",
+            "fontePrincipal": "pedido_compra" if base_pedido_compra > 0 and not candidatos_consumo else "consumo",
         },
     }
 
@@ -575,6 +583,7 @@ def _montar_pedidos_compra(
             break
         solicitacao = next(reversed(solicitacoes), None) if solicitacoes else None
         recebidos = [p for p in pedidos if _num(p.get("quantidadeRecebida")) > 0]
+        ultimo_pedido = pedidos[0] if pedidos else None
         media = sum(_num(p.get("quantidadeRecebida")) or _num(p.get("quantidadePedida")) for p in recebidos) / len(recebidos) if recebidos else None
         titulo, detalhe, status, recebido_sem_entrada = "Sem solicitação de pedido", "", "sem", 0
         if solicitacao:
@@ -598,6 +607,7 @@ def _montar_pedidos_compra(
             "detalhe": detalhe,
             "solicitacao": solicitacao,
             "pedido": pedido,
+            "ultimoPedido": ultimo_pedido,
             "entradaEndereco": entrada_ativa,
             "mediaPedido": media,
             "recebidoSemEntrada": recebido_sem_entrada,

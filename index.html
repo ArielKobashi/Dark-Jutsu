@@ -1268,7 +1268,12 @@ function calcularSugestaoLimitesEstoque(item){
     const saldoAnteriorPlanilha = parsePlanilhaNumero(item?.limitesCooperat?.saldoAnterior);
     const consumoEntrePlanilhas = saldoAnteriorPlanilha !== null ? Math.max(0, saldoAnteriorPlanilha - saldoAtual) : 0;
     const mediaPedido = parsePlanilhaNumero(pedido?.mediaPedido) ?? 0;
-    const minimoPorCompra = mediaPedido > 0 ? mediaPedido * 0.35 : 0;
+    const ultimoPedidoQuantidade = Math.max(
+        parsePlanilhaNumero(pedido?.ultimoPedido?.quantidadeRecebida) ?? 0,
+        parsePlanilhaNumero(pedido?.ultimoPedido?.quantidadePedida) ?? 0
+    );
+    const basePedidoCompra = mediaPedido > 0 ? mediaPedido : ultimoPedidoQuantidade;
+    const minimoPorCompra = basePedidoCompra > 0 ? basePedidoCompra * 0.35 : 0;
 
     const candidatosConsumo = [
         consumo.media,
@@ -1297,7 +1302,7 @@ function calcularSugestaoLimitesEstoque(item){
     if(minimo === null) return null;
 
     const loteReposicao = arredondarLimiteEstoque(Math.max(
-        mediaPedido,
+        basePedidoCompra,
         demandaBase * 1.5,
         minimo * 0.8
     ));
@@ -1316,8 +1321,10 @@ function calcularSugestaoLimitesEstoque(item){
             eventosConsumo: consumo.eventos,
             consumoEntrePlanilhas,
             mediaPedido,
+            ultimoPedidoQuantidade,
+            basePedidoCompra,
             minimoPorCompra,
-            fontePrincipal: mediaPedido > 0 && !candidatosConsumo.length ? "pedido_compra" : "consumo"
+            fontePrincipal: basePedidoCompra > 0 && !candidatosConsumo.length ? "pedido_compra" : "consumo"
         }
     };
 }

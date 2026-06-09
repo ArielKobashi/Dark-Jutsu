@@ -72,6 +72,26 @@ STARTUP_BAT_NAME = "Automus_Controlador_Atualizacoes.bat"
 APP_DISPLAY_NAME = "Automus"
 LOCAL_COMMAND_HOST = "127.0.0.1"
 LOCAL_COMMAND_PORT = 47655
+_SINGLE_INSTANCE_HANDLE = None
+
+
+def _acquire_single_instance_lock() -> bool:
+    if os.name != "nt":
+        return True
+    try:
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.CreateMutexW(None, False, "Global\\Automus.Controlador.Atualizacoes")
+        if not handle:
+            return True
+        already_exists = kernel32.GetLastError() == 183
+        if already_exists:
+            kernel32.CloseHandle(handle)
+            return False
+        global _SINGLE_INSTANCE_HANDLE
+        _SINGLE_INSTANCE_HANDLE = handle
+        return True
+    except Exception:
+        return True
 
 
 def _load_app_version() -> str:
@@ -571,6 +591,7 @@ class _ControlWindow:
                 except Exception:
                     pass
                 root.after(1200, lambda: check_update_ui(silent=True, auto_install=True))
+                root.after(1800, on_close)
             except Exception as exc:
                 login_status.set(str(exc))
             return "break"
@@ -3881,6 +3902,8 @@ def pixel_matches(x: int, y: int, target_rgb: tuple, tolerance: int = 0) -> bool
 
 
 if __name__ == "__main__":
+    if not _acquire_single_instance_lock():
+        sys.exit(0)
     try:
         iniciar_controlador()
     except KeyboardInterrupt:
