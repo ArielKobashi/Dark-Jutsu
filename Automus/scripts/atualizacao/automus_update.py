@@ -1080,8 +1080,8 @@ def _build_items(
 
 def _resolve_file(base_dir: Path, filename: str) -> Path:
     candidates = [
-        base_dir / filename,
         base_dir / "downloads" / filename,
+        base_dir / filename,
         base_dir / "data" / filename,
         Path.home() / "Desktop" / "AMBIENTE ROSA" / filename,
         Path.home() / "Desktop" / filename,
@@ -1095,8 +1095,8 @@ def _resolve_file(base_dir: Path, filename: str) -> Path:
 
 def _resolve_optional_file(base_dir: Path, filename: str) -> Path | None:
     candidates = [
-        base_dir / filename,
         base_dir / "downloads" / filename,
+        base_dir / filename,
         base_dir / "data" / filename,
         Path.home() / "Desktop" / "AMBIENTE ROSA" / filename,
         Path.home() / "Desktop" / filename,
