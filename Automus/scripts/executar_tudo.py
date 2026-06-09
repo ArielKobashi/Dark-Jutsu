@@ -26,7 +26,7 @@ NIVEL1_FINAL_SCAN_RECTANGLE = {
     "y_min": 400,
     "y_max": 715,
     "blocked_rgb": [(54, 54, 54), (32, 32, 32)],
-    "click_delay": 1.0,
+    "click_delay": 0.05,
     "step_delay": 0.0,
     "follow_cursor": False,
     "control_check_interval": 128,
