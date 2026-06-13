@@ -452,6 +452,27 @@
             border-radius:7px;
             margin-top:9px;
         }
+        .historicoBlocoTitulo{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
+            margin:10px 0 6px;
+            color:#EDE9FE;
+            font-size:11px;
+            font-weight:900;
+            text-transform:uppercase;
+        }
+        .historicoAviso{
+            border:1px solid rgba(245,158,11,.32);
+            background:rgba(113,63,18,.22);
+            color:#FDE68A;
+            border-radius:7px;
+            padding:7px 8px;
+            font-size:11px;
+            line-height:1.35;
+            margin-top:8px;
+        }
         .historicoMini table{min-width:620px}
         .historicoMini th,
         .historicoMini td{
@@ -596,6 +617,7 @@
         let mata110Cache = null;
         let mata111Cache = null;
         let mata112Cache = null;
+        let historicoCooperatCache = null;
 
         function parametroPermitido(valor, permitidos, padrao){
             return permitidos.includes(valor) ? valor : padrao;
@@ -867,6 +889,18 @@
             if(mata112Cache) return mata112Cache;
             mata112Cache = await carregarPlanilhaDownload("mata112.xlsx", "Saldos a Endereçar");
             return mata112Cache;
+        }
+        async function carregarHistoricoCooperatLocal(){
+            if(historicoCooperatCache) return historicoCooperatCache;
+            try{
+                const response = await fetch("data/historico_cooperat_antigo.json", { cache: "no-store" });
+                if(!response.ok) return null;
+                historicoCooperatCache = await response.json();
+                return historicoCooperatCache;
+            }catch(err){
+                console.warn("Nao foi possivel carregar historico_cooperat_antigo.json:", err);
+                return null;
+            }
         }
         async function carregarEstoqueMinimo(){
             if(estoqueMinimoCache) return estoqueMinimoCache;
@@ -1269,6 +1303,41 @@
                 diasDesdeRecebimento
             };
         }
+        function estatisticasHistoricoCooperat(cooperat){
+            if(!cooperat) return {
+                totalEventos:0,
+                mediaQuantidade:null,
+                totalQuantidade:0,
+                mediaValor:null,
+                ultimaData:null
+            };
+            return {
+                totalEventos:Number(cooperat.totalEventos || 0) || 0,
+                mediaQuantidade:num(cooperat.mediaQuantidadeCompra) ?? num(cooperat.mediaQuantidadeSolicitada),
+                totalQuantidade:num(cooperat.totalQuantidadeCompra) ?? num(cooperat.totalQuantidadeSolicitada) ?? 0,
+                mediaValor:num(cooperat.mediaValorBaixa),
+                ultimaData:cooperat.ultimaData || null
+            };
+        }
+        function normalizarCodigoCooperatHistorico(valor){
+            const texto = String(valor ?? "").trim();
+            const semDecimalFinal = texto.endsWith(".0") ? texto.slice(0, -2) : texto;
+            const digitos = semDecimalFinal.replace(/\D+/g, "");
+            return digitos.replace(/^0+/, "") || digitos || normalizarCodigo(valor);
+        }
+        function historicoCooperatItem(item, historicoCooperat){
+            const codigos = historicoCooperat?.codigos || {};
+            const candidatos = [
+                item?.cooperat,
+                item?.protheus,
+                item?.protheusKey,
+                key(item)
+            ].map(normalizarCodigoCooperatHistorico).filter(Boolean);
+            for(const codigo of candidatos){
+                if(codigos[codigo]) return codigos[codigo];
+            }
+            return null;
+        }
         function registroAvaliadorItem(item){
             const codigo = key(item);
             return avaliadorPedidosConfig?.[ajusteKey(codigo)] || avaliadorPedidosConfig?.[codigo] || null;
@@ -1302,6 +1371,10 @@
                 aguardando_contagem:"entrega_pendente",
                 aguardando_enderecamento:"entrega_pendente"
             }[statusPedido];
+            const ordem = ["aguardando_solicitacao", "solicitacao_aprovada", "pedido_feito", "entrega_pendente", "entregue"];
+            const idxManual = ordem.indexOf(manual);
+            const idxAutomatico = ordem.indexOf(automatico);
+            if(idxManual >= 0 && idxAutomatico >= 0) return ordem[Math.max(idxManual, idxAutomatico)];
             return automatico || manual || "aguardando_solicitacao";
         }
         async function salvarAvaliacaoPedido(codigo, payload){
@@ -1311,8 +1384,12 @@
         }
         function renderHistoricoMini(historico){
             const linhas = historico.slice(0, 5);
-            if(!linhas.length) return `<div class="historicoMini"><table><tbody><tr><td>Sem historico de pedido localizado na MATA111/MATA112.</td></tr></tbody></table></div>`;
+            if(!linhas.length) return `
+                <div class="historicoBlocoTitulo">Sistema novo - MATA111/MATA112</div>
+                <div class="historicoMini"><table><tbody><tr><td>Sem historico de pedido localizado na MATA111/MATA112.</td></tr></tbody></table></div>
+            `;
             return `
+                <div class="historicoBlocoTitulo">Sistema novo - MATA111/MATA112</div>
                 <div class="historicoMini">
                     <table>
                         <thead>
@@ -1343,9 +1420,49 @@
                 </div>
             `;
         }
+        function renderHistoricoCooperatMini(cooperat){
+            if(!cooperat) return `
+                <div class="historicoBlocoTitulo">Sistema antigo - Cooperat</div>
+                <div class="historicoAviso">Sem historico antigo localizado para este codigo. Esta base usa as requisicoes antigas e nao calcula prazo pedido->recebimento.</div>
+            `;
+            const eventos = Array.isArray(cooperat.eventos) ? cooperat.eventos.slice(0, 5) : [];
+            return `
+                <div class="historicoBlocoTitulo">
+                    <span>Sistema antigo - Cooperat</span>
+                    <span>${esc(fmt(cooperat.totalEventos || 0))} compra(s)</span>
+                </div>
+                <div class="historicoAviso">Base antiga Cooperat: quantidade considerada = Qtd.Solicitada; valor baixa tratado como valor unitario. Nao ha data de recebimento separada.</div>
+                <div class="historicoMini">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Req.</th>
+                                <th>Data</th>
+                                <th class="num">Qtd. solicitada</th>
+                                <th class="num">Valor unit.</th>
+                                <th>Origem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${eventos.map(h => `
+                                <tr>
+                                    <td>${esc(h.requisicao || "-")}</td>
+                                    <td>${esc(h.dataBr || h.data || "-")}</td>
+                                    <td class="num">${fmt(h.qtdSolicitada)}</td>
+                                    <td class="num">${fmt(h.valorBaixa)}</td>
+                                    <td>${esc(h.origem || "Cooperat")}</td>
+                                </tr>
+                            `).join("") || `<tr><td colspan="5">Sem eventos recentes.</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
         function renderAvaliadorItem(linha){
-            const { item, historico, stats, pedido, status, reposicao } = linha;
+            const { item, historico, historicoCooperat, stats, statsCooperat, pedido, status, reposicao } = linha;
             const codigo = key(item);
+            const totalPedidos = stats.totalPedidos + statsCooperat.totalEventos;
+            const mediaQuantidade = stats.mediaQuantidade ?? statsCooperat.mediaQuantidade;
             return `
                 <article class="avaliadorItem">
                     <div class="avaliadorItemTop">
@@ -1362,12 +1479,13 @@
                         <span class="avaliadorTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
                     </div>
                     <div class="avaliadorStats">
-                        <div class="avaliadorStat"><span>Pedidos</span><strong>${esc(fmt(stats.totalPedidos))}</strong></div>
+                        <div class="avaliadorStat"><span>Pedidos</span><strong>${esc(fmt(totalPedidos))}</strong></div>
                         <div class="avaliadorStat"><span>Prazo medio</span><strong>${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} d`}</strong></div>
-                        <div class="avaliadorStat"><span>Qtd. media</span><strong>${stats.mediaQuantidade === null ? "-" : esc(fmt(stats.mediaQuantidade))}</strong></div>
+                        <div class="avaliadorStat"><span>Qtd. media</span><strong>${mediaQuantidade === null ? "-" : esc(fmt(mediaQuantidade))}</strong></div>
                         <div class="avaliadorStat"><span>Desde pedido</span><strong>${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} d`}</strong></div>
                     </div>
                     ${renderHistoricoMini(historico)}
+                    ${renderHistoricoCooperatMini(historicoCooperat)}
                     <div class="avaliadorActions">
                         <button class="okBtn" type="button" data-avaliador-action="passivel" data-codigo="${esc(codigo)}">Passivel</button>
                         <button class="stopBtn" type="button" data-avaliador-action="nao_solicitar" data-codigo="${esc(codigo)}">Nao solicitar</button>
@@ -1378,8 +1496,10 @@
             `;
         }
         function renderKanbanCard(linha){
-            const { item, registro, pedido, stats } = linha;
+            const { item, registro, pedido, stats, statsCooperat, historicoCooperat } = linha;
             const codigo = key(item);
+            const comprasCooperat = statsCooperat.totalEventos || 0;
+            const ultimaCooperat = statsCooperat.ultimaData ? new Date(`${statsCooperat.ultimaData}T00:00:00`).toLocaleDateString("pt-BR") : "-";
             return `
                 <article class="kanbanCard">
                     <div class="kanbanCardTitle">${esc(item.protheus || item.cooperat || "-")}</div>
@@ -1388,6 +1508,7 @@
                         <span>${esc(rotuloPedido(pedido))}</span>
                         <span>Saldo ${esc(fmt(item.saldo))} | Min. ${esc(fmt(item.minimo))} | Rep. ${esc(fmt(reposicao(item)))}</span>
                         <span>Prazo medio: ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`} | Desde pedido: ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
+                        <span>Cooperat antigo: ${esc(fmt(comprasCooperat))} compra(s), ultima ${esc(ultimaCooperat)}</span>
                         <span>Avaliado: ${registro?.avaliadoEm ? esc(new Date(registro.avaliadoEm).toLocaleDateString("pt-BR")) : "-"}</span>
                         ${registro?.observacao ? `<span>Obs.: ${esc(registro.observacao)}</span>` : ""}
                     </div>
@@ -1400,16 +1521,18 @@
                 </article>
             `;
         }
-        function renderAvaliadorPedidos(banco, dados, mata111, mata112){
+        function renderAvaliadorPedidos(banco, dados, mata111, mata112, historicoCooperat){
             const pedidos = banco?.pedidosCompra || {};
             const mapaHistorico = mapaHistoricoPedidosPorItem(mata111, mata112, dados);
             const linhas = dados
                 .filter(item => passaFiltroArmazem(item))
                 .map(item => {
                     const historico = historicoPedidosItem(item, mapaHistorico);
+                    const histCooperat = historicoCooperatItem(item, historicoCooperat);
                     const stats = estatisticasHistoricoPedidos(historico);
+                    const statsCooperat = estatisticasHistoricoCooperat(histCooperat);
                     const pedido = pedidoItem(item, pedidos);
-                    return { item, historico, stats, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
+                    return { item, historico, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
                 })
                 .filter(linha => {
                     if(cfg.status && cfg.status !== "fora" && cfg.status !== "todos" && !passaStatus(linha.status)) return false;
@@ -1451,7 +1574,8 @@
                     <span class="chip">ambiente=avaliador</span>
                     <span class="chip">armazem=${esc(cfg.armazens.join(",") || "04")}</span>
                     <span class="chip">abaixo do minimo: ${abaixoMinimo.length}</span>
-                    <span class="chip">historico MATA111/MATA112 por item</span>
+                    <span class="chip">historico novo MATA111/MATA112</span>
+                    <span class="chip">historico antigo Cooperat: ${esc(fmt(historicoCooperat?.totalEventos || 0))} compras</span>
                 </div>
                 ${renderFiltros([], dados.length)}
                 <section class="avaliadorLayout">
@@ -1978,7 +2102,8 @@
             }
             renderLoading();
             try{
-                const [snap, mapaMinimo, mata110, mata111, mata112, contagensSnap, etiquetasSnap, rankingEtiquetasSnap, dashboardConfigSnap, avaliadorPedidosSnap] = await Promise.all([
+                const deveCarregarHistoricoCooperat = cfg.ambiente === "avaliador";
+                const [snap, mapaMinimo, mata110, mata111, mata112, contagensSnap, etiquetasSnap, rankingEtiquetasSnap, dashboardConfigSnap, avaliadorPedidosSnap, historicoCooperatSnap] = await Promise.all([
                     get(ref(db, "estoqueGlobal")),
                     carregarEstoqueMinimo(),
                     carregarMata110(),
@@ -1988,15 +2113,21 @@
                     get(ref(db, "etiquetasGeradas")).catch(() => null),
                     get(ref(db, "rankingEtiquetas")).catch(() => null),
                     get(ref(db, "dashboardConfig/paineis")).catch(() => null),
-                    get(ref(db, "dashboardConfig/avaliadorPedidos")).catch(() => null)
+                    get(ref(db, "dashboardConfig/avaliadorPedidos")).catch(() => null),
+                    deveCarregarHistoricoCooperat ? get(ref(db, "historicoComprasCooperat")).catch(() => null) : Promise.resolve(null)
                 ]);
                 dashboardPanelConfig = dashboardConfigSnap?.val?.() || {};
                 avaliadorPedidosConfig = avaliadorPedidosSnap?.val?.() || {};
+                const historicoCooperatFirebase = historicoCooperatSnap?.val?.() || null;
+                const historicoCooperat = deveCarregarHistoricoCooperat
+                    ? (historicoCooperatFirebase?.codigos ? historicoCooperatFirebase : await carregarHistoricoCooperatLocal())
+                    : null;
                 renderDashboard(snap.val() || {}, mapaMinimo, mata111, mata112, {
                     mata110,
                     contagens: contagensSnap?.val?.() || {},
                     etiquetasGeradas: etiquetasSnap?.val?.() || {},
-                    rankingEtiquetas: rankingEtiquetasSnap?.val?.() || {}
+                    rankingEtiquetas: rankingEtiquetasSnap?.val?.() || {},
+                    historicoCooperat
                 });
             }catch(err){
                 document.getElementById("subtitulo").textContent = "Erro ao carregar dados";
@@ -2479,7 +2610,7 @@
                 return;
             }
             if(cfg.ambiente === "avaliador"){
-                renderAvaliadorPedidos(banco, dados, mata111, mata112);
+                renderAvaliadorPedidos(banco, dados, mata111, mata112, extras.historicoCooperat || null);
                 return;
             }
 

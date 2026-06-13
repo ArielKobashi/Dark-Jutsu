@@ -1,0 +1,21 @@
+{
+  "dashboardConfig": {
+    "avaliadorPedidos": {
+      "$codigo": {
+        ".read": "auth != null",
+        ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || root.child('usuarios/' + auth.uid + '/nivel').val() === 'mod' || auth.token.email === 'davi@sistema.com')",
+        ".validate": "!newData.exists() || (newData.hasChildren(['codigo','decisao','avaliadoEm']) && newData.child('codigo').isString() && newData.child('decisao').isString() && newData.child('avaliadoEm').isNumber() && (!newData.child('statusManual').exists() || newData.child('statusManual').isString()) && (!newData.child('observacao').exists() || newData.child('observacao').isString()))"
+      }
+    }
+  },
+  "historicoComprasCooperat": {
+    ".read": "auth != null",
+    ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com')",
+    ".validate": "!newData.exists() || newData.hasChildren(['geradoEm','codigos','totalCodigos','totalEventos'])",
+    "codigos": {
+      "$codigo": {
+        ".validate": "!newData.exists() || (newData.hasChildren(['codigo','totalEventos','eventos']) && newData.child('codigo').isString() && newData.child('totalEventos').isNumber())"
+      }
+    }
+  }
+}

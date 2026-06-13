@@ -146,6 +146,19 @@ dashboard.html?ambiente=avaliador&armazem=04&status=abaixo&limite=50
 
 O avaliador lista itens abaixo do minimo ainda nao avaliados, mostra historico recente de pedidos por item, prazo medio de recebimento, quantidade media comprada e dias desde o ultimo pedido. A decisao fica salva em `dashboardConfig/avaliadorPedidos`. Itens marcados como passíveis entram no kanban de acompanhamento; itens marcados como minimo incorreto, reposicao incorreta ou nao solicitar ficam separados como avaliados fora do fluxo de compra.
 
+O historico antigo do Cooperat fica separado visualmente do historico novo MATA111/MATA112. Ele usa:
+
+- `Qtd.Solicitada` como quantidade comprada.
+- `Vlr Baixa` como valor unitario da peca.
+- `historicoComprasCooperat` no Firebase como caminho principal.
+- `data/historico_cooperat_antigo.json` como fallback local enquanto o Firebase ainda nao foi populado.
+
+Para publicar no Firebase, primeiro adicione as regras de [firebase-rules-historico-compras.json](firebase-rules-historico-compras.json) ao Realtime Database Rules. Depois rode:
+
+```powershell
+C:\Users\davi.souza\AppData\Local\Microsoft\WindowsApps\python.exe .\scripts\importar_historico_cooperat_firebase.py --login davi
+```
+
 ## Como executar scripts
 
 Use o Python instalado via WindowsApps, se `python` nao estiver no PATH:

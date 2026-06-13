@@ -1,0 +1,138 @@
+{
+  "rules": {
+    "solicitacoesCadastro": {
+      ".read": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'",
+      "$id": {
+        ".read": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'",
+        ".write": "(!newData.exists() && auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin') || (!data.exists() && newData.exists() && newData.hasChildren(['nickname','senha','status','criadoEm','cracha','setor']) && newData.child('nickname').isString() && newData.child('nickname').val().matches(/^[A-Za-z0-9_.-]{3,20}$/) && newData.child('senha').isString() && newData.child('senha').val().length >= 6 && newData.child('senha').val().length <= 64 && newData.child('status').val() == 'pendente' && newData.child('criadoEm').isNumber() && newData.child('cracha').isString() && newData.child('cracha').val().matches(/^[0-9]{1,10}$/) && (newData.child('setor').val() == 'Manutenção' || newData.child('setor').val() == 'Almoxarifado' || newData.child('setor').val() == 'Supervisão' || newData.child('setor').val() == 'Operação') && (!newData.child('uid').exists() || newData.child('uid').isString()) && (!newData.child('duplicado').exists() || newData.child('duplicado').isBoolean())) || (data.exists() && auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin')",
+        ".validate": "!newData.exists() || newData.hasChildren(['nickname','senha','status','criadoEm','cracha','setor'])"
+      }
+    },
+    "contagemRascunhos": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "!newData.exists() || (newData.hasChildren(['updatedAt','valores','verificacoesVazio','sessao']) && newData.child('updatedAt').isNumber())"
+      }
+    },
+    "contagens": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "contagemControle": {
+      "resetGlobal": {
+        ".read": "auth != null",
+        ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com')"
+      }
+    },
+    "nicknamesSimple": {
+      ".read": true,
+      "$key": {
+        ".write": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'",
+        ".validate": "!newData.exists() || (newData.hasChildren(['nickname','count']) && newData.child('nickname').isString() && newData.child('count').isNumber())"
+      }
+    },
+    "nicknamesAuth": {
+      ".read": true,
+      "$key": {
+        ".write": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'",
+        ".validate": "!newData.exists() || (newData.hasChildren(['nickname','criadoEm']) && newData.child('nickname').isString() && newData.child('criadoEm').isNumber())"
+      }
+    },
+    "nicknamesSolic": {
+      ".read": true,
+      "$key": {
+        ".write": true,
+        ".validate": "!newData.exists() || newData.hasChildren(['nickname','count'])"
+      }
+    },
+    "nicknamesSolicCracha": {
+      ".read": true,
+      "$key": {
+        ".write": true,
+        ".validate": "!newData.exists() || newData.hasChildren(['nickname','cracha','criadoEm']) || newData.hasChildren(['id'])"
+      }
+    },
+    "usuariosBanidos": {
+      ".read": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'",
+      ".write": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'"
+    },
+    "chatGlobal": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "chatReadState": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "chatRooms": {
+      "$room": {
+        "senha": {
+          ".read": "auth != null",
+          ".write": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'"
+        },
+        "messages": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+        "typing": {
+          ".read": "auth != null",
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        }
+      }
+    },
+    "dashboardConfig": {
+      ".read": "auth != null",
+      "paineis": {
+        "$painel": {
+          ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || root.child('usuarios/' + auth.uid + '/nivel').val() === 'mod' || auth.token.email === 'davi@sistema.com')",
+          ".validate": "!newData.exists() || (newData.hasChildren(['limite','codigosOcultos']) && newData.child('limite').isNumber() && newData.child('limite').val() >= 1 && newData.child('limite').val() <= 100 && newData.child('codigosOcultos').isString() && newData.child('codigosOcultos').val().length <= 5000)"
+        }
+      },
+      "avaliadorPedidos": {
+        "$codigo": {
+          ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || root.child('usuarios/' + auth.uid + '/nivel').val() === 'mod' || auth.token.email === 'davi@sistema.com')",
+          ".validate": "!newData.exists() || (newData.hasChildren(['codigo','decisao','avaliadoEm']) && newData.child('codigo').isString() && newData.child('decisao').isString() && newData.child('avaliadoEm').isNumber() && (!newData.child('statusManual').exists() || newData.child('statusManual').isString()) && (!newData.child('observacao').exists() || newData.child('observacao').isString()))"
+        }
+      }
+    },
+    "historicoComprasCooperat": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com')",
+      ".validate": "!newData.exists() || newData.hasChildren(['geradoEm','codigos','totalCodigos','totalEventos'])",
+      "codigos": {
+        "$codigo": {
+          ".validate": "!newData.exists() || (newData.hasChildren(['codigo','totalEventos','eventos']) && newData.child('codigo').isString() && newData.child('totalEventos').isNumber())"
+        }
+      }
+    },
+    "estoqueGlobal": {
+      ".read": "auth != null && ((root.child('usuarios/' + auth.uid).exists() && root.child('usuarios/' + auth.uid + '/ativo').val() !== false) || auth.token.email === 'davi@sistema.com')",
+      ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com')"
+    },
+    "estoqueGlobalBackups": {
+      ".read": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com')",
+      ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com')"
+    },
+    "automus": {
+      "releases": {
+        ".read": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'",
+        ".write": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'"
+      }
+    },
+    "usuarios": {
+      ".read": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin')",
+        ".write": "auth != null && (auth.uid === $uid || root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin')",
+        "nivel": {
+          ".write": "auth != null && root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin'"
+        }
+      }
+    }
+  }
+}
