@@ -365,7 +365,7 @@
             border:1px solid rgba(148,163,184,.18);
             background:rgba(26,26,37,.9);
             border-radius:8px;
-            padding:12px;
+            padding:10px;
             min-width:0;
         }
         .avaliadorItemTop{
@@ -373,7 +373,7 @@
             grid-template-columns:minmax(0,1fr) auto;
             gap:10px;
             align-items:start;
-            margin-bottom:10px;
+            margin-bottom:8px;
         }
         .avaliadorCodigo{
             font-weight:900;
@@ -392,7 +392,7 @@
             display:flex;
             flex-wrap:wrap;
             gap:6px;
-            margin:8px 0;
+            margin:7px 0;
         }
         .avaliadorTag{
             border:1px solid rgba(148,163,184,.22);
@@ -407,7 +407,7 @@
             display:grid;
             grid-template-columns:repeat(4,minmax(0,1fr));
             gap:7px;
-            margin:10px 0;
+            margin:8px 0 6px;
         }
         .avaliadorStat{
             border:1px solid rgba(148,163,184,.16);
@@ -433,7 +433,7 @@
             display:flex;
             flex-wrap:wrap;
             gap:7px;
-            margin-top:10px;
+            margin-top:8px;
         }
         .avaliadorActions button,
         .kanbanCard button{
@@ -450,7 +450,59 @@
             overflow:auto;
             border:1px solid rgba(148,163,184,.13);
             border-radius:7px;
-            margin-top:9px;
+            margin-top:6px;
+        }
+        .avaliadorDetails{
+            border:1px solid rgba(148,163,184,.16);
+            border-radius:8px;
+            background:rgba(15,23,42,.36);
+            margin-top:7px;
+            overflow:hidden;
+        }
+        .avaliadorDetails summary{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+            padding:8px 9px;
+            color:#EDE9FE;
+            font-size:12px;
+            font-weight:900;
+            cursor:pointer;
+            list-style:none;
+            user-select:none;
+        }
+        .avaliadorDetails summary::-webkit-details-marker{display:none}
+        .avaliadorDetails summary::after{
+            content:"+";
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            width:20px;
+            height:20px;
+            border-radius:999px;
+            background:#1F1F2A;
+            color:#BAE6FD;
+            border:1px solid rgba(148,163,184,.2);
+            flex:0 0 auto;
+        }
+        .avaliadorDetails[open] summary::after{content:"-"}
+        .avaliadorDetailsBody{
+            padding:0 9px 9px;
+        }
+        .avaliadorSummaryMeta{
+            color:var(--muted);
+            font-size:11px;
+            font-weight:800;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .avaliadorDecisionPanel{
+            display:grid;
+            gap:8px;
+            color:#cbd5e1;
+            font-size:12px;
         }
         .historicoBlocoTitulo{
             display:flex;
@@ -1385,11 +1437,9 @@
         function renderHistoricoMini(historico){
             const linhas = historico.slice(0, 5);
             if(!linhas.length) return `
-                <div class="historicoBlocoTitulo">Sistema novo - MATA111/MATA112</div>
                 <div class="historicoMini"><table><tbody><tr><td>Sem historico de pedido localizado na MATA111/MATA112.</td></tr></tbody></table></div>
             `;
             return `
-                <div class="historicoBlocoTitulo">Sistema novo - MATA111/MATA112</div>
                 <div class="historicoMini">
                     <table>
                         <thead>
@@ -1422,15 +1472,10 @@
         }
         function renderHistoricoCooperatMini(cooperat){
             if(!cooperat) return `
-                <div class="historicoBlocoTitulo">Sistema antigo - Cooperat</div>
                 <div class="historicoAviso">Sem historico antigo localizado para este codigo. Esta base usa as requisicoes antigas e nao calcula prazo pedido->recebimento.</div>
             `;
             const eventos = Array.isArray(cooperat.eventos) ? cooperat.eventos.slice(0, 5) : [];
             return `
-                <div class="historicoBlocoTitulo">
-                    <span>Sistema antigo - Cooperat</span>
-                    <span>${esc(fmt(cooperat.totalEventos || 0))} compra(s)</span>
-                </div>
                 <div class="historicoAviso">Base antiga Cooperat: quantidade considerada = Qtd.Solicitada; valor baixa tratado como valor unitario. Nao ha data de recebimento separada.</div>
                 <div class="historicoMini">
                     <table>
@@ -1463,6 +1508,9 @@
             const codigo = key(item);
             const totalPedidos = stats.totalPedidos + statsCooperat.totalEventos;
             const mediaQuantidade = stats.mediaQuantidade ?? statsCooperat.mediaQuantidade;
+            const qtdNovo = stats.totalPedidos || 0;
+            const qtdCooperat = statsCooperat.totalEventos || 0;
+            const ultimaCooperat = statsCooperat.ultimaData ? new Date(`${statsCooperat.ultimaData}T00:00:00`).toLocaleDateString("pt-BR") : "-";
             return `
                 <article class="avaliadorItem">
                     <div class="avaliadorItemTop">
@@ -1484,14 +1532,26 @@
                         <div class="avaliadorStat"><span>Qtd. media</span><strong>${mediaQuantidade === null ? "-" : esc(fmt(mediaQuantidade))}</strong></div>
                         <div class="avaliadorStat"><span>Desde pedido</span><strong>${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} d`}</strong></div>
                     </div>
-                    ${renderHistoricoMini(historico)}
-                    ${renderHistoricoCooperatMini(historicoCooperat)}
-                    <div class="avaliadorActions">
-                        <button class="okBtn" type="button" data-avaliador-action="passivel" data-codigo="${esc(codigo)}">Passivel</button>
-                        <button class="stopBtn" type="button" data-avaliador-action="nao_solicitar" data-codigo="${esc(codigo)}">Nao solicitar</button>
-                        <button class="warnBtn" type="button" data-avaliador-action="minimo_incorreto" data-codigo="${esc(codigo)}">Minimo incorreto</button>
-                        <button class="warnBtn" type="button" data-avaliador-action="reposicao_incorreta" data-codigo="${esc(codigo)}">Reposicao incorreta</button>
-                    </div>
+                    <details class="avaliadorDetails">
+                        <summary><span>Historico novo</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdNovo))} pedido(s) | prazo ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} d`}</span></summary>
+                        <div class="avaliadorDetailsBody">${renderHistoricoMini(historico)}</div>
+                    </details>
+                    <details class="avaliadorDetails">
+                        <summary><span>Historico Cooperat</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdCooperat))} compra(s) | ultima ${esc(ultimaCooperat)}</span></summary>
+                        <div class="avaliadorDetailsBody">${renderHistoricoCooperatMini(historicoCooperat)}</div>
+                    </details>
+                    <details class="avaliadorDetails">
+                        <summary><span>Decisao</span><span class="avaliadorSummaryMeta">marcar uma unica vez</span></summary>
+                        <div class="avaliadorDetailsBody avaliadorDecisionPanel">
+                            <span>Escolha o destino deste item apos conferir minimo, reposicao e historico.</span>
+                            <div class="avaliadorActions">
+                                <button class="okBtn" type="button" data-avaliador-action="passivel" data-codigo="${esc(codigo)}">Passivel</button>
+                                <button class="stopBtn" type="button" data-avaliador-action="nao_solicitar" data-codigo="${esc(codigo)}">Nao solicitar</button>
+                                <button class="warnBtn" type="button" data-avaliador-action="minimo_incorreto" data-codigo="${esc(codigo)}">Minimo incorreto</button>
+                                <button class="warnBtn" type="button" data-avaliador-action="reposicao_incorreta" data-codigo="${esc(codigo)}">Reposicao incorreta</button>
+                            </div>
+                        </div>
+                    </details>
                 </article>
             `;
         }
@@ -1504,20 +1564,29 @@
                 <article class="kanbanCard">
                     <div class="kanbanCardTitle">${esc(item.protheus || item.cooperat || "-")}</div>
                     <div class="kanbanCardDesc">${esc(item.descricao || "-")}</div>
-                    <div class="kanbanMeta">
-                        <span>${esc(rotuloPedido(pedido))}</span>
-                        <span>Saldo ${esc(fmt(item.saldo))} | Min. ${esc(fmt(item.minimo))} | Rep. ${esc(fmt(reposicao(item)))}</span>
-                        <span>Prazo medio: ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`} | Desde pedido: ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
-                        <span>Cooperat antigo: ${esc(fmt(comprasCooperat))} compra(s), ultima ${esc(ultimaCooperat)}</span>
-                        <span>Avaliado: ${registro?.avaliadoEm ? esc(new Date(registro.avaliadoEm).toLocaleDateString("pt-BR")) : "-"}</span>
-                        ${registro?.observacao ? `<span>Obs.: ${esc(registro.observacao)}</span>` : ""}
+                    <div class="avaliadorTags">
+                        <span class="avaliadorTag">Saldo ${esc(fmt(item.saldo))}</span>
+                        <span class="avaliadorTag">Min. ${esc(fmt(item.minimo))}</span>
+                        <span class="avaliadorTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
                     </div>
-                    <div class="avaliadorActions">
-                        <button type="button" data-kanban-status="solicitacao_aprovada" data-codigo="${esc(codigo)}">Aprovada</button>
-                        <button type="button" data-kanban-status="pedido_feito" data-codigo="${esc(codigo)}">Pedido</button>
-                        <button type="button" data-kanban-status="entrega_pendente" data-codigo="${esc(codigo)}">Entrega</button>
-                        <button class="okBtn" type="button" data-kanban-status="entregue" data-codigo="${esc(codigo)}">Entregue</button>
-                    </div>
+                    <details class="avaliadorDetails">
+                        <summary><span>Detalhes e avanço</span><span class="avaliadorSummaryMeta">${esc(fmt(comprasCooperat))} Cooperat</span></summary>
+                        <div class="avaliadorDetailsBody">
+                            <div class="kanbanMeta">
+                                <span>Reposicao ${esc(fmt(reposicao(item)))}</span>
+                                <span>Prazo medio: ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`} | Desde pedido: ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
+                                <span>Cooperat antigo: ${esc(fmt(comprasCooperat))} compra(s), ultima ${esc(ultimaCooperat)}</span>
+                                <span>Avaliado: ${registro?.avaliadoEm ? esc(new Date(registro.avaliadoEm).toLocaleDateString("pt-BR")) : "-"}</span>
+                                ${registro?.observacao ? `<span>Obs.: ${esc(registro.observacao)}</span>` : ""}
+                            </div>
+                            <div class="avaliadorActions">
+                                <button type="button" data-kanban-status="solicitacao_aprovada" data-codigo="${esc(codigo)}">Aprovada</button>
+                                <button type="button" data-kanban-status="pedido_feito" data-codigo="${esc(codigo)}">Pedido</button>
+                                <button type="button" data-kanban-status="entrega_pendente" data-codigo="${esc(codigo)}">Entrega</button>
+                                <button class="okBtn" type="button" data-kanban-status="entregue" data-codigo="${esc(codigo)}">Entregue</button>
+                            </div>
+                        </div>
+                    </details>
                 </article>
             `;
         }
