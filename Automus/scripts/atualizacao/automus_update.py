@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from zipfile import BadZipFile
+import xml.etree.ElementTree as ET
 
 from openpyxl import load_workbook
 
@@ -153,30 +155,71 @@ def _sheet_name_key(value: Any) -> str:
 
 
 def _read_sheet(path: Path, sheet_name: str | None = None) -> list[list[Any]]:
-    wb = load_workbook(path, data_only=True, read_only=True)
     try:
-        ws_name = wb.sheetnames[0]
-        if sheet_name:
-            if sheet_name in wb.sheetnames:
-                ws_name = sheet_name
-            else:
-                alvo = _sheet_name_key(sheet_name)
-                ws_name = next(
-                    (
-                        name for name in wb.sheetnames
-                        if _sheet_name_key(name) == alvo
-                        or alvo in _sheet_name_key(name)
-                        or _sheet_name_key(name) in alvo
-                    ),
-                    ws_name,
-                )
-        ws = wb[ws_name]
-        out: list[list[Any]] = []
-        for row in ws.iter_rows(values_only=True):
-            out.append(list(row))
-        return out
-    finally:
-        wb.close()
+        wb = load_workbook(path, data_only=True, read_only=True)
+        try:
+            ws_name = wb.sheetnames[0]
+            if sheet_name:
+                if sheet_name in wb.sheetnames:
+                    ws_name = sheet_name
+                else:
+                    alvo = _sheet_name_key(sheet_name)
+                    ws_name = next(
+                        (
+                            name for name in wb.sheetnames
+                            if _sheet_name_key(name) == alvo
+                            or alvo in _sheet_name_key(name)
+                            or _sheet_name_key(name) in alvo
+                        ),
+                        ws_name,
+                    )
+            ws = wb[ws_name]
+            out: list[list[Any]] = []
+            for row in ws.iter_rows(values_only=True):
+                out.append(list(row))
+            return out
+        finally:
+            wb.close()
+    except BadZipFile:
+        return _read_spreadsheetml_sheet(path, sheet_name)
+
+
+def _read_spreadsheetml_sheet(path: Path, sheet_name: str | None = None) -> list[list[Any]]:
+    ns = {"ss": "urn:schemas-microsoft-com:office:spreadsheet"}
+    tree = ET.parse(path)
+    root = tree.getroot()
+    worksheets = root.findall(".//ss:Worksheet", ns)
+    if not worksheets:
+        return []
+    worksheet = worksheets[0]
+    if sheet_name:
+        alvo = _sheet_name_key(sheet_name)
+        worksheet = next(
+            (
+                ws for ws in worksheets
+                if alvo in _sheet_name_key(ws.attrib.get("{urn:schemas-microsoft-com:office:spreadsheet}Name", ""))
+                or _sheet_name_key(ws.attrib.get("{urn:schemas-microsoft-com:office:spreadsheet}Name", "")) in alvo
+            ),
+            worksheet,
+        )
+    table = worksheet.find(".//ss:Table", ns)
+    if table is None:
+        return []
+    rows: list[list[Any]] = []
+    for row_el in table.findall("ss:Row", ns):
+        row: list[Any] = []
+        for cell in row_el.findall("ss:Cell", ns):
+            index_raw = cell.attrib.get("{urn:schemas-microsoft-com:office:spreadsheet}Index")
+            if index_raw:
+                try:
+                    while len(row) < int(index_raw) - 1:
+                        row.append(None)
+                except ValueError:
+                    pass
+            data = cell.find("ss:Data", ns)
+            row.append(data.text if data is not None else None)
+        rows.append(row)
+    return rows
 
 
 def _header_key(value: Any) -> str:

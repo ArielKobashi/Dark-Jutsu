@@ -338,6 +338,207 @@
         .pedido{color:#cbd5e1}
         .pedido.semPedido{color:#fca5a5;font-weight:800}
         .origem{color:var(--muted)}
+        .avaliadorLayout{
+            display:grid;
+            grid-template-columns:minmax(0,1.08fr) minmax(360px,.92fr);
+            gap:12px;
+            align-items:start;
+        }
+        .avaliadorPanel{
+            background:rgba(21,21,29,.86);
+            border:1px solid rgba(122,60,255,.28);
+            border-radius:8px;
+            padding:12px;
+            box-shadow:0 0 18px rgba(122,60,255,.14);
+            min-width:0;
+        }
+        .avaliadorPanel h2{
+            font-size:15px;
+            color:#EDE9FE;
+            margin:0 0 10px;
+        }
+        .avaliadorList{
+            display:grid;
+            gap:10px;
+        }
+        .avaliadorItem{
+            border:1px solid rgba(148,163,184,.18);
+            background:rgba(26,26,37,.9);
+            border-radius:8px;
+            padding:12px;
+            min-width:0;
+        }
+        .avaliadorItemTop{
+            display:grid;
+            grid-template-columns:minmax(0,1fr) auto;
+            gap:10px;
+            align-items:start;
+            margin-bottom:10px;
+        }
+        .avaliadorCodigo{
+            font-weight:900;
+            color:#e2e8f0;
+            font-size:14px;
+        }
+        .avaliadorDescricao{
+            color:#cbd5e1;
+            font-size:12px;
+            margin-top:3px;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }
+        .avaliadorTags{
+            display:flex;
+            flex-wrap:wrap;
+            gap:6px;
+            margin:8px 0;
+        }
+        .avaliadorTag{
+            border:1px solid rgba(148,163,184,.22);
+            border-radius:999px;
+            padding:4px 7px;
+            font-size:11px;
+            color:#dbeafe;
+            background:rgba(15,23,42,.62);
+            white-space:nowrap;
+        }
+        .avaliadorStats{
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:7px;
+            margin:10px 0;
+        }
+        .avaliadorStat{
+            border:1px solid rgba(148,163,184,.16);
+            border-radius:7px;
+            padding:8px;
+            background:rgba(15,23,42,.48);
+            min-width:0;
+        }
+        .avaliadorStat span{
+            display:block;
+            color:var(--muted);
+            font-size:10px;
+            text-transform:uppercase;
+            font-weight:800;
+        }
+        .avaliadorStat strong{
+            display:block;
+            font-size:15px;
+            margin-top:4px;
+            color:#f8fafc;
+        }
+        .avaliadorActions{
+            display:flex;
+            flex-wrap:wrap;
+            gap:7px;
+            margin-top:10px;
+        }
+        .avaliadorActions button,
+        .kanbanCard button{
+            width:auto;
+            min-height:30px;
+            padding:6px 9px;
+            font-size:11px;
+            border-radius:6px;
+        }
+        .avaliadorActions .okBtn{background:#14532d;border-color:#22c55e}
+        .avaliadorActions .warnBtn{background:#713f12;border-color:#f59e0b}
+        .avaliadorActions .stopBtn{background:#7f1d1d;border-color:#ef4444}
+        .historicoMini{
+            overflow:auto;
+            border:1px solid rgba(148,163,184,.13);
+            border-radius:7px;
+            margin-top:9px;
+        }
+        .historicoMini table{min-width:620px}
+        .historicoMini th,
+        .historicoMini td{
+            padding:7px 8px;
+            font-size:11px;
+        }
+        .kanbanGrid{
+            display:grid;
+            grid-template-columns:repeat(5,minmax(210px,1fr));
+            gap:10px;
+            overflow:auto;
+            padding-bottom:4px;
+        }
+        .kanbanCol{
+            border:1px solid rgba(148,163,184,.18);
+            border-top:3px solid var(--col);
+            border-radius:8px;
+            background:rgba(15,23,42,.44);
+            min-width:210px;
+            padding:9px;
+        }
+        .kanbanCol h3{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
+            margin:0 0 8px;
+            font-size:12px;
+            color:#f8fafc;
+        }
+        .kanbanCol h3 span{
+            color:var(--muted);
+            font-size:11px;
+        }
+        .kanbanCards{
+            display:grid;
+            gap:8px;
+        }
+        .kanbanCard{
+            border:1px solid rgba(148,163,184,.16);
+            border-radius:8px;
+            background:rgba(26,26,37,.92);
+            padding:9px;
+        }
+        .kanbanCardTitle{
+            font-weight:900;
+            color:#e2e8f0;
+            font-size:12px;
+        }
+        .kanbanCardDesc{
+            color:#cbd5e1;
+            font-size:11px;
+            margin:4px 0 7px;
+            display:-webkit-box;
+            -webkit-line-clamp:2;
+            -webkit-box-orient:vertical;
+            overflow:hidden;
+        }
+        .kanbanMeta{
+            display:grid;
+            gap:3px;
+            color:var(--muted);
+            font-size:11px;
+            margin-bottom:7px;
+        }
+        .kanbanEmpty{
+            border:1px dashed rgba(148,163,184,.22);
+            border-radius:8px;
+            padding:14px 10px;
+            color:var(--muted);
+            font-size:12px;
+            text-align:center;
+            background:rgba(15,23,42,.35);
+        }
+        .avaliadorDecision{
+            display:inline-flex;
+            border-radius:999px;
+            padding:5px 8px;
+            font-size:11px;
+            font-weight:900;
+            background:rgba(34,197,94,.16);
+            color:#bbf7d0;
+            white-space:nowrap;
+        }
+        @media (max-width:1100px){
+            .avaliadorLayout{grid-template-columns:1fr}
+        }
         @media (max-width:800px){
             .topbar{display:block;padding:17px 14px 12px}
             .headerActions{justify-content:flex-start;margin-top:12px}
@@ -345,6 +546,7 @@
             .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
             .filters{grid-template-columns:repeat(2,minmax(0,1fr))}
             .vizGrid{grid-template-columns:1fr}
+            .avaliadorStats{grid-template-columns:repeat(2,minmax(0,1fr))}
             .card strong{font-size:22px}
             th,td{font-size:12px;padding:8px}
         }
@@ -359,6 +561,7 @@
             </div>
             <div class="headerActions">
                 <span class="sub" id="ultimaAtualizacao"></span>
+                <a class="secondaryBtn" href="dashboard.html?ambiente=avaliador&armazem=04&status=abaixo&limite=50">Avaliador</a>
                 <a class="secondaryBtn" href="index.html">Abrir Dark</a>
                 <button class="primaryBtn" id="btnAtualizar" type="button">Atualizar</button>
             </div>
@@ -402,7 +605,7 @@
         }
         const cfg = {
             titulo: params.get("titulo") || "Dashboard de Estoque",
-            ambiente: parametroPermitido((params.get("ambiente") || "estoque").toLowerCase(), ["estoque","movimentacao"], "estoque"),
+            ambiente: parametroPermitido((params.get("ambiente") || "estoque").toLowerCase(), ["estoque","movimentacao","avaliador"], "estoque"),
             status: parametroPermitido((params.get("status") || "fora").toLowerCase(), ["todos","all","fora","abaixo","acima","ok","sem","sem-faixa"], "fora"),
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
@@ -432,9 +635,13 @@
                 .join(" ")
                 .trim();
         }
+        if(cfg.ambiente === "avaliador" && !params.get("titulo")){
+            cfg.titulo = "Avaliador de Pedidos";
+        }
         let bancoAtual = null;
         let extrasAtual = {};
         let dashboardPanelConfig = {};
+        let avaliadorPedidosConfig = {};
         document.getElementById("titulo").textContent = cfg.titulo;
         btnAtualizar.addEventListener("click", () => carregar());
 
@@ -979,6 +1186,321 @@
                 };
             }).filter(Boolean).sort((a,b) => b.dias - a.dias);
         }
+        function mapaHistoricoPedidosPorItem(mata111, mata112, dados){
+            const codigosPermitidos = new Set();
+            const descricaoPorCodigo = new Map();
+            dados.forEach(item => {
+                [item?.protheus, item?.cooperat, item?.protheusKey].forEach(c => {
+                    const codigo = normalizarCodigo(c);
+                    if(!codigo) return;
+                    codigosPermitidos.add(codigo);
+                    if(!descricaoPorCodigo.has(codigo)) descricaoPorCodigo.set(codigo, item?.descricao || "-");
+                });
+            });
+            const entradas = new Map();
+            (Array.isArray(mata112) ? mata112.slice(2) : []).forEach(row => {
+                const codigo = normalizarCodigo(row?.[0]);
+                const timestamp = parseDataPlanilha(row?.[12]);
+                if(!codigo || !timestamp) return;
+                if(!entradas.has(codigo)) entradas.set(codigo, []);
+                entradas.get(codigo).push({
+                    timestamp,
+                    data: new Date(timestamp).toLocaleDateString("pt-BR"),
+                    quantidade: num(row?.[3]) || 0
+                });
+            });
+            entradas.forEach(lista => lista.sort((a,b) => a.timestamp - b.timestamp));
+
+            const mapa = new Map();
+            (Array.isArray(mata111) ? mata111.slice(2) : []).forEach(row => {
+                const codigo = normalizarCodigo(row?.[6]);
+                if(!codigo || (codigosPermitidos.size && !codigosPermitidos.has(codigo))) return;
+                const pedidoTs = dataPedidoMata111(row);
+                if(!pedidoTs) return;
+                const entrada = (entradas.get(codigo) || []).find(e => e.timestamp >= pedidoTs);
+                const fim = entrada?.timestamp || Date.now();
+                const dias = Math.max(0, Math.round((fim - pedidoTs) / 86400000));
+                const registro = {
+                    codigo,
+                    descricao: descricaoPorCodigo.get(codigo) || "-",
+                    pedido: String(row?.[0] ?? row?.[1] ?? "").trim() || "-",
+                    dataPedido: new Date(pedidoTs).toLocaleDateString("pt-BR"),
+                    dataEntrada: entrada?.data || "Em aberto",
+                    timestampPedido: pedidoTs,
+                    timestampEntrada: entrada?.timestamp || null,
+                    quantidadePedida: num(row?.[11]) || num(row?.[9]) || 0,
+                    quantidadeRecebida: entrada?.quantidade || 0,
+                    dias,
+                    status: entrada ? "Recebido" : "Em aberto"
+                };
+                if(!mapa.has(codigo)) mapa.set(codigo, []);
+                mapa.get(codigo).push(registro);
+            });
+            mapa.forEach(lista => lista.sort((a,b) => b.timestampPedido - a.timestampPedido));
+            return mapa;
+        }
+        function historicoPedidosItem(item, mapaHistorico){
+            const candidatos = [item?.protheus, item?.cooperat, item?.protheusKey, key(item)].map(normalizarCodigo).filter(Boolean);
+            for(const codigo of candidatos){
+                const historico = mapaHistorico.get(codigo);
+                if(historico?.length) return historico;
+            }
+            return [];
+        }
+        function estatisticasHistoricoPedidos(historico){
+            const recebidos = historico.filter(h => h.timestampEntrada);
+            const diasRecebidos = recebidos.map(h => Number(h.dias || 0)).filter(v => Number.isFinite(v));
+            const qtds = historico.map(h => Math.max(Number(h.quantidadePedida || 0), Number(h.quantidadeRecebida || 0))).filter(v => Number.isFinite(v) && v > 0);
+            const soma = arr => arr.reduce((acc, v) => acc + v, 0);
+            const ultimoPedido = historico[0] || null;
+            const ultimoRecebido = recebidos[0] || null;
+            const diasDesdePedido = ultimoPedido ? Math.max(0, Math.round((Date.now() - ultimoPedido.timestampPedido) / 86400000)) : null;
+            const diasDesdeRecebimento = ultimoRecebido ? Math.max(0, Math.round((Date.now() - ultimoRecebido.timestampEntrada) / 86400000)) : null;
+            return {
+                totalPedidos: historico.length,
+                mediaDias: diasRecebidos.length ? soma(diasRecebidos) / diasRecebidos.length : null,
+                maiorPrazo: diasRecebidos.length ? Math.max(...diasRecebidos) : null,
+                menorPrazo: diasRecebidos.length ? Math.min(...diasRecebidos) : null,
+                mediaQuantidade: qtds.length ? soma(qtds) / qtds.length : null,
+                totalQuantidade: soma(qtds),
+                ultimoPedido,
+                ultimoRecebido,
+                diasDesdePedido,
+                diasDesdeRecebimento
+            };
+        }
+        function registroAvaliadorItem(item){
+            const codigo = key(item);
+            return avaliadorPedidosConfig?.[ajusteKey(codigo)] || avaliadorPedidosConfig?.[codigo] || null;
+        }
+        function rotuloDecisaoAvaliador(registro){
+            const mapa = {
+                passivel: "Passivel de solicitacao",
+                nao_solicitar: "Nao solicitar agora",
+                minimo_incorreto: "Minimo incorreto",
+                reposicao_incorreta: "Reposicao incorreta"
+            };
+            return mapa[registro?.decisao] || "Nao avaliado";
+        }
+        function colunasKanbanAvaliador(){
+            return [
+                { id:"aguardando_solicitacao", titulo:"Aguardando solicitacao", cor:"#60a5fa" },
+                { id:"solicitacao_aprovada", titulo:"Solicitacao aprovada", cor:"#a78bfa" },
+                { id:"pedido_feito", titulo:"Pedido feito", cor:"#f59e0b" },
+                { id:"entrega_pendente", titulo:"Entrega pendente", cor:"#fb7185" },
+                { id:"entregue", titulo:"Entregue", cor:"#22c55e" }
+            ];
+        }
+        function statusKanbanAvaliador(registro, pedido){
+            const manual = registro?.statusManual || registro?.statusKanban || "aguardando_solicitacao";
+            if(manual === "entregue") return "entregue";
+            const statusPedido = String(pedido?.status || "");
+            const automatico = {
+                aguardando_liberacao:"aguardando_solicitacao",
+                aguardando_pedido:"solicitacao_aprovada",
+                aguardando_recebimento:"pedido_feito",
+                aguardando_contagem:"entrega_pendente",
+                aguardando_enderecamento:"entrega_pendente"
+            }[statusPedido];
+            return automatico || manual || "aguardando_solicitacao";
+        }
+        async function salvarAvaliacaoPedido(codigo, payload){
+            const chave = ajusteKey(codigo);
+            await set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), payload);
+            avaliadorPedidosConfig[chave] = payload;
+        }
+        function renderHistoricoMini(historico){
+            const linhas = historico.slice(0, 5);
+            if(!linhas.length) return `<div class="historicoMini"><table><tbody><tr><td>Sem historico de pedido localizado na MATA111/MATA112.</td></tr></tbody></table></div>`;
+            return `
+                <div class="historicoMini">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Pedido</th>
+                                <th>Data pedido</th>
+                                <th>Recebimento</th>
+                                <th class="num">Qtd. pedida</th>
+                                <th class="num">Qtd. recebida</th>
+                                <th class="num">Dias</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${linhas.map(h => `
+                                <tr>
+                                    <td>${esc(h.pedido)}</td>
+                                    <td>${esc(h.dataPedido)}</td>
+                                    <td>${esc(h.dataEntrada)}</td>
+                                    <td class="num">${fmt(h.quantidadePedida)}</td>
+                                    <td class="num">${fmt(h.quantidadeRecebida)}</td>
+                                    <td class="num">${fmt(h.dias)}</td>
+                                    <td>${esc(h.status)}</td>
+                                </tr>
+                            `).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        function renderAvaliadorItem(linha){
+            const { item, historico, stats, pedido, status, reposicao } = linha;
+            const codigo = key(item);
+            return `
+                <article class="avaliadorItem">
+                    <div class="avaliadorItemTop">
+                        <div>
+                            <div class="avaliadorCodigo">${esc(item.protheus || item.cooperat || "-")}</div>
+                            <div class="avaliadorDescricao">${esc(item.descricao || "-")}</div>
+                        </div>
+                        <span class="status ${esc(status)}">${esc(statusRotulo(status))}</span>
+                    </div>
+                    <div class="avaliadorTags">
+                        <span class="avaliadorTag">Saldo ${esc(fmt(item.saldo))}</span>
+                        <span class="avaliadorTag">Min. ${esc(fmt(item.minimo))}</span>
+                        <span class="avaliadorTag">Reposicao ${esc(fmt(reposicao))}</span>
+                        <span class="avaliadorTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
+                    </div>
+                    <div class="avaliadorStats">
+                        <div class="avaliadorStat"><span>Pedidos</span><strong>${esc(fmt(stats.totalPedidos))}</strong></div>
+                        <div class="avaliadorStat"><span>Prazo medio</span><strong>${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} d`}</strong></div>
+                        <div class="avaliadorStat"><span>Qtd. media</span><strong>${stats.mediaQuantidade === null ? "-" : esc(fmt(stats.mediaQuantidade))}</strong></div>
+                        <div class="avaliadorStat"><span>Desde pedido</span><strong>${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} d`}</strong></div>
+                    </div>
+                    ${renderHistoricoMini(historico)}
+                    <div class="avaliadorActions">
+                        <button class="okBtn" type="button" data-avaliador-action="passivel" data-codigo="${esc(codigo)}">Passivel</button>
+                        <button class="stopBtn" type="button" data-avaliador-action="nao_solicitar" data-codigo="${esc(codigo)}">Nao solicitar</button>
+                        <button class="warnBtn" type="button" data-avaliador-action="minimo_incorreto" data-codigo="${esc(codigo)}">Minimo incorreto</button>
+                        <button class="warnBtn" type="button" data-avaliador-action="reposicao_incorreta" data-codigo="${esc(codigo)}">Reposicao incorreta</button>
+                    </div>
+                </article>
+            `;
+        }
+        function renderKanbanCard(linha){
+            const { item, registro, pedido, stats } = linha;
+            const codigo = key(item);
+            return `
+                <article class="kanbanCard">
+                    <div class="kanbanCardTitle">${esc(item.protheus || item.cooperat || "-")}</div>
+                    <div class="kanbanCardDesc">${esc(item.descricao || "-")}</div>
+                    <div class="kanbanMeta">
+                        <span>${esc(rotuloPedido(pedido))}</span>
+                        <span>Saldo ${esc(fmt(item.saldo))} | Min. ${esc(fmt(item.minimo))} | Rep. ${esc(fmt(reposicao(item)))}</span>
+                        <span>Prazo medio: ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`} | Desde pedido: ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
+                        <span>Avaliado: ${registro?.avaliadoEm ? esc(new Date(registro.avaliadoEm).toLocaleDateString("pt-BR")) : "-"}</span>
+                        ${registro?.observacao ? `<span>Obs.: ${esc(registro.observacao)}</span>` : ""}
+                    </div>
+                    <div class="avaliadorActions">
+                        <button type="button" data-kanban-status="solicitacao_aprovada" data-codigo="${esc(codigo)}">Aprovada</button>
+                        <button type="button" data-kanban-status="pedido_feito" data-codigo="${esc(codigo)}">Pedido</button>
+                        <button type="button" data-kanban-status="entrega_pendente" data-codigo="${esc(codigo)}">Entrega</button>
+                        <button class="okBtn" type="button" data-kanban-status="entregue" data-codigo="${esc(codigo)}">Entregue</button>
+                    </div>
+                </article>
+            `;
+        }
+        function renderAvaliadorPedidos(banco, dados, mata111, mata112){
+            const pedidos = banco?.pedidosCompra || {};
+            const mapaHistorico = mapaHistoricoPedidosPorItem(mata111, mata112, dados);
+            const linhas = dados
+                .filter(item => passaFiltroArmazem(item))
+                .map(item => {
+                    const historico = historicoPedidosItem(item, mapaHistorico);
+                    const stats = estatisticasHistoricoPedidos(historico);
+                    const pedido = pedidoItem(item, pedidos);
+                    return { item, historico, stats, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
+                })
+                .filter(linha => {
+                    if(cfg.status && cfg.status !== "fora" && cfg.status !== "todos" && !passaStatus(linha.status)) return false;
+                    if(cfg.busca){
+                        const texto = normalizarTexto([
+                            linha.item.protheus,
+                            linha.item.cooperat,
+                            linha.item.descricao,
+                            linha.item.enderecoPrincipal,
+                            linha.item.armazemPrincipal,
+                            linha.item.armazem,
+                            ...armazensItem(linha.item)
+                        ].join(" "));
+                        if(!texto.includes(normalizarTexto(cfg.busca))) return false;
+                    }
+                    return true;
+                });
+            const abaixoMinimo = linhas.filter(l => l.status === "abaixo");
+            const fila = abaixoMinimo
+                .filter(l => !l.registro?.decisao)
+                .filter(l => !pedidoAtivo(l.pedido))
+                .sort((a,b) => compararValores(a.reposicao || 0, b.reposicao || 0, "desc"));
+            const avaliados = linhas.filter(l => l.registro?.decisao);
+            const monitorados = avaliados
+                .filter(l => l.registro?.decisao === "passivel")
+                .map(l => ({ ...l, kanban:statusKanbanAvaliador(l.registro, l.pedido) }));
+            const revisoes = avaliados.filter(l => l.registro?.decisao !== "passivel");
+            const colunas = colunasKanbanAvaliador();
+
+            document.getElementById("subtitulo").textContent = `${fila.length} item(ns) aguardando avaliacao no armazem ${cfg.armazens.join(",") || "04"}`;
+            root.innerHTML = `
+                <section class="cards">
+                    <article class="card red"><span>Aguardando avaliacao</span><strong>${fila.length}</strong></article>
+                    <article class="card blue"><span>Em monitoramento</span><strong>${monitorados.length}</strong></article>
+                    <article class="card green"><span>Ja avaliados</span><strong>${avaliados.length}</strong></article>
+                    <article class="card"><span>Revisar minimo/reposicao</span><strong>${revisoes.length}</strong></article>
+                </section>
+                <div class="toolbar">
+                    <span class="chip">ambiente=avaliador</span>
+                    <span class="chip">armazem=${esc(cfg.armazens.join(",") || "04")}</span>
+                    <span class="chip">abaixo do minimo: ${abaixoMinimo.length}</span>
+                    <span class="chip">historico MATA111/MATA112 por item</span>
+                </div>
+                ${renderFiltros([], dados.length)}
+                <section class="avaliadorLayout">
+                    <div class="avaliadorPanel">
+                        <h2>Fila de avaliacao</h2>
+                        <div class="avaliadorList">
+                            ${fila.slice(0, cfg.limite).map(renderAvaliadorItem).join("") || `<section class="empty">Nenhum item abaixo do minimo sem avaliacao.</section>`}
+                        </div>
+                    </div>
+                    <div class="avaliadorPanel">
+                        <h2>Itens avaliados fora do fluxo de compra</h2>
+                        <div class="avaliadorList">
+                            ${revisoes.slice(0, 20).map(l => `
+                                <article class="avaliadorItem">
+                                    <div class="avaliadorItemTop">
+                                        <div>
+                                            <div class="avaliadorCodigo">${esc(l.item.protheus || l.item.cooperat || "-")}</div>
+                                            <div class="avaliadorDescricao">${esc(l.item.descricao || "-")}</div>
+                                        </div>
+                                        <span class="avaliadorDecision">${esc(rotuloDecisaoAvaliador(l.registro))}</span>
+                                    </div>
+                                    <div class="avaliadorTags">
+                                        <span class="avaliadorTag">Saldo ${esc(fmt(l.item.saldo))}</span>
+                                        <span class="avaliadorTag">Min. ${esc(fmt(l.item.minimo))}</span>
+                                        <span class="avaliadorTag">Reposicao ${esc(fmt(l.reposicao))}</span>
+                                    </div>
+                                    ${l.registro?.observacao ? `<div class="kanbanMeta"><span>Obs.: ${esc(l.registro.observacao)}</span></div>` : ""}
+                                </article>
+                            `).join("") || `<section class="empty">Sem itens marcados para revisao ou sem solicitacao.</section>`}
+                        </div>
+                    </div>
+                </section>
+                <h2 class="sectionTitle">Kanban de pedidos em andamento - armazem ${esc(cfg.armazens.join(",") || "04")}</h2>
+                <section class="kanbanGrid">
+                    ${colunas.map(col => {
+                        const cards = monitorados.filter(l => l.kanban === col.id);
+                        return `
+                            <div class="kanbanCol" style="--col:${esc(col.cor)}">
+                                <h3>${esc(col.titulo)} <span>${cards.length}</span></h3>
+                                <div class="kanbanCards">
+                                    ${cards.map(renderKanbanCard).join("") || `<div class="kanbanEmpty">Sem itens.</div>`}
+                                </div>
+                            </div>
+                        `;
+                    }).join("")}
+                </section>
+            `;
+            bindFiltros();
+        }
         function incrementarRanking(mapa, usuario, qtd = 1){
             const nome = String(usuario || "").trim() || "Sem usuario";
             const atual = mapa.get(nome) || { usuario:nome, eventos:0, quantidade:0 };
@@ -1395,6 +1917,59 @@
                     if(await salvarDashboardPanelConfig(id)) renderDashboardAtual();
                 });
             });
+            root.querySelectorAll("[data-avaliador-action]").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const codigo = normalizarCodigo(btn.dataset.codigo);
+                    const decisao = btn.dataset.avaliadorAction;
+                    if(!codigo || !decisao) return;
+                    const observacao = prompt("Observacao da avaliacao:", "") || "";
+                    const registroAtual = avaliadorPedidosConfig?.[ajusteKey(codigo)] || {};
+                    const payload = {
+                        ...registroAtual,
+                        codigo,
+                        decisao,
+                        statusManual: decisao === "passivel" ? (registroAtual.statusManual || "aguardando_solicitacao") : "",
+                        observacao,
+                        avaliadoEm: Date.now(),
+                        avaliadoPor: auth.currentUser?.email || auth.currentUser?.uid || ""
+                    };
+                    btn.disabled = true;
+                    try{
+                        await salvarAvaliacaoPedido(codigo, payload);
+                        renderDashboardAtual();
+                    }catch(err){
+                        alert("Nao foi possivel salvar a avaliacao.");
+                        console.warn("Falha ao salvar avaliacao:", err);
+                        btn.disabled = false;
+                    }
+                });
+            });
+            root.querySelectorAll("[data-kanban-status]").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const codigo = normalizarCodigo(btn.dataset.codigo);
+                    const statusManual = btn.dataset.kanbanStatus;
+                    if(!codigo || !statusManual) return;
+                    const chave = ajusteKey(codigo);
+                    const registroAtual = avaliadorPedidosConfig?.[chave] || { codigo, decisao:"passivel", avaliadoEm:Date.now() };
+                    const payload = {
+                        ...registroAtual,
+                        codigo,
+                        decisao:"passivel",
+                        statusManual,
+                        atualizadoEm: Date.now(),
+                        atualizadoPor: auth.currentUser?.email || auth.currentUser?.uid || ""
+                    };
+                    btn.disabled = true;
+                    try{
+                        await salvarAvaliacaoPedido(codigo, payload);
+                        renderDashboardAtual();
+                    }catch(err){
+                        alert("Nao foi possivel atualizar o kanban.");
+                        console.warn("Falha ao atualizar kanban:", err);
+                        btn.disabled = false;
+                    }
+                });
+            });
         }
         async function carregar(){
             if(!auth.currentUser){
@@ -1403,7 +1978,7 @@
             }
             renderLoading();
             try{
-                const [snap, mapaMinimo, mata110, mata111, mata112, contagensSnap, etiquetasSnap, rankingEtiquetasSnap, dashboardConfigSnap] = await Promise.all([
+                const [snap, mapaMinimo, mata110, mata111, mata112, contagensSnap, etiquetasSnap, rankingEtiquetasSnap, dashboardConfigSnap, avaliadorPedidosSnap] = await Promise.all([
                     get(ref(db, "estoqueGlobal")),
                     carregarEstoqueMinimo(),
                     carregarMata110(),
@@ -1412,9 +1987,11 @@
                     get(ref(db, "contagens")).catch(() => null),
                     get(ref(db, "etiquetasGeradas")).catch(() => null),
                     get(ref(db, "rankingEtiquetas")).catch(() => null),
-                    get(ref(db, "dashboardConfig/paineis")).catch(() => null)
+                    get(ref(db, "dashboardConfig/paineis")).catch(() => null),
+                    get(ref(db, "dashboardConfig/avaliadorPedidos")).catch(() => null)
                 ]);
                 dashboardPanelConfig = dashboardConfigSnap?.val?.() || {};
+                avaliadorPedidosConfig = avaliadorPedidosSnap?.val?.() || {};
                 renderDashboard(snap.val() || {}, mapaMinimo, mata111, mata112, {
                     mata110,
                     contagens: contagensSnap?.val?.() || {},
@@ -1730,8 +2307,10 @@
                         <select id="fAmbiente" data-filter="ambiente">
                             <option value="estoque" ${cfg.ambiente === "estoque" ? "selected" : ""}>Estoque</option>
                             <option value="movimentacao" ${cfg.ambiente === "movimentacao" ? "selected" : ""}>Movimentacao</option>
+                            <option value="avaliador" ${cfg.ambiente === "avaliador" ? "selected" : ""}>Avaliador</option>
                         </select>
                     </div>
+                    ${cfg.ambiente === "movimentacao" ? `
                     <div class="filter">
                         <label for="fPeriodoMovimentacao">Periodo mov.</label>
                         <select id="fPeriodoMovimentacao" data-filter="periodoMovimentacao">
@@ -1757,6 +2336,7 @@
                             ${(movFiltro.maquinas || []).map(m => `<option value="${esc(m)}" ${cfg.maquinaMovimentacao === m ? "selected" : ""}>${esc(m)}</option>`).join("")}
                         </select>
                     </div>
+                    ` : ""}
                     <div class="filter">
                         <label for="fBusca">Busca</label>
                         <input id="fBusca" data-filter="busca" value="${esc(cfg.busca)}" placeholder="codigo, descricao, armazem...">
@@ -1896,6 +2476,10 @@
             document.getElementById("ultimaAtualizacao").textContent = `Ultima atualizacao: ${dt}`;
             if(cfg.ambiente === "movimentacao"){
                 renderMovimentacao(banco, dadosEscopo, movimentacao, leadTimes, rankings, progressoContagem);
+                return;
+            }
+            if(cfg.ambiente === "avaliador"){
+                renderAvaliadorPedidos(banco, dados, mata111, mata112);
                 return;
             }
 

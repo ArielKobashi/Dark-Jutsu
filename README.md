@@ -37,6 +37,8 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 - Indicador flutuante de progresso da contagem na tela principal: fica recolhido como um ponto pulsante e abre ao passar o mouse.
 - Historico de contagens com download individual da planilha XLSX de cada sessao.
 - Dashboard abre inicialmente filtrado no armazem 04 e mostra o progresso geral da contagem.
+- Avaliador de pedidos no dashboard (`ambiente=avaliador`) para revisar itens abaixo do minimo do armazem 04, registrar a decisao uma unica vez e acompanhar os itens passíveis em kanban ate entrega.
+- Historico de pedidos por item com quantidade pedida, quantidade recebida e dias entre pedido e recebimento usando MATA111/MATA112.
 - Modal de perfil do item com saldo, endereco, minimo, maximo e reposicao.
 - Edicao item a item de minimo e maximo dentro do modal.
 - Reposicao calculada como quantidade para voltar do minimo ao maximo; sugestoes automaticas usam consumo, pedido medio e saldo das planilhas.
@@ -133,6 +135,16 @@ Exemplo:
 ```text
 dashboard.html?status=fora&semSolicitacao=1&limite=50&ordenar=reposicao&direcao=desc
 ```
+
+### Avaliador de pedidos
+
+Abra:
+
+```text
+dashboard.html?ambiente=avaliador&armazem=04&status=abaixo&limite=50
+```
+
+O avaliador lista itens abaixo do minimo ainda nao avaliados, mostra historico recente de pedidos por item, prazo medio de recebimento, quantidade media comprada e dias desde o ultimo pedido. A decisao fica salva em `dashboardConfig/avaliadorPedidos`. Itens marcados como passíveis entram no kanban de acompanhamento; itens marcados como minimo incorreto, reposicao incorreta ou nao solicitar ficam separados como avaliados fora do fluxo de compra.
 
 ## Como executar scripts
 

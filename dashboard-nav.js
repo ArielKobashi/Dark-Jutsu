@@ -2,18 +2,25 @@
     function abrirDashboard(){
         window.location.href = "dashboard.html?armazem=04";
     }
+    function abrirAvaliadorPedidos(){
+        window.location.href = "dashboard.html?ambiente=avaliador&armazem=04&status=abaixo&limite=50";
+    }
 
     function executarComando(valor){
         var comando = String(valor || "").toLowerCase().trim();
-        return ["/dashboard", "dashboard", "dash"].indexOf(comando) !== -1;
+        if(["/avaliador", "avaliador", "pedidos", "/pedidos"].indexOf(comando) !== -1) return "avaliador";
+        return ["/dashboard", "dashboard", "dash"].indexOf(comando) !== -1 ? "dashboard" : "";
     }
 
     window.abrirDashboard = window.abrirDashboard || abrirDashboard;
+    window.abrirAvaliadorPedidos = window.abrirAvaliadorPedidos || abrirAvaliadorPedidos;
     window.executarComandoDashboardBusca = window.executarComandoDashboardBusca || function(valor){
-        if(!executarComando(valor)) return false;
+        var destino = executarComando(valor);
+        if(!destino) return false;
         var input = document.getElementById("searchInput");
         if(input) input.value = "";
-        abrirDashboard();
+        if(destino === "avaliador") abrirAvaliadorPedidos();
+        else abrirDashboard();
         return true;
     };
 
