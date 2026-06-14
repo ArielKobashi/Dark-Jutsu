@@ -683,6 +683,7 @@
             status: parametroPermitido((params.get("status") || "fora").toLowerCase(), ["todos","all","fora","abaixo","acima","ok","sem","sem-faixa"], "fora"),
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
+            kanbanGestao: parametroPermitido((params.get("kanbanGestao") || params.get("gestaoKanban") || "todos").toLowerCase(), ["todos","avaliador","sem_avaliador","sem-avaliador"], "todos").replace("-", "_"),
             origem: (params.get("origem") || "").toLowerCase(),
             armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "04").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
@@ -1556,7 +1557,7 @@
             `;
         }
         function renderKanbanCard(linha){
-            const { item, registro, pedido, stats, statsCooperat, historicoCooperat } = linha;
+            const { item, registro, pedido, stats, statsCooperat, historicoCooperat, semAvaliador } = linha;
             const codigo = key(item);
             const comprasCooperat = statsCooperat.totalEventos || 0;
             const ultimaCooperat = statsCooperat.ultimaData ? new Date(`${statsCooperat.ultimaData}T00:00:00`).toLocaleDateString("pt-BR") : "-";
@@ -1568,6 +1569,7 @@
                         <span class="avaliadorTag">Saldo ${esc(fmt(item.saldo))}</span>
                         <span class="avaliadorTag">Min. ${esc(fmt(item.minimo))}</span>
                         <span class="avaliadorTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
+                        <span class="avaliadorTag">${semAvaliador ? "Sem avaliador" : "Com avaliador"}</span>
                     </div>
                     <details class="avaliadorDetails">
                         <summary><span>Detalhes e avanço</span><span class="avaliadorSummaryMeta">${esc(fmt(comprasCooperat))} Cooperat</span></summary>
@@ -1625,9 +1627,20 @@
                 .filter(l => !pedidoAtivo(l.pedido))
                 .sort((a,b) => compararValores(a.reposicao || 0, b.reposicao || 0, "desc"));
             const avaliados = linhas.filter(l => l.registro?.decisao);
-            const monitorados = avaliados
+            const passivos = linhas.filter(l => l.registro?.decisao === "passivel");
+            const semAvaliadorKanban = linhas.filter(l => !l.registro?.decisao && pedidoAtivo(l.pedido));
+            const baseKanban = cfg.kanbanGestao === "avaliador"
+                ? passivos
+                : cfg.kanbanGestao === "sem_avaliador"
+                    ? semAvaliadorKanban
+                    : [...passivos, ...semAvaliadorKanban];
+            const monitorados = baseKanban
                 .filter(l => l.registro?.decisao === "passivel")
                 .map(l => ({ ...l, kanban:statusKanbanAvaliador(l.registro, l.pedido) }));
+            const semAvaliadorMonitorados = baseKanban
+                .filter(l => !l.registro?.decisao)
+                .map(l => ({ ...l, kanban:statusKanbanAvaliador(l.registro, l.pedido), semAvaliador:true }));
+            const kanbanItens = [...monitorados, ...semAvaliadorMonitorados];
             const revisoes = avaliados.filter(l => l.registro?.decisao !== "passivel");
             const colunas = colunasKanbanAvaliador();
 
@@ -1635,7 +1648,7 @@
             root.innerHTML = `
                 <section class="cards">
                     <article class="card red"><span>Aguardando avaliacao</span><strong>${fila.length}</strong></article>
-                    <article class="card blue"><span>Em monitoramento</span><strong>${monitorados.length}</strong></article>
+                    <article class="card blue"><span>No Kanban</span><strong>${kanbanItens.length}</strong></article>
                     <article class="card green"><span>Ja avaliados</span><strong>${avaliados.length}</strong></article>
                     <article class="card"><span>Revisar minimo/reposicao</span><strong>${revisoes.length}</strong></article>
                 </section>
@@ -1643,10 +1656,25 @@
                     <span class="chip">ambiente=avaliador</span>
                     <span class="chip">armazem=${esc(cfg.armazens.join(",") || "04")}</span>
                     <span class="chip">abaixo do minimo: ${abaixoMinimo.length}</span>
+                    <span class="chip">kanban: ${cfg.kanbanGestao === "avaliador" ? "com avaliador" : cfg.kanbanGestao === "sem_avaliador" ? "sem avaliador" : "todos"}</span>
                     <span class="chip">historico novo MATA111/MATA112</span>
                     <span class="chip">historico antigo Cooperat: ${esc(fmt(historicoCooperat?.totalEventos || 0))} compras</span>
                 </div>
                 ${renderFiltros([], dados.length)}
+                <h2 class="sectionTitle">Kanban de pedidos em andamento - armazem ${esc(cfg.armazens.join(",") || "04")}</h2>
+                <section class="kanbanGrid">
+                    ${colunas.map(col => {
+                        const cards = kanbanItens.filter(l => l.kanban === col.id);
+                        return `
+                            <div class="kanbanCol" style="--col:${esc(col.cor)}">
+                                <h3>${esc(col.titulo)} <span>${cards.length}</span></h3>
+                                <div class="kanbanCards">
+                                    ${cards.map(renderKanbanCard).join("") || `<div class="kanbanEmpty">Sem itens.</div>`}
+                                </div>
+                            </div>
+                        `;
+                    }).join("")}
+                </section>
                 <section class="avaliadorLayout">
                     <div class="avaliadorPanel">
                         <h2>Fila de avaliacao</h2>
@@ -1676,20 +1704,6 @@
                             `).join("") || `<section class="empty">Sem itens marcados para revisao ou sem solicitacao.</section>`}
                         </div>
                     </div>
-                </section>
-                <h2 class="sectionTitle">Kanban de pedidos em andamento - armazem ${esc(cfg.armazens.join(",") || "04")}</h2>
-                <section class="kanbanGrid">
-                    ${colunas.map(col => {
-                        const cards = monitorados.filter(l => l.kanban === col.id);
-                        return `
-                            <div class="kanbanCol" style="--col:${esc(col.cor)}">
-                                <h3>${esc(col.titulo)} <span>${cards.length}</span></h3>
-                                <div class="kanbanCards">
-                                    ${cards.map(renderKanbanCard).join("") || `<div class="kanbanEmpty">Sem itens.</div>`}
-                                </div>
-                            </div>
-                        `;
-                    }).join("")}
                 </section>
             `;
             bindFiltros();
@@ -2565,6 +2579,16 @@
                             <option value="1" ${cfg.semSolicitacao ? "selected" : ""}>Sem solicitacao</option>
                         </select>
                     </div>
+                    ${cfg.ambiente === "avaliador" ? `
+                    <div class="filter">
+                        <label for="fKanbanGestao">Kanban</label>
+                        <select id="fKanbanGestao" data-filter="kanbanGestao">
+                            <option value="todos" ${cfg.kanbanGestao === "todos" ? "selected" : ""}>Todos</option>
+                            <option value="avaliador" ${cfg.kanbanGestao === "avaliador" ? "selected" : ""}>Com avaliador</option>
+                            <option value="sem_avaliador" ${cfg.kanbanGestao === "sem_avaliador" ? "selected" : ""}>Sem avaliador</option>
+                        </select>
+                    </div>
+                    ` : ""}
                     <div class="filter">
                         <label for="fSuposicao">Suposicao</label>
                         <select id="fSuposicao" data-filter="suposicao">
