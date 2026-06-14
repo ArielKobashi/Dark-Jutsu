@@ -1183,9 +1183,19 @@ function planilhasPedidosCompraProntas(){
         && Array.isArray(planilhas.mata112);
 }
 
-function calcularPedidosCompraEstado(itens, fallback = {}){
+function calcularPedidosCompraEstado(itens, fallback = {}, opcoes = {}){
     if(planilhasPedidosCompraProntas()){
-        return montarEstadoPedidosCompra(planilhas.mata110, planilhas.mata111, planilhas.mata112, itens);
+        const estado = montarEstadoPedidosCompra(planilhas.mata110, planilhas.mata111, planilhas.mata112, itens);
+        if(opcoes.preservarPedidosPublicados && fallback && typeof fallback === "object"){
+            Object.entries(fallback).forEach(([chave, publicado]) => {
+                const local = estado[chave];
+                const statusLocal = (local?.status || "").toString();
+                if(publicado?.pedido && (!local?.pedido || ["sem", "aguardando_liberacao", "aguardando_pedido"].includes(statusLocal))){
+                    estado[chave] = publicado;
+                }
+            });
+        }
+        return estado;
     }
     return fallback || {};
 }
@@ -3588,9 +3598,12 @@ async function carregarPlanilhaPadrao(tipo, arquivo, guia = null){
     try{
         const isArquivoLocalOpcional = arquivo === "dados.mortos.xlsx";
         const emArquivoLocal = location.protocol === "file:";
+        const arquivosAtualizadosViaAutomus = new Set(["mata110.xlsx", "mata111.xlsx", "mata112.xlsx", "mata185.xlsx"]);
         const candidatos = isArquivoLocalOpcional && !emArquivoLocal
             ? [arquivo]
-            : [`data/${arquivo}`, `downloads/${arquivo}`, arquivo];
+            : arquivosAtualizadosViaAutomus.has(arquivo)
+                ? [`downloads/${arquivo}`, `data/${arquivo}`, arquivo]
+                : [`data/${arquivo}`, `downloads/${arquivo}`, arquivo];
         for(const url of candidatos){
             const response = await fetch(url, { cache: "no-store" });
             if(!response.ok) continue;
@@ -10033,7 +10046,7 @@ onAuthStateChanged(auth, async (user) => {
                 carregarPlanilhaPadrao("mata111", "mata111.xlsx"),
                 carregarPlanilhaPadrao("mata112", "mata112.xlsx", "Saldos a Endereçar")
             ]);
-            pedidosCompraEstado = calcularPedidosCompraEstado(dados, pedidosCompraEstado);
+            pedidosCompraEstado = calcularPedidosCompraEstado(dados, pedidosCompraEstado, { preservarPedidosPublicados:true });
             renderTabela();
         };
 
@@ -10144,7 +10157,7 @@ function aplicarSnapshotEstoqueFirebase(val, opcoes = {}){
         window.__estoqueSyncToken = syncToken;
         ajustesItensEstoque = val.ajustesItens || {};
         historicoSaldoEstoque = val.historicoSaldo || {};
-        pedidosCompraEstado = calcularPedidosCompraEstado(val.dados || [], val.pedidosCompra || {});
+        pedidosCompraEstado = calcularPedidosCompraEstado(val.dados || [], val.pedidosCompra || {}, { preservarPedidosPublicados:true });
         dadosMortos = Array.isArray(val.dadosMortos) ? val.dadosMortos.map(item => aplicarAjusteManualItem(corrigirItemIncluirInvertido({...item}))) : [];
         window.dadosMortos = dadosMortos;
         if(Array.isArray(val.dados)){
@@ -10175,7 +10188,7 @@ async function carregarEstoqueInicial() {
 
             ajustesItensEstoque = banco.ajustesItens || {};
             historicoSaldoEstoque = banco.historicoSaldo || {};
-            pedidosCompraEstado = calcularPedidosCompraEstado(banco.dados || [], banco.pedidosCompra || {});
+            pedidosCompraEstado = calcularPedidosCompraEstado(banco.dados || [], banco.pedidosCompra || {}, { preservarPedidosPublicados:true });
             dadosMortos = Array.isArray(banco.dadosMortos) ? banco.dadosMortos : [];
             dadosMortos = dadosMortos.map(item => aplicarAjusteManualItem(corrigirItemIncluirInvertido({...item})));
             window.dadosMortos = dadosMortos;
