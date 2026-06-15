@@ -621,6 +621,7 @@
             display:flex;
             align-items:flex-end;
             justify-content:space-between;
+            flex-wrap:wrap;
             gap:10px;
             margin:14px 0 8px;
             padding:10px;
@@ -629,6 +630,7 @@
             background:rgba(21,21,29,.76);
         }
         .kanbanFiltroBar .filter{width:min(260px,100%)}
+        .kanbanFiltroBar .filter:first-of-type{width:min(330px,100%)}
         .kanbanMore{
             width:100%;
             margin:10px 0 14px;
@@ -749,6 +751,8 @@
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
             kanbanGestao: parametroPermitido((params.get("kanbanGestao") || params.get("gestaoKanban") || "todos").toLowerCase(), ["todos","avaliador","sem_avaliador","sem-avaliador"], "todos").replace("-", "_"),
+            kanbanOrdem: parametroPermitido((params.get("kanbanOrdem") || "antigo").toLowerCase(), ["antigo","recente"], "antigo"),
+            kanbanEntradasDias: parametroPermitido((params.get("kanbanEntradasDias") || "7").toLowerCase(), ["7","15","30"], "7"),
             kanbanExpandido: boolParam("kanbanExpandido", "verMaisKanban"),
             origem: (params.get("origem") || "").toLowerCase(),
             armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "04").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
@@ -1266,12 +1270,12 @@
         }
         function saldoTotalEnderecado(item){
             const saldoTotal = num(item?.saldo);
-            if(saldoTotal === null) return false;
+            if(saldoTotal === null || saldoTotal <= 0) return false;
             const enderecos = Array.isArray(item?.enderecos) ? item.enderecos : [];
             const enderecosValidos = enderecos.filter(end => enderecoValidoItem(end?.endereco));
             if(!enderecosValidos.length) return false;
             const saldoComEndereco = enderecosValidos.reduce((acc, end) => acc + (num(end?.saldo) || 0), 0);
-            return Math.abs(saldoTotal - saldoComEndereco) < 0.0001;
+            return saldoComEndereco > 0 && Math.abs(saldoTotal - saldoComEndereco) < 0.0001;
         }
         function chaveLinhaContagemProgresso(codigo, armazem, endereco){
             return [
@@ -1488,8 +1492,8 @@
                 { id:"aguardando_solicitacao", titulo:"Solicitação feita", cor:"#60a5fa" },
                 { id:"solicitacao_aprovada", titulo:"Solicitacao aprovada", cor:"#a78bfa" },
                 { id:"pedido_feito", titulo:"Pedido feito", cor:"#f59e0b" },
-                { id:"entrega_pendente", titulo:"Entrega pendente", cor:"#fb7185" },
-                { id:"entregue", titulo:"Entregues 7 dias", cor:"#22c55e" }
+                { id:"entrega_pendente", titulo:"Entrada pendente", cor:"#fb7185" },
+                { id:"entregue", titulo:"Entradas", cor:"#22c55e" }
             ];
         }
         function diasDesdeTimestamp(ts){
@@ -1497,22 +1501,38 @@
             if(!valor) return null;
             return Math.max(0, Math.round((Date.now() - valor) / 86400000));
         }
-        function entregueNosUltimos7Dias(registro){
-            if((registro?.statusManual || registro?.statusKanban) !== "entregue") return false;
-            const dias = diasDesdeTimestamp(registro?.atualizadoEm || registro?.avaliadoEm);
-            return dias !== null && dias <= 7;
+        function janelaEntradasKanban(){
+            return Number(cfg.kanbanEntradasDias || 7) || 7;
+        }
+        function timestampEntradaConfirmadaKanban(linha){
+            const pedido = linha?.pedido || {};
+            const entradaTs = Number(pedido?.entradaEndereco?.timestamp || 0);
+            if(entradaTs) return entradaTs;
+            if(saldoTotalEnderecado(linha?.item)){
+                const historicoEntrada = (Array.isArray(linha?.historicoSaldo) ? linha.historicoSaldo : [])
+                    .filter(ev => Number(ev?.delta || 0) > 0 && Number(ev?.timestamp || 0))
+                    .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0];
+                return Number(historicoEntrada?.timestamp || pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp || 0) || null;
+            }
+            return null;
+        }
+        function entradaConfirmadaNaJanela(linha){
+            const dias = diasDesdeTimestamp(timestampEntradaConfirmadaKanban(linha));
+            return dias !== null && dias <= janelaEntradasKanban();
         }
         function statusKanbanAvaliador(linha){
             const registro = linha?.registro || null;
             const pedido = linha?.pedido || null;
             const statusPedido = String(pedido?.status || "");
-            if(["aguardando_contagem", "aguardando_enderecamento"].includes(statusPedido) && saldoTotalEnderecado(linha?.item)){
-                if(entregueNosUltimos7Dias(registro)) return "entregue";
-                const diasRecebido = diasDesdeTimestamp(pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp);
-                return diasRecebido !== null && diasRecebido <= 7 ? "entregue" : "";
+            const temEntradaConfirmada = !!timestampEntradaConfirmadaKanban(linha);
+            if(["aguardando_contagem", "aguardando_enderecamento"].includes(statusPedido) && temEntradaConfirmada){
+                return entradaConfirmadaNaJanela(linha) ? "entregue" : "";
             }
             const manual = registro?.statusManual || registro?.statusKanban || "aguardando_solicitacao";
-            if(manual === "entregue") return entregueNosUltimos7Dias(registro) ? "entregue" : "";
+            if(manual === "entregue"){
+                if(entradaConfirmadaNaJanela(linha)) return "entregue";
+                return ["aguardando_contagem", "aguardando_enderecamento"].includes(statusPedido) ? "entrega_pendente" : "";
+            }
             const automatico = {
                 aguardando_liberacao:"aguardando_solicitacao",
                 aguardando_pedido:"solicitacao_aprovada",
@@ -1530,7 +1550,7 @@
             const pedido = linha?.pedido || {};
             const registro = linha?.registro || {};
             const status = linha?.kanban || statusKanbanAvaliador(linha);
-            if(status === "entregue") return registro.atualizadoEm || registro.avaliadoEm || pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp;
+            if(status === "entregue") return timestampEntradaConfirmadaKanban(linha) || registro.atualizadoEm || registro.avaliadoEm || pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp;
             if(status === "entrega_pendente") return pedido?.entradaEndereco?.timestamp || registro.atualizadoEm || pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp;
             if(status === "pedido_feito") return pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp || registro.atualizadoEm;
             if(status === "solicitacao_aprovada") return registro.atualizadoEm || registro.avaliadoEm || pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp;
@@ -1692,7 +1712,7 @@
                             <div class="avaliadorActions">
                                 <button type="button" data-kanban-status="solicitacao_aprovada" data-codigo="${esc(codigo)}">Aprovada</button>
                                 <button type="button" data-kanban-status="pedido_feito" data-codigo="${esc(codigo)}">Pedido</button>
-                                <button type="button" data-kanban-status="entrega_pendente" data-codigo="${esc(codigo)}">Entrega</button>
+                                <button type="button" data-kanban-status="entrega_pendente" data-codigo="${esc(codigo)}">Entrada</button>
                                 <button class="okBtn" type="button" data-kanban-status="entregue" data-codigo="${esc(codigo)}">Entregue</button>
                             </div>
                         </div>
@@ -1711,7 +1731,8 @@
                     const stats = estatisticasHistoricoPedidos(historico);
                     const statsCooperat = estatisticasHistoricoCooperat(histCooperat);
                     const pedido = pedidoItem(item, pedidos);
-                    return { item, historico, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
+                    const historicoSaldo = historicoSaldoItemDashboard(item, banco);
+                    return { item, historico, historicoSaldo, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
                 })
                 .filter(linha => {
                     if(cfg.status && cfg.status !== "fora" && cfg.status !== "todos" && !passaStatus(linha.status)) return false;
@@ -1755,6 +1776,12 @@
             const revisoes = avaliados.filter(l => l.registro?.decisao !== "passivel");
             const colunas = colunasKanbanAvaliador();
             const kanbanTemMais = colunas.some(col => kanbanItens.filter(l => l.kanban === col.id).length > limiteKanbanPorColuna);
+            const ordenarKanban = lista => lista.slice().sort((a,b) => {
+                const ta = Number(timestampProcessoKanban(a) || 0);
+                const tb = Number(timestampProcessoKanban(b) || 0);
+                if(cfg.kanbanOrdem === "recente") return tb - ta;
+                return ta - tb;
+            });
 
             document.getElementById("subtitulo").textContent = `${fila.length} item(ns) aguardando avaliacao no armazem ${cfg.armazens.join(",") || "04"}`;
             root.innerHTML = `
@@ -1779,6 +1806,21 @@
                         <span class="chip">Exibindo ${cfg.kanbanExpandido ? "todos os registros" : `ate ${limiteKanbanPorColuna} por coluna`}</span>
                     </div>
                     <div class="filter">
+                        <label for="fKanbanOrdem">Ordem</label>
+                        <select id="fKanbanOrdem" data-filter="kanbanOrdem">
+                            <option value="antigo" ${cfg.kanbanOrdem === "antigo" ? "selected" : ""}>Do mais antigo para o mais recente</option>
+                            <option value="recente" ${cfg.kanbanOrdem === "recente" ? "selected" : ""}>Do mais recente para o mais antigo</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fKanbanEntradasDias">Entradas</label>
+                        <select id="fKanbanEntradasDias" data-filter="kanbanEntradasDias">
+                            <option value="7" ${cfg.kanbanEntradasDias === "7" ? "selected" : ""}>Ultimos 7 dias</option>
+                            <option value="15" ${cfg.kanbanEntradasDias === "15" ? "selected" : ""}>Ultimos 15 dias</option>
+                            <option value="30" ${cfg.kanbanEntradasDias === "30" ? "selected" : ""}>Ultimos 30 dias</option>
+                        </select>
+                    </div>
+                    <div class="filter">
                         <label for="fKanbanGestao">Ambiente do Kanban</label>
                         <select id="fKanbanGestao" data-filter="kanbanGestao">
                             <option value="todos" ${cfg.kanbanGestao === "todos" ? "selected" : ""}>Todos</option>
@@ -1789,7 +1831,7 @@
                 </div>
                 <section class="kanbanGrid ${cfg.kanbanExpandido ? "expanded" : ""}">
                     ${colunas.map(col => {
-                        const cards = kanbanItens.filter(l => l.kanban === col.id);
+                        const cards = ordenarKanban(kanbanItens.filter(l => l.kanban === col.id));
                         const visiveis = cards.slice(0, limiteKanbanPorColuna);
                         return `
                             <div class="kanbanCol" style="--col:${esc(col.cor)}">
