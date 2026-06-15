@@ -622,6 +622,7 @@ def _montar_pedidos_compra(
             pedido_ts = int(pedido.get("timestamp") or 0)
             return next((e for e in entradas if not pedido_ts or not int(e.get("timestamp") or 0) or int(e.get("timestamp") or 0) >= pedido_ts), None)
 
+        entrada_confirmada = next((e for e in (localizar_entrada(p) for p in pedidos) if e), None) or (entradas[0] if entradas else None)
         pedido = None
         for candidato in pedidos:
             entrada = localizar_entrada(candidato)
@@ -660,6 +661,7 @@ def _montar_pedidos_compra(
             "pedido": pedido,
             "ultimoPedido": ultimo_pedido,
             "entradaEndereco": entrada_ativa,
+            "entradaConfirmada": entrada_confirmada,
             "mediaPedido": media,
             "recebidoSemEntrada": recebido_sem_entrada,
         }

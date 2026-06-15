@@ -345,11 +345,11 @@
             align-items:start;
         }
         .avaliadorPanel{
-            background:rgba(21,21,29,.86);
-            border:1px solid rgba(122,60,255,.28);
+            background:rgba(15,23,42,.44);
+            border:1px solid rgba(148,163,184,.18);
             border-radius:8px;
             padding:12px;
-            box-shadow:0 0 18px rgba(122,60,255,.14);
+            box-shadow:none;
             min-width:0;
         }
         .avaliadorPanel h2{
@@ -363,7 +363,7 @@
         }
         .avaliadorItem{
             border:1px solid rgba(148,163,184,.18);
-            background:rgba(26,26,37,.72);
+            background:rgba(26,26,37,.92);
             border-radius:8px;
             padding:10px;
             min-width:0;
@@ -998,6 +998,8 @@
         function quantidadeEntradaPedido(pedido){
             return num(pedido?.entradaEndereco?.quantidadeEntrada)
                 ?? num(pedido?.entradaEndereco?.quantidade)
+                ?? num(pedido?.entradaConfirmada?.quantidadeEntrada)
+                ?? num(pedido?.entradaConfirmada?.quantidade)
                 ?? num(pedido?.pedido?.quantidadeRecebida)
                 ?? num(pedido?.ultimoPedido?.quantidadeRecebida)
                 ?? null;
@@ -1595,10 +1597,28 @@
             return `${prefixo} há ${fmt(dias)} dia${dias === 1 ? "" : "s"}`;
         }
         function timestampSolicitacaoKanban(linha){
-            return Number(linha?.pedido?.solicitacao?.timestamp || linha?.registro?.avaliadoEm || 0) || null;
+            const pedido = linha?.pedido || {};
+            const registro = linha?.registro || {};
+            return Number(
+                pedido?.solicitacao?.timestamp ||
+                registro?.avaliadoEm ||
+                pedido?.pedido?.timestamp ||
+                pedido?.ultimoPedido?.timestamp ||
+                0
+            ) || null;
         }
         function timestampAprovacaoKanban(linha){
-            return Number(linha?.pedido?.solicitacao?.aprovadoEm || linha?.pedido?.solicitacao?.aceitoEm || linha?.registro?.atualizadoEm || linha?.registro?.avaliadoEm || 0) || null;
+            const pedido = linha?.pedido || {};
+            const registro = linha?.registro || {};
+            return Number(
+                pedido?.solicitacao?.aprovadoEm ||
+                pedido?.solicitacao?.aceitoEm ||
+                registro?.atualizadoEm ||
+                registro?.avaliadoEm ||
+                pedido?.pedido?.timestamp ||
+                pedido?.ultimoPedido?.timestamp ||
+                0
+            ) || null;
         }
         function origemLimiteTitulo(origem){
             const normalizada = normalizarTexto(origem);
@@ -1619,13 +1639,22 @@
         }
         function timestampEntradaConfirmadaKanban(linha){
             const pedido = linha?.pedido || {};
+            const pedidoTs = Number(pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp || 0);
+            const historicoEntrada = (Array.isArray(linha?.historicoSaldo) ? linha.historicoSaldo : [])
+                .filter(ev => {
+                    const delta = Number(ev?.delta || 0);
+                    const ts = Number(ev?.timestamp || 0);
+                    if(delta <= 0 || !ts) return false;
+                    return !pedidoTs || ts >= pedidoTs - 86400000;
+            })
+                .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0];
+            if(historicoEntrada) return Number(historicoEntrada.timestamp || 0) || null;
+            const entradaConfirmadaTs = Number(pedido?.entradaConfirmada?.timestamp || 0);
+            if(entradaConfirmadaTs) return entradaConfirmadaTs;
             const entradaTs = Number(pedido?.entradaEndereco?.timestamp || 0);
             if(entradaTs) return entradaTs;
             if(saldoTotalEnderecado(linha?.item)){
-                const historicoEntrada = (Array.isArray(linha?.historicoSaldo) ? linha.historicoSaldo : [])
-                    .filter(ev => Number(ev?.delta || 0) > 0 && Number(ev?.timestamp || 0))
-                    .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0];
-                return Number(historicoEntrada?.timestamp || pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp || 0) || null;
+                return Number(pedidoTs || 0) || null;
             }
             return null;
         }
@@ -1638,7 +1667,7 @@
             const pedido = linha?.pedido || null;
             const statusPedido = String(pedido?.status || "");
             const temEntradaConfirmada = !!timestampEntradaConfirmadaKanban(linha);
-            if(["aguardando_contagem", "aguardando_enderecamento"].includes(statusPedido) && temEntradaConfirmada){
+            if(["aguardando_pedido", "aguardando_recebimento", "aguardando_contagem", "aguardando_enderecamento"].includes(statusPedido) && temEntradaConfirmada){
                 return entradaConfirmadaNaJanela(linha) ? "entregue" : "";
             }
             const manual = registro?.statusManual || registro?.statusKanban || "aguardando_solicitacao";

@@ -1019,11 +1019,14 @@ tr:hover {
     z-index:2;
     position:relative;
     overflow-y:auto;
-    overflow-x:hidden;
+    overflow-x:auto;
     box-sizing:border-box;
     padding-right:7px;
     transform: translateZ(0);
     backface-visibility: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
 
     
 }

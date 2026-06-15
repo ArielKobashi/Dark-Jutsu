@@ -1076,6 +1076,7 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
         const localizarEntradaPedido = pedido => entradas.find(e => !pedido?.timestamp || !e.timestamp || e.timestamp >= pedido.timestamp) || null;
         const entradasAsc = [...entradas].sort((a,b) => (a.timestamp - b.timestamp) || (a.rowIndex - b.rowIndex));
         const localizarPrimeiraEntradaPedido = pedido => entradasAsc.find(e => pedido?.timestamp && e.timestamp && e.timestamp >= pedido.timestamp) || null;
+        const entradaConfirmada = pedidos.map(localizarEntradaPedido).find(Boolean) || entradas[0] || null;
         const temposRecebimento = pedidos.map(p => {
             const entrada = localizarPrimeiraEntradaPedido(p);
             if(!p.timestamp || !entrada?.timestamp) return null;
@@ -1153,6 +1154,7 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
             pedido: pedidoAtivo || null,
             ultimoPedido,
             entradaEndereco: entradaAtiva || null,
+            entradaConfirmada,
             mediaPedido,
             recebidoSemEntrada,
             temposRecebimento,
@@ -1500,12 +1502,29 @@ function getEnderecosForaEndereco(item){
     return item.enderecos.filter(e => enderecoPossuiSaldo(e) && isEnderecoForaEndereco(e.endereco));
 }
 
-function saldoAtualTotalmenteEnderecado(item){
-    const saldoAtual = parsePlanilhaNumero(item?.saldo);
-    if(saldoAtual === null || saldoAtual <= 0) return false;
-    const saldoEnderecado = (Array.isArray(item?.enderecos) ? item.enderecos : [])
+function saldoEnderecadoItem(item){
+    return (Array.isArray(item?.enderecos) ? item.enderecos : [])
         .filter(enderecoContaComoEndereco)
         .reduce((total, end) => total + (parsePlanilhaNumero(end?.saldo) || 0), 0);
+}
+
+function aplicarSaldoEnderecadoTabela(item){
+    if(!item || !Array.isArray(item.enderecos) || !item.enderecos.length) return item;
+    const saldoAtual = parsePlanilhaNumero(item.saldo);
+    if(saldoAtual === null) return item;
+    const saldoEnderecado = saldoEnderecadoItem(item);
+    if(Math.abs(saldoEnderecado - saldoAtual) < 0.0001) return item;
+    return {
+        ...item,
+        saldoOriginal: item.saldoOriginal ?? item.saldo,
+        saldo: saldoEnderecado
+    };
+}
+
+function saldoAtualTotalmenteEnderecado(item){
+    const saldoAtual = parsePlanilhaNumero(item?.saldoOriginal ?? item?.saldo);
+    if(saldoAtual === null || saldoAtual <= 0) return false;
+    const saldoEnderecado = saldoEnderecadoItem(item);
     return saldoEnderecado >= saldoAtual - 0.0001;
 }
 
@@ -1526,6 +1545,19 @@ function getResumoSaldoForaEndereco(item){
             armazem: "PEDIDO",
             saldo: pedido.recebidoSemEntrada
         });
+    }
+    const saldoSistema = parsePlanilhaNumero(item?.saldoOriginal ?? item?.saldo);
+    if(saldoSistema !== null && saldoSistema > 0){
+        const saldoEnderecado = saldoEnderecadoItem(item);
+        const saldoSemEndereco = Math.max(0, saldoSistema - saldoEnderecado);
+        const saldoJaRegistrado = foraEndereco.reduce((total, end) => total + (parsePlanilhaNumero(end?.saldo) || 0), 0);
+        if(saldoSemEndereco > saldoJaRegistrado + 0.0001){
+            foraEndereco.push({
+                endereco: "SALDO SEM ENDERECO",
+                armazem: "SISTEMA",
+                saldo: saldoSemEndereco - saldoJaRegistrado
+            });
+        }
     }
     const saldoTotal = foraEndereco.reduce((total, end) => {
         const saldo = parsePlanilhaNumero(end.saldo);
@@ -1781,7 +1813,7 @@ window.setDados = function(novosDados, opcoes = {}){
     }
     const anteriores = getBaseDadosTodos();
     const dadosCorrigidos = Array.isArray(novosDados)
-        ? novosDados.map(item => corrigirItemIncluirInvertido({...item}))
+        ? novosDados.map(item => aplicarSaldoEnderecadoTabela(corrigirItemIncluirInvertido({...item})))
         : [];
     const separados = separarDadosMortosPorDescricao(dadosCorrigidos, dadosMortos);
     dados = enriquecerItensComEstoqueMinimo(separados.ativos, anteriores);
