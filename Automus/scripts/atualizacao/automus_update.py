@@ -310,11 +310,12 @@ def _optional_limit_num(value: Any) -> float | None:
     return num
 
 
-def _normalizar_limite_cooperat(value: Any) -> float | None:
+def _normalizar_limite_cooperat(value: Any, codigo: Any = "") -> float | None:
     num = _optional_limit_num(value)
     if num is None:
         return None
-    return num / 1000 if num >= 1000 and num % 1000 == 0 else num
+    codigo_norm = re.sub(r"\D+", "", str(codigo or "")).lstrip("0") or str(codigo or "").strip().lower()
+    return num / 1000 if codigo_norm == "104739" and num >= 1000 and num % 1000 == 0 else num
 
 
 def _reposicao_media(minimo: Any, maximo: Any) -> float | None:
@@ -960,9 +961,9 @@ def _build_items(
         cod_lower = _ascii_lower(cooperat_cod)
         if "codigo" in cod_lower or "código" in cod_lower or "item" in cod_lower:
             continue
-        minimo = _normalizar_limite_cooperat(row[6] if len(row) > 6 else None)
-        maximo = _normalizar_limite_cooperat(row[7] if len(row) > 7 else None)
-        reposicao_planilha = _normalizar_limite_cooperat(row[8] if len(row) > 8 else None)
+        minimo = _normalizar_limite_cooperat(row[6] if len(row) > 6 else None, cooperat_cod)
+        maximo = _normalizar_limite_cooperat(row[7] if len(row) > 7 else None, cooperat_cod)
+        reposicao_planilha = _normalizar_limite_cooperat(row[8] if len(row) > 8 else None, cooperat_cod)
         saldo_anterior = _optional_num(row[5] if len(row) > 5 else None)
         reposicao = reposicao_planilha if reposicao_planilha is not None else _reposicao_media(minimo, maximo)
         if minimo is None and maximo is None and reposicao is None and saldo_anterior is None:

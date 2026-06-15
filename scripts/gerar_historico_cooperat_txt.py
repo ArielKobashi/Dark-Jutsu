@@ -187,7 +187,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Gera historico Cooperat em JSON a partir do TXT limpo.")
     parser.add_argument("--txt", default=str(DEFAULT_TXT), help="TXT limpo com linhas de requisicao e item.")
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="JSON de saida.")
-    parser.add_argument("--limit", type=int, default=12, help="Eventos recentes guardados por codigo.")
+    parser.add_argument("--limit", type=int, default=999999, help="Eventos recentes guardados por codigo.")
     args = parser.parse_args()
 
     txt_path = Path(args.txt)

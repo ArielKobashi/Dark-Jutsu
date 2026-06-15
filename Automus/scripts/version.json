@@ -1,12 +1,12 @@
 {
   "app": "Automus",
-  "version": "1.0.37",
-  "releasedAt": "2026-06-09",
+  "version": "1.0.38",
+  "releasedAt": "2026-06-14",
   "updateManifestUrl": "",
   "updateManifestFirebasePath": "automus/releases/latest",
   "updateBaseUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "publishDir": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "notes": [
-    "upgrade sagrado"
+    "upgrade demoniaco"
   ]
 }

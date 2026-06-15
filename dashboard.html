@@ -363,7 +363,7 @@
         }
         .avaliadorItem{
             border:1px solid rgba(148,163,184,.18);
-            background:rgba(26,26,37,.9);
+            background:rgba(26,26,37,.72);
             border-radius:8px;
             padding:10px;
             min-width:0;
@@ -859,10 +859,11 @@
             const n = num(valor);
             return n === null || n === 0 ? null : n;
         }
-        function normalizarLimiteCooperat(valor){
+        function normalizarLimiteCooperat(valor, codigo = ""){
             const n = limite(valor);
             if(n === null) return null;
-            return n >= 1000 && n % 1000 === 0 ? n / 1000 : n;
+            const codigoNorm = normalizarCodigoCooperatHistorico(codigo);
+            return codigoNorm === "104739" && n >= 1000 && n % 1000 === 0 ? n / 1000 : n;
         }
         function normalizarCodigo(valor){
             return String(valor ?? "").trim().toLowerCase();
@@ -1109,9 +1110,9 @@
                 linhas.forEach(row => {
                     const codigo = normalizarCodigo(row?.[1]);
                     if(!codigo || codigo.includes("codigo") || codigo.includes("código") || codigo.includes("item")) return;
-                    const minimo = normalizarLimiteCooperat(row[6]);
-                    const maximo = normalizarLimiteCooperat(row[7]);
-                    const reposicaoPlanilha = normalizarLimiteCooperat(row[8]);
+                    const minimo = normalizarLimiteCooperat(row[6], codigo);
+                    const maximo = normalizarLimiteCooperat(row[7], codigo);
+                    const reposicaoPlanilha = normalizarLimiteCooperat(row[8], codigo);
                     const saldoAnterior = num(row[5]);
                     const repos = reposicaoPlanilha !== null ? reposicaoPlanilha : calcularReposicaoMedia(minimo, maximo);
                     if(minimo === null && maximo === null && repos === null && saldoAnterior === null) return;
@@ -1319,6 +1320,10 @@
             const origemSugestiva = origens.some(origemTemSuposicao);
             return origemSugestiva || !!item?.sugestaoEstoque;
         }
+        function itemTemLimiteConfiavel(item){
+            const origemMin = normalizarTexto(item?.minimoOrigem || item?.limitesOrigem);
+            return origemMin.includes("cooperat") || origemMin.includes("manual");
+        }
         function codigoArmazem(valor){
             const texto = String(valor ?? "").trim().toLowerCase();
             if(!texto) return "";
@@ -1517,11 +1522,12 @@
                 ultimaData:null
             };
             const eventosCompra = eventosCompraCooperat(cooperat);
+            const ignorados = (Array.isArray(cooperat?.eventos) ? cooperat.eventos : []).filter(eventoCooperatIgnoradoCompra).length;
             const soma = arr => arr.reduce((acc, v) => acc + v, 0);
             const quantidades = eventosCompra.map(ev => num(ev.quantidadeCompra) ?? num(ev.qtdSolicitada)).filter(v => v !== null);
             const valores = eventosCompra.map(ev => num(ev.valorBaixa)).filter(v => v !== null);
             return {
-                totalEventos:eventosCompra.length,
+                totalEventos:Math.max(0, (Number(cooperat.totalEventos || 0) || eventosCompra.length) - ignorados),
                 mediaQuantidade:quantidades.length ? soma(quantidades) / quantidades.length : null,
                 totalQuantidade:soma(quantidades),
                 mediaValor:valores.length ? soma(valores) / valores.length : null,
@@ -1582,6 +1588,31 @@
             const valor = Number(ts || 0);
             if(!valor) return null;
             return Math.max(0, Math.round((Date.now() - valor) / 86400000));
+        }
+        function rotuloDiasDesde(ts, prefixo){
+            const dias = diasDesdeTimestamp(ts);
+            if(dias === null) return "";
+            return `${prefixo} há ${fmt(dias)} dia${dias === 1 ? "" : "s"}`;
+        }
+        function timestampSolicitacaoKanban(linha){
+            return Number(linha?.pedido?.solicitacao?.timestamp || linha?.registro?.avaliadoEm || 0) || null;
+        }
+        function timestampAprovacaoKanban(linha){
+            return Number(linha?.pedido?.solicitacao?.aprovadoEm || linha?.pedido?.solicitacao?.aceitoEm || linha?.registro?.atualizadoEm || linha?.registro?.avaliadoEm || 0) || null;
+        }
+        function origemLimiteTitulo(origem){
+            const normalizada = normalizarTexto(origem);
+            if(normalizada.includes("cooperat")) return "cooperat";
+            if(normalizada.includes("manual")) return "manual";
+            if(origemTemSuposicao(normalizada)) return "sugerido pelo sistema";
+            return origem ? String(origem) : "sem origem";
+        }
+        function tituloEnderecosItem(item){
+            const enderecos = Array.isArray(item?.enderecos) ? item.enderecos : [];
+            if(!enderecos.length) return item?.enderecoPrincipal || "sem endereço";
+            return enderecos
+                .map(end => `${end?.endereco || "sem endereço"}: ${fmt(end?.saldo)}${end?.armazem ? ` (${end.armazem})` : ""}`)
+                .join("\n");
         }
         function janelaEntradasKanban(){
             return Number(cfg.kanbanEntradasDias || 7) || 7;
@@ -1777,25 +1808,22 @@
                     </div>
                     <div class="avaliadorTags">
                         <span class="avaliadorTag">Saldo ${esc(fmt(item.saldo))}</span>
-                        <span class="avaliadorTag">Min. ${esc(fmt(item.minimo))}</span>
-                        <span class="avaliadorTag">Reposicao ${esc(fmt(reposicao))}</span>
-                        <span class="avaliadorTag">Endereco ${esc(item.enderecoPrincipal || "-")}</span>
+                        <span class="avaliadorTag" title="${esc(origemLimiteTitulo(item.minimoOrigem || item.limitesOrigem))}">Min. ${esc(fmt(item.minimo))}</span>
+                        <span class="avaliadorTag" title="${esc(origemLimiteTitulo(item.reposicaoOrigem || item.limitesOrigem))}">Reposicao ${esc(fmt(reposicao))}</span>
+                        <span class="avaliadorTag" title="${esc(tituloEnderecosItem(item))}">Endereco ${esc(item.enderecoPrincipal || "-")}</span>
                         <span class="avaliadorTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
                     </div>
                     <div class="avaliadorStats">
                         <div class="avaliadorStat"><span>Pedidos</span><strong>${esc(fmt(totalPedidos))}</strong></div>
                         <div class="avaliadorStat"><span>Prazo medio</span><strong>${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} d`}</strong></div>
-                        <div class="avaliadorStat"><span>Media novo</span><strong>${stats.mediaQuantidade === null ? "-" : esc(fmt(stats.mediaQuantidade))}</strong></div>
-                        <div class="avaliadorStat"><span>Media Cooperat</span><strong>${statsCooperat.mediaQuantidade === null ? "-" : esc(fmt(statsCooperat.mediaQuantidade))}</strong></div>
                         <div class="avaliadorStat"><span>Ultimo pedido ha</span><strong>${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} d`}</strong></div>
-                        <div class="avaliadorStat"><span>Saidas</span><strong>${esc(fmt(saidas.length))}</strong></div>
                     </div>
                     <details class="avaliadorDetails">
-                        <summary><span>Historico novo</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdNovo))} pedido(s) | media ${stats.mediaQuantidade === null ? "-" : esc(fmt(stats.mediaQuantidade))}</span></summary>
+                        <summary><span>Historico novo</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdNovo))} pedido(s)</span></summary>
                         <div class="avaliadorDetailsBody">${renderHistoricoMini(historico)}</div>
                     </details>
                     <details class="avaliadorDetails">
-                        <summary><span>Historico Cooperat</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdCooperat))} compra(s) | media ${statsCooperat.mediaQuantidade === null ? "-" : esc(fmt(statsCooperat.mediaQuantidade))}</span></summary>
+                        <summary><span>Historico Cooperat</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdCooperat))} compra(s)</span></summary>
                         <div class="avaliadorDetailsBody">${renderHistoricoCooperatMini(historicoCooperat)}</div>
                     </details>
                     <details class="avaliadorDetails">
@@ -1831,6 +1859,8 @@
             const nomeAprovador = aprovadorPedido(pedido);
             const nomeComprador = compradorPedido(pedido);
             const statusKanban = linha?.kanban || statusKanbanAvaliador(linha);
+            const diasSolicitado = rotuloDiasDesde(timestampSolicitacaoKanban(linha), "Solicitado");
+            const diasAprovado = rotuloDiasDesde(timestampAprovacaoKanban(linha), "Aprovado");
             const nomeVisivel = statusKanban === "aguardando_solicitacao"
                 ? { rotulo:"Solicitou", valor:nomeSolicitante }
                 : statusKanban === "solicitacao_aprovada"
@@ -1849,21 +1879,28 @@
                         ${statusKanban === "entrega_pendente" && qtdPendenteEntrada !== null ? `<span class="avaliadorTag">Pendente entrada ${esc(fmt(qtdPendenteEntrada))}</span>` : ""}
                         ${statusKanban === "entregue" && qtdEntrada !== null ? `<span class="avaliadorTag">Entrou ${esc(fmt(qtdEntrada))}</span>` : ""}
                         ${diasProcesso !== null ? `<span class="avaliadorTag">Há ${esc(fmt(diasProcesso))} dia${diasProcesso === 1 ? "" : "s"}</span>` : ""}
+                        ${diasSolicitado ? `<span class="avaliadorTag">${esc(diasSolicitado)}</span>` : ""}
+                        ${diasAprovado && statusKanban !== "aguardando_solicitacao" ? `<span class="avaliadorTag">${esc(diasAprovado)}</span>` : ""}
                         ${nomeVisivel.valor ? `<span class="avaliadorTag pedidoTag">${esc(nomeVisivel.rotulo)}: ${esc(nomeVisivel.valor)}</span>` : ""}
                     </div>
                     <details class="avaliadorDetails">
                         <summary><span>Detalhes e avanço</span><span class="avaliadorSummaryMeta">${esc(fmt(comprasCooperat))} Cooperat</span></summary>
                         <div class="avaliadorDetailsBody">
                             <div class="kanbanMeta">
-                                <span>Pedido: ${esc(rotuloPedido(pedido))}</span>
-                                <span>Pedido compra: ${qtdPedido === null ? "-" : esc(fmt(qtdPedido))} | Entrada: ${qtdEntrada === null ? "-" : esc(fmt(qtdEntrada))} | Pendente entrada: ${qtdPendenteEntrada === null ? "-" : esc(fmt(qtdPendenteEntrada))}</span>
-                                <span>Solicitou: ${esc(nomeSolicitante || "-")} | Aprovou: ${esc(nomeAprovador || "-")} | Pediu: ${esc(nomeComprador || "-")}</span>
-                                <span>Endereco principal: ${esc(item.enderecoPrincipal || "-")}</span>
-                                <span>${semAvaliador ? "Sem avaliador" : "Com avaliador"}</span>
-                                <span>Reposicao ${esc(fmt(reposicao(item)))}</span>
-                                <span>Prazo medio: ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`} | Último pedido há: ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
-                                <span>Cooperat antigo: ${esc(fmt(comprasCooperat))} compra(s), ultima ${esc(ultimaCooperat)}</span>
-                                <span>Avaliado: ${registro?.avaliadoEm ? esc(new Date(registro.avaliadoEm).toLocaleDateString("pt-BR")) : "-"}</span>
+                                <span><strong>Status:</strong> ${esc(rotuloPedido(pedido))}</span>
+                                <span><strong>Pedido:</strong> ${qtdPedido === null ? "-" : esc(fmt(qtdPedido))}</span>
+                                <span><strong>Entrada:</strong> ${qtdEntrada === null ? "-" : esc(fmt(qtdEntrada))}</span>
+                                <span><strong>Pendente:</strong> ${qtdPendenteEntrada === null ? "-" : esc(fmt(qtdPendenteEntrada))}</span>
+                                <span><strong>Solicitou:</strong> ${esc(nomeSolicitante || "-")}</span>
+                                <span><strong>Aprovou:</strong> ${esc(nomeAprovador || "-")}</span>
+                                <span><strong>Pediu:</strong> ${esc(nomeComprador || "-")}</span>
+                                <span><strong>Endereço:</strong> ${esc(item.enderecoPrincipal || "-")}</span>
+                                <span><strong>Gestão:</strong> ${semAvaliador ? "Sem avaliador" : "Com avaliador"}</span>
+                                <span><strong>Reposição:</strong> ${esc(fmt(reposicao(item)))}</span>
+                                <span><strong>Prazo médio:</strong> ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`}</span>
+                                <span><strong>Último pedido:</strong> ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
+                                <span><strong>Cooperat:</strong> ${esc(fmt(comprasCooperat))} compra(s), última ${esc(ultimaCooperat)}</span>
+                                <span><strong>Avaliado:</strong> ${registro?.avaliadoEm ? esc(new Date(registro.avaliadoEm).toLocaleDateString("pt-BR")) : "-"}</span>
                                 ${registro?.observacao ? `<span>Obs.: ${esc(registro.observacao)}</span>` : ""}
                             </div>
                             <div class="avaliadorActions">
@@ -1893,6 +1930,9 @@
                 })
                 .filter(linha => {
                     if(cfg.status && cfg.status !== "fora" && cfg.status !== "todos" && !passaStatus(linha.status)) return false;
+                    if(cfg.suposicao === "com" && !itemTemSuposicao(linha.item)) return false;
+                    if(cfg.suposicao === "sem" && !itemTemLimiteConfiavel(linha.item)) return false;
+                    if(cfg.origem && !origemItem(linha.item).includes(cfg.origem)) return false;
                     if(cfg.busca){
                         const texto = normalizarTexto([
                             linha.item.protheus,
@@ -2528,8 +2568,11 @@
                 dashboardPanelConfig = dashboardConfigSnap?.val?.() || {};
                 avaliadorPedidosConfig = avaliadorPedidosSnap?.val?.() || {};
                 const historicoCooperatFirebase = historicoCooperatSnap?.val?.() || null;
+                const historicoCooperatLocal = deveCarregarHistoricoCooperat && Number(historicoCooperatFirebase?.limiteEventosPorCodigo || 0) < 999999
+                    ? await carregarHistoricoCooperatLocal()
+                    : null;
                 const historicoCooperat = deveCarregarHistoricoCooperat
-                    ? (historicoCooperatFirebase?.codigos ? historicoCooperatFirebase : await carregarHistoricoCooperatLocal())
+                    ? (historicoCooperatLocal?.codigos ? historicoCooperatLocal : historicoCooperatFirebase?.codigos ? historicoCooperatFirebase : await carregarHistoricoCooperatLocal())
                     : null;
                 renderDashboard(snap.val() || {}, mapaMinimo, mata111, mata112, {
                     mata110,
@@ -2976,6 +3019,7 @@
                 if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
                 if(cfg.suposicao === "com" && !itemTemSuposicao(linha.item)) return false;
                 if(cfg.suposicao === "sem" && itemTemSuposicao(linha.item)) return false;
+                if(cfg.ambiente === "avaliador" && cfg.suposicao === "sem" && !itemTemLimiteConfiavel(linha.item)) return false;
                 if(cfg.origem && linha.origem !== cfg.origem) return false;
                 if(cfg.busca){
                     const texto = normalizarTexto([

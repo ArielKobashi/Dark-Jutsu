@@ -541,10 +541,10 @@ Usuários do Sistema
         <div id="etiquetasContent" aria-hidden="true">
             <div class="etiquetasTitle">Gerador de etiquetas</div>
             <div class="etiquetasSizeRow" role="radiogroup" aria-label="Tamanho da etiqueta">
-                <label><input type="radio" name="etiquetaTamanho" value="7" checked> 7 cm</label>
-                <label><input type="radio" name="etiquetaTamanho" value="5"> 5 cm</label>
-                <label><input type="radio" name="etiquetaTamanho" value="10"> 10 cm</label>
-                <label><input type="radio" name="etiquetaTamanho" value="15"> 15 cm</label>
+                <label><input type="radio" name="etiquetaTamanho" value="7" checked> 7 cm <span class="etiquetaSizeCount" data-etiqueta-count="7">0</span></label>
+                <label><input type="radio" name="etiquetaTamanho" value="5"> 5 cm <span class="etiquetaSizeCount" data-etiqueta-count="5">0</span></label>
+                <label><input type="radio" name="etiquetaTamanho" value="10"> 10 cm <span class="etiquetaSizeCount" data-etiqueta-count="10">0</span></label>
+                <label><input type="radio" name="etiquetaTamanho" value="15"> 15 cm <span class="etiquetaSizeCount" data-etiqueta-count="15">0</span></label>
             </div>
             <div class="etiquetaInputWrap">
                 <textarea id="etiquetaCodigos" rows="3" placeholder="Códigos separados por vírgula"></textarea>
@@ -867,10 +867,10 @@ function parseLimiteEstoque(valor){
     return numero;
 }
 
-function normalizarLimiteCooperat(valor){
+function normalizarLimiteCooperat(valor, codigo = ""){
     const numero = parseLimiteEstoque(valor);
     if(numero === null) return null;
-    return numero >= 1000 && numero % 1000 === 0 ? numero / 1000 : numero;
+    return normalizarCodigoItem(codigo) === "104739" && numero >= 1000 && numero % 1000 === 0 ? numero / 1000 : numero;
 }
 
 function formatarNumeroPlanilha(valor){
@@ -1562,9 +1562,9 @@ function indexarEstoqueMinimoItens(planilha){
         if(!cooperatCodigo) continue;
         if(cooperatCodigo.includes("codigo") || cooperatCodigo.includes("código") || cooperatCodigo.includes("item")) continue;
 
-        const minimo = normalizarLimiteCooperat(row[6]);
-        const maximo = normalizarLimiteCooperat(row[7]);
-        const reposicaoPlanilha = normalizarLimiteCooperat(row[8]);
+        const minimo = normalizarLimiteCooperat(row[6], cooperatCodigo);
+        const maximo = normalizarLimiteCooperat(row[7], cooperatCodigo);
+        const reposicaoPlanilha = normalizarLimiteCooperat(row[8], cooperatCodigo);
         const saldoAnterior = parsePlanilhaNumero(row[5]);
         const reposicao = reposicaoPlanilha !== null ? reposicaoPlanilha : calcularReposicaoMedia(minimo, maximo);
 
@@ -3074,12 +3074,21 @@ function salvarCodigosEtiquetaAtual(){
     setListaEtiquetaTamanho(tamanho, codigos);
     codigos.forEach(codigo => removerCodigoDasListasEtiqueta(codigo, tamanho));
     memorizarCodigosEtiqueta(codigos, tamanho);
+    atualizarContadoresEtiquetas();
 }
 
 function carregarCodigosEtiquetaAtual(){
     const tamanho = getEtiquetaTamanhoAtual();
     const input = document.getElementById("etiquetaCodigos");
     if(input) input.value = etiquetaCodigosPorTamanho[tamanho] || "";
+    atualizarContadoresEtiquetas();
+}
+
+function atualizarContadoresEtiquetas(){
+    Object.keys(etiquetaCodigosPorTamanho || {}).forEach(tamanho => {
+        const el = document.querySelector(`[data-etiqueta-count="${tamanho}"]`);
+        if(el) el.textContent = String(parseCodigosEtiquetasTexto(etiquetaCodigosPorTamanho[tamanho] || "").length);
+    });
 }
 
 function setEtiquetasStatus(msg){
@@ -3140,6 +3149,7 @@ function selecionadosParaEtiquetas(){
     const novos = selecionadosInfo.map(({ key, item }) => item?.protheus || item?.cooperat || key).filter(Boolean);
     const naoEncontrados = selecionadosInfo.filter(({ item }) => !item).length;
     distribuirCodigosPorMemoriaEtiqueta(novos, tamanho);
+    atualizarContadoresEtiquetas();
     const totalAtual = parseCodigosEtiquetasTexto(etiquetaCodigosPorTamanho[getEtiquetaTamanhoAtual()] || "").length;
     const aviso = naoEncontrados ? ` ${naoEncontrados} selecao(oes) sem item completo foram mantidas pelo codigo.` : "";
     setEtiquetasStatus(`${novos.length} selecionado(s) distribuido(s) por tamanho. Lista atual: ${totalAtual}.${aviso}`);
@@ -3151,6 +3161,7 @@ function limparCodigosEtiquetas(){
     const input = document.getElementById("etiquetaCodigos");
     if(input) input.value = "";
     etiquetaCodigosPorTamanho[tamanho] = "";
+    atualizarContadoresEtiquetas();
     setEtiquetasStatus(`Códigos de ${ETIQUETA_MOLDES[tamanho]?.nome || tamanho} limpos.`);
 }
 window.limparCodigosEtiquetas = limparCodigosEtiquetas;
@@ -8572,7 +8583,9 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             }
 
             let soma = 0;
-            item.enderecos.forEach(e => soma += e.saldo);
+            item.enderecos.forEach(e => {
+                if(enderecoContaComoEndereco(e)) soma += e.saldo;
+            });
             item.saldo = soma;
         }
 
