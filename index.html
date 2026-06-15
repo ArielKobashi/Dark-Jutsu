@@ -9261,8 +9261,26 @@ function setMobileConfigOpen(isOpen){
     }
 
     if(tableContainer){
-        tableContainer.addEventListener("touchstart", function(e){ e.stopPropagation(); }, { passive: true });
-        tableContainer.addEventListener("touchmove", function(e){ e.stopPropagation(); }, { passive: true });
+        let tableTouchX = 0;
+        let tableTouchY = 0;
+        let tableStartLeft = 0;
+        tableContainer.addEventListener("touchstart", function(e){
+            e.stopPropagation();
+            if(e.touches && e.touches.length === 1){
+                tableTouchX = e.touches[0].clientX;
+                tableTouchY = e.touches[0].clientY;
+                tableStartLeft = tableContainer.scrollLeft;
+            }
+        }, { passive: true });
+        tableContainer.addEventListener("touchmove", function(e){
+            e.stopPropagation();
+            if(!isMobileLayout() || !e.touches || e.touches.length !== 1) return;
+            const dx = e.touches[0].clientX - tableTouchX;
+            const dy = e.touches[0].clientY - tableTouchY;
+            if(Math.abs(dx) > Math.abs(dy) * 1.15){
+                tableContainer.scrollLeft = tableStartLeft - dx;
+            }
+        }, { passive: true });
         tableContainer.addEventListener("touchend", function(e){ e.stopPropagation(); }, { passive: true });
     }
 

@@ -359,7 +359,8 @@
         }
         .avaliadorList{
             display:grid;
-            gap:10px;
+            gap:7px;
+            align-content:start;
         }
         .avaliadorItem{
             border:1px solid rgba(148,163,184,.18);
@@ -611,6 +612,11 @@
         .kanbanCard .avaliadorTag.pedidoTag{
             display:block;
             width:100%;
+        }
+        .kanbanCard .avaliadorTag.entradaSoltaTag{
+            border-color:rgba(248,113,113,.55);
+            background:rgba(127,29,29,.78);
+            color:#fee2e2;
         }
         .kanbanCard .avaliadorDetails{
             margin-top:7px;
@@ -1637,17 +1643,22 @@
         function janelaEntradasKanban(){
             return Number(cfg.kanbanEntradasDias || 7) || 7;
         }
-        function timestampEntradaConfirmadaKanban(linha){
+        function entradaHistoricoKanban(linha){
             const pedido = linha?.pedido || {};
             const pedidoTs = Number(pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp || 0);
-            const historicoEntrada = (Array.isArray(linha?.historicoSaldo) ? linha.historicoSaldo : [])
+            return (Array.isArray(linha?.historicoSaldo) ? linha.historicoSaldo : [])
                 .filter(ev => {
                     const delta = Number(ev?.delta || 0);
                     const ts = Number(ev?.timestamp || 0);
                     if(delta <= 0 || !ts) return false;
                     return !pedidoTs || ts >= pedidoTs - 86400000;
-            })
-                .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0];
+                })
+                .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0] || null;
+        }
+        function timestampEntradaConfirmadaKanban(linha){
+            const pedido = linha?.pedido || {};
+            const pedidoTs = Number(pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp || 0);
+            const historicoEntrada = entradaHistoricoKanban(linha);
             if(historicoEntrada) return Number(historicoEntrada.timestamp || 0) || null;
             const entradaConfirmadaTs = Number(pedido?.entradaConfirmada?.timestamp || 0);
             if(entradaConfirmadaTs) return entradaConfirmadaTs;
@@ -1883,11 +1894,15 @@
             const qtdSolicitada = quantidadeSolicitadaPedido(pedido);
             const qtdPedido = quantidadePedidoCompra(pedido);
             const qtdPendenteEntrada = quantidadePendenteEntrada(pedido);
-            const qtdEntrada = quantidadeEntradaPedido(pedido);
             const nomeSolicitante = solicitantePedido(pedido);
             const nomeAprovador = aprovadorPedido(pedido);
             const nomeComprador = compradorPedido(pedido);
             const statusKanban = linha?.kanban || statusKanbanAvaliador(linha);
+            const entradaHistorico = entradaHistoricoKanban(linha);
+            const entradaSemPedido = statusKanban === "entregue" && !!entradaHistorico && !pedido?.pedido && !pedido?.entradaConfirmada && !pedido?.entradaEndereco;
+            const qtdEntradaPedido = quantidadeEntradaPedido(pedido);
+            const qtdEntradaHistorico = entradaHistorico ? Math.abs(Number(entradaHistorico.delta || 0)) : null;
+            const qtdEntrada = qtdEntradaPedido && qtdEntradaPedido > 0 ? qtdEntradaPedido : qtdEntradaHistorico;
             const diasSolicitado = rotuloDiasDesde(timestampSolicitacaoKanban(linha), "Solicitado");
             const diasAprovado = rotuloDiasDesde(timestampAprovacaoKanban(linha), "Aprovado");
             const nomeVisivel = statusKanban === "aguardando_solicitacao"
@@ -1908,8 +1923,9 @@
                         ${statusKanban === "entrega_pendente" && qtdPendenteEntrada !== null ? `<span class="avaliadorTag">Pendente entrada ${esc(fmt(qtdPendenteEntrada))}</span>` : ""}
                         ${statusKanban === "entregue" && qtdEntrada !== null ? `<span class="avaliadorTag">Entrou ${esc(fmt(qtdEntrada))}</span>` : ""}
                         ${diasProcesso !== null ? `<span class="avaliadorTag">Há ${esc(fmt(diasProcesso))} dia${diasProcesso === 1 ? "" : "s"}</span>` : ""}
-                        ${diasSolicitado ? `<span class="avaliadorTag">${esc(diasSolicitado)}</span>` : ""}
-                        ${diasAprovado && statusKanban !== "aguardando_solicitacao" ? `<span class="avaliadorTag">${esc(diasAprovado)}</span>` : ""}
+                        ${statusKanban === "aguardando_solicitacao" && diasSolicitado ? `<span class="avaliadorTag">${esc(diasSolicitado)}</span>` : ""}
+                        ${statusKanban === "solicitacao_aprovada" && diasAprovado ? `<span class="avaliadorTag">${esc(diasAprovado)}</span>` : ""}
+                        ${entradaSemPedido ? `<span class="avaliadorTag entradaSoltaTag">Entrada sem pedido vinculado</span>` : ""}
                         ${nomeVisivel.valor ? `<span class="avaliadorTag pedidoTag">${esc(nomeVisivel.rotulo)}: ${esc(nomeVisivel.valor)}</span>` : ""}
                     </div>
                     <details class="avaliadorDetails">

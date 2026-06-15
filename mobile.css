@@ -278,9 +278,10 @@
         display: none !important;
     }
 
-    table {
+    #tableContainer table {
         font-size: 12px;
-        min-width: 720px;
+        width: max-content;
+        min-width: 900px;
     }
 
     th, td {
@@ -827,9 +828,10 @@
 }
 
 @media (max-width: 600px) {
-    table {
+    #tableContainer table {
         font-size: 9px;
-        min-width: 680px;
+        width: max-content;
+        min-width: 900px;
     }
 
     #config {
