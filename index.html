@@ -867,6 +867,12 @@ function parseLimiteEstoque(valor){
     return numero;
 }
 
+function normalizarLimiteCooperat(valor){
+    const numero = parseLimiteEstoque(valor);
+    if(numero === null) return null;
+    return numero >= 1000 && numero % 1000 === 0 ? numero / 1000 : numero;
+}
+
 function formatarNumeroPlanilha(valor){
     const numero = parsePlanilhaNumero(valor);
     if(numero === null){
@@ -1556,9 +1562,9 @@ function indexarEstoqueMinimoItens(planilha){
         if(!cooperatCodigo) continue;
         if(cooperatCodigo.includes("codigo") || cooperatCodigo.includes("código") || cooperatCodigo.includes("item")) continue;
 
-        const minimo = parseLimiteEstoque(row[6]);
-        const maximo = parseLimiteEstoque(row[7]);
-        const reposicaoPlanilha = parseLimiteEstoque(row[8]);
+        const minimo = normalizarLimiteCooperat(row[6]);
+        const maximo = normalizarLimiteCooperat(row[7]);
+        const reposicaoPlanilha = normalizarLimiteCooperat(row[8]);
         const saldoAnterior = parsePlanilhaNumero(row[5]);
         const reposicao = reposicaoPlanilha !== null ? reposicaoPlanilha : calcularReposicaoMedia(minimo, maximo);
 
