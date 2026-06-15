@@ -1054,9 +1054,9 @@
         async function carregarPlanilhaDownload(nome, guia = ""){
             try{
                 if(typeof XLSX === "undefined") return [];
-                let response = await fetch(`data/${nome}`, { cache: "no-store" });
+                let response = await fetch(`downloads/${nome}`, { cache: "no-store" });
                 if(!response.ok){
-                    response = await fetch(`downloads/${nome}`, { cache: "no-store" });
+                    response = await fetch(`data/${nome}`, { cache: "no-store" });
                 }
                 if(!response.ok){
                     response = await fetch(nome, { cache: "no-store" });
@@ -1661,6 +1661,8 @@
             const pedido = linha?.pedido || {};
             const pedidoTs = Number(pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp || 0);
             const statusPedido = String(pedido?.status || "");
+            const historicoEntrada = entradaHistoricoKanban(linha);
+            if(historicoEntrada) return Number(historicoEntrada.timestamp || 0) || null;
             const entradaConfirmadaTs = Number(pedido?.entradaConfirmada?.timestamp || 0);
             if(entradaConfirmadaTs) return entradaConfirmadaTs;
             const entradaTs = Number(pedido?.entradaEndereco?.timestamp || 0);
@@ -1900,9 +1902,11 @@
             const nomeComprador = compradorPedido(pedido);
             const statusKanban = linha?.kanban || statusKanbanAvaliador(linha);
             const entradaConfirmada = pedido?.entradaConfirmada || pedido?.entradaEndereco || null;
-            const entradaSemPedido = statusKanban === "entregue" && !!entradaConfirmada && !pedido?.pedido;
+            const entradaHistorico = entradaHistoricoKanban(linha);
+            const entradaSemPedido = statusKanban === "entregue" && (!!entradaConfirmada || !!entradaHistorico) && !pedido?.pedido;
             const qtdEntradaPedido = quantidadeEntradaPedido(pedido);
-            const qtdEntrada = qtdEntradaPedido && qtdEntradaPedido > 0 ? qtdEntradaPedido : null;
+            const qtdEntradaHistorico = entradaHistorico ? Math.abs(Number(entradaHistorico.delta || 0)) : null;
+            const qtdEntrada = qtdEntradaPedido && qtdEntradaPedido > 0 ? qtdEntradaPedido : qtdEntradaHistorico;
             const tsProcesso = timestampProcessoKanban(linha);
             const diasSolicitado = rotuloDiasDesde(timestampSolicitacaoKanban(linha) || tsProcesso, "Solicitado");
             const diasAprovado = rotuloDiasDesde(timestampAprovacaoKanban(linha) || tsProcesso, "Aprovado");
@@ -2015,7 +2019,12 @@
                 .filter(l => !l.registro?.decisao)
                 .map(l => ({ ...l, kanban:statusKanbanAvaliador(l), semAvaliador:true }))
                 .filter(l => l.kanban);
-            const kanbanItens = [...monitorados, ...semAvaliadorMonitorados];
+            const chavesKanban = new Set([...monitorados, ...semAvaliadorMonitorados].map(l => key(l.item)));
+            const entradasRecentes = linhas
+                .filter(l => !chavesKanban.has(key(l.item)))
+                .filter(l => entradaConfirmadaNaJanela(l))
+                .map(l => ({ ...l, kanban:"entregue", semAvaliador:!l.registro?.decisao }));
+            const kanbanItens = [...monitorados, ...semAvaliadorMonitorados, ...entradasRecentes];
             const limiteKanbanPorColuna = cfg.kanbanExpandido ? 9999 : 8;
             const revisoes = avaliados.filter(l => l.registro?.decisao !== "passivel");
             const colunas = colunasKanbanAvaliador();
