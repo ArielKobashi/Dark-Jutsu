@@ -134,12 +134,15 @@
 
     #tableContainer {
         flex: 1 1 auto;
-        overflow: auto;
+        overflow-x: scroll !important;
+        overflow-y: auto !important;
         border-radius: 8px;
         min-height: 0;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
+        touch-action: pan-x pan-y;
         width: 100%;
+        max-width: 100%;
     }
 
     #mainActions {
@@ -280,8 +283,10 @@
 
     #tableContainer table {
         font-size: 12px;
-        width: max-content;
-        min-width: 900px;
+        width: 900px !important;
+        min-width: 900px !important;
+        max-width: none !important;
+        table-layout: fixed;
     }
 
     th, td {
@@ -830,8 +835,9 @@
 @media (max-width: 600px) {
     #tableContainer table {
         font-size: 9px;
-        width: max-content;
-        min-width: 900px;
+        width: 900px !important;
+        min-width: 900px !important;
+        max-width: none !important;
     }
 
     #config {
