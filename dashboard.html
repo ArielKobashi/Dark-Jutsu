@@ -451,6 +451,12 @@
             border:1px solid rgba(148,163,184,.13);
             border-radius:7px;
             margin-top:6px;
+            max-height:260px;
+        }
+        .historicoMini.expandido{max-height:360px}
+        .avaliadorItem{
+            max-height:620px;
+            overflow:auto;
         }
         .avaliadorDetails{
             border:1px solid rgba(148,163,184,.16);
@@ -936,6 +942,13 @@
             if(!status || status === "sem") return false;
             return !!(pedido.pedido || pedido.solicitacao || pedido.entradaEndereco || pedido.recebidoSemEntrada > 0 || status.startsWith("aguardando"));
         }
+        function processoPedidoAberto(pedido){
+            if(!pedidoAtivo(pedido)) return false;
+            const status = String(pedido?.status || "");
+            if(["finalizado","encerrado","entregue","sem"].includes(status)) return false;
+            if(status.startsWith("aguardando")) return true;
+            return !!(pedido?.solicitacao || pedido?.pedido || pedido?.entradaEndereco || Number(pedido?.recebidoSemEntrada || 0) > 0);
+        }
         function pedidoItem(item, pedidos){
             const codigo = key(item);
             const b64 = btoa(unescape(encodeURIComponent(codigo))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
@@ -952,6 +965,54 @@
                 aguardando_contagem: "Nota recebida: aguardando contagem/conferencia"
             };
             return etapas[status] || pedido?.titulo || "Com solicitacao";
+        }
+        function primeiroTexto(...valores){
+            for(const valor of valores){
+                const texto = String(valor ?? "").trim();
+                if(texto) return texto;
+            }
+            return "";
+        }
+        function quantidadeSolicitadaPedido(pedido){
+            return num(pedido?.solicitacao?.quantidadeSolicitada)
+                ?? num(pedido?.solicitacao?.quantidadeEmPedido)
+                ?? num(pedido?.pedido?.quantidadePedida)
+                ?? num(pedido?.ultimoPedido?.quantidadePedida)
+                ?? null;
+        }
+        function quantidadePedidoCompra(pedido){
+            return num(pedido?.pedido?.quantidadePedida)
+                ?? num(pedido?.ultimoPedido?.quantidadePedida)
+                ?? num(pedido?.solicitacao?.quantidadeEmPedido)
+                ?? null;
+        }
+        function quantidadeEntradaPedido(pedido){
+            return num(pedido?.entradaEndereco?.quantidadeEntrada)
+                ?? num(pedido?.entradaEndereco?.quantidade)
+                ?? num(pedido?.pedido?.quantidadeRecebida)
+                ?? num(pedido?.ultimoPedido?.quantidadeRecebida)
+                ?? null;
+        }
+        function quantidadePendenteEntrada(pedido){
+            return num(pedido?.entradaEndereco?.saldoAEnderecar)
+                ?? num(pedido?.recebidoSemEntrada)
+                ?? null;
+        }
+        function solicitantePedido(pedido){
+            return primeiroTexto(pedido?.solicitacao?.solicitante, pedido?.solicitacao?.usuario, pedido?.solicitacao?.nome);
+        }
+        function aprovadorPedido(pedido){
+            return primeiroTexto(pedido?.solicitacao?.aceitoPor, pedido?.solicitacao?.aprovadoPor, pedido?.solicitacao?.liberadoPor);
+        }
+        function compradorPedido(pedido){
+            return primeiroTexto(
+                pedido?.pedido?.comprador,
+                pedido?.pedido?.usuario,
+                pedido?.pedido?.solicitante,
+                pedido?.pedido?.feitoPor,
+                pedido?.ultimoPedido?.comprador,
+                pedido?.ultimoPedido?.usuario
+            );
         }
         function origemItem(item){
             return String(item?.limitesOrigem || item?.minimoOrigem || item?.maximoOrigem || item?.reposicaoOrigem || "").toLowerCase();
@@ -1601,10 +1662,11 @@
             if(!cooperat) return `
                 <div class="historicoAviso">Sem historico antigo localizado para este codigo. Esta base usa as requisicoes antigas e nao calcula prazo pedido->recebimento.</div>
             `;
-            const eventos = Array.isArray(cooperat.eventos) ? cooperat.eventos.slice(0, 5) : [];
-            return `
-                <div class="historicoAviso">Base antiga Cooperat: quantidade considerada = Qtd.Solicitada; valor baixa tratado como valor unitario. Nao ha data de recebimento separada.</div>
-                <div class="historicoMini">
+            const todosEventos = Array.isArray(cooperat.eventos) ? cooperat.eventos : [];
+            const eventos = todosEventos.slice(0, 5);
+            const eventosRestantes = todosEventos.slice(5);
+            const tabelaEventos = lista => `
+                <div class="historicoMini ${lista.length > 8 ? "expandido" : ""}">
                     <table>
                         <thead>
                             <tr>
@@ -1616,7 +1678,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${eventos.map(h => `
+                            ${lista.map(h => `
                                 <tr>
                                     <td>${esc(h.requisicao || "-")}</td>
                                     <td>${esc(h.dataBr || h.data || "-")}</td>
@@ -1629,12 +1691,21 @@
                     </table>
                 </div>
             `;
+            return `
+                <div class="historicoAviso">Base antiga Cooperat: quantidade considerada = Qtd.Solicitada; valor baixa tratado como valor unitario. Nao ha data de recebimento separada.</div>
+                ${tabelaEventos(eventos)}
+                ${eventosRestantes.length ? `
+                    <details class="avaliadorDetails">
+                        <summary><span>Mostrar mais</span><span class="avaliadorSummaryMeta">${esc(fmt(eventosRestantes.length))} compra(s)</span></summary>
+                        <div class="avaliadorDetailsBody">${tabelaEventos(eventosRestantes)}</div>
+                    </details>
+                ` : ""}
+            `;
         }
         function renderAvaliadorItem(linha){
             const { item, historico, historicoCooperat, stats, statsCooperat, pedido, status, reposicao } = linha;
             const codigo = key(item);
             const totalPedidos = stats.totalPedidos + statsCooperat.totalEventos;
-            const mediaQuantidade = stats.mediaQuantidade ?? statsCooperat.mediaQuantidade;
             const qtdNovo = stats.totalPedidos || 0;
             const qtdCooperat = statsCooperat.totalEventos || 0;
             const ultimaCooperat = statsCooperat.ultimaData ? new Date(`${statsCooperat.ultimaData}T00:00:00`).toLocaleDateString("pt-BR") : "-";
@@ -1656,15 +1727,16 @@
                     <div class="avaliadorStats">
                         <div class="avaliadorStat"><span>Pedidos</span><strong>${esc(fmt(totalPedidos))}</strong></div>
                         <div class="avaliadorStat"><span>Prazo medio</span><strong>${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} d`}</strong></div>
-                        <div class="avaliadorStat"><span>Qtd. media</span><strong>${mediaQuantidade === null ? "-" : esc(fmt(mediaQuantidade))}</strong></div>
-                        <div class="avaliadorStat"><span>Desde pedido</span><strong>${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} d`}</strong></div>
+                        <div class="avaliadorStat"><span>Media novo</span><strong>${stats.mediaQuantidade === null ? "-" : esc(fmt(stats.mediaQuantidade))}</strong></div>
+                        <div class="avaliadorStat"><span>Media Cooperat</span><strong>${statsCooperat.mediaQuantidade === null ? "-" : esc(fmt(statsCooperat.mediaQuantidade))}</strong></div>
+                        <div class="avaliadorStat"><span>Ultimo pedido ha</span><strong>${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} d`}</strong></div>
                     </div>
                     <details class="avaliadorDetails">
-                        <summary><span>Historico novo</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdNovo))} pedido(s) | prazo ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} d`}</span></summary>
+                        <summary><span>Historico novo</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdNovo))} pedido(s) | media ${stats.mediaQuantidade === null ? "-" : esc(fmt(stats.mediaQuantidade))}</span></summary>
                         <div class="avaliadorDetailsBody">${renderHistoricoMini(historico)}</div>
                     </details>
                     <details class="avaliadorDetails">
-                        <summary><span>Historico Cooperat</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdCooperat))} compra(s) | ultima ${esc(ultimaCooperat)}</span></summary>
+                        <summary><span>Historico Cooperat</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdCooperat))} compra(s) | media ${statsCooperat.mediaQuantidade === null ? "-" : esc(fmt(statsCooperat.mediaQuantidade))}</span></summary>
                         <div class="avaliadorDetailsBody">${renderHistoricoCooperatMini(historicoCooperat)}</div>
                     </details>
                     <details class="avaliadorDetails">
@@ -1688,6 +1760,14 @@
             const comprasCooperat = statsCooperat.totalEventos || 0;
             const ultimaCooperat = statsCooperat.ultimaData ? new Date(`${statsCooperat.ultimaData}T00:00:00`).toLocaleDateString("pt-BR") : "-";
             const diasProcesso = diasDesdeTimestamp(timestampProcessoKanban(linha));
+            const qtdSolicitada = quantidadeSolicitadaPedido(pedido);
+            const qtdPedido = quantidadePedidoCompra(pedido);
+            const qtdPendenteEntrada = quantidadePendenteEntrada(pedido);
+            const qtdEntrada = quantidadeEntradaPedido(pedido);
+            const nomeSolicitante = solicitantePedido(pedido);
+            const nomeAprovador = aprovadorPedido(pedido);
+            const nomeComprador = compradorPedido(pedido);
+            const statusKanban = linha?.kanban || statusKanbanAvaliador(linha);
             return `
                 <article class="kanbanCard">
                     <div class="kanbanCardTitle">${esc(item.protheus || item.cooperat || "-")}</div>
@@ -1695,7 +1775,14 @@
                     <div class="avaliadorTags">
                         <span class="avaliadorTag">Saldo ${esc(fmt(item.saldo))}</span>
                         <span class="avaliadorTag">Min. ${esc(fmt(item.minimo))}</span>
+                        ${qtdSolicitada !== null ? `<span class="avaliadorTag">Solicitado ${esc(fmt(qtdSolicitada))}</span>` : ""}
+                        ${qtdPedido !== null ? `<span class="avaliadorTag">Pedido ${esc(fmt(qtdPedido))}</span>` : ""}
+                        ${statusKanban === "entrega_pendente" && qtdPendenteEntrada !== null ? `<span class="avaliadorTag">Pendente entrada ${esc(fmt(qtdPendenteEntrada))}</span>` : ""}
+                        ${statusKanban === "entregue" && qtdEntrada !== null ? `<span class="avaliadorTag">Entrou ${esc(fmt(qtdEntrada))}</span>` : ""}
                         <span class="avaliadorTag pedidoTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
+                        ${nomeSolicitante ? `<span class="avaliadorTag pedidoTag">Solicitou: ${esc(nomeSolicitante)}</span>` : ""}
+                        ${nomeAprovador ? `<span class="avaliadorTag pedidoTag">Aprovou: ${esc(nomeAprovador)}</span>` : ""}
+                        ${nomeComprador ? `<span class="avaliadorTag pedidoTag">Pediu: ${esc(nomeComprador)}</span>` : ""}
                         <span class="avaliadorTag">${semAvaliador ? "Sem avaliador" : "Com avaliador"}</span>
                         ${diasProcesso !== null ? `<span class="avaliadorTag">Há ${esc(fmt(diasProcesso))} dia${diasProcesso === 1 ? "" : "s"}</span>` : ""}
                     </div>
@@ -1705,6 +1792,7 @@
                             <div class="kanbanMeta">
                                 <span>Reposicao ${esc(fmt(reposicao(item)))}</span>
                                 <span>Prazo medio: ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`} | Último pedido há: ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
+                                <span>Media novo: ${stats.mediaQuantidade === null ? "-" : esc(fmt(stats.mediaQuantidade))} | Media Cooperat: ${statsCooperat.mediaQuantidade === null ? "-" : esc(fmt(statsCooperat.mediaQuantidade))}</span>
                                 <span>Cooperat antigo: ${esc(fmt(comprasCooperat))} compra(s), ultima ${esc(ultimaCooperat)}</span>
                                 <span>Avaliado: ${registro?.avaliadoEm ? esc(new Date(registro.avaliadoEm).toLocaleDateString("pt-BR")) : "-"}</span>
                                 ${registro?.observacao ? `<span>Obs.: ${esc(registro.observacao)}</span>` : ""}
@@ -1753,7 +1841,7 @@
             const abaixoMinimo = linhas.filter(l => l.status === "abaixo");
             const fila = abaixoMinimo
                 .filter(l => !l.registro?.decisao)
-                .filter(l => !pedidoAtivo(l.pedido))
+                .filter(l => !processoPedidoAberto(l.pedido))
                 .sort((a,b) => compararValores(a.reposicao || 0, b.reposicao || 0, "desc"));
             const avaliados = linhas.filter(l => l.registro?.decisao);
             const passivos = linhas.filter(l => l.registro?.decisao === "passivel");
