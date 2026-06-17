@@ -633,19 +633,58 @@
             margin-bottom:7px;
         }
         .kanbanFiltroBar{
-            display:flex;
-            align-items:flex-end;
-            justify-content:space-between;
-            flex-wrap:wrap;
-            gap:10px;
-            margin:14px 0 8px;
-            padding:10px;
-            border:1px solid rgba(122,60,255,.28);
+            display:grid;
+            grid-template-columns:minmax(280px,1fr) auto;
+            align-items:end;
+            gap:14px;
+            margin:16px 0 10px;
+            padding:14px;
+            border:1px solid rgba(96,165,250,.24);
             border-radius:8px;
-            background:rgba(21,21,29,.76);
+            background:linear-gradient(135deg, rgba(15,23,42,.92), rgba(26,26,37,.84));
+            box-shadow:0 12px 26px rgba(0,0,0,.18);
+        }
+        .kanbanHeaderTitle{
+            min-width:0;
+        }
+        .kanbanHeaderTitle .sectionTitle{
+            margin:0;
+            font-size:17px;
+            line-height:1.2;
+            color:#F8FAFC;
+        }
+        .kanbanHeaderMeta{
+            display:flex;
+            flex-wrap:wrap;
+            gap:6px;
+            margin-top:8px;
+        }
+        .kanbanHeaderMeta .chip{
+            border-radius:6px;
+            border-color:rgba(96,165,250,.25);
+            background:rgba(15,23,42,.72);
+            color:#C7D2FE;
+        }
+        .kanbanFilterControls{
+            display:flex;
+            align-items:end;
+            justify-content:flex-end;
+            flex-wrap:wrap;
+            gap:9px;
         }
         .kanbanFiltroBar .filter{width:min(260px,100%)}
         .kanbanFiltroBar .filter:first-of-type{width:min(330px,100%)}
+        .kanbanFiltroBar label{
+            color:#BFDBFE;
+            font-size:10px;
+            font-weight:900;
+            text-transform:uppercase;
+        }
+        .kanbanFiltroBar select{
+            min-height:36px;
+            border-color:rgba(96,165,250,.28);
+            background:#111827;
+        }
         .kanbanMore{
             width:100%;
             margin:10px 0 14px;
@@ -682,6 +721,8 @@
         }
         @media (max-width:1100px){
             .avaliadorLayout{grid-template-columns:1fr}
+            .kanbanFiltroBar{grid-template-columns:1fr}
+            .kanbanFilterControls{justify-content:flex-start}
         }
         @media (max-width:800px){
             .topbar{display:block;padding:17px 14px 12px}
@@ -691,6 +732,7 @@
             .filters{grid-template-columns:repeat(2,minmax(0,1fr))}
             .vizGrid{grid-template-columns:1fr}
             .avaliadorStats{grid-template-columns:repeat(2,minmax(0,1fr))}
+            .kanbanFilterControls .filter{width:100%}
             .card strong{font-size:22px}
             th,td{font-size:12px;padding:8px}
         }
@@ -768,7 +810,6 @@
             kanbanGestao: parametroPermitido((params.get("kanbanGestao") || params.get("gestaoKanban") || "todos").toLowerCase(), ["todos","avaliador","sem_avaliador","sem-avaliador"], "todos").replace("-", "_"),
             kanbanOrdem: parametroPermitido((params.get("kanbanOrdem") || "recente").toLowerCase(), ["antigo","recente"], "recente"),
             kanbanEntradasDias: parametroPermitido((params.get("kanbanEntradasDias") || "7").toLowerCase(), ["7","15","30"], "7"),
-            kanbanEntradasHoje: parametroPermitido((params.get("kanbanEntradasHoje") || params.get("entradasHoje") || "0").toLowerCase(), ["0","1"], "0"),
             kanbanExpandido: boolParam("kanbanExpandido", "verMaisKanban"),
             origem: (params.get("origem") || "").toLowerCase(),
             armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "04").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
@@ -1716,7 +1757,6 @@
         }
         function entradaConfirmadaNaJanela(linha){
             const dias = diasDesdeTimestamp(timestampEntradaConfirmadaKanban(linha));
-            if(cfg.kanbanEntradasHoje === "1") return dias === 0;
             return dias !== null && dias <= janelaEntradasKanban();
         }
         function statusKanbanAvaliador(linha){
@@ -2102,39 +2142,38 @@
                 </div>
                 ${renderFiltros([], dados.length)}
                 <div class="kanbanFiltroBar">
-                    <div>
+                    <div class="kanbanHeaderTitle">
                         <h2 class="sectionTitle">Kanban de pedidos em andamento - armazem ${esc(cfg.armazens.join(",") || "04")}</h2>
-                        <span class="chip">Exibindo ${cfg.kanbanExpandido ? "todos os registros" : `ate ${limiteKanbanPorColuna} por coluna`}</span>
+                        <div class="kanbanHeaderMeta">
+                            <span class="chip">Exibindo ${cfg.kanbanExpandido ? "todos os registros" : `ate ${limiteKanbanPorColuna} por coluna`}</span>
+                            <span class="chip">${esc(cfg.kanbanOrdem === "recente" ? "mais recentes primeiro" : "mais antigos primeiro")}</span>
+                            <span class="chip">entradas: ${esc(cfg.kanbanEntradasDias)} dias</span>
+                        </div>
                     </div>
-                    <div class="filter">
-                        <label for="fKanbanOrdem">Ordem</label>
-                        <select id="fKanbanOrdem" data-filter="kanbanOrdem">
-                            <option value="antigo" ${cfg.kanbanOrdem === "antigo" ? "selected" : ""}>Do mais antigo para o mais recente</option>
-                            <option value="recente" ${cfg.kanbanOrdem === "recente" ? "selected" : ""}>Do mais recente para o mais antigo</option>
-                        </select>
-                    </div>
-                    <div class="filter">
-                        <label for="fKanbanEntradasDias">Entradas</label>
-                        <select id="fKanbanEntradasDias" data-filter="kanbanEntradasDias">
-                            <option value="7" ${cfg.kanbanEntradasDias === "7" ? "selected" : ""}>Ultimos 7 dias</option>
-                            <option value="15" ${cfg.kanbanEntradasDias === "15" ? "selected" : ""}>Ultimos 15 dias</option>
-                            <option value="30" ${cfg.kanbanEntradasDias === "30" ? "selected" : ""}>Ultimos 30 dias</option>
-                        </select>
-                    </div>
-                    <div class="filter">
-                        <label for="fKanbanEntradasHoje">Entradas hoje</label>
-                        <select id="fKanbanEntradasHoje" data-filter="kanbanEntradasHoje">
-                            <option value="0" ${cfg.kanbanEntradasHoje === "0" ? "selected" : ""}>Todas da janela</option>
-                            <option value="1" ${cfg.kanbanEntradasHoje === "1" ? "selected" : ""}>Apenas hoje</option>
-                        </select>
-                    </div>
-                    <div class="filter">
-                        <label for="fKanbanGestao">Ambiente do Kanban</label>
-                        <select id="fKanbanGestao" data-filter="kanbanGestao">
-                            <option value="todos" ${cfg.kanbanGestao === "todos" ? "selected" : ""}>Todos</option>
-                            <option value="avaliador" ${cfg.kanbanGestao === "avaliador" ? "selected" : ""}>Com avaliador</option>
-                            <option value="sem_avaliador" ${cfg.kanbanGestao === "sem_avaliador" ? "selected" : ""}>Sem avaliador</option>
-                        </select>
+                    <div class="kanbanFilterControls">
+                        <div class="filter">
+                            <label for="fKanbanOrdem">Ordem</label>
+                            <select id="fKanbanOrdem" data-filter="kanbanOrdem">
+                                <option value="antigo" ${cfg.kanbanOrdem === "antigo" ? "selected" : ""}>Do mais antigo para o mais recente</option>
+                                <option value="recente" ${cfg.kanbanOrdem === "recente" ? "selected" : ""}>Do mais recente para o mais antigo</option>
+                            </select>
+                        </div>
+                        <div class="filter">
+                            <label for="fKanbanEntradasDias">Entradas</label>
+                            <select id="fKanbanEntradasDias" data-filter="kanbanEntradasDias">
+                                <option value="7" ${cfg.kanbanEntradasDias === "7" ? "selected" : ""}>Ultimos 7 dias</option>
+                                <option value="15" ${cfg.kanbanEntradasDias === "15" ? "selected" : ""}>Ultimos 15 dias</option>
+                                <option value="30" ${cfg.kanbanEntradasDias === "30" ? "selected" : ""}>Ultimos 30 dias</option>
+                            </select>
+                        </div>
+                        <div class="filter">
+                            <label for="fKanbanGestao">Ambiente do Kanban</label>
+                            <select id="fKanbanGestao" data-filter="kanbanGestao">
+                                <option value="todos" ${cfg.kanbanGestao === "todos" ? "selected" : ""}>Todos</option>
+                                <option value="avaliador" ${cfg.kanbanGestao === "avaliador" ? "selected" : ""}>Com avaliador</option>
+                                <option value="sem_avaliador" ${cfg.kanbanGestao === "sem_avaliador" ? "selected" : ""}>Sem avaliador</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <section class="kanbanGrid ${cfg.kanbanExpandido ? "expanded" : ""}">
