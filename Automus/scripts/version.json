@@ -1,13 +1,12 @@
 {
   "app": "Automus",
-  "version": "1.0.42",
+  "version": "1.0.43",
   "releasedAt": "2026-06-16",
   "updateManifestUrl": "",
   "updateManifestFirebasePath": "automus/releases/latest",
   "updateBaseUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "publishDir": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "notes": [
-    "remove o runtime fixo em Public para evitar erro de python313.dll ausente",
-    "gera o executavel sem UPX para evitar falha ao carregar DLL do Python"
+    "Atualizacao Automus 1.0.43"
   ]
 }

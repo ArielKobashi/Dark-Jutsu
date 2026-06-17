@@ -1491,6 +1491,37 @@
             mapa.forEach(lista => lista.sort((a,b) => b.timestampPedido - a.timestampPedido));
             return mapa;
         }
+        function mapaEntradasMata112PorItem(mata112){
+            const mapa = new Map();
+            (Array.isArray(mata112) ? mata112.slice(2) : []).forEach(row => {
+                const codigo = normalizarCodigo(row?.[0]);
+                const timestamp = parseDataPlanilha(row?.[12]);
+                if(!codigo || !timestamp) return;
+                if(!mapa.has(codigo)) mapa.set(codigo, []);
+                mapa.get(codigo).push({
+                    codigo,
+                    timestamp,
+                    dataEntrada: new Date(timestamp).toLocaleDateString("pt-BR"),
+                    quantidadeEntrada: num(row?.[3]) || 0,
+                    saldoAEnderecar: num(row?.[4]) || 0
+                });
+            });
+            mapa.forEach(lista => lista.sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)));
+            return mapa;
+        }
+        function entradasMata112Item(item, mapaEntradas){
+            const candidatos = [
+                item?.protheus,
+                item?.protheusKey,
+                item?.cooperat,
+                key(item)
+            ].map(normalizarCodigo).filter(Boolean);
+            for(const codigo of candidatos){
+                const entradas = mapaEntradas?.get(codigo);
+                if(entradas?.length) return entradas;
+            }
+            return [];
+        }
         function historicoPedidosItem(item, mapaHistorico){
             const candidatos = [item?.protheus, item?.cooperat, item?.protheusKey, key(item)].map(normalizarCodigo).filter(Boolean);
             for(const codigo of candidatos){
@@ -1657,12 +1688,19 @@
                 })
                 .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0] || null;
         }
+        function entradaMata112Kanban(linha){
+            return (Array.isArray(linha?.entradasMata112) ? linha.entradasMata112 : [])
+                .filter(e => Number(e?.timestamp || 0) > 0)
+                .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0] || null;
+        }
         function timestampEntradaConfirmadaKanban(linha){
             const pedido = linha?.pedido || {};
             const pedidoTs = Number(pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp || 0);
             const statusPedido = String(pedido?.status || "");
             const historicoEntrada = entradaHistoricoKanban(linha);
             if(historicoEntrada) return Number(historicoEntrada.timestamp || 0) || null;
+            const entradaMata112 = entradaMata112Kanban(linha);
+            if(entradaMata112) return Number(entradaMata112.timestamp || 0) || null;
             const entradaConfirmadaTs = Number(pedido?.entradaConfirmada?.timestamp || 0);
             if(entradaConfirmadaTs) return entradaConfirmadaTs;
             const entradaTs = Number(pedido?.entradaEndereco?.timestamp || 0);
@@ -1681,7 +1719,7 @@
             const pedido = linha?.pedido || null;
             const statusPedido = String(pedido?.status || "");
             const temEntradaConfirmada = !!timestampEntradaConfirmadaKanban(linha);
-            if(["aguardando_pedido", "aguardando_recebimento", "aguardando_contagem", "aguardando_enderecamento"].includes(statusPedido) && temEntradaConfirmada){
+            if(temEntradaConfirmada){
                 return entradaConfirmadaNaJanela(linha) ? "entregue" : "";
             }
             const manual = registro?.statusManual || registro?.statusKanban || "aguardando_solicitacao";
@@ -1903,10 +1941,12 @@
             const statusKanban = linha?.kanban || statusKanbanAvaliador(linha);
             const entradaConfirmada = pedido?.entradaConfirmada || pedido?.entradaEndereco || null;
             const entradaHistorico = entradaHistoricoKanban(linha);
-            const entradaSemPedido = statusKanban === "entregue" && (!!entradaConfirmada || !!entradaHistorico) && !pedido?.pedido;
+            const entradaMata112 = entradaMata112Kanban(linha);
+            const entradaSemPedido = statusKanban === "entregue" && (!!entradaConfirmada || !!entradaHistorico || !!entradaMata112) && !pedido?.pedido;
             const qtdEntradaPedido = quantidadeEntradaPedido(pedido);
             const qtdEntradaHistorico = entradaHistorico ? Math.abs(Number(entradaHistorico.delta || 0)) : null;
-            const qtdEntrada = qtdEntradaPedido && qtdEntradaPedido > 0 ? qtdEntradaPedido : qtdEntradaHistorico;
+            const qtdEntradaMata112 = entradaMata112 ? Number(entradaMata112.quantidadeEntrada || 0) : null;
+            const qtdEntrada = qtdEntradaPedido && qtdEntradaPedido > 0 ? qtdEntradaPedido : (qtdEntradaMata112 || qtdEntradaHistorico);
             const tsProcesso = timestampProcessoKanban(linha);
             const diasSolicitado = rotuloDiasDesde(timestampSolicitacaoKanban(linha) || tsProcesso, "Solicitado");
             const diasAprovado = rotuloDiasDesde(timestampAprovacaoKanban(linha) || tsProcesso, "Aprovado");
@@ -1968,16 +2008,18 @@
         function renderAvaliadorPedidos(banco, dados, mata111, mata112, historicoCooperat){
             const pedidos = banco?.pedidosCompra || {};
             const mapaHistorico = mapaHistoricoPedidosPorItem(mata111, mata112, dados);
+            const mapaEntradasMata112 = mapaEntradasMata112PorItem(mata112);
             const linhas = dados
                 .filter(item => passaFiltroArmazem(item))
                 .map(item => {
                     const historico = historicoPedidosItem(item, mapaHistorico);
+                    const entradasMata112 = entradasMata112Item(item, mapaEntradasMata112);
                     const histCooperat = historicoCooperatItem(item, historicoCooperat);
                     const stats = estatisticasHistoricoPedidos(historico);
                     const statsCooperat = estatisticasHistoricoCooperat(histCooperat);
                     const pedido = pedidoItem(item, pedidos);
                     const historicoSaldo = historicoSaldoItemDashboard(item, banco);
-                    return { item, historico, historicoSaldo, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
+                    return { item, historico, entradasMata112, historicoSaldo, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
                 })
                 .filter(linha => {
                     if(cfg.status && cfg.status !== "fora" && cfg.status !== "todos" && !passaStatus(linha.status)) return false;
