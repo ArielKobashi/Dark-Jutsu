@@ -545,9 +545,14 @@
             display:grid;
             grid-template-columns:repeat(5,minmax(0,1fr));
             gap:10px;
-            overflow:visible;
+            overflow-x:hidden;
+            overflow-y:auto;
             padding-bottom:4px;
             max-height:560px;
+        }
+        .kanbanGrid.expanded{
+            max-height:none;
+            overflow:visible;
         }
         .kanbanCol{
             border:1px solid rgba(148,163,184,.18);
@@ -784,6 +789,7 @@
             kanbanGestao: parametroPermitido((params.get("kanbanGestao") || params.get("gestaoKanban") || "todos").toLowerCase(), ["todos","avaliador","sem_avaliador","sem-avaliador"], "todos").replace("-", "_"),
             kanbanOrdem: parametroPermitido((params.get("kanbanOrdem") || "recente").toLowerCase(), ["antigo","recente"], "recente"),
             kanbanEntradasDias: parametroPermitido((params.get("kanbanEntradasDias") || "7").toLowerCase(), ["7","15","30"], "7"),
+            kanbanExpandido: boolParam("kanbanExpandido", "verMaisKanban"),
             origem: (params.get("origem") || "").toLowerCase(),
             armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "04").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
@@ -2085,7 +2091,7 @@
                 .filter(l => entradaConfirmadaNaJanela(l))
                 .map(l => ({ ...l, kanban:"entregue", semAvaliador:!l.registro?.decisao }));
             const kanbanItens = [...monitorados, ...semAvaliadorMonitorados, ...entradasRecentes];
-            const limiteKanbanPorColuna = 8;
+            const limiteKanbanPorColuna = cfg.kanbanExpandido ? 9999 : 8;
             const revisoes = avaliados.filter(l => l.registro?.decisao !== "passivel");
             const colunas = colunasKanbanAvaliador();
             const kanbanTemMais = colunas.some(col => kanbanItens.filter(l => l.kanban === col.id).length > limiteKanbanPorColuna);
@@ -2116,7 +2122,7 @@
                 <div class="kanbanFiltroBar">
                     <div>
                         <h2 class="sectionTitle kanbanTitle">Kanban de pedidos em andamento - armazem ${esc(cfg.armazens.join(",") || "04")}</h2>
-                        <span class="chip">Exibindo ate ${limiteKanbanPorColuna} por coluna</span>
+                        <span class="chip">Exibindo ${cfg.kanbanExpandido ? "todos os registros" : `ate ${limiteKanbanPorColuna} por coluna`}</span>
                     </div>
                     <div class="filter">
                         <label for="fKanbanOrdem">Ordem</label>
@@ -2142,7 +2148,7 @@
                         </select>
                     </div>
                 </div>
-                <section class="kanbanGrid">
+                <section class="kanbanGrid ${cfg.kanbanExpandido ? "expanded" : ""}">
                     ${colunas.map(col => {
                         const cards = ordenarKanban(kanbanItens.filter(l => l.kanban === col.id));
                         const visiveis = cards.slice(0, limiteKanbanPorColuna);
@@ -2156,7 +2162,7 @@
                         `;
                     }).join("")}
                 </section>
-                ${kanbanTemMais ? `<div class="kanbanMore">Ha mais registros no Kanban; use busca, status ou ambiente para filtrar.</div>` : ""}
+                ${!cfg.kanbanExpandido && kanbanTemMais ? `<a class="kanbanMore" href="${esc(urlComFiltros({ kanbanExpandido:"1" }))}">Ver mais registros do Kanban</a>` : ""}
                 <section class="avaliadorLayout">
                     <div class="avaliadorPanel">
                         <h2>Fila de avaliacao</h2>
