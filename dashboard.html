@@ -1391,6 +1391,17 @@
                 normalizarEnderecoProgresso(endereco)
             ].join("||");
         }
+        function secaoLinhaContagemProgresso(endereco){
+            const raw = String(endereco || "").toUpperCase();
+            if(raw.includes("BARR")) return "barracao";
+            if(/PI\s*[\.\-]\s*2|GAV|GV\d+/i.test(raw)) return "piso2";
+            return "piso1";
+        }
+        const secoesContagemProgresso = {
+            piso1:{ label:"Piso 1", total:0, feitas:0 },
+            piso2:{ label:"Piso 2", total:0, feitas:0 },
+            barracao:{ label:"Barracao", total:0, feitas:0 }
+        };
         function linhasContagemProgresso(dados){
             const linhas = new Map();
             (Array.isArray(dados) ? dados : []).forEach(item => {
@@ -1400,14 +1411,15 @@
                 if(enderecos.length){
                     enderecos.forEach(end => {
                         if(!armazemPermitidoProgresso(end?.armazem)) return;
-                        const chave = chaveLinhaContagemProgresso(codigo, end?.armazem, end?.endereco || item?.enderecoPrincipal);
-                        linhas.set(chave, true);
+                        const endereco = end?.endereco || item?.enderecoPrincipal;
+                        const chave = chaveLinhaContagemProgresso(codigo, end?.armazem, endereco);
+                        linhas.set(chave, { secao:secaoLinhaContagemProgresso(endereco) });
                     });
                     return;
                 }
                 if(!armazemPermitidoProgresso(item?.armazemPrincipal)) return;
                 const chave = chaveLinhaContagemProgresso(codigo, item?.armazemPrincipal, item?.enderecoPrincipal);
-                linhas.set(chave, true);
+                linhas.set(chave, { secao:secaoLinhaContagemProgresso(item?.enderecoPrincipal) });
             });
             return linhas;
         }
@@ -2261,6 +2273,12 @@
         function calcularProgressoContagem(dados, contagens){
             const totalLinhas = linhasContagemProgresso(dados);
             const contadas = new Set();
+            const secoes = JSON.parse(JSON.stringify(secoesContagemProgresso));
+            totalLinhas.forEach(meta => {
+                const secao = meta?.secao || "piso1";
+                if(!secoes[secao]) return;
+                secoes[secao].total += 1;
+            });
             Object.entries(contagens || {}).forEach(([, porUsuario]) => {
                 Object.values(porUsuario || {}).forEach(registros => {
                     Object.entries(registros || {}).forEach(([registroKey, registro]) => {
@@ -2268,7 +2286,11 @@
                         Object.values(registro?.itens || {}).forEach(item => {
                             const codigo = item?.protheus || item?.cooperat || "";
                             const chave = chaveLinhaContagemProgresso(codigo, item?.armazem, item?.endereco);
-                            if(totalLinhas.has(chave)) contadas.add(chave);
+                            if(totalLinhas.has(chave) && !contadas.has(chave)){
+                                contadas.add(chave);
+                                const secao = totalLinhas.get(chave)?.secao || "piso1";
+                                if(secoes[secao]) secoes[secao].feitas += 1;
+                            }
                         });
                     });
                 });
@@ -2276,10 +2298,17 @@
             const total = totalLinhas.size;
             const feitas = contadas.size;
             const percentual = total ? Math.min(100, (feitas / total) * 100) : 0;
-            return { total, feitas, percentual };
+            Object.values(secoes).forEach(secao => {
+                secao.percentual = secao.total ? Math.min(100, (secao.feitas / secao.total) * 100) : 0;
+            });
+            return { total, feitas, percentual, secoes };
         }
         function renderProgressoContagem(progresso){
             const pct = Math.round((progresso?.percentual || 0) * 10) / 10;
+            const tooltipSecoes = Object.values(progresso?.secoes || {}).map(secao => {
+                const pctSecao = Math.round((secao.percentual || 0) * 10) / 10;
+                return `${secao.label}: ${fmt(pctSecao)}% (${fmt(secao.feitas || 0)} de ${fmt(secao.total || 0)})`;
+            }).join("\n");
             return `
                 <section class="contagemProgressPanel">
                     <div class="contagemProgressTop">
@@ -2289,7 +2318,7 @@
                         </div>
                         <div class="contagemProgressMeta">${esc(fmt(progresso?.feitas || 0))} de ${esc(fmt(progresso?.total || 0))} itens/endereco contados</div>
                     </div>
-                    <div class="contagemProgressTrack">
+                    <div class="contagemProgressTrack" title="${esc(tooltipSecoes)}">
                         <div class="contagemProgressFill" style="width:${Math.max(0, Math.min(100, pct))}%"></div>
                     </div>
                 </section>
