@@ -340,7 +340,7 @@
         .origem{color:var(--muted)}
         .avaliadorLayout{
             display:grid;
-            grid-template-columns:minmax(0,1.08fr) minmax(360px,.92fr);
+            grid-template-columns:minmax(0,1.05fr) minmax(280px,.82fr) minmax(280px,.82fr);
             gap:12px;
             align-items:start;
         }
@@ -702,7 +702,7 @@
             color:#bbf7d0;
             white-space:nowrap;
         }
-        @media (max-width:1100px){
+        @media (max-width:900px){
             .avaliadorLayout{grid-template-columns:1fr}
         }
         @media (max-width:800px){
@@ -821,7 +821,7 @@
             cfg.titulo = "Avaliador de Pedidos";
         }
         if(cfg.ambiente === "avaliador" && !params.get("status")){
-            cfg.status = "todos";
+            cfg.status = "abaixo";
         }
         let bancoAtual = null;
         let extrasAtual = {};
@@ -2034,7 +2034,7 @@
             const pedidos = banco?.pedidosCompra || {};
             const mapaHistorico = mapaHistoricoPedidosPorItem(mata111, mata112, dados);
             const mapaEntradasMata112 = mapaEntradasMata112PorItem(mata112);
-            const linhas = dados
+            const linhasBase = dados
                 .filter(item => passaFiltroArmazem(item))
                 .map(item => {
                     const historico = historicoPedidosItem(item, mapaHistorico);
@@ -2047,7 +2047,6 @@
                     return { item, historico, entradasMata112, historicoSaldo, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
                 })
                 .filter(linha => {
-                    if(cfg.status && cfg.status !== "fora" && cfg.status !== "todos" && !passaStatus(linha.status)) return false;
                     if(cfg.suposicao === "com" && !itemTemSuposicao(linha.item)) return false;
                     if(cfg.suposicao === "sem" && !itemTemLimiteConfiavel(linha.item)) return false;
                     if(cfg.origem && !origemItem(linha.item).includes(cfg.origem)) return false;
@@ -2065,14 +2064,18 @@
                     }
                     return true;
                 });
+            const linhas = linhasBase.filter(linha => {
+                if(cfg.status && cfg.status !== "fora" && cfg.status !== "todos" && !passaStatus(linha.status)) return false;
+                return true;
+            });
             const abaixoMinimo = linhas.filter(l => l.status === "abaixo");
             const fila = abaixoMinimo
                 .filter(l => !l.registro?.decisao)
                 .filter(l => !processoPedidoAberto(l.pedido))
                 .sort((a,b) => compararValores(a.reposicao || 0, b.reposicao || 0, "desc"));
             const avaliados = linhas.filter(l => l.registro?.decisao);
-            const passivos = linhas.filter(l => l.registro?.decisao === "passivel");
-            const semAvaliadorKanban = linhas.filter(l => !l.registro?.decisao && pedidoAtivo(l.pedido));
+            const passivos = linhasBase.filter(l => l.registro?.decisao === "passivel");
+            const semAvaliadorKanban = linhasBase.filter(l => !l.registro?.decisao && pedidoAtivo(l.pedido));
             const baseKanban = cfg.kanbanGestao === "avaliador"
                 ? passivos
                 : cfg.kanbanGestao === "sem_avaliador"
@@ -2087,7 +2090,7 @@
                 .map(l => ({ ...l, kanban:statusKanbanAvaliador(l), semAvaliador:true }))
                 .filter(l => l.kanban);
             const chavesKanban = new Set([...monitorados, ...semAvaliadorMonitorados].map(l => key(l.item)));
-            const entradasRecentes = linhas
+            const entradasRecentes = linhasBase
                 .filter(l => !chavesKanban.has(key(l.item)))
                 .filter(l => entradaConfirmadaNaJanela(l))
                 .map(l => ({ ...l, kanban:"entregue", semAvaliador:!l.registro?.decisao }));
@@ -2169,6 +2172,28 @@
                         <h2>Fila de avaliacao</h2>
                         <div class="avaliadorList">
                             ${fila.slice(0, cfg.limite).map(renderAvaliadorItem).join("") || `<section class="empty">Nenhum item abaixo do minimo sem avaliacao.</section>`}
+                        </div>
+                    </div>
+                    <div class="avaliadorPanel">
+                        <h2>Passíveis no Kanban</h2>
+                        <div class="avaliadorList">
+                            ${passivos.slice(0, 20).map(l => `
+                                <article class="avaliadorItem">
+                                    <div class="avaliadorItemTop">
+                                        <div>
+                                            <div class="avaliadorCodigo">${esc(l.item.protheus || l.item.cooperat || "-")}</div>
+                                            <div class="avaliadorDescricao">${esc(l.item.descricao || "-")}</div>
+                                        </div>
+                                        <span class="avaliadorDecision">${esc(rotuloPedido(l.pedido))}</span>
+                                    </div>
+                                    <div class="avaliadorTags">
+                                        <span class="avaliadorTag">Saldo ${esc(fmt(l.item.saldo))}</span>
+                                        <span class="avaliadorTag">Min. ${esc(fmt(l.item.minimo))}</span>
+                                        <span class="avaliadorTag">Reposicao ${esc(fmt(l.reposicao))}</span>
+                                    </div>
+                                    ${l.registro?.observacao ? `<div class="kanbanMeta"><span>Obs.: ${esc(l.registro.observacao)}</span></div>` : ""}
+                                </article>
+                            `).join("") || `<section class="empty">Nenhum item marcado como passivel.</section>`}
                         </div>
                     </div>
                     <div class="avaliadorPanel">
