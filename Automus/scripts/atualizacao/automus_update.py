@@ -4,7 +4,9 @@ import hashlib
 import json
 import logging
 import math
+import os
 import re
+import shutil
 import sys
 import time
 import unicodedata
@@ -34,6 +36,50 @@ FILE_MAP = {
     "mata112": "mata112.xlsx",
     "mata185": "mata185.xlsx",
 }
+
+
+def _candidate_dashboard_roots(project_root: Path) -> list[Path]:
+    roots: list[Path] = []
+    env_root = os.environ.get("AUTOMUS_DASHBOARD_ROOT")
+    if env_root:
+        roots.append(Path(env_root))
+    roots.append(Path.home() / "Desktop" / "KKKKKKKK")
+    for parent in project_root.resolve().parents:
+        if (parent / "dashboard.html").exists():
+            roots.append(parent)
+            break
+
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        key = str(root.resolve()) if root.exists() else str(root)
+        if key not in seen:
+            seen.add(key)
+            unique.append(root)
+    return unique
+
+
+def _mirror_mata112_to_dashboards(mata112_path: Path | None, project_root: Path, log: logging.Logger) -> None:
+    if not mata112_path or not mata112_path.exists():
+        return
+
+    copied = 0
+    for root in _candidate_dashboard_roots(project_root):
+        if not (root / "dashboard.html").exists():
+            continue
+        destino = root / "downloads" / "mata112.xlsx"
+        try:
+            if destino.exists() and mata112_path.resolve() == destino.resolve():
+                continue
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(mata112_path, destino)
+            copied += 1
+            log.info("MATA112_DASHBOARD_SYNC_OK | origem=%s | destino=%s", mata112_path, destino)
+        except OSError as exc:
+            log.warning("MATA112_DASHBOARD_SYNC_FALHOU | origem=%s | destino=%s | erro=%s", mata112_path, destino, exc)
+
+    if not copied:
+        log.info("MATA112_DASHBOARD_SYNC_IGNORADO | nenhum dashboard local encontrado")
 
 
 def _json_hash(value: Any) -> str:
@@ -164,15 +210,20 @@ def _read_sheet(path: Path, sheet_name: str | None = None) -> list[list[Any]]:
                     ws_name = sheet_name
                 else:
                     alvo = _sheet_name_key(sheet_name)
-                    ws_name = next(
+                    ws_name_match = next(
                         (
                             name for name in wb.sheetnames
                             if _sheet_name_key(name) == alvo
                             or alvo in _sheet_name_key(name)
                             or _sheet_name_key(name) in alvo
                         ),
-                        ws_name,
+                        None,
                     )
+                    if not ws_name_match:
+                        raise RuntimeError(
+                            f"Aba {sheet_name!r} nao encontrada em {path}. Abas disponiveis: {', '.join(wb.sheetnames)}"
+                        )
+                    ws_name = ws_name_match
             ws = wb[ws_name]
             out: list[list[Any]] = []
             for row in ws.iter_rows(values_only=True):
@@ -194,14 +245,23 @@ def _read_spreadsheetml_sheet(path: Path, sheet_name: str | None = None) -> list
     worksheet = worksheets[0]
     if sheet_name:
         alvo = _sheet_name_key(sheet_name)
-        worksheet = next(
+        worksheet_match = next(
             (
                 ws for ws in worksheets
                 if alvo in _sheet_name_key(ws.attrib.get("{urn:schemas-microsoft-com:office:spreadsheet}Name", ""))
                 or _sheet_name_key(ws.attrib.get("{urn:schemas-microsoft-com:office:spreadsheet}Name", "")) in alvo
             ),
-            worksheet,
+            None,
         )
+        if worksheet_match is None:
+            nomes = [
+                ws.attrib.get("{urn:schemas-microsoft-com:office:spreadsheet}Name", "")
+                for ws in worksheets
+            ]
+            raise RuntimeError(
+                f"Aba {sheet_name!r} nao encontrada em {path}. Abas disponiveis: {', '.join(nomes)}"
+            )
+        worksheet = worksheet_match
     table = worksheet.find(".//ss:Table", ns)
     if table is None:
         return []
@@ -666,6 +726,77 @@ def _montar_pedidos_compra(
             "recebidoSemEntrada": recebido_sem_entrada,
         }
     return estado
+
+
+def _validar_entradas_mata112_refletidas(
+    mata112: list[list[Any]] | None,
+    itens: list[dict[str, Any]],
+    pedidos_compra: dict[str, Any],
+    log: logging.Logger,
+) -> None:
+    if not mata112:
+        return
+
+    mata112_header, mata112_cols = _column_map(mata112, ("Produto",), {
+        "codigo": ("Produto",),
+        "quantidade_entrada": ("Quantidade", "Quantidade Original", "Quantidade_x000D_\nOriginal"),
+        "data_entrada": ("Data", "Dt Digitacao", "Dt Digitação", "Data Digitacao", "Data Digitação"),
+    })
+    entradas_por_data: dict[int, set[str]] = {}
+    for row in (mata112 or [])[mata112_header + 1:]:
+        codigo = _ascii_lower(_cell(row, mata112_cols, "codigo", 0))
+        if not codigo:
+            continue
+        if _num(_cell(row, mata112_cols, "quantidade_entrada", 3)) <= 0:
+            continue
+        _data_txt, ts = _sheet_date(_cell(row, mata112_cols, "data_entrada", 12))
+        if not ts:
+            continue
+        entradas_por_data.setdefault(ts, set()).add(codigo)
+
+    if not entradas_por_data:
+        return
+
+    data_mais_recente = max(entradas_por_data)
+    codigos_entrada = entradas_por_data[data_mais_recente]
+    codigos_itens = {
+        _ascii_lower(item.get("protheus") or item.get("protheusKey") or item.get("cooperat"))
+        for item in itens
+        if isinstance(item, dict)
+    }
+    codigos_esperados = {codigo for codigo in codigos_entrada if codigo in codigos_itens}
+    if not codigos_esperados:
+        log.warning(
+            "VALIDACAO_MATA112_SEM_ITENS_CADASTRADOS | data=%s | codigos=%s",
+            datetime.fromtimestamp(data_mais_recente / 1000).strftime("%d/%m/%Y"),
+            ",".join(sorted(codigos_entrada)),
+        )
+        return
+
+    faltando: list[str] = []
+    for codigo in sorted(codigos_esperados):
+        pedido = pedidos_compra.get(_ajuste_key(codigo)) or pedidos_compra.get(codigo)
+        if not isinstance(pedido, dict):
+            faltando.append(codigo)
+            continue
+        entrada = pedido.get("entradaConfirmada") or pedido.get("entradaEndereco")
+        if not isinstance(entrada, dict):
+            faltando.append(codigo)
+
+    if faltando:
+        data_br = datetime.fromtimestamp(data_mais_recente / 1000).strftime("%d/%m/%Y")
+        raise RuntimeError(
+            "NAO CONFORME: MATA112 possui entradas recentes que nao foram refletidas em pedidosCompra "
+            f"(data={data_br}; faltando={', '.join(faltando[:80])}"
+            f"{'...' if len(faltando) > 80 else ''}). "
+            "Atualizacao interrompida para evitar Kanban de entrada defasado."
+        )
+
+    log.info(
+        "VALIDACAO_MATA112_ENTRADAS_OK | data=%s | codigos=%s",
+        datetime.fromtimestamp(data_mais_recente / 1000).strftime("%d/%m/%Y"),
+        len(codigos_esperados),
+    )
 
 
 def _safe_text(value: Any) -> str:
@@ -1281,7 +1412,7 @@ def run_automus_update(
     dados_mortos_planilha = _read_sheet(dados_mortos_planilha_path) if dados_mortos_planilha_path else None
     mata110 = _read_sheet(mata110_path) if mata110_path else None
     mata111 = _read_sheet(mata111_path) if mata111_path else None
-    mata112 = _read_sheet(mata112_path, "Saldos a Endereçar") if mata112_path else None
+    mata112 = _read_sheet(mata112_path, "Saldos a Endere") if mata112_path else None
     mata185 = _read_sheet(mata185_path) if mata185_path else None
     log.info(
         "TEST_PLANILHAS_LIDAS_OK | incluir_linhas=%s | saldoAtual_linhas=%s | saldoEndereco_linhas=%s | estoque_minimo_linhas=%s",
@@ -1322,6 +1453,7 @@ def run_automus_update(
         agora_ms,
     )
     pedidos_compra = _montar_pedidos_compra(mata110, mata111, mata112, novos_dados, historico_saldo)
+    _validar_entradas_mata112_refletidas(mata112, novos_dados, pedidos_compra, log)
     movimentacoes_mata185 = _montar_movimentacoes_mata185(mata185, novos_dados, movimentacoes_mata185_anteriores, agora_ms)
     _aplicar_sugestoes_estoque(novos_dados, historico_saldo, pedidos_compra)
 
@@ -1456,6 +1588,7 @@ def run_automus_update(
         len(novos_dados),
         agora_ms,
     )
+    _mirror_mata112_to_dashboards(mata112_path, project_root, log)
 
 
 def _setup_cli_logger() -> logging.Logger:

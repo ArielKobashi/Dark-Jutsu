@@ -17,9 +17,6 @@ ICON = BUILD / "automus.ico"
 FIREBASE_CONFIG = SCRIPTS / "firebase_config.json"
 AUTOMUS_CONFIG = SCRIPTS / "atualizacao" / "automus_config.json"
 LEGACY_AUTOMUS_CONFIG = ROOT.parent / "scripts" / "atualizacao" / "automus_config.json"
-RUNTIME_TMPDIR = Path(os.environ.get("PUBLIC") or r"C:\Users\Public") / "AutomusRuntimeTemp"
-
-
 def python_console_executable() -> str:
     exe = Path(sys.executable)
     if exe.name.lower() == "pythonw.exe":
@@ -147,12 +144,11 @@ def main():
             "-m",
             "PyInstaller",
             "--noconfirm",
-            "--onefile",
+            "--onedir",
             "--windowed",
             "--name",
             "Automus",
-            "--runtime-tmpdir",
-            str(RUNTIME_TMPDIR),
+            "--noupx",
             "--icon",
             str(ICON),
             "--paths",

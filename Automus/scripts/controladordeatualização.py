@@ -1,4 +1,5 @@
 import ctypes
+import base64
 import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
@@ -17,6 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from automus_self_update import (
@@ -69,23 +71,49 @@ LEGACY_CONTROLLER_CONFIG_PATHS = [
     BUNDLED_SCRIPT_DIR / "controlador_config.json",
 ]
 STARTUP_BAT_NAME = "Automus_Controlador_Atualizacoes.bat"
+LEGACY_STARTUP_BAT_NAMES = (
+    "Automus_Controlador.bat",
+    "Automus_Atualizacoes.bat",
+    "Automus.bat",
+)
 APP_DISPLAY_NAME = "Automus"
 LOCAL_COMMAND_HOST = "127.0.0.1"
 LOCAL_COMMAND_PORT = 47655
+AUTO_HIDE_AFTER_LOGIN_MS = 8000
+BACKGROUND_MODE = "--background" in sys.argv
 _SINGLE_INSTANCE_HANDLE = None
+_SINGLE_INSTANCE_FILE = None
 
 
 def _acquire_single_instance_lock() -> bool:
-    if os.name != "nt":
-        return True
+    global _SINGLE_INSTANCE_HANDLE, _SINGLE_INSTANCE_FILE
+    lock_dir = PROJECT_ROOT / "RuntimeTemp"
+    try:
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        lock_file = (lock_dir / "automus.lock").open("a+b")
+        try:
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+            _SINGLE_INSTANCE_FILE = lock_file
+        except OSError:
+            lock_file.close()
+            return False
+    except Exception:
+        pass
+
     try:
         kernel32 = ctypes.windll.kernel32
-        handle = kernel32.CreateMutexW(None, False, "Global\\Automus.Controlador.Atualizacoes")
+        handle = kernel32.CreateMutexW(None, False, "Local\\Automus.Controlador.Atualizacoes")
         if not handle:
             return True
         already_exists = kernel32.GetLastError() == 183
         if already_exists:
             kernel32.CloseHandle(handle)
+            try:
+                if _SINGLE_INSTANCE_FILE is not None:
+                    _SINGLE_INSTANCE_FILE.close()
+                    _SINGLE_INSTANCE_FILE = None
+            except Exception:
+                pass
             return False
         global _SINGLE_INSTANCE_HANDLE
         _SINGLE_INSTANCE_HANDLE = handle
@@ -132,6 +160,51 @@ def _http_json(url: str, method: str = "GET", payload: Optional[dict] = None, ti
         raise RuntimeError(f"Falha de rede: {exc}") from exc
 
 
+def _http_form_json(url: str, payload: dict, timeout: float = 25.0):
+    data = urlencode(payload).encode("utf-8")
+    req = Request(
+        url=url,
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+    )
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+            return json.loads(raw.decode("utf-8")) if raw else None
+    except HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        raise RuntimeError(f"HTTP {exc.code}: {body}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"Falha de rede: {exc}") from exc
+
+
+def _decode_jwt_payload(token: str) -> dict:
+    parts = str(token or "").split(".")
+    if len(parts) < 2:
+        return {}
+    raw = parts[1] + "=" * (-len(parts[1]) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(raw.encode("ascii"))
+        payload = json.loads(decoded.decode("utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _id_token_expired(token: str, skew_seconds: int = 120) -> bool:
+    payload = _decode_jwt_payload(token)
+    exp = payload.get("exp")
+    try:
+        return int(exp) <= int(time.time()) + skew_seconds
+    except Exception:
+        return True
+
+
 def _extract_firebase_config() -> tuple[str, str]:
     for config_path in (SCRIPT_DIR / "firebase_config.json", BUNDLED_SCRIPT_DIR / "firebase_config.json"):
         if not config_path.exists():
@@ -174,7 +247,13 @@ def _auth_admin_dark_jutsu(login: str, senha: str) -> dict:
     usuario = _http_json(f"{db_url}/usuarios/{uid}.json?auth={token}", method="GET")
     if not isinstance(usuario, dict) or usuario.get("nivel") != "admin":
         raise RuntimeError("Acesso bloqueado: este login não tem permissão ADM.")
-    return {"uid": uid, "email": email, "nickname": usuario.get("nickname") or nick, "idToken": token}
+    return {
+        "uid": uid,
+        "email": email,
+        "nickname": usuario.get("nickname") or nick,
+        "idToken": token,
+        "refreshToken": str(auth.get("refreshToken") or ""),
+    }
 
 
 def _machine_fingerprint() -> str:
@@ -251,23 +330,50 @@ def _startup_bat_path() -> Path:
     return startup / STARTUP_BAT_NAME
 
 
+def _startup_dir() -> Path:
+    return _startup_bat_path().parent
+
+
+def _cleanup_legacy_startup_entries(keep: Path | None = None):
+    startup = _startup_dir()
+    if not startup.exists():
+        return
+    keep_resolved = str(keep.resolve()).lower() if keep else ""
+    names = {STARTUP_BAT_NAME, *LEGACY_STARTUP_BAT_NAMES}
+    for path in startup.iterdir():
+        if not path.is_file():
+            continue
+        current = str(path.resolve()).lower()
+        if keep_resolved and current == keep_resolved:
+            continue
+        if path.name in names or (path.suffix.lower() in {".bat", ".cmd", ".lnk"} and "automus" in path.name.lower()):
+            try:
+                path.unlink()
+            except Exception:
+                pass
+
+
 def _set_startup_enabled(enabled: bool):
     path = _startup_bat_path()
     if enabled:
         path.parent.mkdir(parents=True, exist_ok=True)
-        pythonw = Path(sys.executable)
-        if pythonw.name.lower() == "python.exe":
-            candidate = pythonw.with_name("pythonw.exe")
+        _cleanup_legacy_startup_entries(keep=path)
+        executable = Path(sys.executable).resolve() if getattr(sys, "frozen", False) else Path(__file__).resolve()
+        launcher = Path(sys.executable).resolve()
+        if not getattr(sys, "frozen", False) and launcher.name.lower() == "python.exe":
+            candidate = launcher.with_name("pythonw.exe")
             if candidate.exists():
-                pythonw = candidate
+                launcher = candidate
+        command = f'"{executable}" --background' if getattr(sys, "frozen", False) else f'"{launcher}" "{executable}" --background'
         path.write_text(
             "@echo off\r\n"
+            "setlocal\r\n"
             f'cd /d "{PROJECT_ROOT}"\r\n'
-            f'start "" /min "{pythonw}" "{Path(sys.executable).resolve() if getattr(sys, "frozen", False) else Path(__file__).resolve()}" --background\r\n',
+            f'start "Automus" /min {command}\r\n',
             encoding="utf-8",
         )
-    elif path.exists():
-        path.unlink()
+    else:
+        _cleanup_legacy_startup_entries()
 
 
 class StopRequested(RuntimeError):
@@ -579,19 +685,23 @@ class _ControlWindow:
 
             threading.Thread(target=worker, name="automus-update-install", daemon=True).start()
 
+        def enter_main(admin: dict):
+            login_frame.pack_forget()
+            main_frame.pack(fill="both", expand=True)
+            root.title(f"{APP_DISPLAY_NAME} | {admin.get('nickname')}")
+            try:
+                root.after(0, refresh_schedule_ui)
+            except Exception:
+                pass
+            root.after(1200, lambda: check_update_ui(silent=True, auto_install=True))
+            if BACKGROUND_MODE:
+                root.after(AUTO_HIDE_AFTER_LOGIN_MS, on_close)
+
         def do_login(event=None):
             login_status.set("Validando permissão ADM...")
             try:
                 admin = self._state.login_admin(login_var.get(), senha_var.get())
-                login_frame.pack_forget()
-                main_frame.pack(fill="both", expand=True)
-                root.title(f"{APP_DISPLAY_NAME} | {admin.get('nickname')}")
-                try:
-                    root.after(0, refresh_schedule_ui)
-                except Exception:
-                    pass
-                root.after(1200, lambda: check_update_ui(silent=True, auto_install=True))
-                root.after(1800, on_close)
+                enter_main(admin)
             except Exception as exc:
                 login_status.set(str(exc))
             return "break"
@@ -1285,6 +1395,9 @@ class _ControlWindow:
                 log.configure(state="disabled")
             root.after(40, pump)
 
+        if self._state.authenticated_admin is not None:
+            root.after(0, lambda: enter_main(self._state.authenticated_admin or {}))
+
         root.protocol("WM_DELETE_WINDOW", on_close)
         root.after(40, pump)
         self._ready.set()
@@ -1316,8 +1429,8 @@ class _SharedState:
         self.mouse_lock_enabled = False
         self.locked_mouse_pos: Optional[tuple] = None
         self._mouse_repositioning = False
-        self.authenticated_admin: Optional[dict] = None
         self.config = _load_controller_config()
+        self.authenticated_admin: Optional[dict] = self._load_saved_admin_session()
         self.scheduler_thread: Optional[threading.Thread] = None
         self.scheduler_stop = threading.Event()
         self.command_server = None
@@ -1425,9 +1538,11 @@ class _SharedState:
                 "email": email,
                 "nickname": usuario.get("nickname") or nickname or email or uid,
                 "idToken": token,
+                "refreshToken": str((payload or {}).get("refreshToken") or "").strip(),
             }
             with self.lock:
                 self.authenticated_admin = admin
+            self._save_admin_session(admin)
             self._ensure_user_schedule(admin)
             emit_status(f"Interface liberada por comando local para ADM: {admin.get('nickname')}.")
             return True, "ADM autenticado."
@@ -1438,9 +1553,68 @@ class _SharedState:
         admin = _auth_admin_dark_jutsu(login, senha)
         with self.lock:
             self.authenticated_admin = admin
+        self._save_admin_session(admin)
         self._ensure_user_schedule(admin)
         emit_status(f"Interface liberada para ADM: {admin.get('nickname')}.")
         return admin
+
+    def _save_admin_session(self, admin: dict):
+        session = {
+            "uid": admin.get("uid") or "",
+            "email": admin.get("email") or "",
+            "nickname": admin.get("nickname") or "",
+            "idToken": admin.get("idToken") or "",
+            "refreshToken": admin.get("refreshToken") or "",
+            "savedAt": datetime.now().isoformat(timespec="seconds"),
+        }
+        if not session["idToken"] and not session["refreshToken"]:
+            return
+        self.config["adminSession"] = session
+        _save_controller_config(self.config)
+
+    def _clear_admin_session(self):
+        self.config.pop("adminSession", None)
+        _save_controller_config(self.config)
+
+    def _load_saved_admin_session(self) -> Optional[dict]:
+        session = self.config.get("adminSession") if isinstance(self.config, dict) else None
+        if not isinstance(session, dict):
+            return None
+        admin = {
+            "uid": str(session.get("uid") or "").strip(),
+            "email": str(session.get("email") or "").strip(),
+            "nickname": str(session.get("nickname") or "").strip(),
+            "idToken": str(session.get("idToken") or "").strip(),
+            "refreshToken": str(session.get("refreshToken") or "").strip(),
+        }
+        try:
+            if admin["refreshToken"] and (not admin["idToken"] or _id_token_expired(admin["idToken"])):
+                api_key, _db_url = _extract_firebase_config()
+                refreshed = _http_form_json(
+                    f"https://securetoken.googleapis.com/v1/token?key={api_key}",
+                    {"grant_type": "refresh_token", "refresh_token": admin["refreshToken"]},
+                )
+                if isinstance(refreshed, dict):
+                    admin["idToken"] = str(refreshed.get("id_token") or admin["idToken"])
+                    admin["refreshToken"] = str(refreshed.get("refresh_token") or admin["refreshToken"])
+                    admin["uid"] = str(refreshed.get("user_id") or admin["uid"])
+            if not admin["idToken"] or not admin["uid"]:
+                return None
+            _api_key, db_url = _extract_firebase_config()
+            usuario = _http_json(f"{db_url}/usuarios/{admin['uid']}.json?auth={admin['idToken']}", method="GET")
+            if not isinstance(usuario, dict) or str(usuario.get("nivel") or "").lower() != "admin":
+                self._clear_admin_session()
+                return None
+            admin["nickname"] = str(usuario.get("nickname") or admin["nickname"] or admin["email"] or admin["uid"])
+            self.config["adminSession"] = {
+                **admin,
+                "savedAt": datetime.now().isoformat(timespec="seconds"),
+            }
+            _save_controller_config(self.config)
+            return admin
+        except Exception:
+            self._clear_admin_session()
+            return None
 
     def _current_user_key(self) -> Optional[str]:
         admin = self.authenticated_admin or {}
