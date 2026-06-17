@@ -4879,21 +4879,10 @@ function aplicarResetGlobalContagem(resetInfo, avisar = true){
     if(!resetAt) return;
     const aplicado = Number(localStorage.getItem(chaveResetGlobalContagemAplicado()) || 0);
     if(aplicado >= resetAt) return;
-    contagemAplicandoResetGlobal = true;
-    limparRascunhoSessaoContagemLocal();
+    const por = resetInfo?.resetPor ? ` por ${resetInfo.resetPor}` : "";
     localStorage.setItem(chaveResetGlobalContagemAplicado(), String(resetAt));
-    if(document.getElementById("contagemScreen")?.style.display !== "none"){
-        pararEscutaContagem();
-        try{ window.speechSynthesis?.cancel(); }catch(e){}
-        document.getElementById("contagemScreen").style.display = "none";
-        document.getElementById("main").style.display = "";
-        document.body?.classList.remove("contagem-open");
-        desativarModoFocoContagem();
-    }
-    contagemAplicandoResetGlobal = false;
     if(avisar){
-        const por = resetInfo?.resetPor ? ` por ${resetInfo.resetPor}` : "";
-        mostrarNotificacao(`Contagem reiniciada do zero${por}.`);
+        mostrarNotificacao(`Reinicio geral solicitado${por}. Para zerar, use Reiniciar na maquina desejada.`);
     }
 }
 
@@ -4936,7 +4925,16 @@ function uidRascunhoContagemFirebase(){
     return window.auth?.currentUser?.uid || "";
 }
 
+function usuarioKeyContagemFirebase(){
+    return chaveFirebaseContagem(window.meuNickname || window.auth?.currentUser?.uid || "desconhecido");
+}
+
 function pathRascunhoContagemFirebase(){
+    const usuario = usuarioKeyContagemFirebase();
+    return usuario ? `contagens/${dataContagemSessaoAtual()}/${usuario}/_rascunho_atual` : "";
+}
+
+function pathRascunhoContagemFirebaseLegado(){
     const uid = uidRascunhoContagemFirebase();
     return uid ? `contagemRascunhos/${uid}` : "";
 }
@@ -5023,6 +5021,8 @@ async function limparRascunhoContagemFirebase(){
     if(!path || !window.set || !window.ref || !window.db) return;
     try{
         await window.set(window.ref(window.db, path), null);
+        const legado = pathRascunhoContagemFirebaseLegado();
+        if(legado) await window.set(window.ref(window.db, legado), null).catch(() => {});
     }catch(e){
         console.warn("Falha ao limpar rascunho da contagem no Firebase:", e);
     }
@@ -5032,7 +5032,11 @@ async function carregarRascunhoContagemFirebase(){
     const path = pathRascunhoContagemFirebase();
     if(!path || !window.get || !window.ref || !window.db) return false;
     try{
-        const snap = await window.get(window.ref(window.db, path));
+        let snap = await window.get(window.ref(window.db, path));
+        if(!snap.exists()){
+            const legado = pathRascunhoContagemFirebaseLegado();
+            if(legado) snap = await window.get(window.ref(window.db, legado)).catch(() => snap);
+        }
         if(!snap.exists()) return false;
         const remoto = snap.val() || {};
         const sessaoRemota = remoto.sessao && typeof remoto.sessao === "object" ? remoto.sessao : {};
@@ -5056,6 +5060,82 @@ async function carregarRascunhoContagemFirebase(){
         console.warn("Falha ao carregar rascunho da contagem no Firebase:", e);
     }
     return false;
+}
+
+function indiceItensContagemPorRegistro(){
+    const porLinha = new Map();
+    const porVazio = new Map();
+    contagemItens.forEach(item => {
+        const itemKey = itemKeyContagem(item);
+        if(!itemKey) return;
+        if(isVerificacaoVazioContagem(item)){
+            const endereco = normalizarEnderecoProgressoContagem(item.enderecoPrincipal);
+            if(endereco) porVazio.set(endereco, itemKey);
+            return;
+        }
+        const codigos = [item.protheus, item.protheusKey, item.cooperat]
+            .map(normalizarCodigoItem)
+            .filter(Boolean);
+        codigos.forEach(codigo => {
+            const chave = chaveProgressoContagemPrincipal(codigo, item.armazemPrincipal, item.enderecoPrincipal);
+            porLinha.set(chave, itemKey);
+        });
+    });
+    return { porLinha, porVazio };
+}
+
+function mesclarRegistroSalvoNoRascunhoContagem(registro, indices){
+    if(!registro || typeof registro !== "object") return 0;
+    let aplicados = 0;
+    Object.values(registro.itens || {}).forEach(item => {
+        const codigo = item?.protheus || item?.cooperat || "";
+        const chave = chaveProgressoContagemPrincipal(codigo, item?.armazem, item?.endereco);
+        const itemKey = indices.porLinha.get(chave);
+        if(!itemKey || contagemValores[itemKey] !== undefined) return;
+        const contado = Number(String(item?.contado ?? "").replace(",", "."));
+        if(!Number.isFinite(contado)) return;
+        contagemValores[itemKey] = contado;
+        aplicados += 1;
+    });
+    Object.values(registro.verificacoesVazio || {}).forEach(item => {
+        const endereco = normalizarEnderecoProgressoContagem(item?.endereco || "");
+        const itemKey = indices.porVazio.get(endereco);
+        if(!itemKey || contagemVerificacoesVazio[itemKey] !== undefined) return;
+        contagemVerificacoesVazio[itemKey] = item?.status || "livre";
+        aplicados += 1;
+    });
+    return aplicados;
+}
+
+async function carregarContagensSalvasUsuarioAtual(){
+    if(!window.get || !window.ref || !window.db) return 0;
+    const usuario = usuarioKeyContagemFirebase();
+    if(!usuario) return 0;
+    try{
+        const snap = await window.get(window.ref(window.db, `contagens/${dataContagemSessaoAtual()}/${usuario}`));
+        if(!snap.exists()) return 0;
+        const registros = snap.val() || {};
+        const indices = indiceItensContagemPorRegistro();
+        let aplicados = 0;
+        Object.entries(registros || {}).forEach(([registroKey, registro]) => {
+            if(String(registroKey).startsWith("_")) return;
+            if(registro?.itens || registro?.verificacoesVazio){
+                aplicados += mesclarRegistroSalvoNoRascunhoContagem(registro, indices);
+                return;
+            }
+            Object.entries(registro || {}).forEach(([subKey, subRegistro]) => {
+                if(String(subKey).startsWith("_")) return;
+                aplicados += mesclarRegistroSalvoNoRascunhoContagem(subRegistro, indices);
+            });
+        });
+        if(aplicados){
+            salvarRascunhoContagem({ forcarFirebase:false });
+        }
+        return aplicados;
+    }catch(e){
+        console.warn("Falha ao carregar contagens salvas do usuario:", e);
+        return 0;
+    }
 }
 
 function salvarRascunhoContagem(opcoes = {}){
@@ -5385,6 +5465,7 @@ async function abrirContagem(){
     contagemValores = carregarRascunhoContagem();
     contagemVerificacoesVazio = carregarVerificacoesContagem();
     await carregarRascunhoContagemFirebase();
+    await carregarContagensSalvasUsuarioAtual();
     recalcularMaquinasContagem();
     contagemSecaoAtual = primeiraSecaoDisponivelContagem();
     contagemMaquinaAtual = "";
@@ -5507,7 +5588,7 @@ function reiniciarContagemAtual(grupo = ""){
         || contagemMaquinaAtual
         || resolverGrupoSessaoContagem(sessao.maquina || "");
     if(!alvo) return;
-    if(!confirm(`Reiniciar a contagem de ${labelGrupoContagem(alvo)}? O rascunho desta maquina sera apagado.`)) return;
+    if(!confirm(`Reiniciar a contagem de ${labelGrupoContagem(alvo)}?\n\nSomente esta maquina sera zerada. Essa acao apaga o progresso dela nesta contagem.`)) return;
     limparRascunhoContagemMaquina(alvo);
     if(resolverGrupoSessaoContagem(sessao.maquina || "") === alvo){
         salvarSessaoContagem({ aberta:true, maquina:"", indice:0, itemKey:"", dataInicio:dataContagemHoje() });
@@ -6444,7 +6525,7 @@ async function finalizarContagem(){
     try{
         const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
         await window.push(baseRef, payload);
-        limparRascunhoContagemMaquina(payload.maquina);
+        await salvarRascunhoContagemFirebaseAgora();
         contagemFinalizadaSemSessao = true;
         historicoContagemPlanilhasCarregado = false;
         if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas(true);
@@ -6780,7 +6861,7 @@ async function salvarContagemPeloRelatorio(){
     try{
         const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
         await window.push(baseRef, payload);
-        limparRascunhoContagemMaquina(payload.maquina);
+        await salvarRascunhoContagemFirebaseAgora();
         contagemFinalizadaSemSessao = true;
         historicoContagemPlanilhasCarregado = false;
         if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas(true);
@@ -7170,7 +7251,7 @@ async function resetarContagemGlobalAdmin(){
         mostrarNotificacao("Firebase ainda nao esta pronto.");
         return;
     }
-    const ok = confirm("Zerar a contagem de todo mundo?\n\nIsso apaga rascunho, posicao e sessoes abertas quando cada usuario abrir/estiver no app. O historico ja finalizado continua salvo.");
+    const ok = confirm("Solicitar reinicio geral da contagem?\n\nIsso nao apaga automaticamente as maquinas. Cada usuario ainda precisa clicar em Reiniciar na maquina desejada e confirmar.");
     if(!ok) return;
     const resetInfo = {
         resetAt:Date.now(),
@@ -7181,7 +7262,7 @@ async function resetarContagemGlobalAdmin(){
         aplicarResetGlobalContagem(resetInfo, false);
         historicoContagemPlanilhasCarregado = false;
         carregarHistoricoContagemPlanilhas(true);
-        mostrarNotificacao("Contagem reiniciada do zero para todos.");
+        mostrarNotificacao("Reinicio geral solicitado. Cada maquina so zera pelo botao Reiniciar.");
     }catch(e){
         console.error("Erro ao zerar contagem global:", e);
         mostrarNotificacao("Erro ao zerar contagem global.");

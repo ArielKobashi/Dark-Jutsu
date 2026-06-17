@@ -806,14 +806,14 @@
             dataMovimentacao: params.get("dataMovimentacao") || "",
             maquinaMovimentacao: (params.get("maquinaMovimentacao") || params.get("maquina") || "").trim().toUpperCase()
         };
-        const regexArmazemBusca = /(?:do|da|dos|das|de)?\s*(?:armaz[eÃ©]m|almox|deposito|dep[oÃ³]sito)\s*(?:desejado|n[Âºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
+        const regexArmazemBusca = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
         const armazemNaBusca = cfg.busca.match(regexArmazemBusca);
         if(armazemNaBusca && !cfg.armazens.length){
             cfg.armazens = [armazemNaBusca[1]];
             cfg.busca = cfg.busca
                 .replace(regexArmazemBusca, "")
                 .split(/\s+/)
-                .filter(p => !["item","itens","peca","pecas","peÃ§a","peÃ§as","mostrar","mostra","so","sÃ³","apenas","somente","que","sao","sÃ£o","de","do","da","dos","das","com"].includes(p))
+                .filter(p => !["item","itens","peca","pecas","peça","peças","mostrar","mostra","so","só","apenas","somente","que","sao","são","de","do","da","dos","das","com"].includes(p))
                 .join(" ")
                 .trim();
         }
@@ -1113,7 +1113,7 @@
         }
         async function carregarMata112(){
             if(mata112Cache) return mata112Cache;
-            mata112Cache = await carregarPlanilhaDownload("mata112.xlsx", "Saldos a EndereÃ§ar");
+            mata112Cache = await carregarPlanilhaDownload("mata112.xlsx", "Saldos a Endereçar");
             return mata112Cache;
         }
         async function carregarHistoricoCooperatLocal(){
@@ -1142,7 +1142,7 @@
                 const linhas = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                 linhas.forEach(row => {
                     const codigo = normalizarCodigo(row?.[1]);
-                    if(!codigo || codigo.includes("codigo") || codigo.includes("cÃ³digo") || codigo.includes("item")) return;
+                    if(!codigo || codigo.includes("codigo") || codigo.includes("código") || codigo.includes("item")) return;
                     const minimo = normalizarLimiteCooperat(row[6], codigo);
                     const maximo = normalizarLimiteCooperat(row[7], codigo);
                     const reposicaoPlanilha = normalizarLimiteCooperat(row[8], codigo);
@@ -1639,21 +1639,38 @@
             return null;
         }
         function registroAvaliadorItem(item){
-            const codigo = key(item);
-            return avaliadorPedidosConfig?.[ajusteKey(codigo)] || avaliadorPedidosConfig?.[codigo] || null;
+            const candidatos = [
+                key(item),
+                item?.protheus,
+                item?.protheusKey,
+                item?.cooperat
+            ].map(normalizarCodigo).filter(Boolean);
+            for(const codigo of candidatos){
+                const direto = avaliadorPedidosConfig?.[codigo] || avaliadorPedidosConfig?.[ajusteKey(codigo)];
+                if(direto) return direto;
+            }
+            for(const registro of Object.values(avaliadorPedidosConfig || {})){
+                const codigoRegistro = normalizarCodigo(registro?.codigo);
+                if(codigoRegistro && candidatos.includes(codigoRegistro)) return registro;
+            }
+            return null;
         }
         function rotuloDecisaoAvaliador(registro){
             const mapa = {
                 passivel: "Solicitar",
+                solicitar: "Solicitar",
                 nao_solicitar: "Nao solicitar agora",
                 minimo_incorreto: "Minimo incorreto",
                 reposicao_incorreta: "Reposicao incorreta"
             };
             return mapa[registro?.decisao] || "Nao avaliado";
         }
+        function decisaoSolicitarAvaliador(registro){
+            return ["passivel", "solicitar"].includes(String(registro?.decisao || ""));
+        }
         function colunasKanbanAvaliador(){
             return [
-                { id:"aguardando_solicitacao", titulo:"SolicitaÃ§Ã£o feita", cor:"#60a5fa" },
+                { id:"aguardando_solicitacao", titulo:"Solicitação feita", cor:"#60a5fa" },
                 { id:"solicitacao_aprovada", titulo:"Solicitacao aprovada", cor:"#a78bfa" },
                 { id:"pedido_feito", titulo:"Pedido feito", cor:"#f59e0b" },
                 { id:"entrega_pendente", titulo:"Entrada pendente", cor:"#fb7185" },
@@ -1668,7 +1685,7 @@
         function rotuloDiasDesde(ts, prefixo){
             const dias = diasDesdeTimestamp(ts);
             if(dias === null) return "";
-            return `${prefixo} hÃ¡ ${fmt(dias)} dia${dias === 1 ? "" : "s"}`;
+            return `${prefixo} há ${fmt(dias)} dia${dias === 1 ? "" : "s"}`;
         }
         function timestampSolicitacaoKanban(linha){
             const pedido = linha?.pedido || {};
@@ -1703,9 +1720,9 @@
         }
         function tituloEnderecosItem(item){
             const enderecos = Array.isArray(item?.enderecos) ? item.enderecos : [];
-            if(!enderecos.length) return item?.enderecoPrincipal || "sem endereÃ§o";
+            if(!enderecos.length) return item?.enderecoPrincipal || "sem endereço";
             return enderecos
-                .map(end => `${end?.endereco || "sem endereÃ§o"}: ${fmt(end?.saldo)}${end?.armazem ? ` (${end.armazem})` : ""}`)
+                .map(end => `${end?.endereco || "sem endereço"}: ${fmt(end?.saldo)}${end?.armazem ? ` (${end.armazem})` : ""}`)
                 .join("\n");
         }
         function janelaEntradasKanban(){
@@ -1729,6 +1746,14 @@
             return (Array.isArray(linha?.entradasMata112) ? linha.entradasMata112 : [])
                 .filter(e => Number(e?.timestamp || 0) > 0)
                 .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0] || null;
+        }
+        function entradaSemPedidoVinculado(linha, entradaConfirmada, entradaHistorico, entradaMata112){
+            const pedido = linha?.pedido || {};
+            if(linha?.kanban !== "entregue" && statusKanbanAvaliador(linha) !== "entregue") return false;
+            if(!(entradaConfirmada || entradaHistorico || entradaMata112)) return false;
+            if(pedido?.pedido || pedido?.ultimoPedido || pedido?.solicitacao) return false;
+            if(Array.isArray(linha?.historico) && linha.historico.length) return false;
+            return true;
         }
         function timestampEntradaConfirmadaKanban(linha){
             const pedido = linha?.pedido || {};
@@ -1979,7 +2004,7 @@
             const entradaConfirmada = pedido?.entradaConfirmada || pedido?.entradaEndereco || null;
             const entradaHistorico = entradaHistoricoKanban(linha);
             const entradaMata112 = entradaMata112Kanban(linha);
-            const entradaSemPedido = statusKanban === "entregue" && (!!entradaConfirmada || !!entradaHistorico || !!entradaMata112) && !pedido?.pedido;
+            const entradaSemPedido = entradaSemPedidoVinculado(linha, entradaConfirmada, entradaHistorico, entradaMata112);
             const qtdEntradaPedido = quantidadeEntradaPedido(pedido);
             const qtdEntradaHistorico = entradaHistorico ? Math.abs(Number(entradaHistorico.delta || 0)) : null;
             const qtdEntradaMata112 = entradaMata112 ? Number(entradaMata112.quantidadeEntrada || 0) : null;
@@ -2005,14 +2030,14 @@
                         ${qtdSolicitada !== null ? `<span class="avaliadorTag">Solicitado ${esc(fmt(qtdSolicitada))}</span>` : ""}
                         ${statusKanban === "entrega_pendente" && qtdPendenteEntrada !== null ? `<span class="avaliadorTag">Pendente entrada ${esc(fmt(qtdPendenteEntrada))}</span>` : ""}
                         ${statusKanban === "entregue" && qtdEntrada !== null ? `<span class="avaliadorTag">Entrou ${esc(fmt(qtdEntrada))}</span>` : ""}
-                        ${mostrarDiasProcesso && diasProcesso !== null ? `<span class="avaliadorTag">HÃ¡ ${esc(fmt(diasProcesso))} dia${diasProcesso === 1 ? "" : "s"}</span>` : ""}
+                        ${mostrarDiasProcesso && diasProcesso !== null ? `<span class="avaliadorTag">Há ${esc(fmt(diasProcesso))} dia${diasProcesso === 1 ? "" : "s"}</span>` : ""}
                         ${statusKanban === "aguardando_solicitacao" && diasSolicitado ? `<span class="avaliadorTag">${esc(diasSolicitado)}</span>` : ""}
                         ${statusKanban === "solicitacao_aprovada" && diasAprovado ? `<span class="avaliadorTag">${esc(diasAprovado)}</span>` : ""}
                         ${entradaSemPedido ? `<span class="avaliadorTag entradaSoltaTag">Entrada sem pedido vinculado</span>` : ""}
                         ${nomeVisivel.valor ? `<span class="avaliadorTag pedidoTag">${esc(nomeVisivel.rotulo)}: ${esc(nomeVisivel.valor)}</span>` : ""}
                     </div>
                     <details class="avaliadorDetails">
-                        <summary><span>Detalhes e avanÃ§o</span><span class="avaliadorSummaryMeta">${esc(fmt(comprasCooperat))} Cooperat</span></summary>
+                        <summary><span>Detalhes e avanço</span><span class="avaliadorSummaryMeta">${esc(fmt(comprasCooperat))} Cooperat</span></summary>
                         <div class="avaliadorDetailsBody">
                             <div class="kanbanMeta">
                                 <span><strong>Status:</strong> ${esc(rotuloPedido(pedido))}</span>
@@ -2022,12 +2047,12 @@
                                 <span><strong>Solicitou:</strong> ${esc(nomeSolicitante || "-")}</span>
                                 <span><strong>Aprovou:</strong> ${esc(nomeAprovador || "-")}</span>
                                 <span><strong>Pediu:</strong> ${esc(nomeComprador || "-")}</span>
-                                <span><strong>EndereÃ§o:</strong> ${esc(item.enderecoPrincipal || "-")}</span>
-                                <span><strong>GestÃ£o:</strong> ${semAvaliador ? "Sem avaliador" : "Com avaliador"}</span>
-                                <span><strong>ReposiÃ§Ã£o:</strong> ${esc(fmt(reposicao(item)))}</span>
-                                <span><strong>Prazo mÃ©dio:</strong> ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`}</span>
-                                <span><strong>Ãšltimo pedido:</strong> ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
-                                <span><strong>Cooperat:</strong> ${esc(fmt(comprasCooperat))} compra(s), Ãºltima ${esc(ultimaCooperat)}</span>
+                                <span><strong>Endereço:</strong> ${esc(item.enderecoPrincipal || "-")}</span>
+                                <span><strong>Gestão:</strong> ${semAvaliador ? "Sem avaliador" : "Com avaliador"}</span>
+                                <span><strong>Reposição:</strong> ${esc(fmt(reposicao(item)))}</span>
+                                <span><strong>Prazo médio:</strong> ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`}</span>
+                                <span><strong>Último pedido:</strong> ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
+                                <span><strong>Cooperat:</strong> ${esc(fmt(comprasCooperat))} compra(s), última ${esc(ultimaCooperat)}</span>
                                 <span><strong>Avaliado:</strong> ${registro?.avaliadoEm ? esc(new Date(registro.avaliadoEm).toLocaleDateString("pt-BR")) : "-"}</span>
                                 ${registro?.observacao ? `<span>Obs.: ${esc(registro.observacao)}</span>` : ""}
                             </div>
@@ -2085,11 +2110,11 @@
                 .filter(l => !l.registro?.decisao)
                 .filter(l => !processoPedidoAberto(l.pedido))
                 .sort((a,b) => compararValores(a.reposicao || 0, b.reposicao || 0, "desc"));
-            const avaliados = linhas.filter(l => l.registro?.decisao);
-            const passivos = linhasBase.filter(l => l.registro?.decisao === "passivel");
+            const avaliados = linhasBase.filter(l => l.registro?.decisao);
+            const passivos = linhasBase.filter(l => decisaoSolicitarAvaliador(l.registro));
             const passivosSemEntrada = passivos.filter(l => !timestampEntradaConfirmadaKanban(l));
-            const avaliadosSemSolicitacao = linhas
-                .filter(l => l.registro?.decisao && l.registro?.decisao !== "passivel")
+            const avaliadosSemSolicitacao = linhasBase
+                .filter(l => l.registro?.decisao && !decisaoSolicitarAvaliador(l.registro))
                 .filter(l => !processoPedidoAberto(l.pedido))
                 .filter(l => !timestampEntradaConfirmadaKanban(l));
             const semAvaliadorKanban = linhasBase.filter(l => !l.registro?.decisao && pedidoAtivo(l.pedido));
@@ -2099,7 +2124,7 @@
                     ? semAvaliadorKanban
                     : [...passivos, ...semAvaliadorKanban];
             const monitorados = baseKanban
-                .filter(l => l.registro?.decisao === "passivel")
+                .filter(l => decisaoSolicitarAvaliador(l.registro))
                 .map(l => ({ ...l, kanban:statusKanbanAvaliador(l) }))
                 .filter(l => l.kanban);
             const semAvaliadorMonitorados = baseKanban
@@ -2215,7 +2240,7 @@
                         </div>
                     </div>
                     <div class="avaliadorPanel">
-                        <h2>Itens avaliados sem solicitaÃ§Ã£o de compra</h2>
+                        <h2>Itens avaliados sem solicitação de compra</h2>
                         <div class="avaliadorList">
                             ${revisoes.slice(0, 20).map(l => `
                                 <article class="avaliadorItem">
