@@ -766,8 +766,9 @@
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
             kanbanGestao: parametroPermitido((params.get("kanbanGestao") || params.get("gestaoKanban") || "todos").toLowerCase(), ["todos","avaliador","sem_avaliador","sem-avaliador"], "todos").replace("-", "_"),
-            kanbanOrdem: parametroPermitido((params.get("kanbanOrdem") || "antigo").toLowerCase(), ["antigo","recente"], "antigo"),
+            kanbanOrdem: parametroPermitido((params.get("kanbanOrdem") || "recente").toLowerCase(), ["antigo","recente"], "recente"),
             kanbanEntradasDias: parametroPermitido((params.get("kanbanEntradasDias") || "7").toLowerCase(), ["7","15","30"], "7"),
+            kanbanEntradasHoje: parametroPermitido((params.get("kanbanEntradasHoje") || params.get("entradasHoje") || "0").toLowerCase(), ["0","1"], "0"),
             kanbanExpandido: boolParam("kanbanExpandido", "verMaisKanban"),
             origem: (params.get("origem") || "").toLowerCase(),
             armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "04").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
@@ -797,6 +798,9 @@
         }
         if(cfg.ambiente === "avaliador" && !params.get("titulo")){
             cfg.titulo = "Avaliador de Pedidos";
+        }
+        if(cfg.ambiente === "avaliador" && !params.get("status")){
+            cfg.status = "todos";
         }
         let bancoAtual = null;
         let extrasAtual = {};
@@ -1712,6 +1716,7 @@
         }
         function entradaConfirmadaNaJanela(linha){
             const dias = diasDesdeTimestamp(timestampEntradaConfirmadaKanban(linha));
+            if(cfg.kanbanEntradasHoje === "1") return dias === 0;
             return dias !== null && dias <= janelaEntradasKanban();
         }
         function statusKanbanAvaliador(linha){
@@ -2114,6 +2119,13 @@
                             <option value="7" ${cfg.kanbanEntradasDias === "7" ? "selected" : ""}>Ultimos 7 dias</option>
                             <option value="15" ${cfg.kanbanEntradasDias === "15" ? "selected" : ""}>Ultimos 15 dias</option>
                             <option value="30" ${cfg.kanbanEntradasDias === "30" ? "selected" : ""}>Ultimos 30 dias</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fKanbanEntradasHoje">Entradas hoje</label>
+                        <select id="fKanbanEntradasHoje" data-filter="kanbanEntradasHoje">
+                            <option value="0" ${cfg.kanbanEntradasHoje === "0" ? "selected" : ""}>Todas da janela</option>
+                            <option value="1" ${cfg.kanbanEntradasHoje === "1" ? "selected" : ""}>Apenas hoje</option>
                         </select>
                     </div>
                     <div class="filter">
@@ -3031,12 +3043,12 @@
                         <label for="fStatus">Status</label>
                         <select id="fStatus" data-filter="status">
                             ${[
+                                ["todos","Todos"],
                                 ["fora","Saldo abaixo ou acima"],
                                 ["abaixo","Abaixo"],
                                 ["acima","Acima"],
                                 ["ok","Ok"],
                                 ["sem","Sem faixa"],
-                                ["todos","Todos"]
                             ].map(([v,t]) => `<option value="${v}" ${cfg.status === v ? "selected" : ""}>${t}</option>`).join("")}
                         </select>
                     </div>
