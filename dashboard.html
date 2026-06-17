@@ -551,8 +551,9 @@
             max-height:560px;
         }
         .kanbanGrid.expanded{
-            max-height:none;
-            overflow:visible;
+            max-height:720px;
+            overflow-x:hidden;
+            overflow-y:auto;
         }
         .kanbanCol{
             border:1px solid rgba(148,163,184,.18);
@@ -726,7 +727,7 @@
             </div>
             <div class="headerActions">
                 <span class="sub" id="ultimaAtualizacao"></span>
-                <a class="secondaryBtn" href="dashboard.html?ambiente=avaliador&armazem=04&status=abaixo&limite=50">Avaliador</a>
+                <a class="secondaryBtn" href="dashboard.html?ambiente=avaliador&armazem=04&status=todos&limite=50">Avaliador</a>
                 <a class="secondaryBtn" href="index.html">Abrir Dark</a>
                 <button class="primaryBtn" id="btnAtualizar" type="button">Atualizar</button>
             </div>
@@ -783,7 +784,7 @@
         const cfg = {
             titulo: params.get("titulo") || "Dashboard de Estoque",
             ambiente: parametroPermitido((params.get("ambiente") || "estoque").toLowerCase(), ["estoque","movimentacao","avaliador"], "estoque"),
-            status: parametroPermitido((params.get("status") || "fora").toLowerCase(), ["todos","all","fora","abaixo","acima","ok","sem","sem-faixa"], "fora"),
+            status: parametroPermitido((params.get("status") || "todos").toLowerCase(), ["todos","all","fora","abaixo","acima","ok","sem","sem-faixa"], "todos"),
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
             kanbanGestao: parametroPermitido((params.get("kanbanGestao") || params.get("gestaoKanban") || "todos").toLowerCase(), ["todos","avaliador","sem_avaliador","sem-avaliador"], "todos").replace("-", "_"),
@@ -2091,7 +2092,7 @@
                 .filter(l => entradaConfirmadaNaJanela(l))
                 .map(l => ({ ...l, kanban:"entregue", semAvaliador:!l.registro?.decisao }));
             const kanbanItens = [...monitorados, ...semAvaliadorMonitorados, ...entradasRecentes];
-            const limiteKanbanPorColuna = cfg.kanbanExpandido ? 9999 : 8;
+            const limiteKanbanPorColuna = cfg.kanbanExpandido ? 9999 : 10;
             const revisoes = avaliados.filter(l => l.registro?.decisao !== "passivel");
             const colunas = colunasKanbanAvaliador();
             const kanbanTemMais = colunas.some(col => kanbanItens.filter(l => l.kanban === col.id).length > limiteKanbanPorColuna);
