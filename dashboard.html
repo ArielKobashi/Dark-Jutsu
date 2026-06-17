@@ -1646,10 +1646,17 @@
             const codigos = historicoCooperat?.codigos || {};
             const candidatos = [
                 item?.cooperat,
+                item?.codigoCooperat,
+                item?.codCooperat,
+                item?.cooperatCodigo,
+                item?.limitesCooperat?.codigo,
+                item?.codigoAntigo,
                 item?.protheus,
                 item?.protheusKey,
                 key(item)
-            ].map(normalizarCodigoCooperatHistorico).filter(Boolean);
+            ].flatMap((valor) => String(valor ?? "").split(/[,\s;|/]+/))
+                .map(normalizarCodigoCooperatHistorico)
+                .filter(Boolean);
             for(const codigo of candidatos){
                 if(codigos[codigo]) return codigos[codigo];
             }
@@ -2794,11 +2801,11 @@
                 dashboardPanelConfig = dashboardConfigSnap?.val?.() || {};
                 avaliadorPedidosConfig = avaliadorPedidosSnap?.val?.() || {};
                 const historicoCooperatFirebase = historicoCooperatSnap?.val?.() || null;
-                const historicoCooperatLocal = deveCarregarHistoricoCooperat && Number(historicoCooperatFirebase?.limiteEventosPorCodigo || 0) < 999999
+                const historicoCooperatLocal = deveCarregarHistoricoCooperat
                     ? await carregarHistoricoCooperatLocal()
                     : null;
                 const historicoCooperat = deveCarregarHistoricoCooperat
-                    ? (historicoCooperatLocal?.codigos ? historicoCooperatLocal : historicoCooperatFirebase?.codigos ? historicoCooperatFirebase : await carregarHistoricoCooperatLocal())
+                    ? (historicoCooperatLocal?.codigos ? historicoCooperatLocal : historicoCooperatFirebase?.codigos ? historicoCooperatFirebase : null)
                     : null;
                 renderDashboard(snap.val() || {}, mapaMinimo, mata111, mata112, {
                     mata110,
