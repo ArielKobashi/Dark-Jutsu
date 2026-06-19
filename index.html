@@ -99,7 +99,7 @@
 <!-- SPLIT: main.html (estoque table + magnet + relatorio) -->
 <div id="main">
 
-    <input type="text" id="searchInput" placeholder="Pesquisar cooperat / protheus / descrição" oninput="if(['/dashboard','dashboard','dash'].includes(this.value.toLowerCase().trim())){this.value='';location.href='dashboard.html?armazem=04';}">
+    <input type="text" id="searchInput" name="buscaEstoqueDarkJutsu" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" placeholder="Pesquisar cooperat / protheus / descrição" oninput="if(['/dashboard','dashboard','dash'].includes(this.value.toLowerCase().trim())){this.value='';location.href='dashboard.html?armazem=04';}">
 
     <div id="contagemHomePopup" aria-live="polite">
         <button type="button" id="contagemHomeTrigger" aria-label="Mostrar progresso da contagem"></button>
@@ -9763,10 +9763,13 @@ const searchInput = document.getElementById("searchInput");
 if(searchInput){
     searchInput.addEventListener("focus", function(){
         setTimeout(centerTableForMobileSearch, 200);
+        setTimeout(limparBuscaPrincipalSeForUsuario, 80);
     });
     searchInput.addEventListener("input", function(){
+        limparBuscaPrincipalSeForUsuario();
         setTimeout(centerTableForMobileSearch, 120);
     });
+    searchInput.addEventListener("change", limparBuscaPrincipalSeForUsuario);
 }
 
 updateMobileOverlaysState();
@@ -10518,6 +10521,9 @@ onAuthStateChanged(auth, async (user) => {
         window.meuNickname = dadosUsuario.nickname;
         window.meuCracha = dadosUsuario.cracha || "";
         window.meuSetor = dadosUsuario.setor || "";
+        limparBuscaPrincipalSeForUsuario();
+        setTimeout(limparBuscaPrincipalSeForUsuario, 250);
+        setTimeout(limparBuscaPrincipalSeForUsuario, 1200);
         iniciarCamposOcorrencia();
         configurarOcorrenciasUI();
         iniciarOcorrencias();
@@ -10635,6 +10641,22 @@ function escapeHtml(texto) {
         .replace(/'/g, "&#039;");
 }
 window.escapeHtml = escapeHtml;
+
+function limparBuscaPrincipalSeForUsuario(){
+    const input = document.getElementById("searchInput");
+    if(!input) return;
+    const atual = String(input.value || "").trim().toLowerCase();
+    if(!atual) return;
+    const candidatos = [
+        window.meuNickname,
+        document.getElementById("authNickname")?.value,
+        auth.currentUser?.email?.split("@")[0]
+    ].map(v => String(v || "").trim().toLowerCase()).filter(Boolean);
+    if(candidatos.includes(atual)){
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles:true }));
+    }
+}
 
 let TIPOS_OCORRENCIA = [
     "Codigo informado errado",
