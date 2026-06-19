@@ -869,6 +869,26 @@
         overflow: auto;
     }
 
+    .ocorrenciasAvaliadorPage {
+        padding: 8px;
+        overflow: auto;
+    }
+
+    .ocorrenciasAvaliadorHeader,
+    .ocorrenciasAvaliadorGrid {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+    }
+
+    .ocorrenciasAvaliadorGrid {
+        overflow: visible;
+    }
+
+    .ocorrenciasAvaliadorLista,
+    .ocorrenciasAvaliadorSidebar {
+        overflow: visible;
+    }
+
     .ocorrenciaForm {
         grid-template-columns: 1fr;
     }
@@ -908,7 +928,8 @@
 
     .ocorrenciaCardTop,
     .ocorrenciaCard footer,
-    .ocorrenciaTipo {
+    .ocorrenciaTipo,
+    .ocorrenciaResumoLinha {
         flex-direction: column;
         align-items: flex-start;
     }

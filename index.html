@@ -324,6 +324,7 @@ xmlns="http://www.w3.org/2000/svg">
                         <span id="ocorrenciasStorageAviso">Aguardando Firebase...</span>
                     </div>
                     <div class="ocorrenciasHeaderActions">
+                        <button type="button" onclick="abrirAvaliadorOcorrencias()">Avaliador / Tratativas</button>
                         <button type="button" onclick="exportarOcorrenciasXlsx()">Exportar XLSX</button>
                         <button type="button" onclick="limparFiltrosOcorrencia()">Limpar filtros</button>
                     </div>
@@ -344,29 +345,67 @@ xmlns="http://www.w3.org/2000/svg">
                     <input id="ocorrenciaFiltroData" type="date" onchange="renderizarOcorrencias()">
                 </div>
 
-                <div class="ocorrenciasCamposEditor">
-                    <div class="ocorrenciasCamposHeader">
-                        <div>
-                            <strong>Campos da ocorrencia</strong>
-                            <span id="ocorrenciaCamposStatus">Opcoes padrao carregadas.</span>
-                        </div>
-                        <select id="ocorrenciaCampoEditor" onchange="renderizarEditorCamposOcorrencia()">
-                            <option value="tipos">Tipos</option>
-                            <option value="gravidades">Gravidades</option>
-                            <option value="status">Status</option>
-                            <option value="setores">Setores</option>
-                            <option value="tratadores">Tratadores</option>
-                        </select>
-                    </div>
-                    <div class="ocorrenciasCamposAdd">
-                        <input id="ocorrenciaNovaOpcao" type="text" maxlength="60" placeholder="Nova opcao">
-                        <button type="button" onclick="adicionarOpcaoOcorrencia()">Adicionar</button>
-                    </div>
-                    <div id="ocorrenciaOpcoesLista" class="ocorrenciaOpcoesLista"></div>
-                </div>
-
                 <div id="ocorrenciasLista" class="ocorrenciasLista">
                     <p class="ocorrenciasEmpty">Nenhuma ocorrencia carregada.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="ocorrenciasAvaliadorPage" class="ocorrenciasAvaliadorPage">
+            <div class="ocorrenciasAvaliadorHeader">
+                <div>
+                    <span class="ocorrenciasKicker">Tratativas</span>
+                    <h3>Avaliador de ocorrencias</h3>
+                    <p>Responsavel, analise, tratativa realizada, assinatura e exportacao.</p>
+                </div>
+                <div class="ocorrenciasHeaderActions">
+                    <button type="button" onclick="voltarOcorrenciasPrincipal()">Voltar</button>
+                    <button type="button" onclick="exportarOcorrenciasXlsx()">Exportar XLSX</button>
+                </div>
+            </div>
+
+            <div class="ocorrenciasAvaliadorGrid">
+                <aside class="ocorrenciasAvaliadorSidebar">
+                    <div class="ocorrenciasStats ocorrenciasAvaliadorStats">
+                        <div class="stat-abertas"><span>Abertas</span><strong id="avaliadorOcorrenciasAbertas">0</strong></div>
+                        <div class="stat-criticas"><span>Sem tratativa</span><strong id="avaliadorOcorrenciasPendentes">0</strong></div>
+                    </div>
+
+                    <div class="ocorrenciasFiltros ocorrenciasAvaliadorFiltros">
+                        <input id="avaliadorOcorrenciaFiltroBusca" type="search" placeholder="Buscar ocorrencia, responsavel ou tratativa" oninput="renderizarAvaliadorOcorrencias()">
+                        <select id="avaliadorOcorrenciaFiltroStatus" onchange="renderizarAvaliadorOcorrencias()"></select>
+                        <select id="avaliadorOcorrenciaFiltroResponsavel" onchange="renderizarAvaliadorOcorrencias()">
+                            <option value="">Todos os responsaveis</option>
+                            <option value="sem">Sem responsavel</option>
+                            <option value="com">Com responsavel</option>
+                            <option value="eu">Minhas tratativas</option>
+                        </select>
+                    </div>
+
+                    <div class="ocorrenciasCamposEditor">
+                        <div class="ocorrenciasCamposHeader">
+                            <div>
+                                <strong>Campos da ocorrencia</strong>
+                                <span id="ocorrenciaCamposStatus">Opcoes padrao carregadas.</span>
+                            </div>
+                            <select id="ocorrenciaCampoEditor" onchange="renderizarEditorCamposOcorrencia()">
+                                <option value="tipos">Tipos</option>
+                                <option value="gravidades">Gravidades</option>
+                                <option value="status">Status</option>
+                                <option value="setores">Setores</option>
+                                <option value="tratadores">Tratadores</option>
+                            </select>
+                        </div>
+                        <div class="ocorrenciasCamposAdd">
+                            <input id="ocorrenciaNovaOpcao" type="text" maxlength="60" placeholder="Nova opcao">
+                            <button type="button" onclick="adicionarOpcaoOcorrencia()">Adicionar</button>
+                        </div>
+                        <div id="ocorrenciaOpcoesLista" class="ocorrenciaOpcoesLista"></div>
+                    </div>
+                </aside>
+
+                <div id="avaliadorOcorrenciasLista" class="ocorrenciasAvaliadorLista">
+                    <p class="ocorrenciasEmpty">Abra o avaliador para carregar as tratativas.</p>
                 </div>
             </div>
         </div>
@@ -10815,12 +10854,27 @@ function abrirOcorrencias(){
     setTimeout(()=> document.getElementById("ocorrenciaTipo")?.focus(), 80);
 }
 
+function abrirAvaliadorOcorrencias(){
+    iniciarCamposOcorrencia();
+    iniciarOcorrencias();
+    document.querySelector("#ocorrenciasScreen .ocorrenciasShell")?.classList.add("avaliador-open");
+    popularSelectOcorrencia("avaliadorOcorrenciaFiltroStatus", STATUS_OCORRENCIA, "Todos os status");
+    renderizarEditorCamposOcorrencia();
+    renderizarAvaliadorOcorrencias();
+}
+
+function voltarOcorrenciasPrincipal(){
+    document.querySelector("#ocorrenciasScreen .ocorrenciasShell")?.classList.remove("avaliador-open");
+    renderizarOcorrencias();
+}
+
 function fecharOcorrencias(){
     const screen = document.getElementById("ocorrenciasScreen");
     if(screen){
         screen.classList.remove("open");
         screen.setAttribute("aria-hidden", "true");
     }
+    voltarOcorrenciasPrincipal();
 }
 
 function limparFormularioOcorrencia(){
@@ -11325,6 +11379,39 @@ function atualizarBadgeOcorrenciasNovas(total){
     btn.classList.toggle("tem-ocorrencias-novas", total > 0);
 }
 
+function gravidadeClasseOcorrencia(valor){
+    return String(valor || "baixa").toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9_-]+/g, "-") || "baixa";
+}
+
+function renderizarTratativaOcorrencia(oc){
+    const podeTratar = podeTratarOcorrencia(oc);
+    const responsavelNome = oc.responsavelNome || "";
+    return `
+        <div class="ocorrenciaTratativaBox">
+            <div class="ocorrenciaTratativaHeader">
+                <strong>Tratativa</strong>
+                <span>${escapeHtml(responsavelNome ? "Responsavel: " + responsavelNome : "Sem responsavel")}</span>
+            </div>
+            ${podeTratar ? `
+                <div class="ocorrenciaTratativaGrid">
+                    <textarea id="tratativa_${escapeHtml(oc.id)}" maxlength="5000" placeholder="Tratativa realizada">${escapeHtml(oc.tratativaRealizada || "")}</textarea>
+                    <input id="assinatura_${escapeHtml(oc.id)}" maxlength="160" placeholder="Assinatura do responsavel" value="${escapeHtml(oc.tratativaAssinatura || identidadeTratativaOcorrencia().nome)}">
+                </div>
+                <div class="ocorrenciaTratativaActions">
+                    <button type="button" onclick="assumirTratativaOcorrencia('${escapeHtml(oc.id)}')">${responsavelNome ? "Reatribuir para mim" : "Assumir"}</button>
+                    <button type="button" onclick="salvarTratativaOcorrencia('${escapeHtml(oc.id)}')">Salvar tratativa</button>
+                </div>
+            ` : `
+                <p>${escapeHtml(oc.tratativaRealizada || "Tratativa ainda nao registrada.")}</p>
+                ${oc.tratativaAssinatura ? `<small>Assinado por ${escapeHtml(oc.tratativaAssinatura)}</small>` : ""}
+            `}
+            ${oc.tratativaEm ? `<small>Documento assinado em ${escapeHtml(new Date(Number(oc.tratativaEm)).toLocaleString("pt-BR"))}</small>` : ""}
+        </div>
+    `;
+}
+
 function renderizarOcorrencias(){
     const listaEl = document.getElementById("ocorrenciasLista");
     if(!listaEl) return;
@@ -11376,39 +11463,16 @@ function renderizarOcorrencias(){
 
     listaEl.innerHTML = filtradas.slice(0, 80).map(oc => {
         const podeEditar = ocorrenciaPodeEditar(oc);
-        const podeTratar = podeTratarOcorrencia(oc);
         const statusOpcoes = valoresUnicosOcorrencia([...STATUS_OCORRENCIA, oc.status || "aberta"]);
-        const gravClasse = String(oc.gravidade || "baixa").toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-z0-9_-]+/g, "-") || "baixa";
+        const gravClasse = gravidadeClasseOcorrencia(oc.gravidade);
         const statusHtml = podeEditar
             ? `<select class="ocorrenciaStatusSelect" onchange="atualizarStatusOcorrencia('${escapeHtml(oc.id)}', this.value)">
                 ${statusOpcoes.map(s => `<option value="${escapeHtml(s)}" ${oc.status === s ? "selected" : ""}>${escapeHtml(labelOcorrencia(s))}</option>`).join("")}
               </select>`
             : `<span class="ocorrenciaStatus">${escapeHtml(labelOcorrencia(oc.status || "aberta"))}</span>`;
-        const responsavelNome = oc.responsavelNome || "";
-        const tratativaHtml = `
-            <div class="ocorrenciaTratativaBox">
-                <div class="ocorrenciaTratativaHeader">
-                    <strong>Tratativa</strong>
-                    <span>${escapeHtml(responsavelNome ? "Responsavel: " + responsavelNome : "Sem responsavel")}</span>
-                </div>
-                ${podeTratar ? `
-                    <div class="ocorrenciaTratativaGrid">
-                        <textarea id="tratativa_${escapeHtml(oc.id)}" maxlength="5000" placeholder="Tratativa realizada">${escapeHtml(oc.tratativaRealizada || "")}</textarea>
-                        <input id="assinatura_${escapeHtml(oc.id)}" maxlength="160" placeholder="Assinatura do responsavel" value="${escapeHtml(oc.tratativaAssinatura || identidadeTratativaOcorrencia().nome)}">
-                    </div>
-                    <div class="ocorrenciaTratativaActions">
-                        <button type="button" onclick="assumirTratativaOcorrencia('${escapeHtml(oc.id)}')">${responsavelNome ? "Reatribuir para mim" : "Assumir"}</button>
-                        <button type="button" onclick="salvarTratativaOcorrencia('${escapeHtml(oc.id)}')">Salvar tratativa</button>
-                    </div>
-                ` : `
-                    <p>${escapeHtml(oc.tratativaRealizada || "Tratativa ainda nao registrada.")}</p>
-                    ${oc.tratativaAssinatura ? `<small>Assinado por ${escapeHtml(oc.tratativaAssinatura)}</small>` : ""}
-                `}
-                ${oc.tratativaEm ? `<small>Documento assinado em ${escapeHtml(new Date(Number(oc.tratativaEm)).toLocaleString("pt-BR"))}</small>` : ""}
-            </div>
-        `;
+        const tratativaResumo = oc.tratativaRealizada
+            ? `<span class="ocorrenciaResumoTratativa ok">Tratada por ${escapeHtml(oc.tratativaPorNome || oc.responsavelNome || "responsavel")}</span>`
+            : `<span class="ocorrenciaResumoTratativa pendente">Sem tratativa</span>`;
         return `
             <article class="ocorrenciaCard grav-${escapeHtml(gravClasse)}">
                 <div class="ocorrenciaCardTop">
@@ -11433,10 +11497,90 @@ function renderizarOcorrencias(){
                         <span>${escapeHtml(oc.descricaoItem || "")}</span>
                        </div>`
                     : ""}
-                ${tratativaHtml}
+                <div class="ocorrenciaResumoLinha">
+                    ${tratativaResumo}
+                    <button type="button" onclick="abrirAvaliadorOcorrencias()">Abrir avaliador</button>
+                </div>
                 <footer>
                     <span>${escapeHtml(oc.data || "")} ${escapeHtml(oc.hora || "")}</span>
                     <span>por ${escapeHtml(oc.operadorNome || "Usuario")}${oc._storagePath?.startsWith(OCORRENCIAS_FALLBACK_PATH) ? " - compat" : ""}</span>
+                </footer>
+            </article>
+        `;
+    }).join("");
+    renderizarAvaliadorOcorrencias();
+}
+
+function renderizarAvaliadorOcorrencias(){
+    const listaEl = document.getElementById("avaliadorOcorrenciasLista");
+    if(!listaEl) return;
+    popularSelectOcorrencia("avaliadorOcorrenciaFiltroStatus", STATUS_OCORRENCIA, "Todos os status");
+    const busca = (document.getElementById("avaliadorOcorrenciaFiltroBusca")?.value || "").toLowerCase().trim();
+    const status = document.getElementById("avaliadorOcorrenciaFiltroStatus")?.value || "";
+    const responsavel = document.getElementById("avaliadorOcorrenciaFiltroResponsavel")?.value || "";
+    const identidade = identidadeTratativaOcorrencia();
+    const filtradas = ocorrenciasCache.filter(oc => {
+        if(status && oc.status !== status) return false;
+        if(responsavel === "sem" && oc.responsavelNome) return false;
+        if(responsavel === "com" && !oc.responsavelNome) return false;
+        if(responsavel === "eu" && oc.responsavelUid !== identidade.uid && oc.tratativaPorUid !== identidade.uid) return false;
+        if(busca){
+            const texto = [
+                oc.acusadoNome,
+                oc.acusadoCracha,
+                oc.tipo,
+                oc.descricao,
+                oc.responsavelNome,
+                oc.tratativaRealizada,
+                oc.tratativaAssinatura
+            ].join(" ").toLowerCase();
+            if(!texto.includes(busca)) return false;
+        }
+        return true;
+    });
+    const abertasEl = document.getElementById("avaliadorOcorrenciasAbertas");
+    const pendentesEl = document.getElementById("avaliadorOcorrenciasPendentes");
+    if(abertasEl) abertasEl.textContent = String(ocorrenciasCache.filter(oc => oc.status === "aberta").length);
+    if(pendentesEl) pendentesEl.textContent = String(ocorrenciasCache.filter(oc => !oc.tratativaRealizada).length);
+    if(!filtradas.length){
+        listaEl.innerHTML = `<p class="ocorrenciasEmpty">Nenhuma ocorrencia para avaliar.</p>`;
+        return;
+    }
+    listaEl.innerHTML = filtradas.slice(0, 120).map(oc => {
+        const podeEditar = ocorrenciaPodeEditar(oc);
+        const statusOpcoes = valoresUnicosOcorrencia([...STATUS_OCORRENCIA, oc.status || "aberta"]);
+        const statusHtml = podeEditar
+            ? `<select class="ocorrenciaStatusSelect" onchange="atualizarStatusOcorrencia('${escapeHtml(oc.id)}', this.value)">
+                ${statusOpcoes.map(s => `<option value="${escapeHtml(s)}" ${oc.status === s ? "selected" : ""}>${escapeHtml(labelOcorrencia(s))}</option>`).join("")}
+              </select>`
+            : `<span class="ocorrenciaStatus">${escapeHtml(labelOcorrencia(oc.status || "aberta"))}</span>`;
+        return `
+            <article class="ocorrenciaCard ocorrenciaAvaliadorCard grav-${escapeHtml(gravidadeClasseOcorrencia(oc.gravidade))}">
+                <div class="ocorrenciaCardTop">
+                    <div>
+                        <strong>${escapeHtml(oc.acusadoNome || "Sem nome")}</strong>
+                        <span>${escapeHtml(oc.tipo || "-")} - ${escapeHtml(oc.data || "")} ${escapeHtml(oc.hora || "")}</span>
+                    </div>
+                    <div class="ocorrenciaBadges">
+                        <span class="gravidadeBadge">${escapeHtml(labelOcorrencia(oc.gravidade || "baixa"))}</span>
+                        ${statusHtml}
+                    </div>
+                </div>
+                <div class="ocorrenciaTipo">
+                    <span>${escapeHtml(oc.descricao || "")}</span>
+                    <small>#${escapeHtml(String(oc.id || "").replace("ocorrencia_", ""))}</small>
+                </div>
+                ${(oc.codigoItem || oc.descricaoItem || oc.quantidade)
+                    ? `<div class="ocorrenciaItemInfo">
+                        <span>Codigo: <b>${escapeHtml(oc.codigoItem || "-")}</b></span>
+                        <span>Qtd: <b>${escapeHtml(oc.quantidade || 0)}</b></span>
+                        <span>${escapeHtml(oc.descricaoItem || "")}</span>
+                       </div>`
+                    : ""}
+                ${renderizarTratativaOcorrencia(oc)}
+                <footer>
+                    <span>Operador: ${escapeHtml(oc.operadorNome || "Usuario")}</span>
+                    <span>${oc.tratativaRealizada ? "Documento assinado" : "Pendente de tratativa"}</span>
                 </footer>
             </article>
         `;
@@ -11445,10 +11589,13 @@ function renderizarOcorrencias(){
 
 window.abrirOcorrencias = abrirOcorrencias;
 window.fecharOcorrencias = fecharOcorrencias;
+window.abrirAvaliadorOcorrencias = abrirAvaliadorOcorrencias;
+window.voltarOcorrenciasPrincipal = voltarOcorrenciasPrincipal;
 window.salvarOcorrencia = salvarOcorrencia;
 window.limparFormularioOcorrencia = limparFormularioOcorrencia;
 window.limparFiltrosOcorrencia = limparFiltrosOcorrencia;
 window.renderizarOcorrencias = renderizarOcorrencias;
+window.renderizarAvaliadorOcorrencias = renderizarAvaliadorOcorrencias;
 window.atualizarStatusOcorrencia = atualizarStatusOcorrencia;
 window.assumirTratativaOcorrencia = assumirTratativaOcorrencia;
 window.salvarTratativaOcorrencia = salvarTratativaOcorrencia;

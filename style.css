@@ -276,6 +276,82 @@ display:none;
     overflow:hidden;
 }
 
+.ocorrenciasShell.avaliador-open .ocorrenciasBody{
+    display:none;
+}
+
+.ocorrenciasAvaliadorPage{
+    flex:1;
+    min-height:0;
+    display:none;
+    flex-direction:column;
+    gap:10px;
+    padding:10px;
+    overflow:hidden;
+}
+
+.ocorrenciasShell.avaliador-open .ocorrenciasAvaliadorPage{
+    display:flex;
+}
+
+.ocorrenciasAvaliadorHeader{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px;
+    border:1px solid #26364D;
+    border-radius:8px;
+    background:#0B121D;
+}
+
+.ocorrenciasAvaliadorHeader h3{
+    margin:0;
+    color:#F8FAFC;
+    font-size:17px;
+}
+
+.ocorrenciasAvaliadorHeader p{
+    margin:4px 0 0;
+    color:#9DB3CF;
+    font-size:11px;
+    font-weight:700;
+}
+
+.ocorrenciasAvaliadorGrid{
+    flex:1;
+    min-height:0;
+    display:grid;
+    grid-template-columns:minmax(250px, 315px) minmax(0, 1fr);
+    gap:10px;
+    overflow:hidden;
+}
+
+.ocorrenciasAvaliadorSidebar{
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+    overflow:auto;
+}
+
+.ocorrenciasAvaliadorStats{
+    grid-template-columns:1fr 1fr;
+}
+
+.ocorrenciasAvaliadorFiltros{
+    grid-template-columns:1fr;
+}
+
+.ocorrenciasAvaliadorLista{
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    overflow:auto;
+    padding-right:2px;
+}
+
 .ocorrenciaForm,
 .ocorrenciasConsulta{
     min-height:0;
@@ -541,6 +617,11 @@ display:none;
     border:1px solid #24344B;
     border-radius:8px;
     background:#0B121D;
+}
+
+.ocorrenciasAvaliadorSidebar .ocorrenciasCamposEditor{
+    flex:1;
+    min-height:160px;
 }
 
 .ocorrenciasCamposHeader{
@@ -819,6 +900,39 @@ display:none;
 
 .ocorrenciaItemInfo b{
     color:#F8FAFC;
+}
+
+.ocorrenciaResumoLinha{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    margin-top:8px;
+    padding:7px 8px;
+    border:1px solid #1F2A3A;
+    border-radius:7px;
+    background:#09111C;
+}
+
+.ocorrenciaResumoTratativa{
+    font-size:10px;
+    font-weight:900;
+}
+
+.ocorrenciaResumoTratativa.ok{color:#86EFAC;}
+.ocorrenciaResumoTratativa.pendente{color:#FDBA74;}
+
+.ocorrenciaResumoLinha button{
+    margin:0;
+    min-height:28px;
+    padding:5px 9px;
+    border:1px solid #38BDF8;
+    border-radius:7px;
+    background:#102436;
+    color:#E0F2FE;
+    cursor:pointer;
+    font-size:10px;
+    font-weight:900;
 }
 
 .ocorrenciaTratativaBox{
