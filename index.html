@@ -324,10 +324,6 @@ xmlns="http://www.w3.org/2000/svg">
                         <strong>Resumo de ocorrencias</strong>
                         <span id="ocorrenciasStorageAviso">Aguardando Firebase...</span>
                     </div>
-                    <div class="ocorrenciasHeaderActions">
-                        <button type="button" onclick="abrirAvaliadorOcorrencias()">Avaliador / Tratativas</button>
-                        <button type="button" onclick="exportarOcorrenciasXlsx()">Exportar XLSX</button>
-                    </div>
                 </div>
 
                 <div class="ocorrenciasStats">
@@ -338,9 +334,13 @@ xmlns="http://www.w3.org/2000/svg">
                 </div>
 
                 <div class="ocorrenciasResumoPainel">
-                    <strong>Tratativas separadas</strong>
-                    <p>As ocorrencias registradas nao aparecem mais nesta lateral. Use o avaliador para consultar, atribuir responsavel, registrar tratativa, assinar e exportar.</p>
-                    <button type="button" onclick="abrirAvaliadorOcorrencias()">Abrir avaliador</button>
+                    <strong>Acesso ao avaliador</strong>
+                    <label>
+                        Senha do avaliador
+                        <input id="ocorrenciaAvaliadorSenha" type="password" autocomplete="current-password" placeholder="Digite a senha" onkeydown="if(event.key==='Enter'){event.preventDefault();abrirAvaliadorOcorrencias();}">
+                    </label>
+                    <span id="ocorrenciaAvaliadorSenhaStatus">Acesso restrito para tratativas.</span>
+                    <button type="button" onclick="abrirAvaliadorOcorrencias()">Entrar no avaliador</button>
                 </div>
             </div>
         </div>
@@ -360,6 +360,15 @@ xmlns="http://www.w3.org/2000/svg">
 
             <div class="ocorrenciasAvaliadorGrid">
                 <aside class="ocorrenciasAvaliadorSidebar">
+                    <div class="ocorrenciasSenhaEditor">
+                        <strong>Senha do avaliador</strong>
+                        <span id="ocorrenciaAvaliadorSenhaInternaStatus">Senha ativa.</span>
+                        <div class="ocorrenciasSenhaGrid">
+                            <input id="ocorrenciaNovaSenhaAvaliador" type="password" minlength="4" maxlength="32" placeholder="Nova senha">
+                            <button type="button" onclick="alterarSenhaAvaliadorOcorrencias()">Redefinir</button>
+                        </div>
+                    </div>
+
                     <div class="ocorrenciasStats ocorrenciasAvaliadorStats">
                         <div class="stat-abertas"><span>Abertas</span><strong id="avaliadorOcorrenciasAbertas">0</strong></div>
                         <div class="stat-criticas"><span>Sem tratativa</span><strong id="avaliadorOcorrenciasPendentes">0</strong></div>
@@ -10661,6 +10670,9 @@ const CAMPOS_OCORRENCIA_INFO = {
 };
 const CAMPOS_OCORRENCIA_CONFIG_PATH = "dashboardConfig/ocorrenciasCampos";
 const CAMPOS_OCORRENCIA_LOCAL_KEY = "ocorrenciasCamposConfigV1";
+const OCORRENCIAS_AVALIADOR_SENHA_PATH = "dashboardConfig/ocorrenciasAvaliadorSenha";
+const OCORRENCIAS_AVALIADOR_SENHA_LOCAL_KEY = "ocorrenciasAvaliadorSenhaV1";
+const OCORRENCIAS_AVALIADOR_SENHA_PADRAO = "123456";
 const OCORRENCIAS_PRIMARY_PATH = "ocorrencias";
 const OCORRENCIAS_FALLBACK_PATH = "chatGlobal/ocorrencias";
 let ocorrenciasCache = [];
@@ -10673,6 +10685,8 @@ let ocorrenciasPorFonte = {
 };
 let ocorrenciasStorageModo = "carregando";
 let ocorrenciasCamposFonte = "padrao";
+let ocorrenciasAvaliadorSenha = OCORRENCIAS_AVALIADOR_SENHA_PADRAO;
+let ocorrenciasAvaliadorDesbloqueado = false;
 
 function labelOcorrencia(valor){
     const texto = String(valor || "");
@@ -10796,6 +10810,74 @@ function buscarItemOcorrenciaPorCodigo(valor){
     }) || null;
 }
 
+function carregarSenhaAvaliadorLocal(){
+    try{
+        return localStorage.getItem(OCORRENCIAS_AVALIADOR_SENHA_LOCAL_KEY) || "";
+    }catch(err){
+        console.warn("Falha ao ler senha local do avaliador:", err);
+        return "";
+    }
+}
+
+function salvarSenhaAvaliadorLocal(senha){
+    try{
+        localStorage.setItem(OCORRENCIAS_AVALIADOR_SENHA_LOCAL_KEY, senha);
+    }catch(err){
+        console.warn("Falha ao salvar senha local do avaliador:", err);
+    }
+}
+
+async function carregarSenhaAvaliadorOcorrencias(){
+    const local = carregarSenhaAvaliadorLocal();
+    if(local) ocorrenciasAvaliadorSenha = local;
+    if(!auth.currentUser) return ocorrenciasAvaliadorSenha;
+    try{
+        const snap = await get(ref(db, OCORRENCIAS_AVALIADOR_SENHA_PATH));
+        const val = snap.val();
+        const senha = typeof val === "string" ? val : (val?.senha || "");
+        if(senha){
+            ocorrenciasAvaliadorSenha = String(senha);
+            salvarSenhaAvaliadorLocal(ocorrenciasAvaliadorSenha);
+        }
+    }catch(err){
+        if(!isFirebasePermissionDenied(err)) console.warn("Falha ao carregar senha do avaliador:", err);
+    }
+    return ocorrenciasAvaliadorSenha;
+}
+
+function setStatusSenhaAvaliador(texto, interno = false){
+    const el = document.getElementById(interno ? "ocorrenciaAvaliadorSenhaInternaStatus" : "ocorrenciaAvaliadorSenhaStatus");
+    if(el) el.textContent = texto;
+}
+
+async function alterarSenhaAvaliadorOcorrencias(){
+    if(!ocorrenciasAvaliadorDesbloqueado){
+        mostrarNotificacao("Entre no avaliador antes de redefinir a senha.");
+        return;
+    }
+    const input = document.getElementById("ocorrenciaNovaSenhaAvaliador");
+    const senha = normalizarTextoOcorrencia(input?.value || "", 32);
+    if(senha.length < 4){
+        mostrarNotificacao("A senha precisa ter pelo menos 4 caracteres.");
+        return;
+    }
+    ocorrenciasAvaliadorSenha = senha;
+    salvarSenhaAvaliadorLocal(senha);
+    try{
+        await set(ref(db, OCORRENCIAS_AVALIADOR_SENHA_PATH), {
+            senha,
+            atualizadoEm: Date.now(),
+            atualizadoPor: auth.currentUser?.uid || ""
+        });
+        setStatusSenhaAvaliador("Senha redefinida no Firebase.", true);
+    }catch(err){
+        if(!isFirebasePermissionDenied(err)) console.warn("Falha ao salvar senha do avaliador:", err);
+        setStatusSenhaAvaliador("Senha salva neste navegador; publique regras para sincronizar.", true);
+    }
+    if(input) input.value = "";
+    mostrarNotificacao("Senha do avaliador redefinida.");
+}
+
 function preencherDescricaoItemOcorrencia(){
     const codigoEl = document.getElementById("ocorrenciaCodigoItem");
     const descricaoEl = document.getElementById("ocorrenciaDescricaoItem");
@@ -10888,9 +10970,19 @@ function abrirOcorrencias(){
     setTimeout(()=> document.getElementById("ocorrenciaTipo")?.focus(), 80);
 }
 
-function abrirAvaliadorOcorrencias(){
+async function abrirAvaliadorOcorrencias(){
     iniciarCamposOcorrencia();
     iniciarOcorrencias();
+    const senhaAtual = await carregarSenhaAvaliadorOcorrencias();
+    const senhaDigitada = document.getElementById("ocorrenciaAvaliadorSenha")?.value || "";
+    if(!ocorrenciasAvaliadorDesbloqueado && senhaDigitada !== senhaAtual){
+        setStatusSenhaAvaliador("Senha incorreta.");
+        mostrarNotificacao("Senha incorreta para acessar o avaliador.");
+        return;
+    }
+    ocorrenciasAvaliadorDesbloqueado = true;
+    setStatusSenhaAvaliador("Acesso liberado.");
+    setStatusSenhaAvaliador("Acesso liberado. Redefina a senha aqui dentro quando necessario.", true);
     document.querySelector("#ocorrenciasScreen .ocorrenciasShell")?.classList.add("avaliador-open");
     popularSelectOcorrencia("avaliadorOcorrenciaFiltroStatus", STATUS_OCORRENCIA, "Todos os status");
     renderizarEditorCamposOcorrencia();
@@ -10899,6 +10991,10 @@ function abrirAvaliadorOcorrencias(){
 
 function voltarOcorrenciasPrincipal(){
     document.querySelector("#ocorrenciasScreen .ocorrenciasShell")?.classList.remove("avaliador-open");
+    ocorrenciasAvaliadorDesbloqueado = false;
+    const senhaEl = document.getElementById("ocorrenciaAvaliadorSenha");
+    if(senhaEl) senhaEl.value = "";
+    setStatusSenhaAvaliador("Acesso restrito para tratativas.");
     renderizarOcorrencias();
 }
 
@@ -11642,6 +11738,7 @@ window.atualizarStatusOcorrencia = atualizarStatusOcorrencia;
 window.assumirTratativaOcorrencia = assumirTratativaOcorrencia;
 window.salvarTratativaOcorrencia = salvarTratativaOcorrencia;
 window.exportarOcorrenciasXlsx = exportarOcorrenciasXlsx;
+window.alterarSenhaAvaliadorOcorrencias = alterarSenhaAvaliadorOcorrencias;
 window.renderizarEditorCamposOcorrencia = renderizarEditorCamposOcorrencia;
 window.adicionarOpcaoOcorrencia = adicionarOpcaoOcorrencia;
 window.removerOpcaoOcorrencia = removerOpcaoOcorrencia;

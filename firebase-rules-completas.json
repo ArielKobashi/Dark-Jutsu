@@ -102,6 +102,10 @@
       "ocorrenciasCampos": {
         ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || root.child('usuarios/' + auth.uid + '/nivel').val() === 'mod' || auth.token.email === 'davi@sistema.com')",
         ".validate": "!newData.exists() || (newData.hasChildren(['tipos','gravidades','status','setores','tratadores','atualizadoEm','atualizadoPor']) && newData.child('atualizadoEm').isNumber() && newData.child('atualizadoPor').isString())"
+      },
+      "ocorrenciasAvaliadorSenha": {
+        ".write": "auth != null",
+        ".validate": "!newData.exists() || (newData.hasChildren(['senha','atualizadoEm','atualizadoPor']) && newData.child('senha').isString() && newData.child('senha').val().length >= 4 && newData.child('senha').val().length <= 32 && newData.child('atualizadoEm').isNumber() && newData.child('atualizadoPor').isString())"
       }
     },
     "historicoComprasCooperat": {
