@@ -231,8 +231,101 @@ xmlns="http://www.w3.org/2000/svg">
 <div id="mainActions">
     <button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relatório</button>
     <button id="btnContagem" onclick="abrirContagem()">Contagem</button>
+    <button id="btnOcorrencias" type="button" onclick="abrirOcorrencias()">Ocorrencias</button>
     <a id="btnDashboard" href="dashboard.html?armazem=04" title="Abrir dashboard de estoque">Dashboard</a>
 </div>
+
+<section id="ocorrenciasScreen" aria-hidden="true">
+    <div class="ocorrenciasShell">
+        <header class="ocorrenciasHeader">
+            <div>
+                <span class="ocorrenciasKicker">Almoxarifado</span>
+                <h2>Ocorrencias do Almoxarifado</h2>
+            </div>
+            <button type="button" class="ocorrenciasClose" onclick="fecharOcorrencias()" title="Fechar">x</button>
+        </header>
+
+        <div class="ocorrenciasBody">
+            <form id="ocorrenciaForm" class="ocorrenciaForm" onsubmit="salvarOcorrencia(event)">
+                <div class="ocorrenciaFormTitle">
+                    <strong>Nova ocorrencia</strong>
+                    <span id="ocorrenciaOperadorResumo">Operador automatico</span>
+                </div>
+
+                <label>
+                    Tipo *
+                    <select id="ocorrenciaTipo" required></select>
+                </label>
+
+                <label>
+                    Gravidade *
+                    <select id="ocorrenciaGravidade" required></select>
+                </label>
+
+                <label>
+                    Nome do envolvido *
+                    <input id="ocorrenciaAcusadoNome" type="text" autocomplete="off" required>
+                </label>
+
+                <label>
+                    Cracha
+                    <input id="ocorrenciaAcusadoCracha" type="text" inputmode="numeric" autocomplete="off">
+                </label>
+
+                <label>
+                    Setor
+                    <input id="ocorrenciaAcusadoSetor" type="text" autocomplete="off">
+                </label>
+
+                <label>
+                    Codigo do item
+                    <input id="ocorrenciaCodigoItem" type="text" autocomplete="off">
+                </label>
+
+                <label>
+                    Descricao do item
+                    <input id="ocorrenciaDescricaoItem" type="text" autocomplete="off">
+                </label>
+
+                <label>
+                    Quantidade
+                    <input id="ocorrenciaQuantidade" type="number" min="0" step="0.01" inputmode="decimal">
+                </label>
+
+                <label class="ocorrenciaFull">
+                    Descricao detalhada *
+                    <textarea id="ocorrenciaDescricao" rows="4" required></textarea>
+                </label>
+
+                <div class="ocorrenciaActions">
+                    <button type="button" onclick="limparFormularioOcorrencia()">Limpar</button>
+                    <button type="submit" id="ocorrenciaSalvarBtn">Salvar ocorrencia</button>
+                </div>
+            </form>
+
+            <div class="ocorrenciasConsulta">
+                <div class="ocorrenciasStats">
+                    <div><span>Abertas</span><strong id="ocorrenciasAbertas">0</strong></div>
+                    <div><span>Alta/Critica</span><strong id="ocorrenciasCriticas">0</strong></div>
+                    <div><span>Total</span><strong id="ocorrenciasTotal">0</strong></div>
+                </div>
+
+                <div class="ocorrenciasFiltros">
+                    <input id="ocorrenciaFiltroBusca" type="search" placeholder="Buscar nome, cracha, codigo ou descricao" oninput="renderizarOcorrencias()">
+                    <select id="ocorrenciaFiltroTipo" onchange="renderizarOcorrencias()"></select>
+                    <select id="ocorrenciaFiltroGravidade" onchange="renderizarOcorrencias()"></select>
+                    <select id="ocorrenciaFiltroStatus" onchange="renderizarOcorrencias()"></select>
+                    <input id="ocorrenciaFiltroData" type="date" onchange="renderizarOcorrencias()">
+                    <button type="button" onclick="limparFiltrosOcorrencia()">Limpar filtros</button>
+                </div>
+
+                <div id="ocorrenciasLista" class="ocorrenciasLista">
+                    <p class="ocorrenciasEmpty">Nenhuma ocorrencia carregada.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
 <section id="historicoContagemPanel" class="historicoContagemPanel">
     <button type="button" id="historicoContagemToggle" onclick="toggleHistoricoContagemPlanilhas()" aria-expanded="false">
@@ -8486,6 +8579,7 @@ window.fecharModalPerfilItem = fecharModalPerfilItem;
 document.addEventListener("keydown", function(e){
     if(e.key === "Escape"){
         fecharModalPerfilItem();
+        fecharOcorrencias();
     }
 });
 
@@ -10256,6 +10350,8 @@ onAuthStateChanged(auth, async (user) => {
         window.meuNickname = null;
         window.meuCracha = "";
         window.meuSetor = "";
+        pararOcorrencias();
+        fecharOcorrencias();
         chatPublicUnlocked = false;
         window.chatPublicUnlocked = chatPublicUnlocked;
         chatSessionState = null;
@@ -10334,6 +10430,8 @@ onAuthStateChanged(auth, async (user) => {
         window.meuNickname = dadosUsuario.nickname;
         window.meuCracha = dadosUsuario.cracha || "";
         window.meuSetor = dadosUsuario.setor || "";
+        configurarOcorrenciasUI();
+        iniciarOcorrencias();
         setSalaAtiva(salaAtual);
         // 🔥 ZERA CAPTURAS AO INICIAR SESSÃO
         capturados.clear();
@@ -10448,6 +10546,306 @@ function escapeHtml(texto) {
         .replace(/'/g, "&#039;");
 }
 window.escapeHtml = escapeHtml;
+
+const TIPOS_OCORRENCIA = [
+    "Codigo informado errado",
+    "Solicitante nao sabe a peca",
+    "Peca recusada",
+    "Item sem estoque",
+    "Item nao encontrado",
+    "Divergencia de endereco",
+    "Divergencia de saldo",
+    "Solicitacao sem requisicao",
+    "Tentativa de retirada irregular",
+    "Demora na retirada",
+    "Uso indevido do almoxarifado",
+    "Outro"
+];
+const GRAVIDADES_OCORRENCIA = ["baixa", "media", "alta", "critica"];
+const STATUS_OCORRENCIA = ["aberta", "analisada", "resolvida", "cancelada"];
+let ocorrenciasCache = [];
+let ocorrenciasUnsub = null;
+
+function labelOcorrencia(valor){
+    const texto = String(valor || "");
+    return texto.charAt(0).toUpperCase() + texto.slice(1).replace(/_/g, " ");
+}
+
+function popularSelectOcorrencia(id, valores, rotuloTodos = ""){
+    const el = document.getElementById(id);
+    if(!el) return;
+    const atual = el.value;
+    el.innerHTML = (rotuloTodos ? `<option value="">${escapeHtml(rotuloTodos)}</option>` : "") +
+        valores.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(labelOcorrencia(v))}</option>`).join("");
+    if(atual && valores.includes(atual)) el.value = atual;
+}
+
+function configurarOcorrenciasUI(){
+    popularSelectOcorrencia("ocorrenciaTipo", TIPOS_OCORRENCIA);
+    popularSelectOcorrencia("ocorrenciaGravidade", GRAVIDADES_OCORRENCIA);
+    popularSelectOcorrencia("ocorrenciaFiltroTipo", TIPOS_OCORRENCIA, "Todos os tipos");
+    popularSelectOcorrencia("ocorrenciaFiltroGravidade", GRAVIDADES_OCORRENCIA, "Todas as gravidades");
+    popularSelectOcorrencia("ocorrenciaFiltroStatus", STATUS_OCORRENCIA, "Todos os status");
+    const gravidade = document.getElementById("ocorrenciaGravidade");
+    if(gravidade && !gravidade.value) gravidade.value = "baixa";
+    atualizarResumoOperadorOcorrencia();
+}
+
+function atualizarResumoOperadorOcorrencia(){
+    const el = document.getElementById("ocorrenciaOperadorResumo");
+    if(!el) return;
+    const nome = window.meuNickname || auth.currentUser?.email || "Usuario";
+    const setor = window.meuSetor || "Almoxarifado";
+    el.textContent = `${nome} - ${setor}`;
+}
+
+function abrirOcorrencias(){
+    configurarOcorrenciasUI();
+    const screen = document.getElementById("ocorrenciasScreen");
+    if(screen){
+        screen.classList.add("open");
+        screen.setAttribute("aria-hidden", "false");
+    }
+    iniciarOcorrencias();
+    setTimeout(()=> document.getElementById("ocorrenciaTipo")?.focus(), 80);
+}
+
+function fecharOcorrencias(){
+    const screen = document.getElementById("ocorrenciasScreen");
+    if(screen){
+        screen.classList.remove("open");
+        screen.setAttribute("aria-hidden", "true");
+    }
+}
+
+function limparFormularioOcorrencia(){
+    const form = document.getElementById("ocorrenciaForm");
+    if(form) form.reset();
+    const gravidade = document.getElementById("ocorrenciaGravidade");
+    if(gravidade) gravidade.value = "baixa";
+    atualizarResumoOperadorOcorrencia();
+}
+
+function limparFiltrosOcorrencia(){
+    ["ocorrenciaFiltroBusca", "ocorrenciaFiltroTipo", "ocorrenciaFiltroGravidade", "ocorrenciaFiltroStatus", "ocorrenciaFiltroData"].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.value = "";
+    });
+    renderizarOcorrencias();
+}
+
+function ocorrenciaPodeEditar(oc){
+    const uid = auth.currentUser?.uid || "";
+    const nivel = String(window.nivelUsuario || "op").toLowerCase();
+    return nivel === "admin" || nivel === "mod" || (oc.operadorUid === uid && oc.status === "aberta");
+}
+
+async function salvarOcorrencia(event){
+    if(event) event.preventDefault();
+    const usuario = auth.currentUser;
+    if(!usuario){
+        alert("Usuario nao autenticado.");
+        return;
+    }
+    const tipo = document.getElementById("ocorrenciaTipo")?.value || "";
+    const descricao = (document.getElementById("ocorrenciaDescricao")?.value || "").trim();
+    const acusadoNome = (document.getElementById("ocorrenciaAcusadoNome")?.value || "").trim();
+    if(!tipo || !descricao || !acusadoNome){
+        alert("Preencha tipo, nome do envolvido e descricao.");
+        return;
+    }
+
+    const btn = document.getElementById("ocorrenciaSalvarBtn");
+    if(btn) btn.disabled = true;
+    try{
+        const agora = new Date();
+        const id = "ocorrencia_" + Date.now();
+        const quantidadeRaw = document.getElementById("ocorrenciaQuantidade")?.value || "";
+        const ocorrencia = {
+            id,
+            criadoEm: Date.now(),
+            data: agora.toISOString().slice(0, 10),
+            hora: agora.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }),
+            operadorUid: usuario.uid,
+            operadorNome: window.meuNickname || usuario.email || "Usuario",
+            operadorCracha: window.meuCracha || "",
+            operadorSetor: window.meuSetor || "Almoxarifado",
+            acusadoNome,
+            acusadoCracha: (document.getElementById("ocorrenciaAcusadoCracha")?.value || "").trim(),
+            acusadoSetor: (document.getElementById("ocorrenciaAcusadoSetor")?.value || "").trim(),
+            tipo,
+            gravidade: document.getElementById("ocorrenciaGravidade")?.value || "baixa",
+            codigoItem: (document.getElementById("ocorrenciaCodigoItem")?.value || "").trim(),
+            descricaoItem: (document.getElementById("ocorrenciaDescricaoItem")?.value || "").trim(),
+            quantidade: quantidadeRaw === "" ? 0 : Number(quantidadeRaw),
+            descricao,
+            status: "aberta",
+            atualizadoEm: Date.now(),
+            atualizadoPor: usuario.uid,
+            historico: {
+                criado: {
+                    em: Date.now(),
+                    porUid: usuario.uid,
+                    porNome: window.meuNickname || usuario.email || "Usuario",
+                    acao: "criada"
+                }
+            }
+        };
+        await set(ref(db, `ocorrencias/${id}`), ocorrencia);
+        limparFormularioOcorrencia();
+        mostrarNotificacao("Ocorrencia registrada.");
+    }catch(err){
+        console.error("Erro ao salvar ocorrencia:", err);
+        alert("Nao foi possivel salvar a ocorrencia.");
+    }finally{
+        if(btn) btn.disabled = false;
+    }
+}
+
+async function atualizarStatusOcorrencia(id, status){
+    const oc = ocorrenciasCache.find(item => item.id === id);
+    if(!oc || !STATUS_OCORRENCIA.includes(status) || !ocorrenciaPodeEditar(oc)){
+        mostrarNotificacao("Sem permissao para alterar esta ocorrencia.");
+        renderizarOcorrencias();
+        return;
+    }
+    const usuario = auth.currentUser;
+    if(!usuario) return;
+    const agora = Date.now();
+    try{
+        await update(ref(db, `ocorrencias/${id}`), {
+            status,
+            atualizadoEm: agora,
+            atualizadoPor: usuario.uid,
+            [`historico/status_${agora}`]: {
+                em: agora,
+                porUid: usuario.uid,
+                porNome: window.meuNickname || usuario.email || "Usuario",
+                acao: "status",
+                valor: status
+            }
+        });
+        mostrarNotificacao("Status da ocorrencia atualizado.");
+    }catch(err){
+        console.error("Erro ao atualizar status da ocorrencia:", err);
+        mostrarNotificacao("Erro ao atualizar status.");
+    }
+}
+
+function iniciarOcorrencias(){
+    configurarOcorrenciasUI();
+    if(ocorrenciasUnsub || !auth.currentUser) return;
+    ocorrenciasUnsub = onValue(ref(db, "ocorrencias"), snapshot => {
+        const lista = [];
+        snapshot.forEach(child => {
+            const val = child.val() || {};
+            lista.push({ ...val, id: val.id || child.key });
+        });
+        ocorrenciasCache = lista.sort((a, b) => Number(b.criadoEm || 0) - Number(a.criadoEm || 0));
+        renderizarOcorrencias();
+    }, err => {
+        console.warn("Falha ao carregar ocorrencias:", err);
+        const lista = document.getElementById("ocorrenciasLista");
+        if(lista) lista.innerHTML = `<p class="ocorrenciasEmpty">Nao foi possivel carregar ocorrencias.</p>`;
+    });
+}
+
+function pararOcorrencias(){
+    if(ocorrenciasUnsub){
+        try{ ocorrenciasUnsub(); }catch(e){}
+    }
+    ocorrenciasUnsub = null;
+    ocorrenciasCache = [];
+    renderizarOcorrencias();
+}
+
+function renderizarOcorrencias(){
+    const listaEl = document.getElementById("ocorrenciasLista");
+    if(!listaEl) return;
+    const busca = (document.getElementById("ocorrenciaFiltroBusca")?.value || "").toLowerCase().trim();
+    const tipo = document.getElementById("ocorrenciaFiltroTipo")?.value || "";
+    const gravidade = document.getElementById("ocorrenciaFiltroGravidade")?.value || "";
+    const status = document.getElementById("ocorrenciaFiltroStatus")?.value || "";
+    const data = document.getElementById("ocorrenciaFiltroData")?.value || "";
+    const filtradas = ocorrenciasCache.filter(oc => {
+        if(tipo && oc.tipo !== tipo) return false;
+        if(gravidade && oc.gravidade !== gravidade) return false;
+        if(status && oc.status !== status) return false;
+        if(data && oc.data !== data) return false;
+        if(busca){
+            const texto = [
+                oc.acusadoNome,
+                oc.acusadoCracha,
+                oc.acusadoSetor,
+                oc.codigoItem,
+                oc.descricaoItem,
+                oc.descricao,
+                oc.operadorNome,
+                oc.tipo
+            ].join(" ").toLowerCase();
+            if(!texto.includes(busca)) return false;
+        }
+        return true;
+    });
+
+    const abertas = ocorrenciasCache.filter(oc => oc.status === "aberta").length;
+    const criticas = ocorrenciasCache.filter(oc => ["alta", "critica"].includes(oc.gravidade)).length;
+    const abertasEl = document.getElementById("ocorrenciasAbertas");
+    const criticasEl = document.getElementById("ocorrenciasCriticas");
+    const totalEl = document.getElementById("ocorrenciasTotal");
+    if(abertasEl) abertasEl.textContent = String(abertas);
+    if(criticasEl) criticasEl.textContent = String(criticas);
+    if(totalEl) totalEl.textContent = String(ocorrenciasCache.length);
+
+    if(!filtradas.length){
+        listaEl.innerHTML = `<p class="ocorrenciasEmpty">Nenhuma ocorrencia encontrada.</p>`;
+        return;
+    }
+
+    listaEl.innerHTML = filtradas.slice(0, 80).map(oc => {
+        const podeEditar = ocorrenciaPodeEditar(oc);
+        const statusHtml = podeEditar
+            ? `<select class="ocorrenciaStatusSelect" onchange="atualizarStatusOcorrencia('${escapeHtml(oc.id)}', this.value)">
+                ${STATUS_OCORRENCIA.map(s => `<option value="${escapeHtml(s)}" ${oc.status === s ? "selected" : ""}>${escapeHtml(labelOcorrencia(s))}</option>`).join("")}
+              </select>`
+            : `<span class="ocorrenciaStatus">${escapeHtml(labelOcorrencia(oc.status || "aberta"))}</span>`;
+        return `
+            <article class="ocorrenciaCard grav-${escapeHtml(oc.gravidade || "baixa")}">
+                <div class="ocorrenciaCardTop">
+                    <div>
+                        <strong>${escapeHtml(oc.acusadoNome || "Sem nome")}</strong>
+                        <span>${escapeHtml(oc.acusadoCracha || "sem cracha")} - ${escapeHtml(oc.acusadoSetor || "setor nao informado")}</span>
+                    </div>
+                    <div class="ocorrenciaBadges">
+                        <span>${escapeHtml(labelOcorrencia(oc.gravidade || "baixa"))}</span>
+                        ${statusHtml}
+                    </div>
+                </div>
+                <div class="ocorrenciaTipo">${escapeHtml(oc.tipo || "-")}</div>
+                <p>${escapeHtml(oc.descricao || "")}</p>
+                ${(oc.codigoItem || oc.descricaoItem || oc.quantidade)
+                    ? `<div class="ocorrenciaItemInfo">
+                        <span>Codigo: <b>${escapeHtml(oc.codigoItem || "-")}</b></span>
+                        <span>Qtd: <b>${escapeHtml(oc.quantidade || 0)}</b></span>
+                        <span>${escapeHtml(oc.descricaoItem || "")}</span>
+                       </div>`
+                    : ""}
+                <footer>
+                    <span>${escapeHtml(oc.data || "")} ${escapeHtml(oc.hora || "")}</span>
+                    <span>por ${escapeHtml(oc.operadorNome || "Usuario")}</span>
+                </footer>
+            </article>
+        `;
+    }).join("");
+}
+
+window.abrirOcorrencias = abrirOcorrencias;
+window.fecharOcorrencias = fecharOcorrencias;
+window.salvarOcorrencia = salvarOcorrencia;
+window.limparFormularioOcorrencia = limparFormularioOcorrencia;
+window.limparFiltrosOcorrencia = limparFiltrosOcorrencia;
+window.renderizarOcorrencias = renderizarOcorrencias;
+window.atualizarStatusOcorrencia = atualizarStatusOcorrencia;
 
 function formatarTextoUltimaAtualizacao(data, usuario) {
     const usuarioRaw = String(usuario || "Sistema");

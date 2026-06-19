@@ -161,10 +161,12 @@ def download_update(info: UpdateInfo) -> Path:
     package_path = work_dir / info.package_name
     _copy_package(info.package_url, package_path)
 
+    payload_dir = work_dir / "payload"
+    payload_dir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(package_path, "r") as zf:
-        zf.extractall(work_dir)
+        zf.extractall(payload_dir)
 
-    exe_path = work_dir / "Automus.exe"
+    exe_path = payload_dir / "Automus.exe"
     if not exe_path.exists():
         raise RuntimeError("Pacote de atualizacao nao contem Automus.exe.")
 
@@ -183,11 +185,13 @@ def install_downloaded_update(new_exe: Path) -> None:
     helper = new_exe.parent / "instalar_automus_update.bat"
     pid = os.getpid()
     current_dir = current_exe.parent
+    new_dir = new_exe.parent
     helper.write_text(
         "@echo off\r\n"
         "setlocal\r\n"
         "title Atualizando Automus\r\n"
         f'set "NEW_EXE={new_exe}"\r\n'
+        f'set "NEW_DIR={new_dir}"\r\n'
         f'set "CURRENT_EXE={current_exe}"\r\n'
         f'set "CURRENT_DIR={current_dir}"\r\n'
         f'set "PID={pid}"\r\n'
@@ -208,7 +212,9 @@ def install_downloaded_update(new_exe: Path) -> None:
         "set /a TRY=0\r\n"
         ":copy_retry\r\n"
         "set /a TRY+=1\r\n"
-        "echo Copiando Automus.exe... tentativa %TRY%/30\r\n"
+        "echo Copiando arquivos do Automus... tentativa %TRY%/30\r\n"
+        'robocopy "%NEW_DIR%" "%CURRENT_DIR%" /E /XD "__pycache__" /XF "instalar_automus_update.bat" >nul\r\n'
+        "if %ERRORLEVEL% LEQ 7 goto start_app\r\n"
         'copy /Y "%NEW_EXE%" "%CURRENT_EXE%" >nul 2>nul\r\n'
         "if not errorlevel 1 goto start_app\r\n"
         "if %TRY% GEQ 30 goto fail\r\n"

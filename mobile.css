@@ -854,6 +854,31 @@
         height: 28px;
     }
 
+    #mainActions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #ocorrenciasScreen {
+        inset: 6px;
+    }
+
+    .ocorrenciasBody {
+        grid-template-columns: 1fr;
+        overflow: auto;
+    }
+
+    .ocorrenciaForm {
+        grid-template-columns: 1fr;
+    }
+
+    .ocorrenciasFiltros {
+        grid-template-columns: 1fr;
+    }
+
+    .ocorrenciasStats {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+
     #contagemSectionGrid,
     #contagemMachineGrid {
         grid-template-columns: 1fr;

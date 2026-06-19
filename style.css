@@ -99,13 +99,14 @@ display:none;
 
 #mainActions{
     display:grid;
-    grid-template-columns:repeat(3, minmax(0, 1fr));
+    grid-template-columns:repeat(4, minmax(0, 1fr));
     gap:6px;
     flex-shrink:0;
     margin-top:6px;
 }
 
 #btnContagem,
+#btnOcorrencias,
 #btnDashboard{
     display:flex;
     align-items:center;
@@ -138,6 +139,323 @@ display:none;
 #btnDashboard:hover{
     filter:brightness(1.08);
     box-shadow:0 0 12px rgba(34,211,238,0.42);
+}
+
+#btnOcorrencias{
+    background:linear-gradient(145deg,#7C2D12,#B45309);
+    border-color:#F59E0B;
+    color:#FFF7ED;
+}
+
+#btnOcorrencias:hover{
+    filter:brightness(1.08);
+    box-shadow:0 0 12px rgba(245,158,11,0.38);
+}
+
+#ocorrenciasScreen{
+    position:absolute;
+    inset:8px;
+    z-index:30;
+    opacity:0;
+    pointer-events:none;
+    transform:translateY(12px);
+    transition:opacity 0.22s ease, transform 0.22s ease;
+}
+
+#ocorrenciasScreen.open{
+    opacity:1;
+    pointer-events:auto;
+    transform:translateY(0);
+}
+
+.ocorrenciasShell{
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    background:
+        radial-gradient(circle at 12% 8%, rgba(14,116,144,0.34), transparent 28%),
+        radial-gradient(circle at 88% 18%, rgba(180,83,9,0.28), transparent 30%),
+        #0B121A;
+    border:1px solid #223044;
+    border-radius:10px;
+    box-shadow:0 24px 70px rgba(0,0,0,0.62);
+    color:#E6F0FF;
+    overflow:hidden;
+}
+
+.ocorrenciasHeader{
+    min-height:54px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 14px;
+    background:linear-gradient(90deg,#0E2038,#101826);
+    border-bottom:1px solid #223044;
+}
+
+.ocorrenciasKicker{
+    display:block;
+    color:#93C5FD;
+    font-size:10px;
+    font-weight:800;
+    letter-spacing:.5px;
+    text-transform:uppercase;
+}
+
+.ocorrenciasHeader h2{
+    margin:0;
+    color:#F8FAFC;
+    font-size:18px;
+    line-height:1.15;
+}
+
+.ocorrenciasClose{
+    width:34px;
+    min-width:34px;
+    height:34px;
+    margin:0;
+    padding:0;
+    border-radius:8px;
+    background:#101826;
+    border:1px solid #2B3A52;
+    color:#CFE3FF;
+}
+
+.ocorrenciasBody{
+    flex:1;
+    min-height:0;
+    display:grid;
+    grid-template-columns:minmax(300px, 390px) minmax(0, 1fr);
+    gap:12px;
+    padding:12px;
+    overflow:hidden;
+}
+
+.ocorrenciaForm,
+.ocorrenciasConsulta{
+    min-height:0;
+    background:#111B27;
+    border:1px solid #223044;
+    border-radius:10px;
+    padding:12px;
+    overflow:auto;
+}
+
+.ocorrenciaForm{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    align-content:start;
+    gap:10px;
+}
+
+.ocorrenciaFormTitle{
+    grid-column:1 / -1;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:2px;
+    color:#F8FAFC;
+}
+
+.ocorrenciaFormTitle span{
+    color:#9DB3CF;
+    font-size:10px;
+    text-align:right;
+}
+
+.ocorrenciaForm label{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    color:#B9CCE4;
+    font-size:10px;
+    font-weight:800;
+}
+
+.ocorrenciaForm input,
+.ocorrenciaForm select,
+.ocorrenciaForm textarea,
+.ocorrenciasFiltros input,
+.ocorrenciasFiltros select{
+    width:100%;
+    box-sizing:border-box;
+    border:1px solid #223044;
+    border-radius:7px;
+    background:#0B121A;
+    color:#E6F0FF;
+    padding:8px;
+    font-size:11px;
+    outline:none;
+}
+
+.ocorrenciaForm textarea{
+    resize:vertical;
+    min-height:92px;
+}
+
+.ocorrenciaFull,
+.ocorrenciaActions{
+    grid-column:1 / -1;
+}
+
+.ocorrenciaActions{
+    display:grid;
+    grid-template-columns:1fr 1.5fr;
+    gap:8px;
+}
+
+.ocorrenciaActions button,
+.ocorrenciasFiltros button{
+    margin:0;
+    min-height:34px;
+}
+
+.ocorrenciasConsulta{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.ocorrenciasStats{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:8px;
+}
+
+.ocorrenciasStats div{
+    border:1px solid #223044;
+    border-radius:8px;
+    background:#0E1723;
+    padding:9px;
+}
+
+.ocorrenciasStats span{
+    display:block;
+    color:#9DB3CF;
+    font-size:10px;
+    font-weight:800;
+}
+
+.ocorrenciasStats strong{
+    display:block;
+    margin-top:4px;
+    color:#F8FAFC;
+    font-size:20px;
+}
+
+.ocorrenciasFiltros{
+    display:grid;
+    grid-template-columns:1.6fr repeat(4, minmax(110px, 1fr)) minmax(100px, .8fr);
+    gap:7px;
+}
+
+.ocorrenciasLista{
+    min-height:0;
+    overflow:auto;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+
+.ocorrenciasEmpty{
+    margin:0;
+    padding:16px;
+    border:1px dashed #334155;
+    border-radius:10px;
+    color:#9DB3CF;
+    text-align:center;
+}
+
+.ocorrenciaCard{
+    border:1px solid #223044;
+    border-left:4px solid #3B82F6;
+    border-radius:10px;
+    background:#0E1723;
+    padding:10px;
+}
+
+.ocorrenciaCard.grav-media{border-left-color:#F59E0B;}
+.ocorrenciaCard.grav-alta{border-left-color:#F97316;}
+.ocorrenciaCard.grav-critica{border-left-color:#EF4444;}
+
+.ocorrenciaCardTop{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+}
+
+.ocorrenciaCardTop strong{
+    display:block;
+    color:#F8FAFC;
+    font-size:13px;
+}
+
+.ocorrenciaCardTop span,
+.ocorrenciaCard footer,
+.ocorrenciaItemInfo{
+    color:#9DB3CF;
+    font-size:10px;
+}
+
+.ocorrenciaBadges{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+}
+
+.ocorrenciaBadges > span,
+.ocorrenciaStatus,
+.ocorrenciaStatusSelect{
+    border:1px solid #334155;
+    border-radius:999px;
+    background:#111B27;
+    color:#DCEBFF;
+    padding:4px 8px;
+    font-size:10px;
+    font-weight:800;
+}
+
+.ocorrenciaStatusSelect{
+    border-radius:7px;
+    padding:4px 6px;
+}
+
+.ocorrenciaTipo{
+    margin-top:8px;
+    color:#93C5FD;
+    font-size:11px;
+    font-weight:900;
+}
+
+.ocorrenciaCard p{
+    margin:7px 0;
+    color:#E6F0FF;
+    font-size:11px;
+    line-height:1.42;
+}
+
+.ocorrenciaItemInfo{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    padding:7px;
+    border-radius:8px;
+    background:#0B121A;
+    border:1px solid #1F2A3A;
+}
+
+.ocorrenciaCard footer{
+    display:flex;
+    justify-content:space-between;
+    gap:8px;
+    margin-top:8px;
+    padding-top:8px;
+    border-top:1px solid #1F2A3A;
 }
 
 #contagemHomePopup{

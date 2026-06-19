@@ -110,6 +110,13 @@
         }
       }
     },
+    "ocorrencias": {
+      ".read": "auth != null",
+      "$id": {
+        ".write": "auth != null && ((!data.exists() && newData.exists() && newData.child('operadorUid').val() === auth.uid && newData.child('status').val() === 'aberta') || (data.exists() && newData.exists() && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || root.child('usuarios/' + auth.uid + '/nivel').val() === 'mod' || auth.token.email === 'davi@sistema.com' || (data.child('operadorUid').val() === auth.uid && data.child('status').val() === 'aberta' && newData.child('operadorUid').val() === data.child('operadorUid').val()))) || (data.exists() && !newData.exists() && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com')))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['id','criadoEm','data','hora','operadorUid','operadorNome','tipo','gravidade','acusadoNome','descricao','status','atualizadoEm','atualizadoPor']) && newData.child('id').isString() && newData.child('criadoEm').isNumber() && newData.child('data').isString() && newData.child('hora').isString() && newData.child('operadorUid').isString() && newData.child('operadorNome').isString() && newData.child('tipo').isString() && newData.child('gravidade').isString() && (newData.child('gravidade').val() === 'baixa' || newData.child('gravidade').val() === 'media' || newData.child('gravidade').val() === 'alta' || newData.child('gravidade').val() === 'critica') && newData.child('acusadoNome').isString() && newData.child('descricao').isString() && newData.child('status').isString() && (newData.child('status').val() === 'aberta' || newData.child('status').val() === 'analisada' || newData.child('status').val() === 'resolvida' || newData.child('status').val() === 'cancelada') && newData.child('atualizadoEm').isNumber() && newData.child('atualizadoPor').isString())"
+      }
+    },
     "estoqueGlobal": {
       ".read": "auth != null && ((root.child('usuarios/' + auth.uid).exists() && root.child('usuarios/' + auth.uid + '/ativo').val() !== false) || auth.token.email === 'davi@sistema.com')",
       ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com')"

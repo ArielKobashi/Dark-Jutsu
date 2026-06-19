@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
 VERSION_PATH = SCRIPTS / "version.json"
 DIST = ROOT / "dist"
-EXE = DIST / "Automus.exe"
+APP_DIR = DIST / "Automus"
+EXE = APP_DIR / "Automus.exe"
 RELEASES = ROOT / "releases"
 
 
@@ -61,6 +62,8 @@ def main():
     version_data = load_version()
     version = version_data["version"]
     build_exe()
+    if not EXE.exists():
+        raise RuntimeError(f"Build nao gerou {EXE}.")
 
     RELEASES.mkdir(parents=True, exist_ok=True)
     package_name = f"Automus-v{version}.zip"
@@ -74,8 +77,9 @@ def main():
         "package": package_name,
         "exe": "Automus.exe",
         "sha256": checksum,
+        "layout": "onedir",
         "packagedAt": datetime.now().isoformat(timespec="seconds"),
-        "install": "Feche o Automus antigo, coloque o novo Automus.exe no lugar e abra novamente."
+        "install": "Feche o Automus antigo, extraia o pacote inteiro na pasta do Automus e abra novamente."
     }
     if package_url:
         manifest["packageUrl"] = package_url
@@ -84,7 +88,9 @@ def main():
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.write(EXE, "Automus.exe")
+        for path in APP_DIR.rglob("*"):
+            if path.is_file():
+                zf.write(path, path.relative_to(APP_DIR).as_posix())
         zf.write(VERSION_PATH, "version.json")
         zf.write(manifest_path, "latest.json")
         readme = ROOT / "README.md"

@@ -173,8 +173,8 @@ def main():
         ],
         cwd=ROOT,
     )
-    print(f"Automus pronto: {DIST / 'Automus.exe'}")
-    print(r"Pode copiar apenas esse arquivo. Os complementos ficam em %APPDATA%\Automus\complemento.")
+    print(f"Automus pronto: {DIST / 'Automus' / 'Automus.exe'}")
+    print(r"Copie a pasta dist\Automus inteira. Os complementos ficam em %APPDATA%\Automus\complemento.")
 
 
 if __name__ == "__main__":
