@@ -5156,8 +5156,8 @@ function payloadRascunhoContagemFirebase(){
     return {
         usuario:window.meuNickname || "",
         uid:uidRascunhoContagemFirebase(),
-        valores:contagemValores || {},
-        verificacoesVazio:contagemVerificacoesVazio || {},
+        valores: objetoComChavesFirebaseSeguras(contagemValores),
+        verificacoesVazio: objetoComChavesFirebaseSeguras(contagemVerificacoesVazio),
         sessao:carregarSessaoContagem(),
         progressoPorGrupo:resumoProgressoGruposContagem(),
         updatedAt:Date.now()
