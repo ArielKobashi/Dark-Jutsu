@@ -231,7 +231,10 @@ xmlns="http://www.w3.org/2000/svg">
 <div id="mainActions">
     <button id="btnRelatorio" onclick="gerarRelatorio()">Gerar Relatório</button>
     <button id="btnContagem" onclick="abrirContagem()">Contagem</button>
-    <button id="btnOcorrencias" type="button" onclick="abrirOcorrencias()">Ocorrencias</button>
+    <button id="btnOcorrencias" type="button" onclick="abrirOcorrencias()">
+        <span>Ocorrencias</span>
+        <strong id="ocorrenciasNovasBadge">0</strong>
+    </button>
     <a id="btnDashboard" href="dashboard.html?armazem=04" title="Abrir dashboard de estoque">Dashboard</a>
 </div>
 
@@ -241,6 +244,7 @@ xmlns="http://www.w3.org/2000/svg">
             <div>
                 <span class="ocorrenciasKicker">Almoxarifado</span>
                 <h2>Ocorrencias do Almoxarifado</h2>
+                <p>Registro, acompanhamento e consulta de desvios operacionais.</p>
             </div>
             <button type="button" class="ocorrenciasClose" onclick="fecharOcorrencias()" title="Fechar">x</button>
         </header>
@@ -248,19 +252,26 @@ xmlns="http://www.w3.org/2000/svg">
         <div class="ocorrenciasBody">
             <form id="ocorrenciaForm" class="ocorrenciaForm" onsubmit="salvarOcorrencia(event)">
                 <div class="ocorrenciaFormTitle">
-                    <strong>Nova ocorrencia</strong>
+                    <div>
+                        <strong>Nova ocorrencia</strong>
+                        <small>Registro formal com rastreio por operador, data e status.</small>
+                    </div>
                     <span id="ocorrenciaOperadorResumo">Operador automatico</span>
                 </div>
 
+                <div class="ocorrenciaSectionTitle">Classificacao</div>
+
                 <label>
-                    Tipo *
+                    Tipo da ocorrencia *
                     <select id="ocorrenciaTipo" required></select>
                 </label>
 
                 <label>
-                    Gravidade *
+                    Gravidade inicial *
                     <select id="ocorrenciaGravidade" required></select>
                 </label>
+
+                <div class="ocorrenciaSectionTitle">Envolvido</div>
 
                 <label>
                     Nome do envolvido *
@@ -274,8 +285,11 @@ xmlns="http://www.w3.org/2000/svg">
 
                 <label>
                     Setor
-                    <input id="ocorrenciaAcusadoSetor" type="text" autocomplete="off">
+                    <input id="ocorrenciaAcusadoSetor" type="text" list="ocorrenciaSetoresOptions" autocomplete="off">
+                    <datalist id="ocorrenciaSetoresOptions"></datalist>
                 </label>
+
+                <div class="ocorrenciaSectionTitle">Item relacionado</div>
 
                 <label>
                     Codigo do item
@@ -294,7 +308,7 @@ xmlns="http://www.w3.org/2000/svg">
 
                 <label class="ocorrenciaFull">
                     Descricao detalhada *
-                    <textarea id="ocorrenciaDescricao" rows="4" required></textarea>
+                    <textarea id="ocorrenciaDescricao" rows="4" maxlength="5000" required placeholder="Descreva o que aconteceu, onde aconteceu e qual foi a orientacao dada."></textarea>
                 </label>
 
                 <div class="ocorrenciaActions">
@@ -304,10 +318,22 @@ xmlns="http://www.w3.org/2000/svg">
             </form>
 
             <div class="ocorrenciasConsulta">
+                <div class="ocorrenciasConsultaHeader">
+                    <div>
+                        <strong>Consulta de ocorrencias</strong>
+                        <span id="ocorrenciasStorageAviso">Aguardando Firebase...</span>
+                    </div>
+                    <div class="ocorrenciasHeaderActions">
+                        <button type="button" onclick="exportarOcorrenciasXlsx()">Exportar XLSX</button>
+                        <button type="button" onclick="limparFiltrosOcorrencia()">Limpar filtros</button>
+                    </div>
+                </div>
+
                 <div class="ocorrenciasStats">
-                    <div><span>Abertas</span><strong id="ocorrenciasAbertas">0</strong></div>
-                    <div><span>Alta/Critica</span><strong id="ocorrenciasCriticas">0</strong></div>
-                    <div><span>Total</span><strong id="ocorrenciasTotal">0</strong></div>
+                    <div class="stat-abertas"><span>Abertas</span><strong id="ocorrenciasAbertas">0</strong></div>
+                    <div class="stat-criticas"><span>Alta/Critica</span><strong id="ocorrenciasCriticas">0</strong></div>
+                    <div class="stat-filtradas"><span>Filtradas</span><strong id="ocorrenciasFiltradas">0</strong></div>
+                    <div class="stat-total"><span>Total</span><strong id="ocorrenciasTotal">0</strong></div>
                 </div>
 
                 <div class="ocorrenciasFiltros">
@@ -316,7 +342,27 @@ xmlns="http://www.w3.org/2000/svg">
                     <select id="ocorrenciaFiltroGravidade" onchange="renderizarOcorrencias()"></select>
                     <select id="ocorrenciaFiltroStatus" onchange="renderizarOcorrencias()"></select>
                     <input id="ocorrenciaFiltroData" type="date" onchange="renderizarOcorrencias()">
-                    <button type="button" onclick="limparFiltrosOcorrencia()">Limpar filtros</button>
+                </div>
+
+                <div class="ocorrenciasCamposEditor">
+                    <div class="ocorrenciasCamposHeader">
+                        <div>
+                            <strong>Campos da ocorrencia</strong>
+                            <span id="ocorrenciaCamposStatus">Opcoes padrao carregadas.</span>
+                        </div>
+                        <select id="ocorrenciaCampoEditor" onchange="renderizarEditorCamposOcorrencia()">
+                            <option value="tipos">Tipos</option>
+                            <option value="gravidades">Gravidades</option>
+                            <option value="status">Status</option>
+                            <option value="setores">Setores</option>
+                            <option value="tratadores">Tratadores</option>
+                        </select>
+                    </div>
+                    <div class="ocorrenciasCamposAdd">
+                        <input id="ocorrenciaNovaOpcao" type="text" maxlength="60" placeholder="Nova opcao">
+                        <button type="button" onclick="adicionarOpcaoOcorrencia()">Adicionar</button>
+                    </div>
+                    <div id="ocorrenciaOpcoesLista" class="ocorrenciaOpcoesLista"></div>
                 </div>
 
                 <div id="ocorrenciasLista" class="ocorrenciasLista">
@@ -10430,6 +10476,7 @@ onAuthStateChanged(auth, async (user) => {
         window.meuNickname = dadosUsuario.nickname;
         window.meuCracha = dadosUsuario.cracha || "";
         window.meuSetor = dadosUsuario.setor || "";
+        iniciarCamposOcorrencia();
         configurarOcorrenciasUI();
         iniciarOcorrencias();
         setSalaAtiva(salaAtual);
@@ -10547,7 +10594,7 @@ function escapeHtml(texto) {
 }
 window.escapeHtml = escapeHtml;
 
-const TIPOS_OCORRENCIA = [
+let TIPOS_OCORRENCIA = [
     "Codigo informado errado",
     "Solicitante nao sabe a peca",
     "Peca recusada",
@@ -10561,14 +10608,168 @@ const TIPOS_OCORRENCIA = [
     "Uso indevido do almoxarifado",
     "Outro"
 ];
-const GRAVIDADES_OCORRENCIA = ["baixa", "media", "alta", "critica"];
-const STATUS_OCORRENCIA = ["aberta", "analisada", "resolvida", "cancelada"];
+let GRAVIDADES_OCORRENCIA = ["baixa", "media", "alta", "critica"];
+let STATUS_OCORRENCIA = ["aberta", "analisada", "resolvida", "cancelada"];
+let SETORES_OCORRENCIA = ["Manutencao", "Almoxarifado", "Supervisao", "Operacao"];
+let TRATADORES_OCORRENCIA = [];
+const CAMPOS_OCORRENCIA_PADRAO = {
+    tipos: [...TIPOS_OCORRENCIA],
+    gravidades: [...GRAVIDADES_OCORRENCIA],
+    status: [...STATUS_OCORRENCIA],
+    setores: [...SETORES_OCORRENCIA],
+    tratadores: [...TRATADORES_OCORRENCIA]
+};
+const CAMPOS_OCORRENCIA_INFO = {
+    tipos: { label: "Tipos", obrigatorios: [] },
+    gravidades: { label: "Gravidades", obrigatorios: ["baixa"] },
+    status: { label: "Status", obrigatorios: ["aberta"] },
+    setores: { label: "Setores", obrigatorios: [] },
+    tratadores: { label: "Tratadores", obrigatorios: [] }
+};
+const CAMPOS_OCORRENCIA_CONFIG_PATH = "dashboardConfig/ocorrenciasCampos";
+const CAMPOS_OCORRENCIA_LOCAL_KEY = "ocorrenciasCamposConfigV1";
+const OCORRENCIAS_PRIMARY_PATH = "ocorrencias";
+const OCORRENCIAS_FALLBACK_PATH = "chatGlobal/ocorrencias";
 let ocorrenciasCache = [];
 let ocorrenciasUnsub = null;
+let ocorrenciasFallbackUnsub = null;
+let ocorrenciasCamposUnsub = null;
+let ocorrenciasPorFonte = {
+    primary: [],
+    fallback: []
+};
+let ocorrenciasStorageModo = "carregando";
+let ocorrenciasCamposFonte = "padrao";
 
 function labelOcorrencia(valor){
     const texto = String(valor || "");
     return texto.charAt(0).toUpperCase() + texto.slice(1).replace(/_/g, " ");
+}
+
+function dataLocalISO(date = new Date()){
+    const ano = date.getFullYear();
+    const mes = String(date.getMonth() + 1).padStart(2, "0");
+    const dia = String(date.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
+}
+
+function normalizarTextoOcorrencia(valor, limite = 160){
+    return String(valor || "").replace(/\s+/g, " ").trim().slice(0, limite);
+}
+
+function normalizarOpcaoOcorrencia(valor){
+    return normalizarTextoOcorrencia(valor, 60).replace(/[<>"'`\\]/g, "");
+}
+
+function normalizarCracha(valor){
+    return String(valor || "").replace(/\D+/g, "").slice(0, 10);
+}
+
+function valoresUnicosOcorrencia(valores){
+    const vistos = new Set();
+    const lista = [];
+    (Array.isArray(valores) ? valores : []).forEach(valor => {
+        const normalizado = normalizarOpcaoOcorrencia(valor);
+        const chave = normalizado.toLowerCase();
+        if(normalizado && !vistos.has(chave)){
+            vistos.add(chave);
+            lista.push(normalizado);
+        }
+    });
+    return lista;
+}
+
+function aplicarCamposOcorrencia(config = {}, fonte = "padrao"){
+    TIPOS_OCORRENCIA = valoresUnicosOcorrencia(config.tipos || CAMPOS_OCORRENCIA_PADRAO.tipos);
+    GRAVIDADES_OCORRENCIA = valoresUnicosOcorrencia([
+        ...(config.gravidades || CAMPOS_OCORRENCIA_PADRAO.gravidades),
+        ...CAMPOS_OCORRENCIA_INFO.gravidades.obrigatorios
+    ]);
+    STATUS_OCORRENCIA = valoresUnicosOcorrencia([
+        ...(config.status || CAMPOS_OCORRENCIA_PADRAO.status),
+        ...CAMPOS_OCORRENCIA_INFO.status.obrigatorios
+    ]);
+    SETORES_OCORRENCIA = valoresUnicosOcorrencia(config.setores || CAMPOS_OCORRENCIA_PADRAO.setores);
+    TRATADORES_OCORRENCIA = valoresUnicosOcorrencia(config.tratadores || CAMPOS_OCORRENCIA_PADRAO.tratadores);
+    if(!TIPOS_OCORRENCIA.length) TIPOS_OCORRENCIA = [...CAMPOS_OCORRENCIA_PADRAO.tipos];
+    if(!SETORES_OCORRENCIA.length) SETORES_OCORRENCIA = [...CAMPOS_OCORRENCIA_PADRAO.setores];
+    ocorrenciasCamposFonte = fonte;
+    configurarOcorrenciasUI();
+}
+
+function camposOcorrenciaConfigAtual(){
+    return {
+        tipos: [...TIPOS_OCORRENCIA],
+        gravidades: [...GRAVIDADES_OCORRENCIA],
+        status: [...STATUS_OCORRENCIA],
+        setores: [...SETORES_OCORRENCIA],
+        tratadores: [...TRATADORES_OCORRENCIA],
+        atualizadoEm: Date.now(),
+        atualizadoPor: auth.currentUser?.uid || ""
+    };
+}
+
+function carregarCamposOcorrenciaLocal(){
+    try{
+        const bruto = localStorage.getItem(CAMPOS_OCORRENCIA_LOCAL_KEY);
+        if(!bruto) return null;
+        return JSON.parse(bruto);
+    }catch(err){
+        console.warn("Falha ao ler campos locais de ocorrencia:", err);
+        return null;
+    }
+}
+
+function salvarCamposOcorrenciaLocal(config){
+    try{
+        localStorage.setItem(CAMPOS_OCORRENCIA_LOCAL_KEY, JSON.stringify(config));
+    }catch(err){
+        console.warn("Falha ao salvar campos locais de ocorrencia:", err);
+    }
+}
+
+function atualizarStatusCamposOcorrencia(texto, modo = ""){
+    const el = document.getElementById("ocorrenciaCamposStatus");
+    if(!el) return;
+    el.textContent = texto;
+    el.className = modo ? `modo-${modo}` : "";
+}
+
+function popularDatalistOcorrencia(id, valores){
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.innerHTML = valores.map(v => `<option value="${escapeHtml(v)}"></option>`).join("");
+}
+
+function iniciarCamposOcorrencia(){
+    const local = carregarCamposOcorrenciaLocal();
+    if(local) aplicarCamposOcorrencia(local, "local");
+    else aplicarCamposOcorrencia(CAMPOS_OCORRENCIA_PADRAO, "padrao");
+    if(!auth.currentUser || ocorrenciasCamposUnsub) return;
+    ocorrenciasCamposUnsub = onValue(ref(db, CAMPOS_OCORRENCIA_CONFIG_PATH), snapshot => {
+        if(snapshot.exists()){
+            aplicarCamposOcorrencia(snapshot.val(), "firebase");
+            salvarCamposOcorrenciaLocal(camposOcorrenciaConfigAtual());
+        }
+    }, err => {
+        if(!isFirebasePermissionDenied(err)) console.warn("Falha ao carregar campos de ocorrencia:", err);
+        const fallback = carregarCamposOcorrenciaLocal();
+        aplicarCamposOcorrencia(fallback || CAMPOS_OCORRENCIA_PADRAO, fallback ? "local" : "padrao");
+    });
+}
+
+function setOcorrenciasStorageModo(modo){
+    ocorrenciasStorageModo = modo || ocorrenciasStorageModo;
+    const el = document.getElementById("ocorrenciasStorageAviso");
+    if(!el) return;
+    const textos = {
+        carregando: "Conectando ao Firebase...",
+        primary: "Usando /ocorrencias",
+        fallback: "Usando caminho compativel",
+        erro: "Sem acesso as ocorrencias"
+    };
+    el.textContent = textos[ocorrenciasStorageModo] || ocorrenciasStorageModo;
+    el.className = `modo-${ocorrenciasStorageModo}`;
 }
 
 function popularSelectOcorrencia(id, valores, rotuloTodos = ""){
@@ -10586,9 +10787,12 @@ function configurarOcorrenciasUI(){
     popularSelectOcorrencia("ocorrenciaFiltroTipo", TIPOS_OCORRENCIA, "Todos os tipos");
     popularSelectOcorrencia("ocorrenciaFiltroGravidade", GRAVIDADES_OCORRENCIA, "Todas as gravidades");
     popularSelectOcorrencia("ocorrenciaFiltroStatus", STATUS_OCORRENCIA, "Todos os status");
+    popularDatalistOcorrencia("ocorrenciaSetoresOptions", SETORES_OCORRENCIA);
     const gravidade = document.getElementById("ocorrenciaGravidade");
-    if(gravidade && !gravidade.value) gravidade.value = "baixa";
+    if(gravidade && !gravidade.value) gravidade.value = GRAVIDADES_OCORRENCIA.includes("baixa") ? "baixa" : (GRAVIDADES_OCORRENCIA[0] || "");
     atualizarResumoOperadorOcorrencia();
+    setOcorrenciasStorageModo(ocorrenciasStorageModo);
+    renderizarEditorCamposOcorrencia();
 }
 
 function atualizarResumoOperadorOcorrencia(){
@@ -10600,6 +10804,7 @@ function atualizarResumoOperadorOcorrencia(){
 }
 
 function abrirOcorrencias(){
+    iniciarCamposOcorrencia();
     configurarOcorrenciasUI();
     const screen = document.getElementById("ocorrenciasScreen");
     if(screen){
@@ -10623,6 +10828,8 @@ function limparFormularioOcorrencia(){
     if(form) form.reset();
     const gravidade = document.getElementById("ocorrenciaGravidade");
     if(gravidade) gravidade.value = "baixa";
+    const tipo = document.getElementById("ocorrenciaTipo");
+    if(tipo) tipo.focus();
     atualizarResumoOperadorOcorrencia();
 }
 
@@ -10634,10 +10841,156 @@ function limparFiltrosOcorrencia(){
     renderizarOcorrencias();
 }
 
+function listaCampoOcorrencia(campo){
+    if(campo === "gravidades") return GRAVIDADES_OCORRENCIA;
+    if(campo === "status") return STATUS_OCORRENCIA;
+    if(campo === "setores") return SETORES_OCORRENCIA;
+    if(campo === "tratadores") return TRATADORES_OCORRENCIA;
+    return TIPOS_OCORRENCIA;
+}
+
+function definirListaCampoOcorrencia(campo, lista){
+    const valores = valoresUnicosOcorrencia(lista);
+    if(campo === "gravidades") GRAVIDADES_OCORRENCIA = valoresUnicosOcorrencia([...valores, ...CAMPOS_OCORRENCIA_INFO.gravidades.obrigatorios]);
+    else if(campo === "status") STATUS_OCORRENCIA = valoresUnicosOcorrencia([...valores, ...CAMPOS_OCORRENCIA_INFO.status.obrigatorios]);
+    else if(campo === "setores") SETORES_OCORRENCIA = valores.length ? valores : [...CAMPOS_OCORRENCIA_PADRAO.setores];
+    else if(campo === "tratadores") TRATADORES_OCORRENCIA = valores;
+    else TIPOS_OCORRENCIA = valores.length ? valores : [...CAMPOS_OCORRENCIA_PADRAO.tipos];
+}
+
+function podeGerenciarCamposOcorrencia(){
+    const nivel = String(window.nivelUsuario || "").toLowerCase();
+    const email = auth.currentUser?.email || "";
+    return nivel === "admin" || nivel === "mod" || email === "davi@sistema.com";
+}
+
+function identidadeTratativaOcorrencia(){
+    const usuario = auth.currentUser || {};
+    return {
+        uid: usuario.uid || "",
+        email: usuario.email || "",
+        nome: normalizarTextoOcorrencia(window.meuNickname || usuario.email || "Usuario", 120),
+        cracha: normalizarCracha(window.meuCracha || ""),
+        setor: normalizarTextoOcorrencia(window.meuSetor || "", 80)
+    };
+}
+
+function usuarioHabilitadoTratativaOcorrencia(){
+    if(podeGerenciarCamposOcorrencia()) return true;
+    const identidade = identidadeTratativaOcorrencia();
+    const chavesUsuario = [
+        identidade.uid,
+        identidade.email,
+        identidade.nome,
+        identidade.cracha
+    ].map(v => String(v || "").trim().toLowerCase()).filter(Boolean);
+    return TRATADORES_OCORRENCIA.some(valor => chavesUsuario.includes(String(valor || "").trim().toLowerCase()));
+}
+
+function podeTratarOcorrencia(oc){
+    const identidade = identidadeTratativaOcorrencia();
+    return podeGerenciarCamposOcorrencia()
+        || oc.responsavelUid === identidade.uid
+        || usuarioHabilitadoTratativaOcorrencia();
+}
+
+function renderizarEditorCamposOcorrencia(){
+    const listaEl = document.getElementById("ocorrenciaOpcoesLista");
+    const campoEl = document.getElementById("ocorrenciaCampoEditor");
+    if(!listaEl || !campoEl) return;
+    const campo = campoEl.value || "tipos";
+    const info = CAMPOS_OCORRENCIA_INFO[campo] || CAMPOS_OCORRENCIA_INFO.tipos;
+    const obrigatorios = new Set((info.obrigatorios || []).map(v => v.toLowerCase()));
+    const podeEditar = podeGerenciarCamposOcorrencia();
+    const fonteLabel = ocorrenciasCamposFonte === "firebase" ? "Firebase" : (ocorrenciasCamposFonte === "local" ? "local" : "padrao");
+    atualizarStatusCamposOcorrencia(
+        podeEditar ? `Editando ${info.label} - fonte ${fonteLabel}.` : `Somente admin/mod altera campos - fonte ${fonteLabel}.`,
+        podeEditar ? ocorrenciasCamposFonte : "bloqueado"
+    );
+    const inputOpcao = document.getElementById("ocorrenciaNovaOpcao");
+    if(inputOpcao){
+        inputOpcao.placeholder = campo === "tratadores" ? "Nickname, email, cracha ou UID" : "Nova opcao";
+        inputOpcao.toggleAttribute("disabled", !podeEditar);
+    }
+    document.querySelector(".ocorrenciasCamposAdd button")?.toggleAttribute("disabled", !podeEditar);
+    listaEl.innerHTML = listaCampoOcorrencia(campo).map(valor => {
+        const obrigatorio = obrigatorios.has(String(valor).toLowerCase());
+        const podeRemover = podeEditar && !obrigatorio;
+        return `
+            <span class="ocorrenciaOpcaoChip">
+                <b>${escapeHtml(labelOcorrencia(valor))}</b>
+                ${obrigatorio ? `<em>fixo</em>` : ""}
+                <button type="button" ${podeRemover ? "" : "disabled"} onclick="removerOpcaoOcorrencia('${escapeHtml(campo)}','${escapeHtml(valor)}')" title="Remover opcao">x</button>
+            </span>
+        `;
+    }).join("");
+}
+
+async function persistirCamposOcorrencia(){
+    const config = camposOcorrenciaConfigAtual();
+    salvarCamposOcorrenciaLocal(config);
+    try{
+        await set(ref(db, CAMPOS_OCORRENCIA_CONFIG_PATH), config);
+        ocorrenciasCamposFonte = "firebase";
+        atualizarStatusCamposOcorrencia("Opcoes salvas no Firebase.", "firebase");
+    }catch(err){
+        if(!isFirebasePermissionDenied(err)) console.warn("Falha ao salvar campos de ocorrencia no Firebase:", err);
+        ocorrenciasCamposFonte = "local";
+        atualizarStatusCamposOcorrencia("Sem permissao no Firebase; opcoes salvas neste navegador.", "local");
+    }
+    configurarOcorrenciasUI();
+    renderizarOcorrencias();
+}
+
+async function adicionarOpcaoOcorrencia(){
+    if(!podeGerenciarCamposOcorrencia()){
+        mostrarNotificacao("Somente admin/mod pode alterar campos.");
+        return;
+    }
+    const campo = document.getElementById("ocorrenciaCampoEditor")?.value || "tipos";
+    const input = document.getElementById("ocorrenciaNovaOpcao");
+    const valor = normalizarOpcaoOcorrencia(input?.value || "");
+    if(!valor){
+        mostrarNotificacao("Informe uma opcao para adicionar.");
+        return;
+    }
+    const lista = listaCampoOcorrencia(campo);
+    if(lista.some(item => item.toLowerCase() === valor.toLowerCase())){
+        mostrarNotificacao("Essa opcao ja existe.");
+        return;
+    }
+    definirListaCampoOcorrencia(campo, [...lista, valor]);
+    if(input) input.value = "";
+    await persistirCamposOcorrencia();
+}
+
+async function removerOpcaoOcorrencia(campo, valor){
+    if(!podeGerenciarCamposOcorrencia()){
+        mostrarNotificacao("Somente admin/mod pode alterar campos.");
+        return;
+    }
+    const obrigatorios = new Set((CAMPOS_OCORRENCIA_INFO[campo]?.obrigatorios || []).map(v => v.toLowerCase()));
+    if(obrigatorios.has(String(valor).toLowerCase())){
+        mostrarNotificacao("Essa opcao e obrigatoria para a logica do sistema.");
+        return;
+    }
+    definirListaCampoOcorrencia(campo, listaCampoOcorrencia(campo).filter(item => item !== valor));
+    await persistirCamposOcorrencia();
+}
+
 function ocorrenciaPodeEditar(oc){
     const uid = auth.currentUser?.uid || "";
     const nivel = String(window.nivelUsuario || "op").toLowerCase();
     return nivel === "admin" || nivel === "mod" || (oc.operadorUid === uid && oc.status === "aberta");
+}
+
+function isFirebasePermissionDenied(err){
+    const texto = [
+        err?.code,
+        err?.message,
+        String(err || "")
+    ].join(" ").toLowerCase();
+    return texto.includes("permission_denied") || texto.includes("permission-denied") || texto.includes("permission denied");
 }
 
 async function salvarOcorrencia(event){
@@ -10648,10 +11001,16 @@ async function salvarOcorrencia(event){
         return;
     }
     const tipo = document.getElementById("ocorrenciaTipo")?.value || "";
-    const descricao = (document.getElementById("ocorrenciaDescricao")?.value || "").trim();
-    const acusadoNome = (document.getElementById("ocorrenciaAcusadoNome")?.value || "").trim();
+    const descricao = normalizarTextoOcorrencia(document.getElementById("ocorrenciaDescricao")?.value || "", 5000);
+    const acusadoNome = normalizarTextoOcorrencia(document.getElementById("ocorrenciaAcusadoNome")?.value || "", 120);
     if(!tipo || !descricao || !acusadoNome){
         alert("Preencha tipo, nome do envolvido e descricao.");
+        return;
+    }
+    const quantidadeRaw = String(document.getElementById("ocorrenciaQuantidade")?.value || "").replace(",", ".");
+    const quantidade = quantidadeRaw === "" ? 0 : Number(quantidadeRaw);
+    if(!Number.isFinite(quantidade) || quantidade < 0){
+        alert("Informe uma quantidade valida.");
         return;
     }
 
@@ -10659,46 +11018,71 @@ async function salvarOcorrencia(event){
     if(btn) btn.disabled = true;
     try{
         const agora = new Date();
-        const id = "ocorrencia_" + Date.now();
-        const quantidadeRaw = document.getElementById("ocorrenciaQuantidade")?.value || "";
+        const criadoEm = Date.now();
+        const id = `ocorrencia_${criadoEm}_${usuario.uid.slice(0, 6)}`;
         const ocorrencia = {
             id,
-            criadoEm: Date.now(),
-            data: agora.toISOString().slice(0, 10),
+            criadoEm,
+            data: dataLocalISO(agora),
             hora: agora.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }),
             operadorUid: usuario.uid,
-            operadorNome: window.meuNickname || usuario.email || "Usuario",
-            operadorCracha: window.meuCracha || "",
-            operadorSetor: window.meuSetor || "Almoxarifado",
+            operadorNome: normalizarTextoOcorrencia(window.meuNickname || usuario.email || "Usuario", 120),
+            operadorCracha: normalizarCracha(window.meuCracha || ""),
+            operadorSetor: normalizarTextoOcorrencia(window.meuSetor || "Almoxarifado", 80),
             acusadoNome,
-            acusadoCracha: (document.getElementById("ocorrenciaAcusadoCracha")?.value || "").trim(),
-            acusadoSetor: (document.getElementById("ocorrenciaAcusadoSetor")?.value || "").trim(),
+            acusadoCracha: normalizarCracha(document.getElementById("ocorrenciaAcusadoCracha")?.value || ""),
+            acusadoSetor: normalizarTextoOcorrencia(document.getElementById("ocorrenciaAcusadoSetor")?.value || "", 80),
             tipo,
             gravidade: document.getElementById("ocorrenciaGravidade")?.value || "baixa",
-            codigoItem: (document.getElementById("ocorrenciaCodigoItem")?.value || "").trim(),
-            descricaoItem: (document.getElementById("ocorrenciaDescricaoItem")?.value || "").trim(),
-            quantidade: quantidadeRaw === "" ? 0 : Number(quantidadeRaw),
+            codigoItem: normalizarTextoOcorrencia(document.getElementById("ocorrenciaCodigoItem")?.value || "", 60).toUpperCase(),
+            descricaoItem: normalizarTextoOcorrencia(document.getElementById("ocorrenciaDescricaoItem")?.value || "", 180),
+            quantidade,
             descricao,
             status: "aberta",
-            atualizadoEm: Date.now(),
+            atualizadoEm: criadoEm,
             atualizadoPor: usuario.uid,
             historico: {
                 criado: {
-                    em: Date.now(),
+                    em: criadoEm,
                     porUid: usuario.uid,
-                    porNome: window.meuNickname || usuario.email || "Usuario",
+                    porNome: normalizarTextoOcorrencia(window.meuNickname || usuario.email || "Usuario", 120),
                     acao: "criada"
                 }
             }
         };
-        await set(ref(db, `ocorrencias/${id}`), ocorrencia);
+        const storagePath = await salvarOcorrenciaFirebase(id, ocorrencia);
+        ocorrencia._storagePath = `${storagePath}/${id}`;
+        ocorrenciasPorFonte[storagePath === OCORRENCIAS_PRIMARY_PATH ? "primary" : "fallback"] = [
+            ocorrencia,
+            ...ocorrenciasPorFonte[storagePath === OCORRENCIAS_PRIMARY_PATH ? "primary" : "fallback"].filter(item => item.id !== id)
+        ];
+        atualizarCacheOcorrencias();
         limparFormularioOcorrencia();
         mostrarNotificacao("Ocorrencia registrada.");
     }catch(err){
         console.error("Erro ao salvar ocorrencia:", err);
-        alert("Nao foi possivel salvar a ocorrencia.");
+        const detalhe = err?.code === "PERMISSION_DENIED" || err?.code === "permission-denied"
+            ? "Permissao negada pelo Firebase. Publique as regras atualizadas."
+            : (err?.message || "Erro desconhecido.");
+        alert("Nao foi possivel salvar a ocorrencia. " + detalhe);
     }finally{
         if(btn) btn.disabled = false;
+    }
+}
+
+async function salvarOcorrenciaFirebase(id, ocorrencia){
+    try{
+        await set(ref(db, `${OCORRENCIAS_PRIMARY_PATH}/${id}`), ocorrencia);
+        setOcorrenciasStorageModo("primary");
+        return OCORRENCIAS_PRIMARY_PATH;
+    }catch(err){
+        if(!isFirebasePermissionDenied(err)){
+            throw err;
+        }
+        console.warn("Firebase negou /ocorrencias; salvando ocorrencia no caminho compativel.", err);
+        await set(ref(db, `${OCORRENCIAS_FALLBACK_PATH}/${id}`), ocorrencia);
+        setOcorrenciasStorageModo("fallback");
+        return OCORRENCIAS_FALLBACK_PATH;
     }
 }
 
@@ -10709,11 +11093,16 @@ async function atualizarStatusOcorrencia(id, status){
         renderizarOcorrencias();
         return;
     }
+    if(status === oc.status){
+        renderizarOcorrencias();
+        return;
+    }
     const usuario = auth.currentUser;
     if(!usuario) return;
     const agora = Date.now();
+    const storagePath = oc._storagePath || `${OCORRENCIAS_PRIMARY_PATH}/${id}`;
     try{
-        await update(ref(db, `ocorrencias/${id}`), {
+        await update(ref(db, storagePath), {
             status,
             atualizadoEm: agora,
             atualizadoPor: usuario.uid,
@@ -10732,31 +11121,208 @@ async function atualizarStatusOcorrencia(id, status){
     }
 }
 
+async function assumirTratativaOcorrencia(id){
+    const oc = ocorrenciasCache.find(item => item.id === id);
+    if(!oc || !podeTratarOcorrencia(oc)){
+        mostrarNotificacao("Sem permissao para assumir esta ocorrencia.");
+        return;
+    }
+    const identidade = identidadeTratativaOcorrencia();
+    const agora = Date.now();
+    const storagePath = oc._storagePath || `${OCORRENCIAS_PRIMARY_PATH}/${id}`;
+    try{
+        await update(ref(db, storagePath), {
+            responsavelUid: identidade.uid,
+            responsavelNome: identidade.nome,
+            responsavelCracha: identidade.cracha,
+            responsavelSetor: identidade.setor,
+            responsavelAtribuidoEm: agora,
+            atualizadoEm: agora,
+            atualizadoPor: identidade.uid,
+            [`historico/responsavel_${agora}`]: {
+                em: agora,
+                porUid: identidade.uid,
+                porNome: identidade.nome,
+                acao: "responsavel",
+                valor: identidade.nome
+            }
+        });
+        mostrarNotificacao("Responsavel atribuido.");
+    }catch(err){
+        console.error("Erro ao assumir ocorrencia:", err);
+        mostrarNotificacao("Erro ao assumir ocorrencia.");
+    }
+}
+
+async function salvarTratativaOcorrencia(id){
+    const oc = ocorrenciasCache.find(item => item.id === id);
+    if(!oc || !podeTratarOcorrencia(oc)){
+        mostrarNotificacao("Sem permissao para tratar esta ocorrencia.");
+        return;
+    }
+    const tratativa = normalizarTextoOcorrencia(document.getElementById(`tratativa_${id}`)?.value || "", 5000);
+    const assinatura = normalizarTextoOcorrencia(document.getElementById(`assinatura_${id}`)?.value || "", 160);
+    if(!tratativa || !assinatura){
+        mostrarNotificacao("Preencha a tratativa e a assinatura.");
+        return;
+    }
+    const identidade = identidadeTratativaOcorrencia();
+    const agora = Date.now();
+    const storagePath = oc._storagePath || `${OCORRENCIAS_PRIMARY_PATH}/${id}`;
+    const statusTratado = STATUS_OCORRENCIA.includes("analisada") ? "analisada" : (STATUS_OCORRENCIA[0] || oc.status || "aberta");
+    try{
+        await update(ref(db, storagePath), {
+            responsavelUid: oc.responsavelUid || identidade.uid,
+            responsavelNome: oc.responsavelNome || identidade.nome,
+            responsavelCracha: oc.responsavelCracha || identidade.cracha,
+            responsavelSetor: oc.responsavelSetor || identidade.setor,
+            tratativaRealizada: tratativa,
+            tratativaAssinatura: assinatura,
+            tratativaEm: agora,
+            tratativaPorUid: identidade.uid,
+            tratativaPorNome: identidade.nome,
+            documentoTratativa: {
+                tipo: "ocorrencia_almoxarifado",
+                geradoEm: agora,
+                ocorrenciaId: id,
+                responsavelNome: oc.responsavelNome || identidade.nome,
+                tratativa,
+                assinatura
+            },
+            status: statusTratado,
+            atualizadoEm: agora,
+            atualizadoPor: identidade.uid,
+            [`historico/tratativa_${agora}`]: {
+                em: agora,
+                porUid: identidade.uid,
+                porNome: identidade.nome,
+                acao: "tratativa",
+                valor: statusTratado
+            }
+        });
+        mostrarNotificacao("Tratativa registrada e assinada.");
+    }catch(err){
+        console.error("Erro ao salvar tratativa:", err);
+        mostrarNotificacao("Erro ao salvar tratativa.");
+    }
+}
+
+function linhasOcorrenciasExportacao(){
+    return ocorrenciasCache.map(oc => ({
+        ID: oc.id || "",
+        Data: oc.data || "",
+        Hora: oc.hora || "",
+        Status: labelOcorrencia(oc.status || ""),
+        Gravidade: labelOcorrencia(oc.gravidade || ""),
+        Tipo: oc.tipo || "",
+        Envolvido: oc.acusadoNome || "",
+        Cracha: oc.acusadoCracha || "",
+        Setor: oc.acusadoSetor || "",
+        CodigoItem: oc.codigoItem || "",
+        DescricaoItem: oc.descricaoItem || "",
+        Quantidade: oc.quantidade || 0,
+        Descricao: oc.descricao || "",
+        Operador: oc.operadorNome || "",
+        OperadorCracha: oc.operadorCracha || "",
+        Responsavel: oc.responsavelNome || "",
+        ResponsavelCracha: oc.responsavelCracha || "",
+        ResponsavelSetor: oc.responsavelSetor || "",
+        Tratativa: oc.tratativaRealizada || "",
+        Assinatura: oc.tratativaAssinatura || "",
+        TratadoEm: oc.tratativaEm ? new Date(Number(oc.tratativaEm)).toLocaleString("pt-BR") : "",
+        AtualizadoEm: oc.atualizadoEm ? new Date(Number(oc.atualizadoEm)).toLocaleString("pt-BR") : ""
+    }));
+}
+
+function exportarOcorrenciasXlsx(){
+    if(typeof XLSX === "undefined"){
+        mostrarNotificacao("Biblioteca XLSX nao encontrada.");
+        return;
+    }
+    const linhas = linhasOcorrenciasExportacao();
+    if(!linhas.length){
+        mostrarNotificacao("Nenhuma ocorrencia para exportar.");
+        return;
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(linhas);
+    XLSX.utils.book_append_sheet(wb, ws, "Ocorrencias");
+    XLSX.writeFile(wb, `ocorrencias_almoxarifado_${dataLocalISO()}.xlsx`);
+}
+
 function iniciarOcorrencias(){
     configurarOcorrenciasUI();
-    if(ocorrenciasUnsub || !auth.currentUser) return;
-    ocorrenciasUnsub = onValue(ref(db, "ocorrencias"), snapshot => {
-        const lista = [];
-        snapshot.forEach(child => {
-            const val = child.val() || {};
-            lista.push({ ...val, id: val.id || child.key });
+    if(!auth.currentUser) return;
+    if(!ocorrenciasUnsub){
+        ocorrenciasUnsub = onValue(ref(db, OCORRENCIAS_PRIMARY_PATH), snapshot => {
+            setOcorrenciasStorageModo("primary");
+            aplicarSnapshotOcorrencias("primary", snapshot, OCORRENCIAS_PRIMARY_PATH);
+        }, err => {
+            console.warn("Firebase negou /ocorrencias; lendo ocorrencias pelo caminho compativel.", err);
+            setOcorrenciasStorageModo("fallback");
+            ocorrenciasPorFonte.primary = [];
+            atualizarCacheOcorrencias();
         });
-        ocorrenciasCache = lista.sort((a, b) => Number(b.criadoEm || 0) - Number(a.criadoEm || 0));
-        renderizarOcorrencias();
-    }, err => {
-        console.warn("Falha ao carregar ocorrencias:", err);
-        const lista = document.getElementById("ocorrenciasLista");
-        if(lista) lista.innerHTML = `<p class="ocorrenciasEmpty">Nao foi possivel carregar ocorrencias.</p>`;
-    });
+    }
+    if(!ocorrenciasFallbackUnsub){
+        ocorrenciasFallbackUnsub = onValue(ref(db, OCORRENCIAS_FALLBACK_PATH), snapshot => {
+            if(ocorrenciasStorageModo !== "primary") setOcorrenciasStorageModo("fallback");
+            aplicarSnapshotOcorrencias("fallback", snapshot, OCORRENCIAS_FALLBACK_PATH);
+        }, err => {
+            console.warn("Falha ao carregar ocorrencias fallback:", err);
+            if(ocorrenciasStorageModo !== "primary") setOcorrenciasStorageModo("erro");
+            ocorrenciasPorFonte.fallback = [];
+            atualizarCacheOcorrencias();
+        });
+    }
 }
 
 function pararOcorrencias(){
     if(ocorrenciasUnsub){
         try{ ocorrenciasUnsub(); }catch(e){}
     }
+    if(ocorrenciasFallbackUnsub){
+        try{ ocorrenciasFallbackUnsub(); }catch(e){}
+    }
+    if(ocorrenciasCamposUnsub){
+        try{ ocorrenciasCamposUnsub(); }catch(e){}
+    }
     ocorrenciasUnsub = null;
+    ocorrenciasFallbackUnsub = null;
+    ocorrenciasCamposUnsub = null;
+    ocorrenciasPorFonte = { primary: [], fallback: [] };
     ocorrenciasCache = [];
+    setOcorrenciasStorageModo("carregando");
     renderizarOcorrencias();
+}
+
+function aplicarSnapshotOcorrencias(fonte, snapshot, basePath){
+    const lista = [];
+    snapshot.forEach(child => {
+        const val = child.val() || {};
+        const id = val.id || child.key;
+        lista.push({ ...val, id, _storagePath: `${basePath}/${id}` });
+    });
+    ocorrenciasPorFonte[fonte] = lista;
+    atualizarCacheOcorrencias();
+}
+
+function atualizarCacheOcorrencias(){
+    const mapa = new Map();
+    [...ocorrenciasPorFonte.fallback, ...ocorrenciasPorFonte.primary].forEach(item => {
+        mapa.set(item.id, item);
+    });
+    ocorrenciasCache = [...mapa.values()].sort((a, b) => Number(b.criadoEm || 0) - Number(a.criadoEm || 0));
+    renderizarOcorrencias();
+}
+
+function atualizarBadgeOcorrenciasNovas(total){
+    const badge = document.getElementById("ocorrenciasNovasBadge");
+    const btn = document.getElementById("btnOcorrencias");
+    if(!badge || !btn) return;
+    badge.textContent = String(total);
+    badge.style.display = total > 0 ? "inline-flex" : "none";
+    btn.classList.toggle("tem-ocorrencias-novas", total > 0);
 }
 
 function renderizarOcorrencias(){
@@ -10781,7 +11347,10 @@ function renderizarOcorrencias(){
                 oc.descricaoItem,
                 oc.descricao,
                 oc.operadorNome,
-                oc.tipo
+                oc.tipo,
+                oc.responsavelNome,
+                oc.tratativaRealizada,
+                oc.tratativaAssinatura
             ].join(" ").toLowerCase();
             if(!texto.includes(busca)) return false;
         }
@@ -10792,10 +11361,13 @@ function renderizarOcorrencias(){
     const criticas = ocorrenciasCache.filter(oc => ["alta", "critica"].includes(oc.gravidade)).length;
     const abertasEl = document.getElementById("ocorrenciasAbertas");
     const criticasEl = document.getElementById("ocorrenciasCriticas");
+    const filtradasEl = document.getElementById("ocorrenciasFiltradas");
     const totalEl = document.getElementById("ocorrenciasTotal");
     if(abertasEl) abertasEl.textContent = String(abertas);
     if(criticasEl) criticasEl.textContent = String(criticas);
+    if(filtradasEl) filtradasEl.textContent = String(filtradas.length);
     if(totalEl) totalEl.textContent = String(ocorrenciasCache.length);
+    atualizarBadgeOcorrenciasNovas(abertas);
 
     if(!filtradas.length){
         listaEl.innerHTML = `<p class="ocorrenciasEmpty">Nenhuma ocorrencia encontrada.</p>`;
@@ -10804,24 +11376,55 @@ function renderizarOcorrencias(){
 
     listaEl.innerHTML = filtradas.slice(0, 80).map(oc => {
         const podeEditar = ocorrenciaPodeEditar(oc);
+        const podeTratar = podeTratarOcorrencia(oc);
+        const statusOpcoes = valoresUnicosOcorrencia([...STATUS_OCORRENCIA, oc.status || "aberta"]);
+        const gravClasse = String(oc.gravidade || "baixa").toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9_-]+/g, "-") || "baixa";
         const statusHtml = podeEditar
             ? `<select class="ocorrenciaStatusSelect" onchange="atualizarStatusOcorrencia('${escapeHtml(oc.id)}', this.value)">
-                ${STATUS_OCORRENCIA.map(s => `<option value="${escapeHtml(s)}" ${oc.status === s ? "selected" : ""}>${escapeHtml(labelOcorrencia(s))}</option>`).join("")}
+                ${statusOpcoes.map(s => `<option value="${escapeHtml(s)}" ${oc.status === s ? "selected" : ""}>${escapeHtml(labelOcorrencia(s))}</option>`).join("")}
               </select>`
             : `<span class="ocorrenciaStatus">${escapeHtml(labelOcorrencia(oc.status || "aberta"))}</span>`;
+        const responsavelNome = oc.responsavelNome || "";
+        const tratativaHtml = `
+            <div class="ocorrenciaTratativaBox">
+                <div class="ocorrenciaTratativaHeader">
+                    <strong>Tratativa</strong>
+                    <span>${escapeHtml(responsavelNome ? "Responsavel: " + responsavelNome : "Sem responsavel")}</span>
+                </div>
+                ${podeTratar ? `
+                    <div class="ocorrenciaTratativaGrid">
+                        <textarea id="tratativa_${escapeHtml(oc.id)}" maxlength="5000" placeholder="Tratativa realizada">${escapeHtml(oc.tratativaRealizada || "")}</textarea>
+                        <input id="assinatura_${escapeHtml(oc.id)}" maxlength="160" placeholder="Assinatura do responsavel" value="${escapeHtml(oc.tratativaAssinatura || identidadeTratativaOcorrencia().nome)}">
+                    </div>
+                    <div class="ocorrenciaTratativaActions">
+                        <button type="button" onclick="assumirTratativaOcorrencia('${escapeHtml(oc.id)}')">${responsavelNome ? "Reatribuir para mim" : "Assumir"}</button>
+                        <button type="button" onclick="salvarTratativaOcorrencia('${escapeHtml(oc.id)}')">Salvar tratativa</button>
+                    </div>
+                ` : `
+                    <p>${escapeHtml(oc.tratativaRealizada || "Tratativa ainda nao registrada.")}</p>
+                    ${oc.tratativaAssinatura ? `<small>Assinado por ${escapeHtml(oc.tratativaAssinatura)}</small>` : ""}
+                `}
+                ${oc.tratativaEm ? `<small>Documento assinado em ${escapeHtml(new Date(Number(oc.tratativaEm)).toLocaleString("pt-BR"))}</small>` : ""}
+            </div>
+        `;
         return `
-            <article class="ocorrenciaCard grav-${escapeHtml(oc.gravidade || "baixa")}">
+            <article class="ocorrenciaCard grav-${escapeHtml(gravClasse)}">
                 <div class="ocorrenciaCardTop">
                     <div>
                         <strong>${escapeHtml(oc.acusadoNome || "Sem nome")}</strong>
-                        <span>${escapeHtml(oc.acusadoCracha || "sem cracha")} - ${escapeHtml(oc.acusadoSetor || "setor nao informado")}</span>
+                        <span>${escapeHtml(oc.acusadoCracha ? "Cracha " + oc.acusadoCracha : "sem cracha")} - ${escapeHtml(oc.acusadoSetor || "setor nao informado")}</span>
                     </div>
                     <div class="ocorrenciaBadges">
-                        <span>${escapeHtml(labelOcorrencia(oc.gravidade || "baixa"))}</span>
+                        <span class="gravidadeBadge">${escapeHtml(labelOcorrencia(oc.gravidade || "baixa"))}</span>
                         ${statusHtml}
                     </div>
                 </div>
-                <div class="ocorrenciaTipo">${escapeHtml(oc.tipo || "-")}</div>
+                <div class="ocorrenciaTipo">
+                    <span>${escapeHtml(oc.tipo || "-")}</span>
+                    <small>#${escapeHtml(String(oc.id || "").replace("ocorrencia_", ""))}</small>
+                </div>
                 <p>${escapeHtml(oc.descricao || "")}</p>
                 ${(oc.codigoItem || oc.descricaoItem || oc.quantidade)
                     ? `<div class="ocorrenciaItemInfo">
@@ -10830,9 +11433,10 @@ function renderizarOcorrencias(){
                         <span>${escapeHtml(oc.descricaoItem || "")}</span>
                        </div>`
                     : ""}
+                ${tratativaHtml}
                 <footer>
                     <span>${escapeHtml(oc.data || "")} ${escapeHtml(oc.hora || "")}</span>
-                    <span>por ${escapeHtml(oc.operadorNome || "Usuario")}</span>
+                    <span>por ${escapeHtml(oc.operadorNome || "Usuario")}${oc._storagePath?.startsWith(OCORRENCIAS_FALLBACK_PATH) ? " - compat" : ""}</span>
                 </footer>
             </article>
         `;
@@ -10846,6 +11450,12 @@ window.limparFormularioOcorrencia = limparFormularioOcorrencia;
 window.limparFiltrosOcorrencia = limparFiltrosOcorrencia;
 window.renderizarOcorrencias = renderizarOcorrencias;
 window.atualizarStatusOcorrencia = atualizarStatusOcorrencia;
+window.assumirTratativaOcorrencia = assumirTratativaOcorrencia;
+window.salvarTratativaOcorrencia = salvarTratativaOcorrencia;
+window.exportarOcorrenciasXlsx = exportarOcorrenciasXlsx;
+window.renderizarEditorCamposOcorrencia = renderizarEditorCamposOcorrencia;
+window.adicionarOpcaoOcorrencia = adicionarOpcaoOcorrencia;
+window.removerOpcaoOcorrencia = removerOpcaoOcorrencia;
 
 function formatarTextoUltimaAtualizacao(data, usuario) {
     const usuarioRaw = String(usuario || "Sistema");

@@ -859,11 +859,13 @@
     }
 
     #ocorrenciasScreen {
-        inset: 6px;
+        inset: 5px;
     }
 
     .ocorrenciasBody {
         grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 8px;
         overflow: auto;
     }
 
@@ -875,8 +877,58 @@
         grid-template-columns: 1fr;
     }
 
+    .ocorrenciasCamposHeader,
+    .ocorrenciasCamposAdd {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+    }
+
+    .ocorrenciasCamposHeader select {
+        width: 100%;
+    }
+
     .ocorrenciasStats {
-        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .ocorrenciasConsultaHeader {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .ocorrenciasHeaderActions,
+    .ocorrenciasConsultaHeader button {
+        width: 100%;
+    }
+
+    .ocorrenciasHeaderActions {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .ocorrenciaCardTop,
+    .ocorrenciaCard footer,
+    .ocorrenciaTipo {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .ocorrenciaFormTitle {
+        flex-direction: column;
+    }
+
+    .ocorrenciaFormTitle span {
+        max-width: none;
+        text-align: left;
+    }
+
+    .ocorrenciaTratativaGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .ocorrenciaTratativaActions {
+        display: grid;
+        grid-template-columns: 1fr;
     }
 
     #contagemSectionGrid,
