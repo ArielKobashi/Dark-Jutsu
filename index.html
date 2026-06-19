@@ -292,13 +292,14 @@ xmlns="http://www.w3.org/2000/svg">
                 <div class="ocorrenciaSectionTitle">Item relacionado</div>
 
                 <label>
-                    Codigo do item
-                    <input id="ocorrenciaCodigoItem" type="text" autocomplete="off">
+                    Identificador do item
+                    <input id="ocorrenciaCodigoItem" type="text" list="ocorrenciaItensOptions" autocomplete="off" oninput="preencherDescricaoItemOcorrencia()">
+                    <datalist id="ocorrenciaItensOptions"></datalist>
                 </label>
 
                 <label>
                     Descricao do item
-                    <input id="ocorrenciaDescricaoItem" type="text" autocomplete="off">
+                    <input id="ocorrenciaDescricaoItem" type="text" autocomplete="off" oninput="delete this.dataset.auto">
                 </label>
 
                 <label>
@@ -320,33 +321,26 @@ xmlns="http://www.w3.org/2000/svg">
             <div class="ocorrenciasConsulta">
                 <div class="ocorrenciasConsultaHeader">
                     <div>
-                        <strong>Consulta de ocorrencias</strong>
+                        <strong>Resumo de ocorrencias</strong>
                         <span id="ocorrenciasStorageAviso">Aguardando Firebase...</span>
                     </div>
                     <div class="ocorrenciasHeaderActions">
                         <button type="button" onclick="abrirAvaliadorOcorrencias()">Avaliador / Tratativas</button>
                         <button type="button" onclick="exportarOcorrenciasXlsx()">Exportar XLSX</button>
-                        <button type="button" onclick="limparFiltrosOcorrencia()">Limpar filtros</button>
                     </div>
                 </div>
 
                 <div class="ocorrenciasStats">
                     <div class="stat-abertas"><span>Abertas</span><strong id="ocorrenciasAbertas">0</strong></div>
                     <div class="stat-criticas"><span>Alta/Critica</span><strong id="ocorrenciasCriticas">0</strong></div>
-                    <div class="stat-filtradas"><span>Filtradas</span><strong id="ocorrenciasFiltradas">0</strong></div>
+                    <div class="stat-filtradas"><span>Sem tratativa</span><strong id="ocorrenciasFiltradas">0</strong></div>
                     <div class="stat-total"><span>Total</span><strong id="ocorrenciasTotal">0</strong></div>
                 </div>
 
-                <div class="ocorrenciasFiltros">
-                    <input id="ocorrenciaFiltroBusca" type="search" placeholder="Buscar nome, cracha, codigo ou descricao" oninput="renderizarOcorrencias()">
-                    <select id="ocorrenciaFiltroTipo" onchange="renderizarOcorrencias()"></select>
-                    <select id="ocorrenciaFiltroGravidade" onchange="renderizarOcorrencias()"></select>
-                    <select id="ocorrenciaFiltroStatus" onchange="renderizarOcorrencias()"></select>
-                    <input id="ocorrenciaFiltroData" type="date" onchange="renderizarOcorrencias()">
-                </div>
-
-                <div id="ocorrenciasLista" class="ocorrenciasLista">
-                    <p class="ocorrenciasEmpty">Nenhuma ocorrencia carregada.</p>
+                <div class="ocorrenciasResumoPainel">
+                    <strong>Tratativas separadas</strong>
+                    <p>As ocorrencias registradas nao aparecem mais nesta lateral. Use o avaliador para consultar, atribuir responsavel, registrar tratativa, assinar e exportar.</p>
+                    <button type="button" onclick="abrirAvaliadorOcorrencias()">Abrir avaliador</button>
                 </div>
             </div>
         </div>
@@ -10780,6 +10774,45 @@ function popularDatalistOcorrencia(id, valores){
     el.innerHTML = valores.map(v => `<option value="${escapeHtml(v)}"></option>`).join("");
 }
 
+function popularItensOcorrenciaDatalist(){
+    const el = document.getElementById("ocorrenciaItensOptions");
+    if(!el) return;
+    const itens = Array.isArray(window.dados) ? window.dados : [];
+    el.innerHTML = itens.slice(0, 5000).map(item => {
+        const codigo = item?.protheus || item?.protheusKey || item?.cooperat || "";
+        const descricao = item?.descricao || "";
+        if(!codigo) return "";
+        return `<option value="${escapeHtml(codigo)}">${escapeHtml(descricao)}</option>`;
+    }).join("");
+}
+
+function buscarItemOcorrenciaPorCodigo(valor){
+    const alvo = normalizarCodigoItem(valor);
+    if(!alvo) return null;
+    const itens = Array.isArray(window.dados) ? window.dados : [];
+    return itens.find(item => {
+        const codigos = [item?.protheus, item?.protheusKey, item?.cooperat, typeof getItemKey === "function" ? getItemKey(item) : ""];
+        return codigos.some(codigo => normalizarCodigoItem(codigo) === alvo);
+    }) || null;
+}
+
+function preencherDescricaoItemOcorrencia(){
+    const codigoEl = document.getElementById("ocorrenciaCodigoItem");
+    const descricaoEl = document.getElementById("ocorrenciaDescricaoItem");
+    if(!codigoEl || !descricaoEl) return;
+    const item = buscarItemOcorrenciaPorCodigo(codigoEl.value);
+    if(!item) return;
+    const descricao = normalizarTextoOcorrencia(item.descricao || "", 180);
+    if(descricao && (!descricaoEl.value.trim() || descricaoEl.dataset.auto === "1")){
+        descricaoEl.value = descricao;
+        descricaoEl.dataset.auto = "1";
+    }
+    const codigoPreferido = item.protheus || item.protheusKey || item.cooperat || "";
+    if(codigoPreferido && normalizarCodigoItem(codigoEl.value) === normalizarCodigoItem(codigoPreferido)){
+        codigoEl.value = codigoPreferido;
+    }
+}
+
 function iniciarCamposOcorrencia(){
     const local = carregarCamposOcorrenciaLocal();
     if(local) aplicarCamposOcorrencia(local, "local");
@@ -10827,6 +10860,7 @@ function configurarOcorrenciasUI(){
     popularSelectOcorrencia("ocorrenciaFiltroGravidade", GRAVIDADES_OCORRENCIA, "Todas as gravidades");
     popularSelectOcorrencia("ocorrenciaFiltroStatus", STATUS_OCORRENCIA, "Todos os status");
     popularDatalistOcorrencia("ocorrenciaSetoresOptions", SETORES_OCORRENCIA);
+    popularItensOcorrenciaDatalist();
     const gravidade = document.getElementById("ocorrenciaGravidade");
     if(gravidade && !gravidade.value) gravidade.value = GRAVIDADES_OCORRENCIA.includes("baixa") ? "baixa" : (GRAVIDADES_OCORRENCIA[0] || "");
     atualizarResumoOperadorOcorrencia();
@@ -10880,6 +10914,8 @@ function fecharOcorrencias(){
 function limparFormularioOcorrencia(){
     const form = document.getElementById("ocorrenciaForm");
     if(form) form.reset();
+    const descricaoItem = document.getElementById("ocorrenciaDescricaoItem");
+    if(descricaoItem) delete descricaoItem.dataset.auto;
     const gravidade = document.getElementById("ocorrenciaGravidade");
     if(gravidade) gravidade.value = "baixa";
     const tipo = document.getElementById("ocorrenciaTipo");
@@ -11414,7 +11450,6 @@ function renderizarTratativaOcorrencia(oc){
 
 function renderizarOcorrencias(){
     const listaEl = document.getElementById("ocorrenciasLista");
-    if(!listaEl) return;
     const busca = (document.getElementById("ocorrenciaFiltroBusca")?.value || "").toLowerCase().trim();
     const tipo = document.getElementById("ocorrenciaFiltroTipo")?.value || "";
     const gravidade = document.getElementById("ocorrenciaFiltroGravidade")?.value || "";
@@ -11446,15 +11481,21 @@ function renderizarOcorrencias(){
 
     const abertas = ocorrenciasCache.filter(oc => oc.status === "aberta").length;
     const criticas = ocorrenciasCache.filter(oc => ["alta", "critica"].includes(oc.gravidade)).length;
+    const semTratativa = ocorrenciasCache.filter(oc => !oc.tratativaRealizada).length;
     const abertasEl = document.getElementById("ocorrenciasAbertas");
     const criticasEl = document.getElementById("ocorrenciasCriticas");
     const filtradasEl = document.getElementById("ocorrenciasFiltradas");
     const totalEl = document.getElementById("ocorrenciasTotal");
     if(abertasEl) abertasEl.textContent = String(abertas);
     if(criticasEl) criticasEl.textContent = String(criticas);
-    if(filtradasEl) filtradasEl.textContent = String(filtradas.length);
+    if(filtradasEl) filtradasEl.textContent = String(semTratativa);
     if(totalEl) totalEl.textContent = String(ocorrenciasCache.length);
     atualizarBadgeOcorrenciasNovas(abertas);
+
+    if(!listaEl){
+        renderizarAvaliadorOcorrencias();
+        return;
+    }
 
     if(!filtradas.length){
         listaEl.innerHTML = `<p class="ocorrenciasEmpty">Nenhuma ocorrencia encontrada.</p>`;
@@ -11596,6 +11637,7 @@ window.limparFormularioOcorrencia = limparFormularioOcorrencia;
 window.limparFiltrosOcorrencia = limparFiltrosOcorrencia;
 window.renderizarOcorrencias = renderizarOcorrencias;
 window.renderizarAvaliadorOcorrencias = renderizarAvaliadorOcorrencias;
+window.preencherDescricaoItemOcorrencia = preencherDescricaoItemOcorrencia;
 window.atualizarStatusOcorrencia = atualizarStatusOcorrencia;
 window.assumirTratativaOcorrencia = assumirTratativaOcorrencia;
 window.salvarTratativaOcorrencia = salvarTratativaOcorrencia;
