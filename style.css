@@ -4048,6 +4048,15 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     background:rgba(15,32,55,0.82);
 }
 
+.contagemMachineCard.ocupada{
+    border-color:rgba(245,158,11,0.58);
+}
+
+.contagemMachineBusy{
+    color:#FCD34D !important;
+    font-weight:900;
+}
+
 .contagemMachineCardActions{
     width:100%;
     display:grid;
@@ -4140,6 +4149,10 @@ box-shadow:0 0 0px rgba(0,255,120,0);
 .contagemMachineProgress small{
     color:#8FB8A0;
     font-size:11px;
+}
+
+.contagemMachineProgress .contagemMachineBusy{
+    display:block;
 }
 
 #contagemCardArea{

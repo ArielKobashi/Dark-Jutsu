@@ -594,6 +594,7 @@ document.addEventListener("keydown", function(e){
         <div id="contagemRelatorioTabela"></div>
         <div id="contagemRelatorioRodape">
             <button onclick="salvarContagemPeloRelatorio()">Salvar Contagem</button>
+            <button onclick="exportarPlanilhaGeralContagem()">Exportar Contados Geral</button>
         </div>
     </div>
 </div>
@@ -4375,7 +4376,7 @@ function gerarRelatorioReposicaoSemPedido(itens){
                     </tr>
                 </tfoot>
             </table>
-            <script>
+            <scr${""}ipt>
                 const linhasRelatorio = ${JSON.stringify(linhas)};
                 function exportarXlsx(){
                     const XLSXLib = window.opener && window.opener.XLSX;
@@ -4841,6 +4842,7 @@ let contagemMicStream = null;
 let contagemRascunhoFirebaseTimer = null;
 let contagemRascunhoFirebaseAvisoErro = false;
 let contagemRegistrosDesdeUltimoBackup = 0;
+let contagemPresencaUnsub = null;
 const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
 const CONTAGEM_ALIAS_STORAGE_KEY = "contagemAliasesMaquinas";
 const CONTAGEM_SECOES = [
@@ -5160,14 +5162,114 @@ function objetoFirebaseSeguro(obj){
     return seguro;
 }
 
+function objetoRascunhoContagemFirebaseSeguro(obj){
+    const seguro = {};
+    Object.entries(obj || {}).forEach(([key, value]) => {
+        seguro[chaveFirebaseContagem(key)] = { key, value };
+    });
+    return seguro;
+}
+
+function normalizarRascunhoContagemFirebase(obj){
+    const normalizado = {};
+    const mapaChaves = new Map();
+    contagemItens.forEach(item => {
+        const key = itemKeyContagem(item);
+        if(key) mapaChaves.set(chaveFirebaseContagem(key), key);
+    });
+    Object.entries(obj || {}).forEach(([safeKey, entrada]) => {
+        if(entrada && typeof entrada === "object" && Object.prototype.hasOwnProperty.call(entrada, "key")){
+            normalizado[entrada.key] = entrada.value;
+            return;
+        }
+        normalizado[mapaChaves.get(safeKey) || safeKey] = entrada;
+    });
+    return normalizado;
+}
+
+function payloadPresencaContagemFirebase(aberta = true){
+    const sessao = carregarSessaoContagem();
+    const maquina = contagemMaquinaAtual || sessao.maquina || "";
+    const resumoGrupo = maquina ? resumoProgressoGruposContagem()[maquina] : null;
+    return {
+        aberta: !!aberta,
+        etapa: "contagem",
+        usuario: window.meuNickname || "",
+        uid: uidRascunhoContagemFirebase(),
+        maquina,
+        maquinaLabel: maquina ? labelGrupoContagem(maquina) : "",
+        contadosGrupo: resumoGrupo?.contados || 0,
+        totalGrupo: resumoGrupo?.total || 0,
+        concluidaGrupo: !!resumoGrupo?.total && resumoGrupo.contados >= resumoGrupo.total,
+        itemKey: itemKeyContagem(contagemItensMaquina[contagemIndice]) || sessao.itemKey || "",
+        indice: Number.isFinite(contagemIndice) ? contagemIndice : Number(sessao.indice || 0),
+        updatedAt: Date.now()
+    };
+}
+
+function payloadProgressoItensContagemFirebase(){
+    const itens = {};
+    contagemItens.forEach(item => {
+        const key = itemKeyContagem(item);
+        if(!key) return;
+        const grupo = grupoItemContagem(item);
+        if(isVerificacaoVazioContagem(item)){
+            if(contagemVerificacoesVazio[key] === undefined) return;
+            itens[chaveFirebaseContagem(key)] = {
+                key,
+                tipo:"verificacao_vazio",
+                grupo,
+                maquina:maquinaGrupoContagem(grupo),
+                endereco:item.enderecoPrincipal || "",
+                armazem:item.armazemPrincipal || "",
+                descricao:item.descricao || "",
+                status:contagemVerificacoesVazio[key],
+                updatedAt:Date.now()
+            };
+            return;
+        }
+        if(contagemValores[key] === undefined) return;
+        itens[chaveFirebaseContagem(key)] = {
+            key,
+            tipo:"item_contado",
+            grupo,
+            maquina:maquinaGrupoContagem(grupo),
+            endereco:item.enderecoPrincipal || "",
+            armazem:item.armazemPrincipal || "",
+            protheus:item.protheus || "",
+            cooperat:item.cooperat || "",
+            descricao:item.descricao || "",
+            saldoSistema:parsePlanilhaNumero(item.saldo),
+            contado:contagemValores[key],
+            updatedAt:Date.now()
+        };
+    });
+    return itens;
+}
+
+function payloadProgressoGruposContagemFirebase(){
+    const grupos = {};
+    Object.entries(resumoProgressoGruposContagem()).forEach(([grupo, resumo]) => {
+        grupos[chaveFirebaseContagem(grupo)] = {
+            ...resumo,
+            concluida: !!resumo.total && resumo.contados >= resumo.total,
+            updatedAt:Date.now()
+        };
+    });
+    return grupos;
+}
+
 function payloadRascunhoContagemFirebase(){
     return {
         usuario: window.meuNickname || "",
         uid: uidRascunhoContagemFirebase(),
-        valores: objetoFirebaseSeguro(contagemValores),
-        verificacoesVazio: objetoFirebaseSeguro(contagemVerificacoesVazio),
+        valores: objetoRascunhoContagemFirebaseSeguro(contagemValores),
+        verificacoesVazio: objetoRascunhoContagemFirebaseSeguro(contagemVerificacoesVazio),
         sessao: carregarSessaoContagem(),
         progressoPorGrupo: objetoFirebaseSeguro(resumoProgressoGruposContagem()),
+        progressoItens: payloadProgressoItensContagemFirebase(),
+        progressoGrupos: payloadProgressoGruposContagemFirebase(),
+        presenca: payloadPresencaContagemFirebase(true),
         updatedAt: Date.now()
     };
 }
@@ -5180,7 +5282,14 @@ async function salvarRascunhoContagemFirebaseAgora(){
     const path = pathRascunhoContagemFirebase();
     if(!path || !window.set || !window.ref || !window.db) return false;
     try{
-        await window.set(window.ref(window.db, path), payloadRascunhoContagemFirebase());
+        const payload = payloadRascunhoContagemFirebase();
+        const baseUsuario = path.replace(/\/_rascunho_atual$/, "");
+        await Promise.all([
+            window.set(window.ref(window.db, path), payload),
+            window.set(window.ref(window.db, `${baseUsuario}/_progresso_itens`), payload.progressoItens || {}),
+            window.set(window.ref(window.db, `${baseUsuario}/_progresso_grupos`), payload.progressoGrupos || {}),
+            window.set(window.ref(window.db, `${baseUsuario}/_presenca`), payload.presenca || payloadPresencaContagemFirebase(true))
+        ]);
         contagemRascunhoFirebaseAvisoErro = false;
         return true;
     }catch(e){
@@ -5189,6 +5298,19 @@ async function salvarRascunhoContagemFirebaseAgora(){
             contagemRascunhoFirebaseAvisoErro = true;
             mostrarNotificacao("Rascunho salvo localmente, mas o Firebase negou o backup.");
         }
+        return false;
+    }
+}
+
+async function salvarPresencaContagemFirebase(aberta = true){
+    const usuario = usuarioKeyContagemFirebase();
+    const data = dataContagemSessaoAtual();
+    if(!usuario || !window.set || !window.ref || !window.db) return false;
+    try{
+        await window.set(window.ref(window.db, `contagens/${data}/${usuario}/_presenca`), payloadPresencaContagemFirebase(aberta));
+        return true;
+    }catch(e){
+        console.warn("Falha ao salvar presenca da contagem:", e);
         return false;
     }
 }
@@ -5232,19 +5354,24 @@ async function carregarRascunhoContagemFirebase(){
         const localSessao = carregarSessaoContagem();
         const remotoTs = Number(remoto.updatedAt || sessaoRemota.updatedAt || 0);
         const localTs = Number(localSessao.updatedAt || 0);
-        if(remotoTs > localTs){
-            contagemValores = remoto.valores && typeof remoto.valores === "object" ? remoto.valores : {};
-            contagemVerificacoesVazio = remoto.verificacoesVazio && typeof remoto.verificacoesVazio === "object" ? remoto.verificacoesVazio : {};
+        const valoresRemotos = remoto.valores && typeof remoto.valores === "object" ? normalizarRascunhoContagemFirebase(remoto.valores) : {};
+        const verificacoesRemotas = remoto.verificacoesVazio && typeof remoto.verificacoesVazio === "object" ? normalizarRascunhoContagemFirebase(remoto.verificacoesVazio) : {};
+        if(localTs > remotoTs){
+            contagemValores = { ...valoresRemotos, ...(contagemValores || {}) };
+            contagemVerificacoesVazio = { ...verificacoesRemotas, ...(contagemVerificacoesVazio || {}) };
+            agendarSalvarRascunhoContagemFirebase(50);
+        }else{
+            contagemValores = valoresRemotos;
+            contagemVerificacoesVazio = verificacoesRemotas;
             try{
-                localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
-                localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
                 localStorage.setItem(chaveSessaoContagem(), JSON.stringify(sessaoRemota));
             }catch(e){}
-            return true;
         }
-        if(localTs > remotoTs){
-            agendarSalvarRascunhoContagemFirebase(50);
-        }
+        try{
+            localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
+            localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
+        }catch(e){}
+        return true;
     }catch(e){
         console.warn("Falha ao carregar rascunho da contagem no Firebase:", e);
     }
@@ -5333,7 +5460,7 @@ function salvarRascunhoContagem(opcoes = {}){
         localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
     }catch(e){}
     if(opcoes.contagemAlterada) contagemRegistrosDesdeUltimoBackup += 1;
-    const forcarBackup = opcoes.forcarFirebase || contagemRegistrosDesdeUltimoBackup >= 5;
+    const forcarBackup = opcoes.forcarFirebase || opcoes.contagemAlterada || contagemRegistrosDesdeUltimoBackup >= 5;
     if(forcarBackup){
         contagemRegistrosDesdeUltimoBackup = 0;
         salvarRascunhoContagemFirebaseAgora();
@@ -5379,12 +5506,42 @@ function salvarSessaoContagem(extra = {}){
             ...extra
         }));
     }catch(e){}
+    if(extra.aberta !== undefined || contagemMaquinaAtual){
+        salvarPresencaContagemFirebase(extra.aberta !== false);
+    }
     agendarSalvarRascunhoContagemFirebase();
 }
 
 function marcarContagemAberta(aberta){
     salvarSessaoContagem({ aberta: !!aberta });
     document.body?.classList.toggle("contagem-open", !!aberta);
+}
+
+function pararListenerPresencaContagem(){
+    if(typeof contagemPresencaUnsub === "function"){
+        try{ contagemPresencaUnsub(); }catch(e){}
+    }
+    contagemPresencaUnsub = null;
+}
+
+function iniciarListenerPresencaContagem(){
+    if(contagemPresencaUnsub || !window.onValue || !window.ref || !window.db) return;
+    const data = dataContagemSessaoAtual();
+    try{
+        contagemPresencaUnsub = window.onValue(window.ref(window.db, `contagens/${data}`), snap => {
+            contagemHomeRegistros = {
+                ...(contagemHomeRegistros || {}),
+                [data]: snap.exists() ? snap.val() : {}
+            };
+            if(document.getElementById("contagemScreen")?.style.display !== "none"){
+                renderizarMaquinasContagem();
+            }
+        }, err => {
+            console.warn("Falha ao escutar presenca da contagem:", err);
+        });
+    }catch(e){
+        console.warn("Falha ao iniciar presenca da contagem:", e);
+    }
 }
 
 function itemKeyContagem(item){
@@ -5463,13 +5620,29 @@ function chaveProgressoContagemPrincipal(codigo, armazem, endereco){
 
 function calcularProgressoContagemPrincipal(){
     const totalLinhas = new Set();
+    const porItemKey = new Map();
+    const porItemKeyFirebase = new Map();
     criarLinhasContagemPermitidas(Array.isArray(window.dados) ? window.dados : []).forEach(item => {
         const codigo = item.protheus || item.protheusKey || item.cooperat || "";
         const chave = chaveProgressoContagemPrincipal(codigo, item.armazemPrincipal, item.enderecoPrincipal);
         if(codigo && chave) totalLinhas.add(chave);
+        const itemKey = itemKeyContagem(item);
+        if(itemKey && codigo && chave){
+            porItemKey.set(itemKey, chave);
+            porItemKeyFirebase.set(chaveFirebaseContagem(itemKey), chave);
+        }
     });
 
     const contadas = new Set();
+    const registrarRascunho = valores => {
+        Object.entries(valores || {}).forEach(([safeKey, entrada]) => {
+            const itemKey = entrada && typeof entrada === "object" && Object.prototype.hasOwnProperty.call(entrada, "key")
+                ? entrada.key
+                : safeKey;
+            const chave = porItemKey.get(itemKey) || porItemKeyFirebase.get(safeKey);
+            if(chave && totalLinhas.has(chave)) contadas.add(chave);
+        });
+    };
     const visitarRegistro = registro => {
         if(!registro || typeof registro !== "object") return;
         if(registro.itens){
@@ -5478,6 +5651,10 @@ function calcularProgressoContagemPrincipal(){
                 const chave = chaveProgressoContagemPrincipal(codigo, item?.armazem, item?.endereco);
                 if(totalLinhas.has(chave)) contadas.add(chave);
             });
+            return;
+        }
+        if(registro.valores){
+            registrarRascunho(registro.valores);
             return;
         }
         Object.values(registro).forEach(visitarRegistro);
@@ -5663,6 +5840,7 @@ async function abrirContagem(){
     renderizarMaquinasContagem();
     mostrarSelecaoMaquinaContagem();
     atualizarBotoesVozContagem();
+    iniciarListenerPresencaContagem();
     ativarModoFocoContagem();
 
     document.getElementById("contagemScreen").style.display = "flex";
@@ -5673,6 +5851,8 @@ async function abrirContagem(){
 
 function fecharContagem(){
     if(contagemAplicandoResetGlobal) return;
+    salvarPresencaContagemFirebase(false);
+    pararListenerPresencaContagem();
     if(contagemFinalizadaSemSessao){
         contagemFinalizadaSemSessao = false;
     }else{
@@ -5889,6 +6069,68 @@ async function removerAliasMaquinaContagem(origem){
     renderizarMaquinasContagem();
 }
 
+function presencasContagemDataAtual(){
+    const data = dataContagemSessaoAtual();
+    return contagemHomeRegistros?.[data] || {};
+}
+
+function usuarioAtualPresencaContagem(){
+    return {
+        usuario: String(window.meuNickname || ""),
+        uid: String(uidRascunhoContagemFirebase() || ""),
+        usuarioKey: usuarioKeyContagemFirebase()
+    };
+}
+
+function statusOutrosUsuariosMaquinaContagem(maquina){
+    const alvo = resolverGrupoSessaoContagem(maquina) || maquina || "";
+    const atual = usuarioAtualPresencaContagem();
+    const limiteAtivo = Date.now() - (4 * 60 * 1000);
+    const status = [];
+    Object.entries(presencasContagemDataAtual() || {}).forEach(([usuarioKey, registroUsuario]) => {
+        if(usuarioKey === atual.usuarioKey) return;
+        const presenca = registroUsuario?._presenca || registroUsuario?._rascunho_atual?.presenca || {};
+        if(String(presenca.uid || "") && atual.uid && String(presenca.uid) === atual.uid) return;
+        if(String(presenca.usuario || "") && atual.usuario && String(presenca.usuario) === atual.usuario) return;
+        const grupos = registroUsuario?._progresso_grupos || registroUsuario?._rascunho_atual?.progressoGrupos || {};
+        const grupoSafe = chaveFirebaseContagem(alvo);
+        const progresso = grupos[grupoSafe] || Object.values(grupos).find(g => (g?.grupo || "") === alvo) || {};
+        const contados = Number(progresso.contados || presenca.contadosGrupo || 0);
+        const total = Number(progresso.total || presenca.totalGrupo || 0);
+        const concluida = !!total && contados >= total;
+        const ativa = presenca.aberta !== false
+            && Number(presenca.updatedAt || progresso.updatedAt || 0) >= limiteAtivo
+            && ((resolverGrupoSessaoContagem(presenca.maquina || "") || presenca.maquina || "") === alvo);
+        if(contados < 2 && !concluida) return;
+        const nome = String(presenca.usuario || registroUsuario?._rascunho_atual?.usuario || usuarioKey || "Outro usuario").trim();
+        status.push({
+            usuario:nome,
+            contados,
+            total,
+            concluida,
+            ativa,
+            texto:concluida
+                ? `${nome} concluiu esta maquina`
+                : `${nome} contando (${contados}/${total || "?"})`
+        });
+    });
+    return status;
+}
+
+function presencasOutrosUsuariosMaquinaContagem(maquina){
+    return statusOutrosUsuariosMaquinaContagem(maquina).map(s => s.usuario);
+}
+
+function htmlIndicadorPresencaContagem(maquina){
+    const status = statusOutrosUsuariosMaquinaContagem(maquina);
+    if(!status.length) return "";
+    const textos = status.map(s => s.texto);
+    const texto = textos.length === 1
+        ? textos[0]
+        : `${textos.slice(0, 2).join(" | ")}${textos.length > 2 ? ` +${textos.length - 2}` : ""}`;
+    return `<small class="contagemMachineBusy">${escapeHtml(texto)}</small>`;
+}
+
 function renderizarMaquinasContagem(){
     const bar = document.getElementById("contagemMaquinasBar");
     const sectionGrid = document.getElementById("contagemSectionGrid");
@@ -5947,13 +6189,15 @@ function renderizarMaquinasContagem(){
             const contados = totalRegistradoGrupoContagem(maquina);
             const textoProgresso = `${contados}/${itensMaq.length}`;
             const temRascunho = grupoTemRascunhoContagem(maquina);
+            const ocupado = presencasOutrosUsuariosMaquinaContagem(maquina).length > 0;
             const card = document.createElement("div");
-            card.className = "contagemMachineCard" + (contados === itensMaq.length ? " completa" : "");
+            card.className = "contagemMachineCard" + (contados === itensMaq.length ? " completa" : "") + (ocupado ? " ocupada" : "");
             card.innerHTML = `
                 <button type="button" class="contagemMachineStart">
                     <strong>${escapeHtml(maquinaGrupoContagem(maquina))}</strong>
                     <span>${textoProgresso} contados</span>
                     <small>${itensMaq.length} itens em ordem de endereco</small>
+                    ${htmlIndicadorPresencaContagem(maquina)}
                 </button>
                 <div class="contagemMachineCardActions">
                     <button type="button" class="continuar" ${temRascunho ? "" : "disabled"}>Continuar</button>
@@ -5983,6 +6227,7 @@ function renderizarContadorMaquinaAtual(){
             <span>${escapeHtml(labelGrupoContagem(contagemMaquinaAtual))}</span>
             <strong>${resumo.contados}/${resumo.total}</strong>
             <small>contados</small>
+            ${htmlIndicadorPresencaContagem(contagemMaquinaAtual)}
         </div>
     `;
 }
@@ -6149,6 +6394,13 @@ function abrirJanelaEscutaContagem(){
 }
 
 function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null, itemKeyPreferido = ""){
+    const conflitos = statusOutrosUsuariosMaquinaContagem(maquina);
+    if(conflitos.length){
+        mostrarNotificacao(conflitos[0].concluida
+            ? `${conflitos[0].usuario} ja concluiu esta maquina nesta etapa.`
+            : `${conflitos[0].usuario} ja esta contando esta maquina.`);
+        return;
+    }
     contagemMaquinaAtual = maquina;
     contagemItensMaquina = contagemItens.filter(item => grupoItemContagem(item) === maquina);
     const primeiroPendente = contagemItensMaquina.findIndex(item => {
@@ -6820,7 +7072,9 @@ function criarPayloadRascunhoFirebaseRelatorioContagem(remoto, uid = ""){
         verificacoesVazio:{},
         rascunhoRecuperado:true
     };
-    Object.entries(valores).forEach(([key, contado]) => {
+    Object.entries(valores).forEach(([safeKey, entrada]) => {
+        const key = entrada && typeof entrada === "object" && Object.prototype.hasOwnProperty.call(entrada, "key") ? entrada.key : safeKey;
+        const contado = entrada && typeof entrada === "object" && Object.prototype.hasOwnProperty.call(entrada, "value") ? entrada.value : entrada;
         const item = porKey.get(key);
         if(!item || isVerificacaoVazioContagem(item)) return;
         payload.itens[chaveFirebaseContagem(key)] = {
@@ -6834,7 +7088,9 @@ function criarPayloadRascunhoFirebaseRelatorioContagem(remoto, uid = ""){
             contado
         };
     });
-    Object.entries(verificacoes).forEach(([key, status]) => {
+    Object.entries(verificacoes).forEach(([safeKey, entrada]) => {
+        const key = entrada && typeof entrada === "object" && Object.prototype.hasOwnProperty.call(entrada, "key") ? entrada.key : safeKey;
+        const status = entrada && typeof entrada === "object" && Object.prototype.hasOwnProperty.call(entrada, "value") ? entrada.value : entrada;
         const item = porKey.get(key);
         if(!item || !isVerificacaoVazioContagem(item)) return;
         payload.verificacoesVazio[chaveFirebaseContagem(key)] = {
@@ -6855,6 +7111,25 @@ function criarPayloadRascunhoFirebaseRelatorioContagem(remoto, uid = ""){
         .filter(item => !maquina || grupoItemContagem(item) === maquina)
         .length;
     return payload;
+}
+
+function mesclarRascunhosAtuaisContagem(contagens){
+    const base = JSON.parse(JSON.stringify(contagens || {}));
+    Object.entries(base || {}).forEach(([data, porUsuario]) => {
+        Object.entries(porUsuario || {}).forEach(([usuarioKey, registros]) => {
+            const remoto = registros?._rascunho_atual;
+            const payload = criarPayloadRascunhoFirebaseRelatorioContagem(remoto, usuarioKey);
+            if(!payload) return;
+            payload.data = payload.data || data;
+            if(!base[data][usuarioKey] || base[data][usuarioKey].itens || base[data][usuarioKey].verificacoesVazio){
+                base[data][usuarioKey] = base[data][usuarioKey]?.itens || base[data][usuarioKey]?.verificacoesVazio
+                    ? { registro_salvo:base[data][usuarioKey] }
+                    : {};
+            }
+            base[data][usuarioKey].rascunho_atual = payload;
+        });
+    });
+    return base;
 }
 
 function mesclarRascunhosFirebaseRelatorioContagem(contagens, rascunhos){
@@ -6941,9 +7216,11 @@ async function abrirRelatorioContagem(){
             window.get(window.ref(window.db, "contagemRascunhos")).catch(() => null)
         ]);
         relContagens = mesclarRascunhoAtualRelatorioContagem(
-            mesclarRascunhosFirebaseRelatorioContagem(
-                snap.exists() ? snap.val() : {},
-                rascunhosSnap?.exists?.() ? rascunhosSnap.val() : {}
+            mesclarRascunhosAtuaisContagem(
+                mesclarRascunhosFirebaseRelatorioContagem(
+                    snap.exists() ? snap.val() : {},
+                    rascunhosSnap?.exists?.() ? rascunhosSnap.val() : {}
+                )
             )
         );
         popularFiltrosRelatorioContagem();
@@ -7008,33 +7285,63 @@ function renderizarRelatorioContagem(){
     document.getElementById("contagemRelatorioTabela").innerHTML = html;
 }
 
-function exportarLinhasRelatorioContagemXlsx(linhasOrigem, dataArquivo = ""){
+function exportarLinhasRelatorioContagemXlsx(linhasOrigem, dataArquivo = "", opcoes = {}){
     if(typeof XLSX === "undefined"){
         mostrarNotificacao("Biblioteca XLSX nao encontrada.");
         return false;
     }
-    const linhas = ordenarLinhasRelatorioContagem((linhasOrigem || []).filter(l => linhaEhDaMaquinaContagemAtual(l))).map(l => ({
+    const filtrarMaquina = opcoes.filtrarMaquina !== false;
+    const linhas = ordenarLinhasRelatorioContagem((linhasOrigem || []).filter(l => !filtrarMaquina || linhaEhDaMaquinaContagemAtual(l))).map(l => {
+        const enderecoInfo = parsearEnderecoContagem(l.item.endereco || "");
+        return {
         Data:l.data,
         Usuario:l.usuario,
         Tipo:l.verificacao ? "Verificacao de vazio" : "Item contado",
+        Maquina:enderecoInfo.grupo || "",
         Endereco:l.item.endereco || "",
+        Armazem:l.item.armazem || "",
         Protheus:l.item.protheus || "",
         Cooperat:l.item.cooperat || "",
         Descricao:l.item.descricao || "",
         SaldoSistema:l.saldo ?? "",
         Contado:l.contado ?? "",
         Status:l.verificacao ? (l.item.status || l.item.descricao || "Verificacao de vazio") : (l.diverge ? "DIVERGENTE" : "OK")
-    }));
+        };
+    });
     const ws = XLSX.utils.json_to_sheet(linhas);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Divergencias");
-    XLSX.writeFile(wb, `divergencias_contagem_${dataArquivo || dataContagemSessaoAtual()}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, opcoes.sheetName || "Divergencias");
+    XLSX.writeFile(wb, `${opcoes.nomeArquivo || "divergencias_contagem"}_${dataArquivo || dataContagemSessaoAtual()}.xlsx`);
     return true;
 }
 
 function exportarRelatorioContagemXlsx(){
     const dataArquivo = document.getElementById("contagemFiltroData")?.value || dataContagemSessaoAtual();
     exportarLinhasRelatorioContagemXlsx(linhasFiltradasRelatorioContagem(), dataArquivo);
+}
+
+function linhasPlanilhaGeralContagem(){
+    const dataFiltro = document.getElementById("contagemFiltroData")?.value || dataContagemSessaoAtual();
+    const usuarioFiltro = document.getElementById("contagemFiltroUsuario")?.value || "";
+    return ordenarLinhasRelatorioContagem(coletarLinhasRelatorioContagem().filter(l => {
+        if(dataFiltro && l.data !== dataFiltro) return false;
+        if(usuarioFiltro && l.usuario !== usuarioFiltro) return false;
+        return true;
+    }));
+}
+
+function exportarPlanilhaGeralContagem(){
+    const dataArquivo = document.getElementById("contagemFiltroData")?.value || dataContagemSessaoAtual();
+    const linhas = linhasPlanilhaGeralContagem();
+    if(!linhas.length){
+        mostrarNotificacao("Nenhum item contado para exportar.");
+        return false;
+    }
+    return exportarLinhasRelatorioContagemXlsx(linhas, dataArquivo, {
+        filtrarMaquina:false,
+        sheetName:"Contados",
+        nomeArquivo:"contagem_geral"
+    });
 }
 
 async function salvarContagemPeloRelatorio(){
