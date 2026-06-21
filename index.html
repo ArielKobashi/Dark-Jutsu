@@ -9769,15 +9769,18 @@ function setMobileConfigOpen(isOpen){
 
 const searchInput = document.getElementById("searchInput");
 if(searchInput){
+    const limparBuscaPrincipalQuandoDisponivel = () => {
+        if(typeof limparBuscaPrincipalSeForUsuario === "function") limparBuscaPrincipalSeForUsuario();
+    };
     searchInput.addEventListener("focus", function(){
         setTimeout(centerTableForMobileSearch, 200);
-        setTimeout(limparBuscaPrincipalSeForUsuario, 80);
+        setTimeout(limparBuscaPrincipalQuandoDisponivel, 80);
     });
     searchInput.addEventListener("input", function(){
-        limparBuscaPrincipalSeForUsuario();
+        limparBuscaPrincipalQuandoDisponivel();
         setTimeout(centerTableForMobileSearch, 120);
     });
-    searchInput.addEventListener("change", limparBuscaPrincipalSeForUsuario);
+    searchInput.addEventListener("change", limparBuscaPrincipalQuandoDisponivel);
 }
 
 updateMobileOverlaysState();
