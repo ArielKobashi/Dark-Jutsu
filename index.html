@@ -5524,6 +5524,22 @@ function pararListenerPresencaContagem(){
     contagemPresencaUnsub = null;
 }
 
+async function carregarPresencaContagemFirebaseAgora(){
+    if(!window.get || !window.ref || !window.db) return false;
+    const data = dataContagemSessaoAtual();
+    try{
+        const snap = await window.get(window.ref(window.db, `contagens/${data}`));
+        contagemHomeRegistros = {
+            ...(contagemHomeRegistros || {}),
+            [data]: snap.exists() ? snap.val() : {}
+        };
+        return true;
+    }catch(e){
+        console.warn("Falha ao carregar presenca/progresso da contagem:", e);
+        return false;
+    }
+}
+
 function iniciarListenerPresencaContagem(){
     if(contagemPresencaUnsub || !window.onValue || !window.ref || !window.db) return;
     const data = dataContagemSessaoAtual();
@@ -5832,6 +5848,7 @@ async function abrirContagem(){
     contagemVerificacoesVazio = carregarVerificacoesContagem();
     await carregarRascunhoContagemFirebase();
     await carregarContagensSalvasUsuarioAtual();
+    await carregarPresencaContagemFirebaseAgora();
     recalcularMaquinasContagem();
     contagemSecaoAtual = primeiraSecaoDisponivelContagem();
     contagemMaquinaAtual = "";
@@ -5840,11 +5857,12 @@ async function abrirContagem(){
     renderizarMaquinasContagem();
     mostrarSelecaoMaquinaContagem();
     atualizarBotoesVozContagem();
-    iniciarListenerPresencaContagem();
     ativarModoFocoContagem();
 
     document.getElementById("contagemScreen").style.display = "flex";
     document.getElementById("main").style.display = "none";
+    iniciarListenerPresencaContagem();
+    renderizarMaquinasContagem();
     marcarContagemAberta(true);
 
 }
@@ -6082,6 +6100,93 @@ function usuarioAtualPresencaContagem(){
     };
 }
 
+function coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo){
+    const saida = [];
+    const grupoSafe = chaveFirebaseContagem(alvo);
+    const adicionarGrupo = (grupo, origem = "rascunho") => {
+        if(!grupo || typeof grupo !== "object") return;
+        const grupoValor = resolverGrupoSessaoContagem(grupo.grupo || "") || grupo.grupo || "";
+        if(grupoValor && grupoValor !== alvo) return;
+        const contados = Number(grupo.contados || 0);
+        const total = Number(grupo.total || totalItensGrupoContagem(alvo) || 0);
+        if(!contados && !total) return;
+        saida.push({
+            contados,
+            total,
+            concluida: !!total && contados >= total,
+            updatedAt:Number(grupo.updatedAt || registroUsuario?._rascunho_atual?.updatedAt || 0),
+            origem
+        });
+    };
+    const colecoes = [
+        registroUsuario?._progresso_grupos,
+        registroUsuario?._rascunho_atual?.progressoGrupos,
+        registroUsuario?._rascunho_atual?.progressoPorGrupo
+    ];
+    colecoes.forEach(grupos => {
+        if(!grupos || typeof grupos !== "object") return;
+        adicionarGrupo(grupos[grupoSafe], "rascunho");
+        Object.entries(grupos).forEach(([key, grupo]) => {
+            if(key === grupoSafe) return;
+            adicionarGrupo(grupo, "rascunho");
+        });
+    });
+    const rascunhoAtual = registroUsuario?._rascunho_atual || {};
+    if(rascunhoAtual.valores || rascunhoAtual.verificacoesVazio){
+        const valores = normalizarRascunhoContagemFirebase(rascunhoAtual.valores || {});
+        const verificacoes = normalizarRascunhoContagemFirebase(rascunhoAtual.verificacoesVazio || {});
+        const keys = new Set([...Object.keys(valores), ...Object.keys(verificacoes)]);
+        let contados = 0;
+        let itensContados = 0;
+        contagemItens.forEach(item => {
+            if((resolverGrupoSessaoContagem(grupoItemContagem(item)) || grupoItemContagem(item)) !== alvo) return;
+            const key = itemKeyContagem(item);
+            if(!keys.has(key)) return;
+            contados += 1;
+            if(!isVerificacaoVazioContagem(item)) itensContados += 1;
+        });
+        const total = totalItensGrupoContagem(alvo);
+        if(contados){
+            saida.push({
+                contados,
+                total,
+                concluida: !!total && itensContados >= total,
+                updatedAt:Number(rascunhoAtual.updatedAt || 0),
+                origem:"rascunho"
+            });
+        }
+    }
+    Object.entries(registroUsuario || {}).forEach(([registroKey, registro]) => {
+        if(String(registroKey).startsWith("_")) return;
+        if(!registro || typeof registro !== "object") return;
+        const lista = registro.itens || registro.verificacoesVazio ? [registro] : Object.values(registro || {});
+        lista.forEach(subRegistro => {
+            if(!subRegistro || (!subRegistro.itens && !subRegistro.verificacoesVazio)) return;
+            const maquinaRegistro = resolverGrupoSessaoContagem(subRegistro.maquina || "") || subRegistro.maquina || "";
+            if(maquinaRegistro && maquinaRegistro !== alvo) return;
+            const itens = Object.values(subRegistro.itens || {}).filter(item => {
+                const grupoItem = resolverGrupoSessaoContagem(parsearEnderecoContagem(item?.endereco || "").grupo || "") || "";
+                return !grupoItem || grupoItem === alvo;
+            });
+            const vazios = Object.values(subRegistro.verificacoesVazio || {}).filter(item => {
+                const grupoItem = resolverGrupoSessaoContagem(parsearEnderecoContagem(item?.endereco || "").grupo || "") || "";
+                return !grupoItem || grupoItem === alvo;
+            });
+            const contados = itens.length + vazios.length;
+            const total = Number(subRegistro.totalItens || totalItensGrupoContagem(alvo) || 0);
+            if(!contados) return;
+            saida.push({
+                contados,
+                total,
+                concluida: !!total && itens.length >= total,
+                updatedAt:Number(subRegistro.timestamp || 0),
+                origem:"salvo"
+            });
+        });
+    });
+    return saida;
+}
+
 function statusOutrosUsuariosMaquinaContagem(maquina){
     const alvo = resolverGrupoSessaoContagem(maquina) || maquina || "";
     const atual = usuarioAtualPresencaContagem();
@@ -6092,12 +6197,11 @@ function statusOutrosUsuariosMaquinaContagem(maquina){
         const presenca = registroUsuario?._presenca || registroUsuario?._rascunho_atual?.presenca || {};
         if(String(presenca.uid || "") && atual.uid && String(presenca.uid) === atual.uid) return;
         if(String(presenca.usuario || "") && atual.usuario && String(presenca.usuario) === atual.usuario) return;
-        const grupos = registroUsuario?._progresso_grupos || registroUsuario?._rascunho_atual?.progressoGrupos || {};
-        const grupoSafe = chaveFirebaseContagem(alvo);
-        const progresso = grupos[grupoSafe] || Object.values(grupos).find(g => (g?.grupo || "") === alvo) || {};
+        const progressos = coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo);
+        const progresso = progressos.sort((a, b) => (Number(b.concluida) - Number(a.concluida)) || ((b.contados || 0) - (a.contados || 0)))[0] || {};
         const contados = Number(progresso.contados || presenca.contadosGrupo || 0);
         const total = Number(progresso.total || presenca.totalGrupo || 0);
-        const concluida = !!total && contados >= total;
+        const concluida = !!progresso.concluida || (!!total && contados >= total);
         const ativa = presenca.aberta !== false
             && Number(presenca.updatedAt || progresso.updatedAt || 0) >= limiteAtivo
             && ((resolverGrupoSessaoContagem(presenca.maquina || "") || presenca.maquina || "") === alvo);
@@ -6111,7 +6215,9 @@ function statusOutrosUsuariosMaquinaContagem(maquina){
             ativa,
             texto:concluida
                 ? `${nome} concluiu esta maquina`
-                : `${nome} contando (${contados}/${total || "?"})`
+                : ativa
+                    ? `${nome} contando (${contados}/${total || "?"})`
+                    : `${nome} ja contou (${contados}/${total || "?"})`
         });
     });
     return status;
