@@ -19,6 +19,14 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "contagemAtual": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "contagemStatusMaquinas": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "contagemControle": {
       "resetGlobal": {
         ".read": "auth != null",
