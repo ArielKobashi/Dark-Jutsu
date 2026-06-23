@@ -3829,7 +3829,7 @@ async function carregarPlanilhaPadrao(tipo, arquivo, guia = null){
     try{
         const isArquivoLocalOpcional = arquivo === "dados.mortos.xlsx";
         const emArquivoLocal = location.protocol === "file:";
-        const arquivosAtualizadosViaAutomus = new Set(["mata110.xlsx", "mata111.xlsx", "mata112.xlsx", "mata185.xlsx"]);
+        const arquivosAtualizadosViaAutomus = new Set(["mata112.xlsx", "mata185.xlsx"]);
         const candidatos = isArquivoLocalOpcional && !emArquivoLocal
             ? [arquivo]
             : arquivosAtualizadosViaAutomus.has(arquivo)
@@ -5929,7 +5929,7 @@ function calcularProgressoContagemPrincipal(){
     const total = totalLinhas.size;
     const feitas = contadas.size;
     const percentual = total ? Math.min(100, (feitas / total) * 100) : 0;
-    return { total, feitas, percentual };
+    return { total, feitas, percentual, basePercentual:`${feitas}/${total}` };
 }
 
 function recalcularMaquinasContagem(){
@@ -5955,7 +5955,7 @@ function atualizarPopupProgressoContagemPrincipal(){
     const progresso = calcularProgressoContagemPrincipal();
     const pct = Math.round((progresso.percentual || 0) * 10) / 10;
     pctEl.textContent = `${formatarNumeroPlanilha(pct)}%`;
-    metaEl.textContent = `${formatarNumeroPlanilha(progresso.feitas)} de ${formatarNumeroPlanilha(progresso.total)} itens/endereco`;
+    metaEl.textContent = `${formatarNumeroPlanilha(progresso.feitas)} de ${formatarNumeroPlanilha(progresso.total)} itens/endereco | base % ${progresso.basePercentual}`;
     fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
     popup.classList.toggle("semDados", !progresso.total);
 }
@@ -6493,6 +6493,8 @@ function statusOutrosUsuariosMaquinaContagem(maquina){
             total,
             concluida,
             ativa,
+            itemKey:String(registro.itemKey || ""),
+            indice:Number(registro.indice || 0),
             texto:concluida
                 ? `${nome} concluiu esta maquina`
                 : ativa
@@ -6587,17 +6589,12 @@ function renderizarMaquinasContagem(){
                 </button>
                 <div class="contagemMachineCardActions">
                     <button type="button" class="continuar" ${temRascunho ? "" : "disabled"}>Continuar</button>
-                    <button type="button" class="reiniciar">Reiniciar</button>
                 </div>
             `;
             card.querySelector(".contagemMachineStart").onclick = () => selecionarMaquinaContagem(maquina, true);
             card.querySelector(".continuar").onclick = (ev) => {
                 ev.stopPropagation();
                 continuarContagemDeOndeParou(maquina);
-            };
-            card.querySelector(".reiniciar").onclick = (ev) => {
-                ev.stopPropagation();
-                reiniciarContagemAtual(maquina);
             };
             grid.appendChild(card);
         });
@@ -6782,10 +6779,13 @@ function abrirJanelaEscutaContagem(){
 function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null, itemKeyPreferido = ""){
     const conflitos = statusOutrosUsuariosMaquinaContagem(maquina);
     if(conflitos.length){
-        mostrarNotificacao(conflitos[0].concluida
-            ? `${conflitos[0].usuario} ja concluiu esta maquina nesta etapa.`
-            : `${conflitos[0].usuario} ja esta contando esta maquina.`);
-        return;
+        const conflito = conflitos[0];
+        const texto = conflito.concluida
+            ? `${conflito.usuario} ja concluiu esta maquina nesta etapa. Abrir mesmo assim?`
+            : `${conflito.usuario} estava contando esta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar do ponto onde essa pessoa parou?`;
+        if(!confirm(texto)) return;
+        if(!itemKeyPreferido && conflito.itemKey) itemKeyPreferido = conflito.itemKey;
+        if(!Number.isFinite(indicePreferido) && Number.isFinite(conflito.indice)) indicePreferido = conflito.indice;
     }
     contagemMaquinaAtual = maquina;
     contagemItensMaquina = contagemItens.filter(item => grupoItemContagem(item) === maquina);
