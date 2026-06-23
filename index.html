@@ -4844,6 +4844,7 @@ let contagemRascunhoFirebaseAvisoErro = false;
 let contagemRegistrosDesdeUltimoBackup = 0;
 let contagemPresencaUnsub = null;
 let contagemStatusMaquinas = {};
+let contagemHistoricoProgressoGrupos = {};
 const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
 const CONTAGEM_ALIAS_STORAGE_KEY = "contagemAliasesMaquinas";
 const CONTAGEM_SECOES = [
@@ -5138,7 +5139,16 @@ function usuarioKeyContagemFirebase(){
     return chaveFirebaseContagem(window.meuNickname || window.auth?.currentUser?.uid || "desconhecido");
 }
 
+function usuarioLiveKeyContagemFirebase(){
+    return chaveFirebaseContagem(uidRascunhoContagemFirebase() || window.meuNickname || "desconhecido");
+}
+
 function pathRascunhoContagemFirebase(){
+    const usuario = usuarioLiveKeyContagemFirebase();
+    return usuario ? `contagemAtual/${chaveCicloContagemAtual()}/usuarios/${usuario}/_rascunho_atual` : "";
+}
+
+function pathRascunhoContagemFirebaseLegadoUsuario(){
     const usuario = usuarioKeyContagemFirebase();
     return usuario ? `contagemAtual/${chaveCicloContagemAtual()}/usuarios/${usuario}/_rascunho_atual` : "";
 }
@@ -5151,6 +5161,15 @@ function pathRascunhoContagemFirebaseLegadoData(){
 function pathRascunhoContagemFirebaseLegado(){
     const uid = uidRascunhoContagemFirebase();
     return uid ? `contagemRascunhos/${uid}` : "";
+}
+
+function pathsRascunhoContagemFirebase(){
+    return [
+        pathRascunhoContagemFirebase(),
+        pathRascunhoContagemFirebaseLegadoUsuario(),
+        pathRascunhoContagemFirebaseLegadoData(),
+        pathRascunhoContagemFirebaseLegado()
+    ].filter(Boolean).filter((path, idx, arr) => arr.indexOf(path) === idx);
 }
 
 function resumoProgressoGruposContagem(){
@@ -5326,7 +5345,7 @@ function payloadStatusMaquinaContagemFirebase(grupo, resumo = {}, aberta = true)
 }
 
 async function salvarStatusMaquinasContagemFirebase(payload = null, aberta = true){
-    const usuario = usuarioKeyContagemFirebase();
+    const usuario = usuarioLiveKeyContagemFirebase();
     const ciclo = chaveCicloContagemAtual();
     if(!usuario || !window.set || !window.ref || !window.db) return false;
     const grupos = payload?.progressoGrupos || payloadProgressoGruposContagemFirebase();
@@ -5350,8 +5369,8 @@ async function salvarStatusMaquinasContagemFirebase(payload = null, aberta = tru
         ));
     }
     try{
-        await Promise.all(writes);
-        return true;
+        const resultados = await Promise.allSettled(writes);
+        return resultados.some(r => r.status === "fulfilled");
     }catch(e){
         console.warn("Falha ao salvar status das maquinas da contagem:", e);
         return false;
@@ -5363,40 +5382,56 @@ async function salvarRascunhoContagemFirebaseAgora(){
         clearTimeout(contagemRascunhoFirebaseTimer);
         contagemRascunhoFirebaseTimer = null;
     }
-    const path = pathRascunhoContagemFirebase();
-    if(!path || !window.set || !window.ref || !window.db) return false;
+    const paths = pathsRascunhoContagemFirebase();
+    if(!paths.length || !window.set || !window.ref || !window.db) return false;
+    const payload = payloadRascunhoContagemFirebase();
+    const writes = [];
+    paths.forEach(path => {
+        writes.push(window.set(window.ref(window.db, path), payload));
+        if(path.endsWith("/_rascunho_atual")){
+            const baseUsuario = path.replace(/\/_rascunho_atual$/, "");
+            writes.push(window.set(window.ref(window.db, `${baseUsuario}/_progresso_itens`), payload.progressoItens || {}));
+            writes.push(window.set(window.ref(window.db, `${baseUsuario}/_progresso_grupos`), payload.progressoGrupos || {}));
+            writes.push(window.set(window.ref(window.db, `${baseUsuario}/_presenca`), payload.presenca || payloadPresencaContagemFirebase(true)));
+        }
+    });
+    writes.push(salvarStatusMaquinasContagemFirebase(payload, true));
     try{
-        const payload = payloadRascunhoContagemFirebase();
-        const baseUsuario = path.replace(/\/_rascunho_atual$/, "");
-        await Promise.all([
-            window.set(window.ref(window.db, path), payload),
-            window.set(window.ref(window.db, `${baseUsuario}/_progresso_itens`), payload.progressoItens || {}),
-            window.set(window.ref(window.db, `${baseUsuario}/_progresso_grupos`), payload.progressoGrupos || {}),
-            window.set(window.ref(window.db, `${baseUsuario}/_presenca`), payload.presenca || payloadPresencaContagemFirebase(true)),
-            salvarStatusMaquinasContagemFirebase(payload, true)
-        ]);
-        contagemRascunhoFirebaseAvisoErro = false;
-        return true;
+        const resultados = await Promise.allSettled(writes);
+        const sucesso = resultados.some(r => r.status === "fulfilled" && r.value !== false);
+        if(sucesso){
+            contagemRascunhoFirebaseAvisoErro = false;
+            return true;
+        }
+        throw resultados.find(r => r.status === "rejected")?.reason || new Error("Nenhum caminho de rascunho aceitou o backup.");
     }catch(e){
         console.warn("Falha ao salvar rascunho da contagem no Firebase:", e);
         if(!contagemRascunhoFirebaseAvisoErro){
             contagemRascunhoFirebaseAvisoErro = true;
-            mostrarNotificacao("Rascunho salvo localmente, mas o Firebase negou o backup.");
+            mostrarNotificacao("Rascunho salvo localmente, mas o Firebase negou todos os backups.");
         }
         return false;
     }
 }
 
 async function salvarPresencaContagemFirebase(aberta = true){
-    const usuario = usuarioKeyContagemFirebase();
+    const usuario = usuarioLiveKeyContagemFirebase();
     const ciclo = chaveCicloContagemAtual();
     if(!usuario || !window.set || !window.ref || !window.db) return false;
     try{
-        await Promise.all([
-            window.set(window.ref(window.db, `contagemAtual/${ciclo}/usuarios/${usuario}/_presenca`), payloadPresencaContagemFirebase(aberta)),
+        const presenca = payloadPresencaContagemFirebase(aberta);
+        const writes = [
+            window.set(window.ref(window.db, `contagemAtual/${ciclo}/usuarios/${usuario}/_presenca`), presenca),
             salvarStatusMaquinasContagemFirebase(null, aberta)
-        ]);
-        return true;
+        ];
+        pathsRascunhoContagemFirebase()
+            .filter(path => path.endsWith("/_rascunho_atual"))
+            .forEach(path => {
+                const baseUsuario = path.replace(/\/_rascunho_atual$/, "");
+                writes.push(window.set(window.ref(window.db, `${baseUsuario}/_presenca`), presenca));
+            });
+        const resultados = await Promise.allSettled(writes);
+        return resultados.some(r => r.status === "fulfilled" && r.value !== false);
     }catch(e){
         console.warn("Falha ao salvar presenca da contagem:", e);
         return false;
@@ -5416,47 +5451,63 @@ async function limparRascunhoContagemFirebase(){
         clearTimeout(contagemRascunhoFirebaseTimer);
         contagemRascunhoFirebaseTimer = null;
     }
-    const path = pathRascunhoContagemFirebase();
-    if(!path || !window.set || !window.ref || !window.db) return;
+    const paths = pathsRascunhoContagemFirebase();
+    if(!paths.length || !window.set || !window.ref || !window.db) return;
     try{
-        await window.set(window.ref(window.db, path), null);
-        const legadoData = pathRascunhoContagemFirebaseLegadoData();
-        if(legadoData) await window.set(window.ref(window.db, legadoData), null).catch(() => {});
-        const legado = pathRascunhoContagemFirebaseLegado();
-        if(legado) await window.set(window.ref(window.db, legado), null).catch(() => {});
+        const writes = [];
+        paths.forEach(path => {
+            writes.push(window.set(window.ref(window.db, path), null));
+            if(path.endsWith("/_rascunho_atual")){
+                const baseUsuario = path.replace(/\/_rascunho_atual$/, "");
+                writes.push(window.set(window.ref(window.db, `${baseUsuario}/_progresso_itens`), null));
+                writes.push(window.set(window.ref(window.db, `${baseUsuario}/_progresso_grupos`), null));
+                writes.push(window.set(window.ref(window.db, `${baseUsuario}/_presenca`), null));
+            }
+        });
+        await Promise.allSettled(writes);
     }catch(e){
         console.warn("Falha ao limpar rascunho da contagem no Firebase:", e);
     }
 }
 
 async function carregarRascunhoContagemFirebase(){
-    const path = pathRascunhoContagemFirebase();
-    if(!path || !window.get || !window.ref || !window.db) return false;
+    const paths = pathsRascunhoContagemFirebase();
+    if(!paths.length || !window.get || !window.ref || !window.db) return false;
     try{
-        let snap = await window.get(window.ref(window.db, path));
-        if(!snap.exists()){
-            const legadoData = pathRascunhoContagemFirebaseLegadoData();
-            if(legadoData) snap = await window.get(window.ref(window.db, legadoData)).catch(() => snap);
-        }
-        if(!snap.exists()){
-            const legado = pathRascunhoContagemFirebaseLegado();
-            if(legado) snap = await window.get(window.ref(window.db, legado)).catch(() => snap);
-        }
-        if(!snap.exists()) return false;
-        const remoto = snap.val() || {};
+        const snaps = await Promise.allSettled(paths.map(path =>
+            window.get(window.ref(window.db, path)).then(snap => ({ path, snap }))
+        ));
+        const remotos = snaps
+            .filter(r => r.status === "fulfilled" && r.value.snap?.exists?.())
+            .map(r => r.value.snap.val() || {})
+            .filter(remoto => remoto && typeof remoto === "object")
+            .sort((a, b) => Number(a.updatedAt || a.sessao?.updatedAt || 0) - Number(b.updatedAt || b.sessao?.updatedAt || 0));
+        if(!remotos.length) return false;
+        const remoto = remotos.reduce((acc, atual) => {
+            const valores = atual.valores && typeof atual.valores === "object" ? normalizarRascunhoContagemFirebase(atual.valores) : {};
+            const verificacoes = atual.verificacoesVazio && typeof atual.verificacoesVazio === "object" ? normalizarRascunhoContagemFirebase(atual.verificacoesVazio) : {};
+            return {
+                ...acc,
+                ...atual,
+                valores:{ ...(acc.valores || {}), ...valores },
+                verificacoesVazio:{ ...(acc.verificacoesVazio || {}), ...verificacoes },
+                sessao:Number(atual.sessao?.updatedAt || 0) >= Number(acc.sessao?.updatedAt || 0) ? (atual.sessao || acc.sessao || {}) : (acc.sessao || {}),
+                updatedAt:Math.max(Number(acc.updatedAt || 0), Number(atual.updatedAt || atual.sessao?.updatedAt || 0))
+            };
+        }, {});
         const sessaoRemota = remoto.sessao && typeof remoto.sessao === "object" ? remoto.sessao : {};
         const localSessao = carregarSessaoContagem();
         const remotoTs = Number(remoto.updatedAt || sessaoRemota.updatedAt || 0);
         const localTs = Number(localSessao.updatedAt || 0);
-        const valoresRemotos = remoto.valores && typeof remoto.valores === "object" ? normalizarRascunhoContagemFirebase(remoto.valores) : {};
-        const verificacoesRemotas = remoto.verificacoesVazio && typeof remoto.verificacoesVazio === "object" ? normalizarRascunhoContagemFirebase(remoto.verificacoesVazio) : {};
+        const valoresRemotos = remoto.valores && typeof remoto.valores === "object" ? remoto.valores : {};
+        const verificacoesRemotas = remoto.verificacoesVazio && typeof remoto.verificacoesVazio === "object" ? remoto.verificacoesVazio : {};
         if(localTs > remotoTs){
             contagemValores = { ...valoresRemotos, ...(contagemValores || {}) };
             contagemVerificacoesVazio = { ...verificacoesRemotas, ...(contagemVerificacoesVazio || {}) };
             agendarSalvarRascunhoContagemFirebase(50);
         }else{
-            contagemValores = valoresRemotos;
-            contagemVerificacoesVazio = verificacoesRemotas;
+            contagemValores = { ...(contagemValores || {}), ...valoresRemotos };
+            contagemVerificacoesVazio = { ...(contagemVerificacoesVazio || {}), ...verificacoesRemotas };
             try{
                 localStorage.setItem(chaveSessaoContagem(), JSON.stringify(sessaoRemota));
             }catch(e){}
@@ -5465,6 +5516,7 @@ async function carregarRascunhoContagemFirebase(){
             localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
             localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
         }catch(e){}
+        agendarSalvarRascunhoContagemFirebase(80);
         return true;
     }catch(e){
         console.warn("Falha ao carregar rascunho da contagem no Firebase:", e);
@@ -5743,6 +5795,94 @@ function chaveProgressoContagemPrincipal(codigo, armazem, endereco){
     ].join("||");
 }
 
+function criarIndicesProgressoContagem(){
+    const porLinha = new Map();
+    const porVazio = new Map();
+    const porItemKey = new Map();
+    contagemItens.forEach(item => {
+        const itemKey = itemKeyContagem(item);
+        if(!itemKey) return;
+        porItemKey.set(itemKey, item);
+        if(isVerificacaoVazioContagem(item)){
+            const endereco = normalizarEnderecoProgressoContagem(item.enderecoPrincipal);
+            if(endereco) porVazio.set(endereco, item);
+            return;
+        }
+        const codigos = [item.protheus, item.protheusKey, item.cooperat]
+            .map(normalizarCodigoItem)
+            .filter(Boolean);
+        codigos.forEach(codigo => {
+            const chave = chaveProgressoContagemPrincipal(codigo, item.armazemPrincipal, item.enderecoPrincipal);
+            porLinha.set(chave, item);
+        });
+    });
+    return { porLinha, porVazio, porItemKey };
+}
+
+function adicionarItemHistoricoProgressoContagem(saida, item){
+    const grupo = grupoItemContagem(item);
+    const key = itemKeyContagem(item);
+    if(!grupo || !key) return;
+    if(!saida[grupo]) saida[grupo] = new Set();
+    saida[grupo].add(key);
+}
+
+function reconstruirHistoricoProgressoContagem(registros){
+    const saida = {};
+    const indices = criarIndicesProgressoContagem();
+    const visitarRegistro = registro => {
+        if(!registro || typeof registro !== "object") return;
+        if(registro.valores || (registro.verificacoesVazio && !registro.itens)){
+            const valores = normalizarRascunhoContagemFirebase(registro.valores || {});
+            const verificacoes = normalizarRascunhoContagemFirebase(registro.verificacoesVazio || {});
+            Object.keys(valores).forEach(key => {
+                const item = indices.porItemKey.get(key);
+                if(item) adicionarItemHistoricoProgressoContagem(saida, item);
+            });
+            Object.keys(verificacoes).forEach(key => {
+                const item = indices.porItemKey.get(key);
+                if(item) adicionarItemHistoricoProgressoContagem(saida, item);
+            });
+            return;
+        }
+        if(registro.itens || registro.verificacoesVazio){
+            Object.values(registro.itens || {}).forEach(item => {
+                const codigo = item?.protheus || item?.cooperat || "";
+                const chave = chaveProgressoContagemPrincipal(codigo, item?.armazem, item?.endereco);
+                const atual = indices.porLinha.get(chave);
+                if(atual) adicionarItemHistoricoProgressoContagem(saida, atual);
+            });
+            Object.values(registro.verificacoesVazio || {}).forEach(item => {
+                const endereco = normalizarEnderecoProgressoContagem(item?.endereco || "");
+                const atual = indices.porVazio.get(endereco);
+                if(atual) adicionarItemHistoricoProgressoContagem(saida, atual);
+            });
+            return;
+        }
+        Object.entries(registro).forEach(([key, valor]) => {
+            if(String(key).startsWith("_") && key !== "_rascunho_atual") return;
+            visitarRegistro(valor);
+        });
+    };
+    visitarRegistro(registros || {});
+    return Object.fromEntries(Object.entries(saida).map(([grupo, keys]) => [grupo, keys]));
+}
+
+async function carregarHistoricoContagemParaProgresso(){
+    if(!window.get || !window.ref || !window.db) return false;
+    try{
+        const snap = await window.get(window.ref(window.db, "contagens"));
+        contagemHomeRegistros = snap.exists() ? snap.val() : {};
+        contagemHistoricoProgressoGrupos = reconstruirHistoricoProgressoContagem(contagemHomeRegistros);
+        atualizarPopupProgressoContagemPrincipal();
+        return true;
+    }catch(e){
+        console.warn("Falha ao reconfirmar progresso pelo historico da contagem:", e);
+        contagemHistoricoProgressoGrupos = reconstruirHistoricoProgressoContagem(contagemHomeRegistros || {});
+        return false;
+    }
+}
+
 function calcularProgressoContagemPrincipal(){
     const totalLinhas = new Set();
     const porItemKey = new Map();
@@ -5827,6 +5967,12 @@ function iniciarPopupProgressoContagemPrincipal(){
     try{
         contagemHomeUnsub = window.onValue(window.ref(window.db, "contagens"), snap => {
             contagemHomeRegistros = snap.exists() ? snap.val() : {};
+            if(contagemItens.length){
+                contagemHistoricoProgressoGrupos = reconstruirHistoricoProgressoContagem(contagemHomeRegistros);
+                if(document.getElementById("contagemScreen")?.style.display !== "none"){
+                    renderizarMaquinasContagem();
+                }
+            }
             atualizarPopupProgressoContagemPrincipal();
         }, err => {
             if(String(err?.code || err?.message || "").toLowerCase().includes("permission")){
@@ -5957,6 +6103,7 @@ async function abrirContagem(){
     contagemVerificacoesVazio = carregarVerificacoesContagem();
     await carregarRascunhoContagemFirebase();
     await carregarContagensSalvasUsuarioAtual();
+    await carregarHistoricoContagemParaProgresso();
     await carregarPresencaContagemFirebaseAgora();
     recalcularMaquinasContagem();
     contagemSecaoAtual = primeiraSecaoDisponivelContagem();
@@ -5982,6 +6129,7 @@ function fecharContagem(){
     pararListenerPresencaContagem();
     if(contagemFinalizadaSemSessao){
         contagemFinalizadaSemSessao = false;
+        marcarContagemAberta(false);
     }else{
         salvarAtualContagem();
         marcarContagemAberta(false);
@@ -6029,7 +6177,35 @@ function primeiraSecaoDisponivelContagem(){
     return secao?.key || CONTAGEM_SECOES[0]?.key || "piso1";
 }
 
+function keysRascunhoLocalGrupoContagem(grupo){
+    const keys = new Set();
+    if(!grupo) return keys;
+    contagemItens
+        .filter(item => grupoItemContagem(item) === grupo)
+        .forEach(item => {
+            const key = itemKeyContagem(item);
+            const contado = isVerificacaoVazioContagem(item)
+                ? contagemVerificacoesVazio[key] !== undefined
+                : contagemValores[key] !== undefined;
+            if(contado) keys.add(key);
+        });
+    return keys;
+}
+
+function totalRascunhoLocalGrupoContagem(grupo){
+    return keysRascunhoLocalGrupoContagem(grupo).size;
+}
+
 function totalRegistradoGrupoContagem(grupo){
+    const keys = keysRascunhoLocalGrupoContagem(grupo);
+    const historico = contagemHistoricoProgressoGrupos?.[grupo];
+    if(historico?.forEach){
+        historico.forEach(key => keys.add(key));
+    }
+    return keys.size;
+}
+
+function totalRegistradoLocalGrupoContagem(grupo){
     return contagemItens
         .filter(item => grupoItemContagem(item) === grupo)
         .filter(item => {
@@ -6048,7 +6224,7 @@ function grupoTemRascunhoContagem(grupo){
     if(!grupo) return false;
     const sessao = carregarSessaoContagem();
     if(resolverGrupoSessaoContagem(sessao.maquina || "") === grupo) return true;
-    return totalRegistradoGrupoContagem(grupo) > 0;
+    return totalRascunhoLocalGrupoContagem(grupo) > 0;
 }
 
 function existeContagemInacabada(grupo = ""){
