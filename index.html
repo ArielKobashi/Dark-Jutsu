@@ -6291,6 +6291,23 @@ function indiceObrigatorioMaisProximoContagem(itens, indice){
     return -1;
 }
 
+function itemPendenteParaContagem(item, keysRegistradas = null){
+    if(!item || isVerificacaoVazioContagem(item)) return false;
+    const key = itemKeyContagem(item);
+    if(!key) return false;
+    if(keysRegistradas?.has(key)) return false;
+    return contagemValores[key] === undefined && contagemHistoricoValores[key] === undefined;
+}
+
+function indicePendenteDirecaoContagem(inicio, passo){
+    if(!Array.isArray(contagemItensMaquina) || !contagemItensMaquina.length) return -1;
+    const keysRegistradas = keysRegistradasGrupoContagem(contagemMaquinaAtual);
+    for(let idx = inicio; idx >= 0 && idx < contagemItensMaquina.length; idx += passo){
+        if(itemPendenteParaContagem(contagemItensMaquina[idx], keysRegistradas)) return idx;
+    }
+    return -1;
+}
+
 function gruposDaSecaoContagem(secaoKey){
     return contagemGruposPorSecao.get(secaoKey) || [];
 }
@@ -7079,10 +7096,7 @@ async function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido 
         ? contagemItensMaquina.findIndex((item, idx) => idx > ultimoRegistrado && !isVerificacaoVazioContagem(item))
         : -1;
     const primeiroPendente = contagemItensMaquina.findIndex(item => {
-        if(isVerificacaoVazioContagem(item)) return false;
-        const key = itemKeyContagem(item);
-        if(keysJaRegistradas.has(key)) return false;
-        return contagemValores[key] === undefined && contagemHistoricoValores[key] === undefined;
+        return itemPendenteParaContagem(item, keysJaRegistradas);
     });
     const primeiroObrigatorio = contagemItensMaquina.findIndex(item => !isVerificacaoVazioContagem(item));
     const ultimoObrigatorioRegistrado = ultimoRegistrado >= 0 ? ultimoRegistrado : primeiroObrigatorio;
@@ -7674,8 +7688,9 @@ function animarContagem(direcao, callback){
 function contagemProximo(){
     salvarAtualContagem();
     animarContagem("left", () => {
-        if(contagemIndice < contagemItensMaquina.length - 1){
-            contagemIndice++;
+        const proximoPendente = indicePendenteDirecaoContagem(contagemIndice + 1, 1);
+        if(proximoPendente >= 0){
+            contagemIndice = proximoPendente;
         }else{
             const idx = contagemMaquinas.indexOf(contagemMaquinaAtual);
             if(idx >= 0 && idx < contagemMaquinas.length - 1){
@@ -7692,14 +7707,18 @@ function contagemProximo(){
 function contagemAnterior(){
     salvarAtualContagem();
     animarContagem("right", () => {
-        if(contagemIndice > 0){
-            contagemIndice--;
+        const anteriorPendente = indicePendenteDirecaoContagem(contagemIndice - 1, -1);
+        if(anteriorPendente >= 0){
+            contagemIndice = anteriorPendente;
         }else{
             const idx = contagemMaquinas.indexOf(contagemMaquinaAtual);
             if(idx > 0){
                 contagemMaquinaAtual = contagemMaquinas[idx - 1];
                 contagemItensMaquina = itensGrupoContagem(contagemMaquinaAtual);
-                contagemIndice = Math.max(contagemItensMaquina.length - 1, 0);
+                const ultimoPendente = indicePendenteDirecaoContagem(contagemItensMaquina.length - 1, -1);
+                contagemIndice = ultimoPendente >= 0
+                    ? ultimoPendente
+                    : indiceObrigatorioMaisProximoContagem(contagemItensMaquina, contagemItensMaquina.length - 1);
             }
         }
         salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:itemKeyContagem(contagemItensMaquina[contagemIndice]) });
@@ -13909,8 +13928,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
 
 
 
