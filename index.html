@@ -6500,7 +6500,7 @@ function coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo){
     return saida;
 }
 
-function statusOutrosUsuariosMaquinaContagem(maquina){
+function statusOutrosUsuariosMaquinaContagem(maquina, incluirHistorico = false){
     const alvo = resolverGrupoSessaoContagem(maquina) || maquina || "";
     const atual = usuarioAtualPresencaContagem();
     const limiteAtivo = Date.now() - (4 * 60 * 1000);
@@ -6535,8 +6535,10 @@ function statusOutrosUsuariosMaquinaContagem(maquina){
     Object.entries(registrosGrupo || {}).forEach(([usuarioKey, registro]) => {
         adicionarStatus(usuarioKey, registro, "presenca");
     });
-    Object.values(contagemHomeRegistros || {}).forEach(registrosData => {
+    if(incluirHistorico) Object.values(contagemHomeRegistros || {}).forEach(registrosData => {
+        if(!registrosData || typeof registrosData !== "object") return;
         Object.entries(registrosData || {}).forEach(([usuarioKey, registroUsuario]) => {
+            if(!registroUsuario || typeof registroUsuario !== "object") return;
             const usuario = registroUsuario?._rascunho_atual?.usuario || registroUsuario?.rascunho_atual?.usuario || usuarioKey;
             const progressos = coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo);
             progressos.forEach(progresso => {
@@ -6561,11 +6563,11 @@ function statusOutrosUsuariosMaquinaContagem(maquina){
 }
 
 function presencasOutrosUsuariosMaquinaContagem(maquina){
-    return statusOutrosUsuariosMaquinaContagem(maquina).map(s => s.usuario);
+    return statusOutrosUsuariosMaquinaContagem(maquina, false).map(s => s.usuario);
 }
 
 function htmlIndicadorPresencaContagem(maquina){
-    const status = statusOutrosUsuariosMaquinaContagem(maquina);
+    const status = statusOutrosUsuariosMaquinaContagem(maquina, false);
     if(!status.length) return "";
     const textos = status.map(s => s.texto);
     const texto = textos.length === 1
@@ -6831,7 +6833,7 @@ function abrirJanelaEscutaContagem(){
 }
 
 function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null, itemKeyPreferido = ""){
-    const conflitos = statusOutrosUsuariosMaquinaContagem(maquina);
+    const conflitos = statusOutrosUsuariosMaquinaContagem(maquina, true);
     if(conflitos.length){
         const conflito = conflitos[0];
         const texto = conflito.concluida
@@ -13482,7 +13484,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
 
 
 
