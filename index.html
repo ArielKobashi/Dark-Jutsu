@@ -6154,10 +6154,7 @@ function fecharContagem(){
 }
 
 async function tentarRetomarContagemPendente(){
-    await checarResetGlobalContagem();
-    const sessao = carregarSessaoContagem();
-    if(!sessao.aberta) return;
-    setTimeout(()=>abrirContagem(), 80);
+    document.body?.classList.remove("contagem-open");
 }
 
 function voltarContagem(){
@@ -6842,7 +6839,6 @@ function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null
                 ? `${conflito.usuario} esta contando esta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar do ponto onde essa pessoa esta?`
                 : `${conflito.usuario} contou parte desta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar de onde essa pessoa parou?`;
         mostrarNotificacao(texto);
-        if(!confirm(texto)) return;
         if(!itemKeyPreferido && conflito.itemKey) itemKeyPreferido = conflito.itemKey;
         if(!Number.isFinite(indicePreferido) && Number.isFinite(conflito.indice) && conflito.indice > 0) indicePreferido = conflito.indice;
     }
@@ -13484,7 +13480,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
 
 
 
