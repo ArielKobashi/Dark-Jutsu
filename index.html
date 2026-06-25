@@ -5220,16 +5220,20 @@ function resumoProgressoGruposContagem(){
                 grupo,
                 total:0,
                 contados:0,
+                totalRegistros:0,
+                verificacoesRespondidas:0,
                 indice:0,
                 itemKey:""
             };
         }
         const key = itemKeyContagem(item);
+        grupos[grupo].totalRegistros += 1;
+        if(isVerificacaoVazioContagem(item)){
+            if(contagemVerificacoesVazio[key] !== undefined) grupos[grupo].verificacoesRespondidas += 1;
+            return;
+        }
         grupos[grupo].total += 1;
-        const contado = isVerificacaoVazioContagem(item)
-            ? contagemVerificacoesVazio[key] !== undefined
-            : contagemValores[key] !== undefined;
-        if(contado) grupos[grupo].contados += 1;
+        if(contagemValores[key] !== undefined) grupos[grupo].contados += 1;
     });
     if(contagemMaquinaAtual && grupos[contagemMaquinaAtual]){
         grupos[contagemMaquinaAtual].indice = Number.isFinite(contagemIndice) ? contagemIndice : 0;
@@ -6271,6 +6275,10 @@ function itensGrupoContagem(grupo){
     return contagemItensPorGrupo.get(grupo) || [];
 }
 
+function itensObrigatoriosGrupoContagem(grupo){
+    return itensGrupoContagem(grupo).filter(item => !isVerificacaoVazioContagem(item));
+}
+
 function gruposDaSecaoContagem(secaoKey){
     return contagemGruposPorSecao.get(secaoKey) || [];
 }
@@ -6318,9 +6326,11 @@ function keysRegistradasGrupoContagem(grupo){
     return keys;
 }
 
-function totalRegistradoGrupoContagem(grupo){
+function totalRegistradoGrupoContagem(grupo, opcoes = {}){
+    const somenteObrigatorios = opcoes.somenteObrigatorios !== false;
     const keys = keysRegistradasGrupoContagem(grupo);
-    return keys.size;
+    if(!somenteObrigatorios) return keys.size;
+    return itensObrigatoriosGrupoContagem(grupo).filter(item => keys.has(itemKeyContagem(item))).length;
 }
 
 function totalRegistradoLocalGrupoContagem(grupo){
@@ -6334,6 +6344,10 @@ function totalRegistradoLocalGrupoContagem(grupo){
 }
 
 function totalItensGrupoContagem(grupo){
+    return itensObrigatoriosGrupoContagem(grupo).length;
+}
+
+function totalRegistrosGrupoContagem(grupo){
     return itensGrupoContagem(grupo).length;
 }
 
@@ -6531,7 +6545,7 @@ function coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo){
         const grupoValor = resolverGrupoSessaoContagem(grupo.grupo || "") || grupo.grupo || "";
         if(grupoValor && grupoValor !== alvo) return;
         const contados = Number(grupo.contados || 0);
-        const total = Math.max(Number(grupo.total || 0), Number(totalItensGrupoContagem(alvo) || 0));
+        const total = Number(totalItensGrupoContagem(alvo) || grupo.total || 0);
         if(!contados && !total) return;
         saida.push({
             contados,
@@ -6557,10 +6571,9 @@ function coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo){
     const rascunhoAtual = registroUsuario?._rascunho_atual || {};
     if(rascunhoAtual.valores || rascunhoAtual.verificacoesVazio){
         const valores = normalizarRascunhoContagemFirebase(rascunhoAtual.valores || {});
-        const verificacoes = normalizarRascunhoContagemFirebase(rascunhoAtual.verificacoesVazio || {});
-        const keys = new Set([...Object.keys(valores), ...Object.keys(verificacoes)]);
+        const keys = new Set(Object.keys(valores));
         let contados = 0;
-        itensGrupoContagem(alvo).forEach(item => {
+        itensObrigatoriosGrupoContagem(alvo).forEach(item => {
             const key = itemKeyContagem(item);
             if(!keys.has(key)) return;
             contados += 1;
@@ -6592,8 +6605,8 @@ function coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo){
                 const grupoItem = resolverGrupoSessaoContagem(parsearEnderecoContagem(item?.endereco || "").grupo || "") || "";
                 return !grupoItem || grupoItem === alvo;
             });
-            const contados = itens.length + vazios.length;
-            const total = Math.max(Number(subRegistro.totalItens || 0), Number(totalItensGrupoContagem(alvo) || 0));
+            const contados = itens.length;
+            const total = Number(totalItensGrupoContagem(alvo) || subRegistro.totalItens || 0);
             if(!contados) return;
             saida.push({
                 contados,
@@ -6617,7 +6630,7 @@ function statusOutrosUsuariosMaquinaContagem(maquina, incluirHistorico = false){
         if(String(registro.uid || "") && atual.uid && String(registro.uid) === atual.uid) return;
         if(String(registro.usuario || "") && atual.usuario && String(registro.usuario) === atual.usuario) return;
         const contados = Number(registro.contados || 0);
-        const total = Math.max(Number(registro.total || 0), Number(totalItensGrupoContagem(alvo) || 0));
+        const total = Number(totalItensGrupoContagem(alvo) || registro.total || 0);
         const concluida = !!registro.concluida || (!!total && contados >= total);
         const ativa = origem === "presenca" && registro.aberta !== false && Number(registro.updatedAt || 0) >= limiteAtivo;
         if(contados < 2 && !concluida) return;
@@ -6753,9 +6766,9 @@ function renderizarMaquinasContagem(){
     if(sectionGrid) sectionGrid.innerHTML = "";
     if(grid) grid.innerHTML = "";
     contagemMaquinas.forEach(maquina => {
-        const itensMaq = itensGrupoContagem(maquina);
+        const totalObrigatorio = totalItensGrupoContagem(maquina);
         const contados = totalRegistradoGrupoContagem(maquina);
-        const textoProgresso = `${contados}/${itensMaq.length}`;
+        const textoProgresso = `${contados}/${totalObrigatorio}`;
 
         const btn = document.createElement("button");
         btn.className = "contagemMaqBtn" + (maquina === contagemMaquinaAtual ? " ativa" : "");
@@ -6793,19 +6806,20 @@ function renderizarMaquinasContagem(){
     if(grid){
         const grupos = gruposDaSecaoContagem(contagemSecaoAtual);
         grupos.forEach(maquina => {
-            const itensMaq = itensGrupoContagem(maquina);
+            const totalObrigatorio = totalItensGrupoContagem(maquina);
+            const totalRegistros = totalRegistrosGrupoContagem(maquina);
             const contados = totalRegistradoGrupoContagem(maquina);
-            const textoProgresso = `${contados}/${itensMaq.length}`;
+            const textoProgresso = `${contados}/${totalObrigatorio}`;
             const temRascunho = grupoTemRascunhoContagem(maquina);
             const ocupado = presencasOutrosUsuariosMaquinaContagem(maquina).length > 0;
             const autoresHtml = htmlAutoresMaquinaContagem(maquina);
             const card = document.createElement("div");
-            card.className = "contagemMachineCard" + (contados === itensMaq.length ? " completa" : "") + (ocupado ? " ocupada" : "");
+            card.className = "contagemMachineCard" + (totalObrigatorio > 0 && contados >= totalObrigatorio ? " completa" : "") + (ocupado ? " ocupada" : "");
             card.innerHTML = `
                 <button type="button" class="contagemMachineStart">
                     <strong>${escapeHtml(maquinaGrupoContagem(maquina))}${autoresHtml}</strong>
                     <span>${textoProgresso} contados</span>
-                    <small>${itensMaq.length} itens em ordem de endereco</small>
+                    <small>${totalObrigatorio} itens obrigatorios${totalRegistros > totalObrigatorio ? ` + ${totalRegistros - totalObrigatorio} boxes opcionais` : ""}</small>
                     ${htmlIndicadorPresencaContagem(maquina)}
                 </button>
                 <div class="contagemMachineCardActions">
@@ -7047,31 +7061,34 @@ async function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido 
     let ultimoRegistrado = -1;
     contagemItensMaquina.forEach((item, idx) => {
         const key = itemKeyContagem(item);
-        if(keysJaRegistradas.has(key)) ultimoRegistrado = idx;
+        if(!isVerificacaoVazioContagem(item) && keysJaRegistradas.has(key)) ultimoRegistrado = idx;
     });
-    const proximoSequencial = ultimoRegistrado >= 0 && ultimoRegistrado < contagemItensMaquina.length - 1
-        ? ultimoRegistrado + 1
+    const proximoSequencial = ultimoRegistrado >= 0
+        ? contagemItensMaquina.findIndex((item, idx) => idx > ultimoRegistrado && !isVerificacaoVazioContagem(item))
         : -1;
     const indicePorTotalContado = Math.max(0, Math.min(
         Number(totalRegistradoGrupoContagem(maquina) || 0),
         Math.max(contagemItensMaquina.length - 1, 0)
     ));
     const primeiroPendente = contagemItensMaquina.findIndex(item => {
+        if(isVerificacaoVazioContagem(item)) return false;
         const key = itemKeyContagem(item);
         if(keysJaRegistradas.has(key)) return false;
-        return isVerificacaoVazioContagem(item)
-            ? contagemVerificacoesVazio[key] === undefined
-            : contagemValores[key] === undefined;
+        return contagemValores[key] === undefined;
     });
+    const primeiroObrigatorio = contagemItensMaquina.findIndex(item => !isVerificacaoVazioContagem(item));
+    const ultimoObrigatorioRegistrado = ultimoRegistrado >= 0 ? ultimoRegistrado : primeiroObrigatorio;
     const indicePorItem = itemKeyPreferido ? contagemItensMaquina.findIndex(item => itemKeyContagem(item) === itemKeyPreferido) : -1;
-    if(indicePorTotalContado > 0 && indicePorTotalContado < contagemItensMaquina.length){
+    if(primeiroPendente >= 0){
+        contagemIndice = primeiroPendente;
+    }else if(indicePorTotalContado > 0 && indicePorTotalContado < contagemItensMaquina.length && !isVerificacaoVazioContagem(contagemItensMaquina[indicePorTotalContado])){
         contagemIndice = indicePorTotalContado;
     }else if(proximoSequencial >= 0){
         contagemIndice = proximoSequencial;
     }else if(indicePorItem >= 0){
         contagemIndice = indicePorItem;
-    }else if(primeiroPendente >= 0){
-        contagemIndice = primeiroPendente;
+    }else if(ultimoObrigatorioRegistrado >= 0){
+        contagemIndice = ultimoObrigatorioRegistrado;
     }else if(Number.isFinite(indicePreferido)){
         contagemIndice = Math.max(0, Math.min(Number(indicePreferido), Math.max(contagemItensMaquina.length - 1, 0)));
     }else{
@@ -7161,16 +7178,15 @@ function renderizarCardContagem(){
 
 function obterResumoContagemMaquina(){
     const base = contagemItensMaquina.length ? contagemItensMaquina : contagemItens;
-    const contadosMaquina = base.filter(item => {
+    const obrigatorios = base.filter(item => !isVerificacaoVazioContagem(item));
+    const contadosMaquina = obrigatorios.filter(item => {
         const key = itemKeyContagem(item);
-        return isVerificacaoVazioContagem(item)
-            ? contagemVerificacoesVazio[key] !== undefined || contagemHistoricoVerificacoesVazio[key] !== undefined
-            : contagemValores[key] !== undefined || contagemHistoricoValores[key] !== undefined;
+        return contagemValores[key] !== undefined || contagemHistoricoValores[key] !== undefined;
     }).length;
     return {
-        total: base.length,
+        total: obrigatorios.length,
         contados: contadosMaquina,
-        restantes: Math.max(base.length - contadosMaquina, 0)
+        restantes: Math.max(obrigatorios.length - contadosMaquina, 0)
     };
 }
 
@@ -13885,12 +13901,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
-
-
-
 
 
 
