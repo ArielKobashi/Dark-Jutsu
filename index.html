@@ -6323,6 +6323,26 @@ function indicePendenteDirecaoContagem(inicio, passo){
     return -1;
 }
 
+function indicePendenteCircularContagem(indiceAtual, passo = 1){
+    if(!Array.isArray(contagemItensMaquina) || !contagemItensMaquina.length) return -1;
+    const direcao = passo < 0 ? -1 : 1;
+    const proximo = indicePendenteDirecaoContagem(Number(indiceAtual || 0) + direcao, direcao);
+    if(proximo >= 0) return proximo;
+    return direcao > 0
+        ? indicePendenteDirecaoContagem(0, 1)
+        : indicePendenteDirecaoContagem(contagemItensMaquina.length - 1, -1);
+}
+
+function ajustarIndiceParaPendenteContagem(){
+    if(!Array.isArray(contagemItensMaquina) || !contagemItensMaquina.length) return false;
+    const keysRegistradas = keysRegistradasGrupoContagem(contagemMaquinaAtual);
+    if(itemPendenteParaContagem(contagemItensMaquina[contagemIndice], keysRegistradas)) return false;
+    const proximoPendente = indicePendenteCircularContagem(contagemIndice, 1);
+    if(proximoPendente < 0 || proximoPendente === contagemIndice) return false;
+    contagemIndice = proximoPendente;
+    return true;
+}
+
 function gruposDaSecaoContagem(secaoKey){
     return contagemGruposPorSecao.get(secaoKey) || [];
 }
@@ -7138,6 +7158,7 @@ async function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido 
 }
 
 function renderizarCardContagem(){
+    ajustarIndiceParaPendenteContagem();
     const item = contagemItensMaquina[contagemIndice];
     const total = contagemItensMaquina.length;
     const label = document.getElementById("contagemMaquinaLabel");
@@ -7702,7 +7723,7 @@ function animarContagem(direcao, callback){
 function contagemProximo(){
     salvarAtualContagem();
     animarContagem("left", () => {
-        const proximoPendente = indicePendenteDirecaoContagem(contagemIndice + 1, 1);
+        const proximoPendente = indicePendenteCircularContagem(contagemIndice, 1);
         if(proximoPendente >= 0){
             contagemIndice = proximoPendente;
         }else{
@@ -7721,7 +7742,7 @@ function contagemProximo(){
 function contagemAnterior(){
     salvarAtualContagem();
     animarContagem("right", () => {
-        const anteriorPendente = indicePendenteDirecaoContagem(contagemIndice - 1, -1);
+        const anteriorPendente = indicePendenteCircularContagem(contagemIndice, -1);
         if(anteriorPendente >= 0){
             contagemIndice = anteriorPendente;
         }else{
@@ -13942,8 +13963,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
 
 
 
