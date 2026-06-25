@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dark-Jutsu</title>
 <link rel="icon" href="logo-tab.png">
-<link rel="stylesheet" href="style.css?v=3">
-<link rel="stylesheet" href="mobile.css?v=9">
+<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="mobile.css?v=10">
 <script src="dashboard-nav.js" defer></script>
 <!-- /SPLIT: head.html -->
 
@@ -321,29 +321,9 @@ xmlns="http://www.w3.org/2000/svg">
             <div class="ocorrenciasConsulta">
                 <div class="ocorrenciasConsultaHeader">
                     <div>
-                        <strong>Resumo de ocorrencias</strong>
+                        <strong>Avaliador de ocorrencias</strong>
                         <span id="ocorrenciasStorageAviso">Aguardando Firebase...</span>
                     </div>
-                </div>
-
-                <div class="ocorrenciasStats">
-                    <div class="stat-abertas"><span>Abertas</span><strong id="ocorrenciasAbertas">0</strong></div>
-                    <div class="stat-criticas"><span>Alta/Critica</span><strong id="ocorrenciasCriticas">0</strong></div>
-                    <div class="stat-filtradas"><span>Sem tratativa</span><strong id="ocorrenciasFiltradas">0</strong></div>
-                    <div class="stat-total"><span>Total</span><strong id="ocorrenciasTotal">0</strong></div>
-                </div>
-
-                <div class="ocorrenciasFiltros">
-                    <input id="ocorrenciaFiltroBusca" type="search" placeholder="Buscar ocorrencia, envolvido ou item" oninput="renderizarOcorrencias()">
-                    <select id="ocorrenciaFiltroTipo" onchange="renderizarOcorrencias()"></select>
-                    <select id="ocorrenciaFiltroGravidade" onchange="renderizarOcorrencias()"></select>
-                    <select id="ocorrenciaFiltroStatus" onchange="renderizarOcorrencias()"></select>
-                    <input id="ocorrenciaFiltroData" type="date" onchange="renderizarOcorrencias()">
-                    <button type="button" onclick="limparFiltrosOcorrencia()">Limpar</button>
-                </div>
-
-                <div id="ocorrenciasLista" class="ocorrenciasLista">
-                    <p class="ocorrenciasEmpty">Carregando ocorrencias...</p>
                 </div>
 
                 <div class="ocorrenciasResumoPainel">

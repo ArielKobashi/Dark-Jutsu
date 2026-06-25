@@ -953,6 +953,23 @@
         grid-template-columns: 1fr;
     }
 
+    .ocorrenciaForm > label,
+    .ocorrenciaForm > label:nth-of-type(3),
+    .ocorrenciaForm > label:nth-of-type(4),
+    .ocorrenciaForm > label:nth-of-type(5),
+    .ocorrenciaForm > label:nth-of-type(6),
+    .ocorrenciaForm > label:nth-of-type(7) {
+        grid-column: 1 / -1;
+    }
+
+    .ocorrenciaFormTitle {
+        margin: -14px -14px 4px;
+    }
+
+    .ocorrenciasConsulta {
+        overflow: visible;
+    }
+
     .ocorrenciasFiltros {
         grid-template-columns: 1fr;
         gap: 7px;

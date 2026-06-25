@@ -1394,6 +1394,154 @@ display:none;
     gap:10px;
 }
 
+.ocorrenciasBody{
+    grid-template-columns:minmax(520px, 1fr) minmax(260px, 340px);
+}
+
+.ocorrenciaForm{
+    grid-template-columns:repeat(6, minmax(0, 1fr));
+    gap:10px;
+    padding:14px;
+}
+
+.ocorrenciaForm > label{
+    grid-column:span 3;
+}
+
+.ocorrenciaForm > label:nth-of-type(3),
+.ocorrenciaForm > label:nth-of-type(4),
+.ocorrenciaForm > label:nth-of-type(5),
+.ocorrenciaForm > label:nth-of-type(6),
+.ocorrenciaForm > label:nth-of-type(7){
+    grid-column:span 2;
+}
+
+.ocorrenciaFormTitle{
+    padding:14px;
+    border:0;
+    border-bottom:1px solid rgba(103,232,249,0.14);
+    border-radius:0;
+    margin:-14px -14px 4px;
+}
+
+.ocorrenciaFormTitle strong{
+    font-size:16px;
+}
+
+.ocorrenciaFormTitle small{
+    font-size:11px;
+}
+
+.ocorrenciaSectionTitle{
+    margin:8px -2px 0;
+    padding:11px 0 0;
+    font-size:11px;
+}
+
+.ocorrenciaForm label{
+    font-size:11px;
+    color:#D6E4F7;
+}
+
+.ocorrenciaForm input,
+.ocorrenciaForm select{
+    min-height:38px;
+}
+
+.ocorrenciaForm textarea{
+    min-height:124px;
+}
+
+.ocorrenciasConsulta{
+    display:grid;
+    grid-template-rows:auto minmax(0, 1fr);
+    gap:12px;
+    overflow:hidden;
+    padding:0;
+    background:
+        linear-gradient(180deg,rgba(8,47,73,0.24),rgba(15,23,42,0.76)),
+        #0B1120;
+}
+
+.ocorrenciasConsultaHeader{
+    border:0;
+    border-bottom:1px solid rgba(103,232,249,0.14);
+    border-radius:0;
+    padding:14px;
+    background:rgba(15,23,42,0.5);
+}
+
+.ocorrenciasConsultaHeader strong{
+    font-size:15px;
+}
+
+.ocorrenciasConsultaHeader span{
+    font-size:11px;
+}
+
+.ocorrenciasResumoPainel{
+    position:relative;
+    grid-template-columns:1fr;
+    align-content:center;
+    padding:18px;
+    border:0;
+    border-radius:0;
+    background:transparent;
+}
+
+.ocorrenciasResumoPainel::before{
+    content:"";
+    width:42px;
+    height:42px;
+    border:1px solid rgba(103,232,249,0.28);
+    border-radius:9px;
+    background:
+        linear-gradient(180deg,rgba(103,232,249,0.18),rgba(34,197,94,0.08)),
+        #020817;
+    box-shadow:0 0 18px rgba(34,211,238,0.12);
+}
+
+.ocorrenciasResumoPainel strong{
+    font-size:17px;
+    margin-top:2px;
+}
+
+.ocorrenciasResumoPainel label{
+    font-size:11px;
+}
+
+.ocorrenciasResumoPainel input{
+    min-height:38px;
+}
+
+.ocorrenciasResumoPainel span{
+    grid-column:auto;
+    color:#A7F3D0;
+    font-size:11px;
+}
+
+.ocorrenciasResumoPainel button{
+    width:100%;
+    min-height:40px;
+    border-color:rgba(103,232,249,0.36);
+    background:linear-gradient(180deg,#075985,#0E7490);
+    color:#ECFEFF;
+    box-shadow:0 0 18px rgba(14,116,144,0.18);
+}
+
+.ocorrenciasAvaliadorHeader{
+    border-radius:8px;
+    padding:14px;
+}
+
+.ocorrenciasAvaliadorGrid{
+    grid-template-columns:minmax(260px, 320px) minmax(0, 1fr);
+}
+
+.ocorrenciasAvaliadorLista .ocorrenciaCard{
+    padding:12px;
+}
+
 #contagemHomePopup{
     position:absolute;
     top:114px;
