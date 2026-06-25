@@ -6149,7 +6149,6 @@ async function abrirContagem(){
     contagemVerificacoesVazio = carregarVerificacoesContagem();
     await carregarRascunhoContagemFirebase();
     await carregarContagensSalvasUsuarioAtual();
-    await carregarHistoricoContagemParaProgresso();
     await carregarPresencaContagemFirebaseAgora();
     recalcularMaquinasContagem();
     contagemSecaoAtual = primeiraSecaoDisponivelContagem();
@@ -6166,6 +6165,12 @@ async function abrirContagem(){
     iniciarListenerPresencaContagem();
     renderizarMaquinasContagem();
     marcarContagemAberta(true);
+    carregarHistoricoContagemParaProgresso().then(() => {
+        if(document.getElementById("contagemScreen")?.style.display !== "none"){
+            renderizarMaquinasContagem();
+            atualizarProgressoContagem();
+        }
+    });
 
 }
 
@@ -13619,7 +13624,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
 
 
 
