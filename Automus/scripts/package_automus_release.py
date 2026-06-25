@@ -16,6 +16,7 @@ DIST = ROOT / "dist"
 APP_DIR = DIST / "Automus"
 EXE = APP_DIR / "Automus.exe"
 RELEASES = ROOT / "releases"
+LAUNCHER = ROOT / "Abrir_Automus.bat"
 
 
 def python_console_executable() -> str:
@@ -93,6 +94,8 @@ def main():
                 zf.write(path, path.relative_to(APP_DIR).as_posix())
         zf.write(VERSION_PATH, "version.json")
         zf.write(manifest_path, "latest.json")
+        if LAUNCHER.exists():
+            zf.write(LAUNCHER, "Abrir_Automus.bat")
         readme = ROOT / "README.md"
         if readme.exists():
             zf.write(readme, "README.md")

@@ -2,14 +2,31 @@
 setlocal
 cd /d "%~dp0"
 
-set "PYTHON_EXE=C:\Users\davi.souza\AppData\Local\Microsoft\WindowsApps\python.exe"
-set "SCRIPT_PATH=%cd%\Automus\scripts\executar_tudo.py"
+set "AUTOMUS_EXE=%cd%\Automus\dist\Automus\Automus.exe"
+if not exist "%AUTOMUS_EXE%" set "AUTOMUS_EXE=%cd%\Automus\Automus.exe"
+if not exist "%AUTOMUS_EXE%" set "AUTOMUS_EXE=%cd%\Automus.exe"
 
-if not exist "%PYTHON_EXE%" (
-  echo Python nao encontrado em:
-  echo %PYTHON_EXE%
-  pause
-  exit /b 1
+if exist "%AUTOMUS_EXE%" (
+  echo Abrindo Automus...
+  start "" "%AUTOMUS_EXE%"
+  exit /b 0
+)
+
+set "SCRIPT_PATH=%cd%\Automus\scripts\executar_tudo.py"
+set "PYTHON_EXE="
+set "PYTHON_ARGS="
+
+where py >nul 2>nul
+if not errorlevel 1 (
+  set "PYTHON_EXE=py"
+  set "PYTHON_ARGS=-3"
+)
+
+if not defined PYTHON_EXE (
+  for /f "delims=" %%P in ('where python 2^>nul') do (
+    echo %%P | findstr /I "\\WindowsApps\\python.exe" >nul
+    if errorlevel 1 if not defined PYTHON_EXE set "PYTHON_EXE=%%P"
+  )
 )
 
 if not exist "%SCRIPT_PATH%" (
@@ -19,8 +36,15 @@ if not exist "%SCRIPT_PATH%" (
   exit /b 1
 )
 
+if not defined PYTHON_EXE (
+  echo Automus.exe nao encontrado e este computador nao tem Python.
+  echo Baixe ou extraia o pacote Automus-v*.zip e abra o Automus.exe.
+  pause
+  exit /b 1
+)
+
 echo Executando automacao completa...
-"%PYTHON_EXE%" "%SCRIPT_PATH%"
+"%PYTHON_EXE%" %PYTHON_ARGS% "%SCRIPT_PATH%"
 
 echo.
 echo Execucao finalizada.
