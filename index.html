@@ -6505,15 +6505,14 @@ function statusOutrosUsuariosMaquinaContagem(maquina){
     const atual = usuarioAtualPresencaContagem();
     const limiteAtivo = Date.now() - (4 * 60 * 1000);
     const status = [];
-    const registrosGrupo = presencasContagemDataAtual()[chaveFirebaseContagem(alvo)] || {};
-    Object.entries(registrosGrupo || {}).forEach(([usuarioKey, registro]) => {
+    const adicionarStatus = (usuarioKey, registro, origem = "presenca") => {
         if(usuarioKey === atual.usuarioKey) return;
         if(String(registro.uid || "") && atual.uid && String(registro.uid) === atual.uid) return;
         if(String(registro.usuario || "") && atual.usuario && String(registro.usuario) === atual.usuario) return;
         const contados = Number(registro.contados || 0);
-        const total = Number(registro.total || 0);
+        const total = Number(registro.total || totalItensGrupoContagem(alvo) || 0);
         const concluida = !!registro.concluida || (!!total && contados >= total);
-        const ativa = registro.aberta !== false && Number(registro.updatedAt || 0) >= limiteAtivo;
+        const ativa = origem === "presenca" && registro.aberta !== false && Number(registro.updatedAt || 0) >= limiteAtivo;
         if(contados < 2 && !concluida) return;
         const nome = String(registro.usuario || usuarioKey || "Outro usuario").trim();
         status.push({
@@ -6531,12 +6530,33 @@ function statusOutrosUsuariosMaquinaContagem(maquina){
                     ? `${nome} contando (${contados}/${total || "?"})`
                     : `${nome} ja contou (${contados}/${total || "?"})`
         });
+    };
+    const registrosGrupo = presencasContagemDataAtual()[chaveFirebaseContagem(alvo)] || {};
+    Object.entries(registrosGrupo || {}).forEach(([usuarioKey, registro]) => {
+        adicionarStatus(usuarioKey, registro, "presenca");
     });
-    return status.sort((a, b) => {
+    Object.values(contagemHomeRegistros || {}).forEach(registrosData => {
+        Object.entries(registrosData || {}).forEach(([usuarioKey, registroUsuario]) => {
+            const usuario = registroUsuario?._rascunho_atual?.usuario || registroUsuario?.rascunho_atual?.usuario || usuarioKey;
+            const progressos = coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo);
+            progressos.forEach(progresso => {
+                adicionarStatus(usuarioKey, { ...progresso, usuario }, "historico");
+            });
+        });
+    });
+    const ordenados = status.sort((a, b) => {
         if(a.concluida !== b.concluida) return a.concluida ? -1 : 1;
         if(a.ativa !== b.ativa) return a.ativa ? -1 : 1;
         if(a.contados !== b.contados) return b.contados - a.contados;
         return Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
+    });
+    const vistos = new Set();
+    return ordenados.filter(item => {
+        const chave = normalizarNickChat(item.usuario || "");
+        if(!chave) return true;
+        if(vistos.has(chave)) return false;
+        vistos.add(chave);
+        return true;
     });
 }
 
@@ -6819,9 +6839,10 @@ function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null
             : conflito.ativa
                 ? `${conflito.usuario} esta contando esta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar do ponto onde essa pessoa esta?`
                 : `${conflito.usuario} contou parte desta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar de onde essa pessoa parou?`;
+        mostrarNotificacao(texto);
         if(!confirm(texto)) return;
         if(!itemKeyPreferido && conflito.itemKey) itemKeyPreferido = conflito.itemKey;
-        if(!Number.isFinite(indicePreferido) && Number.isFinite(conflito.indice)) indicePreferido = conflito.indice;
+        if(!Number.isFinite(indicePreferido) && Number.isFinite(conflito.indice) && conflito.indice > 0) indicePreferido = conflito.indice;
     }
     contagemMaquinaAtual = maquina;
     contagemItensMaquina = itensGrupoContagem(maquina);
@@ -6834,12 +6855,14 @@ function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null
             : contagemValores[key] === undefined;
     });
     const indicePorItem = itemKeyPreferido ? contagemItensMaquina.findIndex(item => itemKeyContagem(item) === itemKeyPreferido) : -1;
-    if(indicePorItem >= 0){
+    if(primeiroPendente >= 0){
+        contagemIndice = primeiroPendente;
+    }else if(indicePorItem >= 0){
         contagemIndice = indicePorItem;
     }else if(Number.isFinite(indicePreferido)){
         contagemIndice = Math.max(0, Math.min(Number(indicePreferido), Math.max(contagemItensMaquina.length - 1, 0)));
     }else{
-        contagemIndice = primeiroPendente >= 0 ? primeiroPendente : 0;
+        contagemIndice = 0;
     }
     contagemUltimoEnderecoFalado = "";
     mostrarCardContagem();
@@ -13459,8 +13482,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
 
 
 
