@@ -121,9 +121,13 @@
 
     #main {
         flex: 1 1 auto;
+        width: 100%;
+        max-width: 100vw;
         padding: 10px 8px 64px 8px;
         min-height: 0;
+        min-width: 0;
         overflow: hidden;
+        box-sizing: border-box;
     }
 
     #searchInput {
@@ -138,11 +142,13 @@
         overflow-y: auto !important;
         border-radius: 8px;
         min-height: 0;
+        min-width: 0;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
         touch-action: pan-x pan-y;
         width: 100%;
         max-width: 100%;
+        box-sizing: border-box;
     }
 
     #mainActions {
@@ -283,8 +289,8 @@
 
     #tableContainer table {
         font-size: 12px;
-        width: 900px !important;
-        min-width: 900px !important;
+        width: max-content !important;
+        min-width: 760px !important;
         max-width: none !important;
         table-layout: fixed;
     }
@@ -835,8 +841,8 @@
 @media (max-width: 600px) {
     #tableContainer table {
         font-size: 9px;
-        width: 900px !important;
-        min-width: 900px !important;
+        width: max-content !important;
+        min-width: 720px !important;
         max-width: none !important;
     }
 
@@ -971,5 +977,4 @@
         min-height: 32px;
     }
 }
-
 

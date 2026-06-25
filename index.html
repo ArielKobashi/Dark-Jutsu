@@ -4185,6 +4185,13 @@ function ajustarLarguraDescricaoTabela(){
     const colDescricao = document.getElementById("colDescricaoPrincipal");
     const descricoes = Array.from(document.querySelectorAll("td.descricaoPrincipal"));
     if(!app || !main || !table || !colDescricao || !descricoes.length) return;
+    if(window.matchMedia && window.matchMedia("(max-width: 900px)").matches){
+        app.style.width = "";
+        main.style.width = "";
+        colDescricao.style.width = "260px";
+        table.style.removeProperty("--descricao-col-width");
+        return;
+    }
 
     const canvas = ajustarLarguraDescricaoTabela.canvas || (ajustarLarguraDescricaoTabela.canvas = document.createElement("canvas"));
     const ctx = canvas.getContext("2d");
@@ -6203,12 +6210,29 @@ function totalRascunhoLocalGrupoContagem(grupo){
     return keysRascunhoLocalGrupoContagem(grupo).size;
 }
 
-function totalRegistradoGrupoContagem(grupo){
-    const keys = keysRascunhoLocalGrupoContagem(grupo);
+function adicionarKeysHistoricoGrupoContagem(keys, grupo){
     const historico = contagemHistoricoProgressoGrupos?.[grupo];
-    if(historico?.forEach){
+    if(!historico) return keys;
+    if(typeof historico.forEach === "function"){
         historico.forEach(key => keys.add(key));
+    }else if(Array.isArray(historico)){
+        historico.forEach(key => keys.add(key));
+    }else if(typeof historico === "object"){
+        Object.values(historico).forEach(key => {
+            if(typeof key === "string") keys.add(key);
+        });
     }
+    return keys;
+}
+
+function keysRegistradasGrupoContagem(grupo){
+    const keys = keysRascunhoLocalGrupoContagem(grupo);
+    adicionarKeysHistoricoGrupoContagem(keys, grupo);
+    return keys;
+}
+
+function totalRegistradoGrupoContagem(grupo){
+    const keys = keysRegistradasGrupoContagem(grupo);
     return keys.size;
 }
 
@@ -6500,6 +6524,7 @@ function statusOutrosUsuariosMaquinaContagem(maquina){
             ativa,
             itemKey:String(registro.itemKey || ""),
             indice:Number(registro.indice || 0),
+            updatedAt:Number(registro.updatedAt || 0),
             texto:concluida
                 ? `${nome} concluiu esta maquina`
                 : ativa
@@ -6507,7 +6532,12 @@ function statusOutrosUsuariosMaquinaContagem(maquina){
                     : `${nome} ja contou (${contados}/${total || "?"})`
         });
     });
-    return status;
+    return status.sort((a, b) => {
+        if(a.concluida !== b.concluida) return a.concluida ? -1 : 1;
+        if(a.ativa !== b.ativa) return a.ativa ? -1 : 1;
+        if(a.contados !== b.contados) return b.contados - a.contados;
+        return Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
+    });
 }
 
 function presencasOutrosUsuariosMaquinaContagem(maquina){
@@ -6785,16 +6815,20 @@ function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null
     if(conflitos.length){
         const conflito = conflitos[0];
         const texto = conflito.concluida
-            ? `${conflito.usuario} ja concluiu esta maquina nesta etapa. Abrir mesmo assim?`
-            : `${conflito.usuario} estava contando esta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar do ponto onde essa pessoa parou?`;
+            ? `${conflito.usuario} finalizou a contagem desta maquina nesta etapa. Abrir mesmo assim?`
+            : conflito.ativa
+                ? `${conflito.usuario} esta contando esta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar do ponto onde essa pessoa esta?`
+                : `${conflito.usuario} contou parte desta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar de onde essa pessoa parou?`;
         if(!confirm(texto)) return;
         if(!itemKeyPreferido && conflito.itemKey) itemKeyPreferido = conflito.itemKey;
         if(!Number.isFinite(indicePreferido) && Number.isFinite(conflito.indice)) indicePreferido = conflito.indice;
     }
     contagemMaquinaAtual = maquina;
     contagemItensMaquina = itensGrupoContagem(maquina);
+    const keysJaRegistradas = keysRegistradasGrupoContagem(maquina);
     const primeiroPendente = contagemItensMaquina.findIndex(item => {
         const key = itemKeyContagem(item);
+        if(keysJaRegistradas.has(key)) return false;
         return isVerificacaoVazioContagem(item)
             ? contagemVerificacoesVazio[key] === undefined
             : contagemValores[key] === undefined;
@@ -13425,9 +13459,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
 
 
 
