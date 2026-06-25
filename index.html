@@ -6279,6 +6279,18 @@ function itensObrigatoriosGrupoContagem(grupo){
     return itensGrupoContagem(grupo).filter(item => !isVerificacaoVazioContagem(item));
 }
 
+function indiceObrigatorioMaisProximoContagem(itens, indice){
+    if(!Array.isArray(itens) || !itens.length || !Number.isFinite(indice)) return -1;
+    const alvo = Math.max(0, Math.min(Number(indice), itens.length - 1));
+    for(let distancia = 0; distancia < itens.length; distancia++){
+        const anterior = alvo - distancia;
+        if(anterior >= 0 && !isVerificacaoVazioContagem(itens[anterior])) return anterior;
+        const posterior = alvo + distancia;
+        if(posterior < itens.length && posterior !== anterior && !isVerificacaoVazioContagem(itens[posterior])) return posterior;
+    }
+    return -1;
+}
+
 function gruposDaSecaoContagem(secaoKey){
     return contagemGruposPorSecao.get(secaoKey) || [];
 }
@@ -7066,31 +7078,27 @@ async function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido 
     const proximoSequencial = ultimoRegistrado >= 0
         ? contagemItensMaquina.findIndex((item, idx) => idx > ultimoRegistrado && !isVerificacaoVazioContagem(item))
         : -1;
-    const indicePorTotalContado = Math.max(0, Math.min(
-        Number(totalRegistradoGrupoContagem(maquina) || 0),
-        Math.max(contagemItensMaquina.length - 1, 0)
-    ));
     const primeiroPendente = contagemItensMaquina.findIndex(item => {
         if(isVerificacaoVazioContagem(item)) return false;
         const key = itemKeyContagem(item);
         if(keysJaRegistradas.has(key)) return false;
-        return contagemValores[key] === undefined;
+        return contagemValores[key] === undefined && contagemHistoricoValores[key] === undefined;
     });
     const primeiroObrigatorio = contagemItensMaquina.findIndex(item => !isVerificacaoVazioContagem(item));
     const ultimoObrigatorioRegistrado = ultimoRegistrado >= 0 ? ultimoRegistrado : primeiroObrigatorio;
-    const indicePorItem = itemKeyPreferido ? contagemItensMaquina.findIndex(item => itemKeyContagem(item) === itemKeyPreferido) : -1;
+    const indicePorItemBruto = itemKeyPreferido ? contagemItensMaquina.findIndex(item => itemKeyContagem(item) === itemKeyPreferido) : -1;
+    const indicePorItem = indicePorItemBruto >= 0 ? indiceObrigatorioMaisProximoContagem(contagemItensMaquina, indicePorItemBruto) : -1;
+    const indicePreferidoObrigatorio = indiceObrigatorioMaisProximoContagem(contagemItensMaquina, Number(indicePreferido));
     if(primeiroPendente >= 0){
         contagemIndice = primeiroPendente;
-    }else if(indicePorTotalContado > 0 && indicePorTotalContado < contagemItensMaquina.length && !isVerificacaoVazioContagem(contagemItensMaquina[indicePorTotalContado])){
-        contagemIndice = indicePorTotalContado;
     }else if(proximoSequencial >= 0){
         contagemIndice = proximoSequencial;
-    }else if(indicePorItem >= 0){
-        contagemIndice = indicePorItem;
     }else if(ultimoObrigatorioRegistrado >= 0){
         contagemIndice = ultimoObrigatorioRegistrado;
-    }else if(Number.isFinite(indicePreferido)){
-        contagemIndice = Math.max(0, Math.min(Number(indicePreferido), Math.max(contagemItensMaquina.length - 1, 0)));
+    }else if(indicePorItem >= 0){
+        contagemIndice = indicePorItem;
+    }else if(indicePreferidoObrigatorio >= 0){
+        contagemIndice = indicePreferidoObrigatorio;
     }else{
         contagemIndice = 0;
     }
@@ -13901,9 +13909,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
 
 
 
