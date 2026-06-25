@@ -6254,7 +6254,7 @@ function grupoTemRascunhoContagem(grupo){
     if(!grupo) return false;
     const sessao = carregarSessaoContagem();
     if(resolverGrupoSessaoContagem(sessao.maquina || "") === grupo) return true;
-    return totalRascunhoLocalGrupoContagem(grupo) > 0;
+    return totalRegistradoGrupoContagem(grupo) > 0;
 }
 
 function existeContagemInacabada(grupo = ""){
@@ -6833,7 +6833,7 @@ function abrirJanelaEscutaContagem(){
 }
 
 function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null, itemKeyPreferido = ""){
-    const conflitos = statusOutrosUsuariosMaquinaContagem(maquina, true);
+    const conflitos = statusOutrosUsuariosMaquinaContagem(maquina, false);
     if(conflitos.length){
         const conflito = conflitos[0];
         const texto = conflito.concluida
@@ -13484,7 +13484,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
 
 
 
