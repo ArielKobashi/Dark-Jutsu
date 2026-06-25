@@ -221,13 +221,34 @@
     }
 
     .historicoContagemPanel.aberto #historicoContagemConteudo {
-        max-height: 300px;
+        max-height: min(76vh, 560px);
+    }
+
+    .historicoContagemHeader {
+        align-items: flex-start;
+        padding: 9px;
+    }
+
+    .historicoContagemTopActions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .historicoContagemTopActions button {
+        min-height: 30px;
+        font-size: 10px;
+    }
+
+    #historicoContagemMetricas {
+        grid-template-columns: 1fr 1fr;
+        padding: 7px;
+        gap: 6px;
     }
 
     #historicoContagemToolbar {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
         gap: 6px;
-        padding: 6px;
+        padding: 7px;
         background: rgba(11, 17, 32, 0.86);
     }
 
@@ -255,13 +276,22 @@
     }
 
     #historicoContagemLista {
-        max-height: 142px;
+        max-height: 270px;
         background: rgba(11, 17, 32, 0.86);
     }
 
     .historicoContagemRow {
+        grid-template-columns: 1fr;
         gap: 6px;
-        padding: 8px 0;
+        padding: 10px 0;
+    }
+
+    .historicoContagemActions {
+        justify-content: stretch;
+    }
+
+    .historicoContagemActions button {
+        flex: 1 1 0;
     }
 
     .historicoContagemRow button {

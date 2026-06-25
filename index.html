@@ -421,11 +421,31 @@ xmlns="http://www.w3.org/2000/svg">
         <strong id="historicoContagemResumo">abrir</strong>
     </button>
     <div id="historicoContagemConteudo">
+        <div class="historicoContagemHeader">
+            <div>
+                <strong>Planilhas salvas</strong>
+                <span id="historicoContagemSubResumo">Abra para carregar as contagens.</span>
+            </div>
+            <div class="historicoContagemTopActions">
+                <button type="button" onclick="carregarHistoricoContagemPlanilhas(true)">Atualizar</button>
+                <button type="button" id="historicoContagemResetBtn" onclick="resetarContagemGlobalAdmin()" style="display:none;">Zerar ciclo</button>
+            </div>
+        </div>
+        <div id="historicoContagemMetricas">
+            <span><strong>0</strong> planilhas</span>
+            <span><strong>0</strong> registros</span>
+            <span><strong>0</strong> divergencias</span>
+        </div>
         <div id="historicoContagemToolbar">
-            <select id="historicoContagemData" onchange="renderizarHistoricoContagemPlanilhas()"></select>
-            <select id="historicoContagemUsuario" onchange="renderizarHistoricoContagemPlanilhas()"></select>
-            <button type="button" onclick="carregarHistoricoContagemPlanilhas(true)">Atualizar</button>
-            <button type="button" id="historicoContagemResetBtn" onclick="resetarContagemGlobalAdmin()" style="display:none;">Zerar todos</button>
+            <label>
+                Data
+                <select id="historicoContagemData" onchange="renderizarHistoricoContagemPlanilhas()"></select>
+            </label>
+            <label>
+                Colaborador
+                <select id="historicoContagemUsuario" onchange="renderizarHistoricoContagemPlanilhas()"></select>
+            </label>
+            <button type="button" onclick="baixarHistoricoContagemFiltrado()">Baixar filtradas</button>
         </div>
         <div id="historicoContagemCorrecao" hidden>
             <select id="historicoContagemSessaoEditar"></select>
@@ -7924,6 +7944,12 @@ function ordenarLinhasRelatorioContagem(linhas){
 
 async function abrirRelatorioContagem(){
     salvarAtualContagem();
+    const header = document.querySelector("#contagemRelatorioHeader span");
+    const filtros = document.getElementById("contagemRelatorioFiltros");
+    const rodape = document.getElementById("contagemRelatorioRodape");
+    if(header) header.textContent = "Relatorio de Divergencia";
+    if(filtros) filtros.style.display = "";
+    if(rodape) rodape.style.display = "";
     document.getElementById("contagemRelatorioModal").style.display = "flex";
     document.getElementById("contagemRelatorioTabela").innerHTML = "<p class='contagemEmpty'>Carregando...</p>";
     try{
@@ -7949,6 +7975,10 @@ async function abrirRelatorioContagem(){
 
 function fecharRelatorioContagem(){
     document.getElementById("contagemRelatorioModal").style.display = "none";
+    const filtros = document.getElementById("contagemRelatorioFiltros");
+    const rodape = document.getElementById("contagemRelatorioRodape");
+    if(filtros) filtros.style.display = "";
+    if(rodape) rodape.style.display = "";
 }
 
 function popularFiltrosRelatorioContagem(){
@@ -8235,6 +8265,37 @@ function atualizarBotaoResetGlobalContagem(){
     if(btn) btn.style.display = window.nivelUsuario === "admin" ? "" : "none";
 }
 
+function sessoesHistoricoContagemFiltradas(){
+    const dataFiltro = document.getElementById("historicoContagemData")?.value || "";
+    const usuarioFiltro = document.getElementById("historicoContagemUsuario")?.value || "";
+    return historicoContagemSessoes.filter(sessao => {
+        if(dataFiltro && sessao.data !== dataFiltro) return false;
+        if(usuarioFiltro && sessao.usuario !== usuarioFiltro) return false;
+        return true;
+    });
+}
+
+function atualizarResumoHistoricoContagem(sessoes = []){
+    const metricas = document.getElementById("historicoContagemMetricas");
+    const subResumo = document.getElementById("historicoContagemSubResumo");
+    const totalRegistros = sessoes.reduce((acc, sessao) => acc + Number(sessao.total || 0), 0);
+    const divergencias = sessoes.reduce((acc, sessao) => acc + Number(sessao.divergencias || 0), 0);
+    const vazios = sessoes.reduce((acc, sessao) => acc + Number(sessao.vazios || 0), 0);
+    if(metricas){
+        metricas.innerHTML = `
+            <span><strong>${sessoes.length}</strong> planilhas</span>
+            <span><strong>${totalRegistros}</strong> registros</span>
+            <span><strong>${divergencias}</strong> divergencias</span>
+            <span><strong>${vazios}</strong> vazios/fantasmas</span>
+        `;
+    }
+    if(subResumo){
+        subResumo.textContent = sessoes.length
+            ? `${totalRegistros} registros em ${sessoes.length} planilha(s)`
+            : historicoContagemPlanilhasCarregado ? "Nenhuma planilha encontrada nos filtros." : "Abra para carregar as contagens.";
+    }
+}
+
 function labelSessaoHistoricoContagem(sessao){
     if(!sessao) return "";
     const quando = formatarResumoDataHoraContagem(sessao);
@@ -8388,13 +8449,8 @@ function renderizarHistoricoContagemPlanilhas(){
     const lista = document.getElementById("historicoContagemLista");
     const resumo = document.getElementById("historicoContagemResumo");
     if(!lista) return;
-    const dataFiltro = document.getElementById("historicoContagemData")?.value || "";
-    const usuarioFiltro = document.getElementById("historicoContagemUsuario")?.value || "";
-    const sessoes = historicoContagemSessoes.filter(sessao => {
-        if(dataFiltro && sessao.data !== dataFiltro) return false;
-        if(usuarioFiltro && sessao.usuario !== usuarioFiltro) return false;
-        return true;
-    });
+    const sessoes = sessoesHistoricoContagemFiltradas();
+    atualizarResumoHistoricoContagem(sessoes);
     if(resumo) resumo.textContent = historicoContagemPlanilhasAberto ? `${sessoes.length} planilhas` : "abrir";
     if(!historicoContagemPlanilhasCarregado){
         lista.innerHTML = "<p>Abra para carregar as contagens salvas.</p>";
@@ -8409,14 +8465,23 @@ function renderizarHistoricoContagemPlanilhas(){
     lista.innerHTML = sessoes.map(sessao => {
         const idx = historicoContagemSessoes.findIndex(s => s.id === sessao.id);
         const quando = formatarResumoDataHoraContagem(sessao);
+        const maquina = sessao.registro?.maquina ? labelGrupoContagem(sessao.registro.maquina) : "Maquina nao informada";
+        const itens = Math.max(0, Number(sessao.total || 0) - Number(sessao.vazios || 0));
         return `
             <div class="historicoContagemRow">
-                <div class="historicoContagemActions">
-                    <button type="button" onclick="baixarHistoricoContagemPlanilha(${idx})">Baixar planilha</button>
-                </div>
                 <div class="historicoContagemInfo">
-                    <strong>${escapeHtml(sessao.usuario)} - ${escapeHtml(quando)}</strong>
-                    <span>${sessao.total} linhas | ${sessao.divergencias} divergencias | ${sessao.vazios} vazios</span>
+                    <strong>${escapeHtml(sessao.usuario)}</strong>
+                    <span>${escapeHtml(quando)} | ${escapeHtml(maquina)}</span>
+                    <div class="historicoContagemBadges">
+                        <em>${sessao.total} registros</em>
+                        <em>${itens} itens</em>
+                        <em>${sessao.vazios} vazios/fantasmas</em>
+                        <em class="${sessao.divergencias ? "alerta" : "ok"}">${sessao.divergencias} divergencias</em>
+                    </div>
+                </div>
+                <div class="historicoContagemActions">
+                    <button type="button" onclick="verificarHistoricoContagemPlanilha(${idx})">Verificar</button>
+                    <button type="button" onclick="baixarHistoricoContagemPlanilha(${idx})">Baixar</button>
                 </div>
             </div>
         `;
@@ -8497,6 +8562,50 @@ function nomeArquivoHistoricoContagem(sessao){
     return `contagem_${limpar(sessao.data)}_${limpar(sessao.usuario)}${sufixo}.xlsx`;
 }
 
+function nomeAbaHistoricoContagem(sessao, idx = 0){
+    const limpar = valor => String(valor || "")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 18);
+    const base = `${limpar(sessao.usuario) || "contagem"}_${limpar(sessao.data) || "data"}`;
+    return `${String(idx + 1).padStart(2, "0")}_${base}`.slice(0, 31);
+}
+
+function verificarHistoricoContagemPlanilha(indice){
+    const sessao = historicoContagemSessoes[indice];
+    if(!sessao){
+        mostrarNotificacao("Contagem nao encontrada.");
+        return;
+    }
+    const linhas = linhasRegistroContagemPlanilha(sessao);
+    const header = document.querySelector("#contagemRelatorioHeader span");
+    const tabela = document.getElementById("contagemRelatorioTabela");
+    const filtros = document.getElementById("contagemRelatorioFiltros");
+    const rodape = document.getElementById("contagemRelatorioRodape");
+    if(header) header.textContent = `Historico - ${sessao.usuario}`;
+    if(filtros) filtros.style.display = "none";
+    if(rodape) rodape.style.display = "none";
+    document.getElementById("contagemRelatorioModal").style.display = "flex";
+    if(!tabela) return;
+    const linhasVisiveis = linhas.slice(0, 250);
+    tabela.innerHTML = `
+        <div class="contagemRelRow header">
+            <span>Endereco</span><span>Descricao</span><span>Sistema</span><span>Contado</span><span>Status</span>
+        </div>
+        ${linhasVisiveis.map(linha => `
+            <div class="contagemRelRow ${linha.Status === "DIVERGENTE" || linha.Status === "item fantasma" ? "divergente" : ""}">
+                <span>${escapeHtml(linha.Endereco || "-")}<small>${escapeHtml(linha.Tipo || "")}</small></span>
+                <span>${escapeHtml(linha.Descricao || "-")}<small>${escapeHtml([linha.Protheus, linha.Cooperat].filter(Boolean).join(" / ") || "-")}</small></span>
+                <span>${escapeHtml(String(linha.SaldoSistema ?? ""))}</span>
+                <span>${escapeHtml(String(linha.Contado ?? ""))}</span>
+                <span>${escapeHtml(linha.Status || "-")}</span>
+            </div>
+        `).join("")}
+        ${linhas.length > linhasVisiveis.length ? `<p class="contagemEmpty">Mostrando ${linhasVisiveis.length} de ${linhas.length}. Baixe a planilha para ver tudo.</p>` : ""}
+    `;
+}
+
 function baixarHistoricoContagemPlanilha(indice){
     if(typeof XLSX === "undefined"){
         mostrarNotificacao("Biblioteca XLSX nao encontrada.");
@@ -8512,6 +8621,27 @@ function baixarHistoricoContagemPlanilha(indice){
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Contagem");
     XLSX.writeFile(wb, nomeArquivoHistoricoContagem(sessao));
+}
+
+function baixarHistoricoContagemFiltrado(){
+    if(typeof XLSX === "undefined"){
+        mostrarNotificacao("Biblioteca XLSX nao encontrada.");
+        return;
+    }
+    const sessoes = sessoesHistoricoContagemFiltradas();
+    if(!sessoes.length){
+        mostrarNotificacao("Nenhuma planilha nos filtros atuais.");
+        return;
+    }
+    const wb = XLSX.utils.book_new();
+    const consolidadas = [];
+    sessoes.forEach((sessao, idx) => {
+        const linhas = linhasRegistroContagemPlanilha(sessao);
+        linhas.forEach(linha => consolidadas.push(linha));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(linhas), nomeAbaHistoricoContagem(sessao, idx));
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consolidadas), "Consolidado");
+    XLSX.writeFile(wb, `historico_contagem_${dataContagemHoje()}.xlsx`);
 }
 
 (function iniciarEventosContagem(){
@@ -8577,7 +8707,9 @@ window.salvarContagemPeloRelatorio = salvarContagemPeloRelatorio;
 window.toggleHistoricoContagemPlanilhas = toggleHistoricoContagemPlanilhas;
 window.carregarHistoricoContagemPlanilhas = carregarHistoricoContagemPlanilhas;
 window.renderizarHistoricoContagemPlanilhas = renderizarHistoricoContagemPlanilhas;
+window.verificarHistoricoContagemPlanilha = verificarHistoricoContagemPlanilha;
 window.baixarHistoricoContagemPlanilha = baixarHistoricoContagemPlanilha;
+window.baixarHistoricoContagemFiltrado = baixarHistoricoContagemFiltrado;
 window.resetarContagemGlobalAdmin = resetarContagemGlobalAdmin;
 
 
@@ -13753,12 +13885,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
-
-
-
 
 
 
