@@ -4057,6 +4057,33 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     font-weight:900;
 }
 
+.contagemMachineAuthors{
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px;
+    margin-top:4px;
+    color:#BAE6FD !important;
+    font-size:10px !important;
+    line-height:1.2;
+}
+
+.contagemMachineCard strong .contagemMachineAuthors{
+    display:inline-flex;
+    margin-top:0;
+    margin-left:8px;
+    vertical-align:middle;
+}
+
+.contagemMachineAuthors span{
+    display:inline-flex;
+    align-items:center;
+    border:1px solid rgba(56,189,248,0.26);
+    border-radius:999px;
+    padding:2px 6px;
+    background:rgba(8,47,73,0.62);
+    white-space:nowrap;
+}
+
 .contagemMachineCardActions{
     width:100%;
     display:grid;
@@ -4071,6 +4098,11 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     font-size:11px;
     font-weight:900;
     cursor:pointer;
+}
+
+.contagemMachineCardActions .contagemMachineAuthors{
+    grid-column:1 / -1;
+    margin-top:0;
 }
 
 .contagemMachineCardActions .continuar{
@@ -4566,7 +4598,5 @@ box-shadow:0 0 0px rgba(0,255,120,0);
     box-shadow:0 6px 14px rgba(47,107,255,0.35);
     filter:brightness(1.05);
 }
-
-
 
 

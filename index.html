@@ -4852,6 +4852,9 @@ let contagemRegistrosDesdeUltimoBackup = 0;
 let contagemPresencaUnsub = null;
 let contagemStatusMaquinas = {};
 let contagemHistoricoProgressoGrupos = {};
+let contagemHistoricoValores = {};
+let contagemHistoricoVerificacoesVazio = {};
+let contagemHistoricoAutoresGrupos = {};
 let contagemItensPorGrupo = new Map();
 let contagemGruposPorSecao = new Map();
 const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
@@ -5818,29 +5821,52 @@ function criarIndicesProgressoContagem(){
     return { porLinha, porVazio, porItemKey };
 }
 
-function adicionarItemHistoricoProgressoContagem(saida, item){
+function adicionarItemHistoricoProgressoContagem(saida, item, usuario = ""){
     const grupo = grupoItemContagem(item);
     const key = itemKeyContagem(item);
     if(!grupo || !key) return;
     if(!saida[grupo]) saida[grupo] = new Set();
     saida[grupo].add(key);
+    if(usuario){
+        if(!contagemHistoricoAutoresGrupos[grupo]) contagemHistoricoAutoresGrupos[grupo] = {};
+        const autores = contagemHistoricoAutoresGrupos[grupo];
+        const nome = String(usuario || "").trim();
+        if(!autores[nome]) autores[nome] = { usuario:nome, inicio:Infinity, fim:-1, total:0, updatedAt:0 };
+        const itensGrupo = itensGrupoContagem(grupo).length ? itensGrupoContagem(grupo) : contagemItens.filter(atual => grupoItemContagem(atual) === grupo);
+        const idx = itensGrupo.findIndex(atual => itemKeyContagem(atual) === key);
+        if(idx >= 0){
+            autores[nome].inicio = Math.min(autores[nome].inicio, idx + 1);
+            autores[nome].fim = Math.max(autores[nome].fim, idx + 1);
+        }
+        autores[nome].total += 1;
+    }
 }
 
 function reconstruirHistoricoProgressoContagem(registros){
     const saida = {};
+    contagemHistoricoValores = {};
+    contagemHistoricoVerificacoesVazio = {};
+    contagemHistoricoAutoresGrupos = {};
     const indices = criarIndicesProgressoContagem();
-    const visitarRegistro = registro => {
+    const visitarRegistro = (registro, usuario = "") => {
         if(!registro || typeof registro !== "object") return;
+        const usuarioRegistro = registro.usuario || usuario || "";
         if(registro.valores || (registro.verificacoesVazio && !registro.itens)){
             const valores = normalizarRascunhoContagemFirebase(registro.valores || {});
             const verificacoes = normalizarRascunhoContagemFirebase(registro.verificacoesVazio || {});
-            Object.keys(valores).forEach(key => {
+            Object.entries(valores).forEach(([key, valor]) => {
                 const item = indices.porItemKey.get(key);
-                if(item) adicionarItemHistoricoProgressoContagem(saida, item);
+                if(item){
+                    contagemHistoricoValores[key] = valor;
+                    adicionarItemHistoricoProgressoContagem(saida, item, usuarioRegistro);
+                }
             });
-            Object.keys(verificacoes).forEach(key => {
+            Object.entries(verificacoes).forEach(([key, status]) => {
                 const item = indices.porItemKey.get(key);
-                if(item) adicionarItemHistoricoProgressoContagem(saida, item);
+                if(item){
+                    contagemHistoricoVerificacoesVazio[key] = status;
+                    adicionarItemHistoricoProgressoContagem(saida, item, usuarioRegistro);
+                }
             });
             return;
         }
@@ -5849,18 +5875,26 @@ function reconstruirHistoricoProgressoContagem(registros){
                 const codigo = item?.protheus || item?.cooperat || "";
                 const chave = chaveProgressoContagemPrincipal(codigo, item?.armazem, item?.endereco);
                 const atual = indices.porLinha.get(chave);
-                if(atual) adicionarItemHistoricoProgressoContagem(saida, atual);
+                if(atual){
+                    contagemHistoricoValores[itemKeyContagem(atual)] = item?.contado;
+                    adicionarItemHistoricoProgressoContagem(saida, atual, usuarioRegistro);
+                }
             });
             Object.values(registro.verificacoesVazio || {}).forEach(item => {
                 const endereco = normalizarEnderecoProgressoContagem(item?.endereco || "");
                 const atual = indices.porVazio.get(endereco);
-                if(atual) adicionarItemHistoricoProgressoContagem(saida, atual);
+                if(atual){
+                    contagemHistoricoVerificacoesVazio[itemKeyContagem(atual)] = item?.status || "livre";
+                    adicionarItemHistoricoProgressoContagem(saida, atual, usuarioRegistro);
+                }
             });
             return;
         }
         Object.entries(registro).forEach(([key, valor]) => {
             if(String(key).startsWith("_") && key !== "_rascunho_atual") return;
-            visitarRegistro(valor);
+            const keyTexto = String(key || "");
+            const proximoUsuario = valor?.usuario || (/^\d{4}-\d{2}-\d{2}$/.test(keyTexto) ? usuario : keyTexto) || usuario;
+            visitarRegistro(valor, proximoUsuario);
         });
     };
     visitarRegistro(registros || {});
@@ -6573,6 +6607,63 @@ function htmlIndicadorPresencaContagem(maquina){
     return `<small class="contagemMachineBusy">${escapeHtml(texto)}</small>`;
 }
 
+function autoresMaquinaContagem(maquina){
+    const alvo = resolverGrupoSessaoContagem(maquina) || maquina || "";
+    const autores = { ...(contagemHistoricoAutoresGrupos?.[alvo] || {}) };
+    const adicionarFaixaLocal = (usuario, keys, updatedAt = Date.now()) => {
+        const nome = String(usuario || "").trim();
+        if(!nome || !keys?.size) return;
+        const itens = itensGrupoContagem(alvo);
+        let inicio = Infinity;
+        let fim = -1;
+        itens.forEach((item, idx) => {
+            if(keys.has(itemKeyContagem(item))){
+                inicio = Math.min(inicio, idx + 1);
+                fim = Math.max(fim, idx + 1);
+            }
+        });
+        if(!Number.isFinite(inicio) || fim < 1) return;
+        const atual = autores[nome] || { usuario:nome, inicio:Infinity, fim:-1, total:0, updatedAt:0 };
+        autores[nome] = {
+            usuario:nome,
+            inicio:Math.min(Number(atual.inicio || Infinity), inicio),
+            fim:Math.max(Number(atual.fim || -1), fim),
+            total:Number(atual.total || 0) + keys.size,
+            updatedAt:Math.max(Number(atual.updatedAt || 0), Number(updatedAt || 0))
+        };
+    };
+    adicionarFaixaLocal(window.meuNickname || "", keysRascunhoLocalGrupoContagem(alvo));
+    statusOutrosUsuariosMaquinaContagem(alvo, false).forEach(status => {
+        const contados = Number(status.contados || 0);
+        if(!status.usuario || !contados) return;
+        const atual = autores[status.usuario] || { usuario:status.usuario, inicio:1, fim:0, total:0, updatedAt:0 };
+        autores[status.usuario] = {
+            usuario:status.usuario,
+            inicio:Math.min(Number(atual.inicio || 1), 1),
+            fim:Math.max(Number(atual.fim || 0), contados),
+            total:Math.max(Number(atual.total || 0), contados),
+            updatedAt:Math.max(Number(atual.updatedAt || 0), Number(status.updatedAt || 0))
+        };
+    });
+    return Object.values(autores)
+        .filter(a => a?.usuario && Number.isFinite(Number(a.inicio)) && Number(a.fim) > 0)
+        .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0) || Number(b.fim || 0) - Number(a.fim || 0))
+        .slice(0, 3)
+        .map(a => ({
+            usuario:a.usuario,
+            inicio:Number(a.inicio || 1),
+            fim:Number(a.fim || a.inicio || 1)
+        }));
+}
+
+function htmlAutoresMaquinaContagem(maquina){
+    const autores = autoresMaquinaContagem(maquina);
+    if(!autores.length) return "";
+    return `<small class="contagemMachineAuthors">${autores.map(a =>
+        `<span>${escapeHtml(a.usuario)} ${escapeHtml(String(a.inicio))}-${escapeHtml(String(a.fim))}</span>`
+    ).join("")}</small>`;
+}
+
 function renderizarMaquinasContagem(){
     const bar = document.getElementById("contagemMaquinasBar");
     const sectionGrid = document.getElementById("contagemSectionGrid");
@@ -6631,17 +6722,19 @@ function renderizarMaquinasContagem(){
             const textoProgresso = `${contados}/${itensMaq.length}`;
             const temRascunho = grupoTemRascunhoContagem(maquina);
             const ocupado = presencasOutrosUsuariosMaquinaContagem(maquina).length > 0;
+            const autoresHtml = htmlAutoresMaquinaContagem(maquina);
             const card = document.createElement("div");
             card.className = "contagemMachineCard" + (contados === itensMaq.length ? " completa" : "") + (ocupado ? " ocupada" : "");
             card.innerHTML = `
                 <button type="button" class="contagemMachineStart">
-                    <strong>${escapeHtml(maquinaGrupoContagem(maquina))}</strong>
+                    <strong>${escapeHtml(maquinaGrupoContagem(maquina))}${autoresHtml}</strong>
                     <span>${textoProgresso} contados</span>
                     <small>${itensMaq.length} itens em ordem de endereco</small>
                     ${htmlIndicadorPresencaContagem(maquina)}
                 </button>
                 <div class="contagemMachineCardActions">
                     <button type="button" class="continuar" ${temRascunho ? "" : "disabled"}>Continuar</button>
+                    ${autoresHtml}
                 </div>
             `;
             card.querySelector(".contagemMachineStart").onclick = () => selecionarMaquinaContagem(maquina, true);
@@ -6933,7 +7026,7 @@ function renderizarCardContagem(){
 
     const key = itemKeyContagem(item);
     const isVerificacao = isVerificacaoVazioContagem(item);
-    const valorSalvo = contagemValores[key];
+    const valorSalvo = contagemValores[key] !== undefined ? contagemValores[key] : contagemHistoricoValores[key];
     const input = document.getElementById("contagemInput");
     const quickPad = document.getElementById("contagemQuickPad");
     const ghostActions = document.getElementById("contagemGhostActions");
@@ -6942,7 +7035,7 @@ function renderizarCardContagem(){
     input.value = isVerificacao ? "" : (valorSalvo !== undefined ? valorSalvo : "");
     const status = document.getElementById("contagemInputStatus");
     if(isVerificacao){
-        const verificacao = contagemVerificacoesVazio[key];
+        const verificacao = contagemVerificacoesVazio[key] !== undefined ? contagemVerificacoesVazio[key] : contagemHistoricoVerificacoesVazio[key];
         document.getElementById("contagemCardDescricao").textContent = `${infoEndereco.prateleira} ${infoEndereco.caixa} esta vazia?`;
         if(codigos) codigos.style.display = "none";
         if(saldoSistema) saldoSistema.style.display = "none";
@@ -6977,8 +7070,8 @@ function obterResumoContagemMaquina(){
     const contadosMaquina = base.filter(item => {
         const key = itemKeyContagem(item);
         return isVerificacaoVazioContagem(item)
-            ? contagemVerificacoesVazio[key] !== undefined
-            : contagemValores[key] !== undefined;
+            ? contagemVerificacoesVazio[key] !== undefined || contagemHistoricoVerificacoesVazio[key] !== undefined
+            : contagemValores[key] !== undefined || contagemHistoricoValores[key] !== undefined;
     }).length;
     return {
         total: base.length,
@@ -13526,12 +13619,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
-
-
-
 
 
 

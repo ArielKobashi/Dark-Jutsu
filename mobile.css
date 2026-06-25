@@ -619,6 +619,17 @@
         font-size: 24px;
     }
 
+    .contagemMachineCard strong .contagemMachineAuthors {
+        display:flex;
+        margin-left:0;
+        margin-top:4px;
+    }
+
+    .contagemMachineAuthors {
+        font-size:9px !important;
+        gap:3px;
+    }
+
     .contagemMachineCard span {
         font-size: 13px;
     }
@@ -977,4 +988,3 @@
         min-height: 32px;
     }
 }
-
