@@ -118,8 +118,16 @@ def check_for_update(script_dir: Path, bundled_script_dir: Path, timeout: float 
     if not manifest_url:
         return None
 
-    with urlopen(manifest_url, timeout=timeout) as resp:
-        manifest = json.loads(resp.read().decode("utf-8-sig"))
+    parsed = urlparse(manifest_url)
+    if parsed.scheme in ("http", "https"):
+        with urlopen(manifest_url, timeout=timeout) as resp:
+            manifest = json.loads(resp.read().decode("utf-8-sig"))
+    elif parsed.scheme == "file":
+        manifest_path = Path(unquote(parsed.path))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    else:
+        manifest_path = Path(manifest_url)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
 
     return update_info_from_manifest(current_version, manifest, manifest_url)
 
@@ -169,6 +177,8 @@ def download_update(info: UpdateInfo) -> Path:
     exe_path = payload_dir / "Automus.exe"
     if not exe_path.exists():
         raise RuntimeError("Pacote de atualizacao nao contem Automus.exe.")
+    if not any((payload_dir / "_internal").glob("python*.dll")):
+        raise RuntimeError("Pacote de atualizacao incompleto: falta _internal\\python*.dll. Extraia o zip inteiro da release.")
 
     checksum = _sha256(exe_path).lower()
     if checksum != info.sha256:

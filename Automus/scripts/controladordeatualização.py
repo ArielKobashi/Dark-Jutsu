@@ -1735,12 +1735,18 @@ class _SharedState:
         return get_manifest_firebase_path(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
 
     def get_update_source_label(self) -> str:
+        manifest_url = self.get_update_manifest_url()
+        if manifest_url:
+            return manifest_url
         firebase_path = self.get_update_manifest_firebase_path()
         if firebase_path:
             return f"Firebase:{firebase_path}"
-        return self.get_update_manifest_url()
+        return ""
 
     def check_app_update(self):
+        manifest_url = self.get_update_manifest_url()
+        if manifest_url:
+            return check_for_update(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
         firebase_path = self.get_update_manifest_firebase_path()
         if firebase_path:
             admin = self.authenticated_admin or {}
@@ -1754,7 +1760,7 @@ class _SharedState:
             local = load_local_version(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
             current_version = str(local.get("version") or "dev").strip()
             return update_info_from_manifest(current_version, manifest, f"firebase:{firebase_path}")
-        return check_for_update(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
+        return None
 
     def download_app_update(self, info):
         return download_update(info)

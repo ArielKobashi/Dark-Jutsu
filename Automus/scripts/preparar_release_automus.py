@@ -145,7 +145,7 @@ def copy_to_publish_dir(version: str, publish_dir: str, log=print):
     target = Path(publish_dir).expanduser()
     target.mkdir(parents=True, exist_ok=True)
     package_name = f"Automus-v{version}.zip"
-    for filename in (package_name, "latest.json"):
+    for filename in (package_name, "latest.json", "latest"):
         source = RELEASES / filename
         if source.exists():
             shutil.copy2(source, target / filename)

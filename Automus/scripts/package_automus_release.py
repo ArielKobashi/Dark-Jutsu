@@ -65,6 +65,8 @@ def main():
     build_exe()
     if not EXE.exists():
         raise RuntimeError(f"Build nao gerou {EXE}.")
+    if not any((APP_DIR / "_internal").glob("python*.dll")):
+        raise RuntimeError(f"Build incompleto: {APP_DIR / '_internal'} nao contem python*.dll.")
 
     RELEASES.mkdir(parents=True, exist_ok=True)
     package_name = f"Automus-v{version}.zip"
@@ -87,6 +89,8 @@ def main():
 
     manifest_path = RELEASES / "latest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    latest_alias_path = RELEASES / "latest"
+    latest_alias_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for path in APP_DIR.rglob("*"):
@@ -94,6 +98,7 @@ def main():
                 zf.write(path, path.relative_to(APP_DIR).as_posix())
         zf.write(VERSION_PATH, "version.json")
         zf.write(manifest_path, "latest.json")
+        zf.write(latest_alias_path, "latest")
         if LAUNCHER.exists():
             zf.write(LAUNCHER, "Abrir_Automus.bat")
         readme = ROOT / "README.md"
@@ -101,6 +106,7 @@ def main():
             zf.write(readme, "README.md")
 
     shutil.copy2(manifest_path, DIST / "latest.json")
+    shutil.copy2(latest_alias_path, DIST / "latest")
     print(f"Pacote pronto: {package_path}")
     print(f"SHA256: {checksum}")
     print("Envie esse .zip para os outros dispositivos.")
