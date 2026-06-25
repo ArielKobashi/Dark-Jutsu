@@ -17,7 +17,14 @@
     },
     "contagens": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      "$data": {
+        "$usuario": {
+          ".write": "auth != null && (root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com')",
+          "$registro": {
+            ".write": "auth != null && ($registro === '_etiquetas' || root.child('usuarios/' + auth.uid + '/nivel').val() === 'admin' || auth.token.email === 'davi@sistema.com' || ((!data.exists() || data.child('uid').val() === auth.uid) && (!newData.exists() || newData.child('uid').val() === auth.uid)))"
+          }
+        }
+      }
     },
     "contagemAtual": {
       ".read": "auth != null",

@@ -4855,6 +4855,8 @@ let contagemHistoricoProgressoGrupos = {};
 let contagemHistoricoValores = {};
 let contagemHistoricoVerificacoesVazio = {};
 let contagemHistoricoAutoresGrupos = {};
+let contagemHistoricoResponsaveisValores = {};
+let contagemHistoricoResponsaveisVerificacoes = {};
 let contagemItensPorGrupo = new Map();
 let contagemGruposPorSecao = new Map();
 const CONTAGEM_TOLERANCIA_VOZ_MS = 20000;
@@ -5232,6 +5234,29 @@ function objetoRascunhoContagemFirebaseSeguro(obj){
     return seguro;
 }
 
+function limparContagensBloqueadasDeOutrosUsuarios(){
+    let removeu = false;
+    Object.keys(contagemValores || {}).forEach(key => {
+        if(itemContagemBloqueadoPorOutro(key, "valor")){
+            delete contagemValores[key];
+            removeu = true;
+        }
+    });
+    Object.keys(contagemVerificacoesVazio || {}).forEach(key => {
+        if(itemContagemBloqueadoPorOutro(key, "verificacao")){
+            delete contagemVerificacoesVazio[key];
+            removeu = true;
+        }
+    });
+    if(removeu){
+        try{
+            localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
+            localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
+        }catch(e){}
+    }
+    return removeu;
+}
+
 function normalizarRascunhoContagemFirebase(obj){
     const normalizado = {};
     const mapaChaves = new Map();
@@ -5322,6 +5347,7 @@ function payloadProgressoGruposContagemFirebase(){
 }
 
 function payloadRascunhoContagemFirebase(){
+    limparContagensBloqueadasDeOutrosUsuarios();
     return {
         usuario: window.meuNickname || "",
         uid: uidRascunhoContagemFirebase(),
@@ -5603,6 +5629,7 @@ async function carregarContagensSalvasUsuarioAtual(){
 }
 
 function salvarRascunhoContagem(opcoes = {}){
+    limparContagensBloqueadasDeOutrosUsuarios();
     try{
         localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
         localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
@@ -5847,6 +5874,8 @@ function reconstruirHistoricoProgressoContagem(registros){
     contagemHistoricoValores = {};
     contagemHistoricoVerificacoesVazio = {};
     contagemHistoricoAutoresGrupos = {};
+    contagemHistoricoResponsaveisValores = {};
+    contagemHistoricoResponsaveisVerificacoes = {};
     const indices = criarIndicesProgressoContagem();
     const visitarRegistro = (registro, usuario = "") => {
         if(!registro || typeof registro !== "object") return;
@@ -5858,6 +5887,7 @@ function reconstruirHistoricoProgressoContagem(registros){
                 const item = indices.porItemKey.get(key);
                 if(item){
                     contagemHistoricoValores[key] = valor;
+                    if(usuarioRegistro) contagemHistoricoResponsaveisValores[key] = usuarioRegistro;
                     adicionarItemHistoricoProgressoContagem(saida, item, usuarioRegistro);
                 }
             });
@@ -5865,6 +5895,7 @@ function reconstruirHistoricoProgressoContagem(registros){
                 const item = indices.porItemKey.get(key);
                 if(item){
                     contagemHistoricoVerificacoesVazio[key] = status;
+                    if(usuarioRegistro) contagemHistoricoResponsaveisVerificacoes[key] = usuarioRegistro;
                     adicionarItemHistoricoProgressoContagem(saida, item, usuarioRegistro);
                 }
             });
@@ -5876,7 +5907,9 @@ function reconstruirHistoricoProgressoContagem(registros){
                 const chave = chaveProgressoContagemPrincipal(codigo, item?.armazem, item?.endereco);
                 const atual = indices.porLinha.get(chave);
                 if(atual){
-                    contagemHistoricoValores[itemKeyContagem(atual)] = item?.contado;
+                    const keyAtual = itemKeyContagem(atual);
+                    contagemHistoricoValores[keyAtual] = item?.contado;
+                    if(usuarioRegistro) contagemHistoricoResponsaveisValores[keyAtual] = usuarioRegistro;
                     adicionarItemHistoricoProgressoContagem(saida, atual, usuarioRegistro);
                 }
             });
@@ -5884,7 +5917,9 @@ function reconstruirHistoricoProgressoContagem(registros){
                 const endereco = normalizarEnderecoProgressoContagem(item?.endereco || "");
                 const atual = indices.porVazio.get(endereco);
                 if(atual){
-                    contagemHistoricoVerificacoesVazio[itemKeyContagem(atual)] = item?.status || "livre";
+                    const keyAtual = itemKeyContagem(atual);
+                    contagemHistoricoVerificacoesVazio[keyAtual] = item?.status || "livre";
+                    if(usuarioRegistro) contagemHistoricoResponsaveisVerificacoes[keyAtual] = usuarioRegistro;
                     adicionarItemHistoricoProgressoContagem(saida, atual, usuarioRegistro);
                 }
             });
@@ -6151,6 +6186,8 @@ async function abrirContagem(){
     await carregarContagensSalvasUsuarioAtual();
     await carregarPresencaContagemFirebaseAgora();
     recalcularMaquinasContagem();
+    await carregarHistoricoContagemParaProgresso();
+    limparContagensBloqueadasDeOutrosUsuarios();
     contagemSecaoAtual = primeiraSecaoDisponivelContagem();
     contagemMaquinaAtual = "";
     contagemItensMaquina = [];
@@ -6165,12 +6202,6 @@ async function abrirContagem(){
     iniciarListenerPresencaContagem();
     renderizarMaquinasContagem();
     marcarContagemAberta(true);
-    carregarHistoricoContagemParaProgresso().then(() => {
-        if(document.getElementById("contagemScreen")?.style.display !== "none"){
-            renderizarMaquinasContagem();
-            atualizarProgressoContagem();
-        }
-    });
 
 }
 
@@ -6448,6 +6479,28 @@ function usuarioAtualPresencaContagem(){
         uid: String(uidRascunhoContagemFirebase() || ""),
         usuarioKey: usuarioKeyContagemFirebase()
     };
+}
+
+function usuarioAtualNormalizadoContagem(){
+    const nome = window.meuNickname || window.auth?.currentUser?.email || window.auth?.currentUser?.uid || "";
+    return String(nome || "").trim().toLowerCase();
+}
+
+function itemContagemBloqueadoPorOutro(key, tipo = "valor"){
+    if(!key) return null;
+    const responsaveis = tipo === "verificacao"
+        ? contagemHistoricoResponsaveisVerificacoes
+        : contagemHistoricoResponsaveisValores;
+    const dono = String(responsaveis?.[key] || "").trim();
+    if(!dono) return null;
+    const atual = usuarioAtualNormalizadoContagem();
+    if(atual && dono.toLowerCase() === atual) return null;
+    return dono;
+}
+
+function avisarItemContagemBloqueado(dono){
+    if(!dono) return;
+    mostrarNotificacao(`Item ja contado por ${dono}. Voce so pode alterar contagens feitas por voce.`);
 }
 
 function coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo){
@@ -7032,12 +7085,14 @@ function renderizarCardContagem(){
     const key = itemKeyContagem(item);
     const isVerificacao = isVerificacaoVazioContagem(item);
     const valorSalvo = contagemValores[key] !== undefined ? contagemValores[key] : contagemHistoricoValores[key];
+    const donoBloqueado = itemContagemBloqueadoPorOutro(key, isVerificacao ? "verificacao" : "valor");
     const input = document.getElementById("contagemInput");
     const quickPad = document.getElementById("contagemQuickPad");
     const ghostActions = document.getElementById("contagemGhostActions");
     const codigos = document.getElementById("contagemCardCodigos");
     const saldoSistema = document.getElementById("contagemCardSaldoSistema");
     input.value = isVerificacao ? "" : (valorSalvo !== undefined ? valorSalvo : "");
+    input.disabled = !!donoBloqueado;
     const status = document.getElementById("contagemInputStatus");
     if(isVerificacao){
         const verificacao = contagemVerificacoesVazio[key] !== undefined ? contagemVerificacoesVazio[key] : contagemHistoricoVerificacoesVazio[key];
@@ -7047,7 +7102,9 @@ function renderizarCardContagem(){
         if(input) input.style.display = "none";
         if(quickPad) quickPad.style.display = "none";
         if(ghostActions) ghostActions.style.display = "grid";
-        status.textContent = verificacao ? `Registrado: ${verificacao}` : "Confirme se o endereco esta livre";
+        status.textContent = donoBloqueado
+            ? `Contado por ${donoBloqueado}. Somente essa pessoa pode alterar.`
+            : verificacao ? `Registrado: ${verificacao}` : "Confirme se o endereco esta livre";
         status.classList.toggle("contado", !!verificacao);
     }else{
         if(codigos) codigos.style.display = "flex";
@@ -7055,8 +7112,22 @@ function renderizarCardContagem(){
         if(input) input.style.display = "";
         if(quickPad) quickPad.style.display = "grid";
         if(ghostActions) ghostActions.style.display = "none";
-        status.textContent = valorSalvo !== undefined ? "Contado" : "Aguardando contagem";
+        status.textContent = donoBloqueado
+            ? `Contado por ${donoBloqueado}. Somente essa pessoa pode alterar.`
+            : valorSalvo !== undefined ? "Contado" : "Aguardando contagem";
         status.classList.toggle("contado", valorSalvo !== undefined);
+    }
+    if(quickPad){
+        quickPad.querySelectorAll("button").forEach(btn => {
+            btn.disabled = !!donoBloqueado;
+            btn.title = donoBloqueado ? `Contado por ${donoBloqueado}` : "";
+        });
+    }
+    if(ghostActions){
+        ghostActions.querySelectorAll("button").forEach(btn => {
+            btn.disabled = !!donoBloqueado;
+            btn.title = donoBloqueado ? `Contado por ${donoBloqueado}` : "";
+        });
     }
     atualizarProgressoContagem();
     falarEnderecoContagem(infoEndereco, item);
@@ -7065,7 +7136,7 @@ function renderizarCardContagem(){
         abrirJanelaEscutaContagem();
     }
     salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:key });
-    if(!isVerificacao){
+    if(!isVerificacao && !donoBloqueado){
         setTimeout(() => input.focus({ preventScroll:true }), 60);
     }
 }
@@ -7364,7 +7435,19 @@ function valorInputContagem(){
     return Number.isFinite(valor) ? valor : 0;
 }
 
+function donoBloqueadoItemAtualContagem(){
+    const item = contagemItensMaquina[contagemIndice];
+    if(!item) return null;
+    return itemContagemBloqueadoPorOutro(itemKeyContagem(item), isVerificacaoVazioContagem(item) ? "verificacao" : "valor");
+}
+
 function preencherContagemRapida(valor, avancar = false){
+    const donoBloqueado = donoBloqueadoItemAtualContagem();
+    if(donoBloqueado){
+        avisarItemContagemBloqueado(donoBloqueado);
+        if(avancar) contagemProximo();
+        return;
+    }
     const input = document.getElementById("contagemInput");
     if(!input) return;
     input.value = valor;
@@ -7385,6 +7468,11 @@ function preencherSaldoSistemaContagem(avancar = false){
 }
 
 function digitarContagemRapida(digito){
+    const donoBloqueado = donoBloqueadoItemAtualContagem();
+    if(donoBloqueado){
+        avisarItemContagemBloqueado(donoBloqueado);
+        return;
+    }
     const input = document.getElementById("contagemInput");
     if(!input) return;
     const atual = input.value.toString();
@@ -7396,6 +7484,11 @@ function digitarContagemRapida(digito){
 }
 
 function apagarDigitoContagem(){
+    const donoBloqueado = donoBloqueadoItemAtualContagem();
+    if(donoBloqueado){
+        avisarItemContagemBloqueado(donoBloqueado);
+        return;
+    }
     const input = document.getElementById("contagemInput");
     if(!input) return;
     input.value = input.value.toString().slice(0, -1);
@@ -7410,6 +7503,11 @@ function apagarDigitoContagem(){
 }
 
 function ajustarContagemAtual(delta){
+    const donoBloqueado = donoBloqueadoItemAtualContagem();
+    if(donoBloqueado){
+        avisarItemContagemBloqueado(donoBloqueado);
+        return;
+    }
     const input = document.getElementById("contagemInput");
     if(!input) return;
     const proximo = Math.max(0, valorInputContagem() + Number(delta || 0));
@@ -7421,6 +7519,11 @@ function ajustarContagemAtual(delta){
 }
 
 function limparContagemAtual(){
+    const donoBloqueado = donoBloqueadoItemAtualContagem();
+    if(donoBloqueado){
+        avisarItemContagemBloqueado(donoBloqueado);
+        return;
+    }
     const input = document.getElementById("contagemInput");
     if(!input) return;
     input.value = "";
@@ -7434,6 +7537,13 @@ function registrarVerificacaoVazioContagem(status){
     const item = contagemItensMaquina[contagemIndice];
     if(!isVerificacaoVazioContagem(item)) return;
     const key = itemKeyContagem(item);
+    const donoBloqueado = itemContagemBloqueadoPorOutro(key, "verificacao");
+    if(donoBloqueado){
+        delete contagemVerificacoesVazio[key];
+        avisarItemContagemBloqueado(donoBloqueado);
+        contagemProximo();
+        return;
+    }
     const anterior = contagemVerificacoesVazio[key];
     contagemVerificacoesVazio[key] = status;
     salvarRascunhoContagem({ contagemAlterada:anterior !== status });
@@ -7471,6 +7581,13 @@ function salvarAtualContagem(){
     if(!item || !input) return;
     if(isVerificacaoVazioContagem(item)){
         const key = itemKeyContagem(item);
+        const donoBloqueado = itemContagemBloqueadoPorOutro(key, "verificacao");
+        if(donoBloqueado){
+            delete contagemVerificacoesVazio[key];
+            salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:key });
+            atualizarProgressoContagem();
+            return;
+        }
         salvarRascunhoContagem();
         salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:key });
         atualizarProgressoContagem();
@@ -7478,6 +7595,14 @@ function salvarAtualContagem(){
     }
     const raw = input.value.toString().trim();
     const key = itemKeyContagem(item);
+    const donoBloqueado = itemContagemBloqueadoPorOutro(key, "valor");
+    if(donoBloqueado){
+        delete contagemValores[key];
+        input.value = contagemHistoricoValores[key] !== undefined ? contagemHistoricoValores[key] : "";
+        salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:key });
+        atualizarProgressoContagem();
+        return;
+    }
     const anterior = contagemValores[key];
     let alterou = false;
     if(raw === ""){
@@ -7571,6 +7696,7 @@ async function finalizarContagem(){
 
 function criarPayloadRascunhoRelatorioContagem(rascunho = true){
     salvarAtualContagem();
+    limparContagensBloqueadasDeOutrosUsuarios();
     const maquinaBase = contagemMaquinaAtual || carregarSessaoContagem().maquina || "";
     const itensBase = maquinaBase
         ? itensGrupoContagem(maquinaBase)
@@ -7581,6 +7707,7 @@ function criarPayloadRascunhoRelatorioContagem(rascunho = true){
     const nick = window.meuNickname || "desconhecido";
     const payload = {
         usuario:nick,
+        uid:uidRascunhoContagemFirebase(),
         data:dataContagemSessaoAtual(),
         timestamp:Date.now(),
         maquina:maquinaBase,
@@ -13624,16 +13751,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
 
 
 
