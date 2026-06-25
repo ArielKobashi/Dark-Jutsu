@@ -6829,7 +6829,35 @@ function abrirJanelaEscutaContagem(){
     atualizarStatusEscutaAtualContagem();
 }
 
-function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null, itemKeyPreferido = ""){
+function confirmarEntradaMaquinaContagem(texto){
+    return new Promise(resolve => {
+        const overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,6,23,.72);";
+        overlay.innerHTML = `
+            <div style="width:min(360px,100%);background:#0f172a;color:#f8fafc;border:1px solid rgba(103,232,249,.35);border-radius:14px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.45);font-family:Arial,sans-serif;">
+                <strong style="display:block;font-size:16px;margin-bottom:8px;">Contagem em andamento</strong>
+                <p style="margin:0 0 14px;font-size:13px;line-height:1.4;color:#dbeafe;">${escapeHtml(texto)}</p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <button type="button" data-contagem-confirm="cancelar" style="min-height:42px;border-radius:9px;border:1px solid rgba(148,163,184,.35);background:#1e293b;color:#e2e8f0;font-weight:800;">Cancelar</button>
+                    <button type="button" data-contagem-confirm="continuar" style="min-height:42px;border-radius:9px;border:0;background:#22c55e;color:#052e16;font-weight:900;">Continuar</button>
+                </div>
+            </div>
+        `;
+        const fechar = resposta => {
+            overlay.remove();
+            resolve(resposta);
+        };
+        overlay.addEventListener("click", ev => {
+            if(ev.target === overlay) fechar(false);
+            const acao = ev.target?.dataset?.contagemConfirm;
+            if(acao === "cancelar") fechar(false);
+            if(acao === "continuar") fechar(true);
+        });
+        document.body.appendChild(overlay);
+    });
+}
+
+async function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null, itemKeyPreferido = ""){
     const conflitos = statusOutrosUsuariosMaquinaContagem(maquina, false);
     if(conflitos.length){
         const conflito = conflitos[0];
@@ -6839,6 +6867,8 @@ function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido = null
                 ? `${conflito.usuario} esta contando esta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar do ponto onde essa pessoa esta?`
                 : `${conflito.usuario} contou parte desta maquina (${conflito.contados}/${conflito.total || "?"}). Continuar de onde essa pessoa parou?`;
         mostrarNotificacao(texto);
+        const continuar = await confirmarEntradaMaquinaContagem(texto);
+        if(!continuar) return;
         if(!itemKeyPreferido && conflito.itemKey) itemKeyPreferido = conflito.itemKey;
         if(!Number.isFinite(indicePreferido) && Number.isFinite(conflito.indice) && conflito.indice > 0) indicePreferido = conflito.indice;
     }
@@ -13480,7 +13510,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
 
 
 
