@@ -6511,7 +6511,7 @@ function coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo){
         const grupoValor = resolverGrupoSessaoContagem(grupo.grupo || "") || grupo.grupo || "";
         if(grupoValor && grupoValor !== alvo) return;
         const contados = Number(grupo.contados || 0);
-        const total = Number(grupo.total || totalItensGrupoContagem(alvo) || 0);
+        const total = Math.max(Number(grupo.total || 0), Number(totalItensGrupoContagem(alvo) || 0));
         if(!contados && !total) return;
         saida.push({
             contados,
@@ -6540,19 +6540,17 @@ function coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo){
         const verificacoes = normalizarRascunhoContagemFirebase(rascunhoAtual.verificacoesVazio || {});
         const keys = new Set([...Object.keys(valores), ...Object.keys(verificacoes)]);
         let contados = 0;
-        let itensContados = 0;
         itensGrupoContagem(alvo).forEach(item => {
             const key = itemKeyContagem(item);
             if(!keys.has(key)) return;
             contados += 1;
-            if(!isVerificacaoVazioContagem(item)) itensContados += 1;
         });
         const total = totalItensGrupoContagem(alvo);
         if(contados){
             saida.push({
                 contados,
                 total,
-                concluida: !!total && itensContados >= total,
+                concluida: !!total && contados >= total,
                 updatedAt:Number(rascunhoAtual.updatedAt || 0),
                 origem:"rascunho"
             });
@@ -6575,12 +6573,12 @@ function coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo){
                 return !grupoItem || grupoItem === alvo;
             });
             const contados = itens.length + vazios.length;
-            const total = Number(subRegistro.totalItens || totalItensGrupoContagem(alvo) || 0);
+            const total = Math.max(Number(subRegistro.totalItens || 0), Number(totalItensGrupoContagem(alvo) || 0));
             if(!contados) return;
             saida.push({
                 contados,
                 total,
-                concluida: !!total && itens.length >= total,
+                concluida: !!total && contados >= total,
                 updatedAt:Number(subRegistro.timestamp || 0),
                 origem:"salvo"
             });
@@ -6599,7 +6597,7 @@ function statusOutrosUsuariosMaquinaContagem(maquina, incluirHistorico = false){
         if(String(registro.uid || "") && atual.uid && String(registro.uid) === atual.uid) return;
         if(String(registro.usuario || "") && atual.usuario && String(registro.usuario) === atual.usuario) return;
         const contados = Number(registro.contados || 0);
-        const total = Number(registro.total || totalItensGrupoContagem(alvo) || 0);
+        const total = Math.max(Number(registro.total || 0), Number(totalItensGrupoContagem(alvo) || 0));
         const concluida = !!registro.concluida || (!!total && contados >= total);
         const ativa = origem === "presenca" && registro.aberta !== false && Number(registro.updatedAt || 0) >= limiteAtivo;
         if(contados < 2 && !concluida) return;
@@ -7675,7 +7673,8 @@ async function finalizarContagem(){
     const linhasExportacao = linhasRelatorioContagemPayload(payload);
     const totalItens = Object.keys(payload.itens || {}).length;
     const totalVazios = Object.keys(payload.verificacoesVazio || {}).length;
-    if(!confirm(`Finalizar contagem?\n\nItens contados: ${totalItens}\nVazios verificados: ${totalVazios}.`)) return;
+    const totalRegistros = totalItens + totalVazios;
+    if(!confirm(`Finalizar contagem?\n\nRegistros contados: ${totalRegistros}\nItens com quantidade: ${totalItens}\nVazios/fantasmas: ${totalVazios}.`)) return;
     try{
         const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
         await window.push(baseRef, payload);
@@ -7683,7 +7682,7 @@ async function finalizarContagem(){
         contagemFinalizadaSemSessao = true;
         historicoContagemPlanilhasCarregado = false;
         if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas(true);
-        mostrarNotificacao(`Contagem salva: ${totalItens} itens.`);
+        mostrarNotificacao(`Contagem salva: ${totalRegistros} registros.`);
         fecharContagem();
         if(confirm("Contagem salva. Quer exportar o XLSX agora?")){
             exportarLinhasRelatorioContagemXlsx(linhasExportacao, payload.data);
@@ -7711,7 +7710,9 @@ function criarPayloadRascunhoRelatorioContagem(rascunho = true){
         data:dataContagemSessaoAtual(),
         timestamp:Date.now(),
         maquina:maquinaBase,
-        totalItens:itensBase.filter(item => !isVerificacaoVazioContagem(item)).length,
+        totalItens:itensBase.length,
+        totalItensComQuantidade:itensBase.filter(item => !isVerificacaoVazioContagem(item)).length,
+        totalVerificacoesVazio:itensBase.filter(item => isVerificacaoVazioContagem(item)).length,
         itens:{},
         verificacoesVazio:{}
     };
@@ -7821,10 +7822,10 @@ function criarPayloadRascunhoFirebaseRelatorioContagem(remoto, uid = ""){
     });
     const totalRegistros = Object.keys(payload.itens).length + Object.keys(payload.verificacoesVazio).length;
     if(!totalRegistros) return null;
-    payload.totalItens = linhasBase
-        .filter(item => !isVerificacaoVazioContagem(item))
-        .filter(item => !maquina || grupoItemContagem(item) === maquina)
-        .length;
+    const linhasMaquina = linhasBase.filter(item => !maquina || grupoItemContagem(item) === maquina);
+    payload.totalItens = linhasMaquina.length;
+    payload.totalItensComQuantidade = linhasMaquina.filter(item => !isVerificacaoVazioContagem(item)).length;
+    payload.totalVerificacoesVazio = linhasMaquina.filter(item => isVerificacaoVazioContagem(item)).length;
     return payload;
 }
 
@@ -8069,7 +8070,8 @@ async function salvarContagemPeloRelatorio(){
     const linhasExportacao = linhasRelatorioContagemPayload(payload);
     const totalItens = Object.keys(payload.itens || {}).length;
     const totalVazios = Object.keys(payload.verificacoesVazio || {}).length;
-    if(!confirm(`Salvar contagem?\n\nItens contados: ${totalItens}\nVazios verificados: ${totalVazios}.`)) return;
+    const totalRegistros = totalItens + totalVazios;
+    if(!confirm(`Salvar contagem?\n\nRegistros contados: ${totalRegistros}\nItens com quantidade: ${totalItens}\nVazios/fantasmas: ${totalVazios}.`)) return;
     try{
         const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
         await window.push(baseRef, payload);
@@ -8078,7 +8080,7 @@ async function salvarContagemPeloRelatorio(){
         historicoContagemPlanilhasCarregado = false;
         if(historicoContagemPlanilhasAberto) carregarHistoricoContagemPlanilhas(true);
         document.getElementById("contagemRelatorioModal").style.display = "none";
-        mostrarNotificacao(`Contagem salva: ${totalItens} itens.`);
+        mostrarNotificacao(`Contagem salva: ${totalRegistros} registros.`);
         fecharContagem();
         if(confirm("Contagem salva. Quer exportar o XLSX agora?")){
             exportarLinhasRelatorioContagemXlsx(linhasExportacao, payload.data);
@@ -13751,11 +13753,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
-
-
 
 
 
