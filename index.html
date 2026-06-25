@@ -6291,12 +6291,27 @@ function indiceObrigatorioMaisProximoContagem(itens, indice){
     return -1;
 }
 
+function itemTemContagemRegistrada(item, keysRegistradas = null){
+    if(!item) return false;
+    const key = itemKeyContagem(item);
+    if(!key) return false;
+    if(keysRegistradas?.has(key)) return true;
+    if(isVerificacaoVazioContagem(item)){
+        return contagemVerificacoesVazio[key] !== undefined
+            || contagemHistoricoVerificacoesVazio[key] !== undefined
+            || contagemHistoricoResponsaveisVerificacoes[key] !== undefined;
+    }
+    return contagemValores[key] !== undefined
+        || contagemHistoricoValores[key] !== undefined
+        || contagemHistoricoResponsaveisValores[key] !== undefined;
+}
+
 function itemPendenteParaContagem(item, keysRegistradas = null){
     if(!item || isVerificacaoVazioContagem(item)) return false;
     const key = itemKeyContagem(item);
     if(!key) return false;
-    if(keysRegistradas?.has(key)) return false;
-    return contagemValores[key] === undefined && contagemHistoricoValores[key] === undefined;
+    if(itemTemContagemRegistrada(item, keysRegistradas)) return false;
+    return true;
 }
 
 function indicePendenteDirecaoContagem(inicio, passo){
@@ -7015,7 +7030,7 @@ function statusEscutaAtualContagem(){
             const verificacao = contagemVerificacoesVazio[key];
             return verificacao ? `Registrado: ${verificacao}` : "Confirme se o endereco esta livre";
         }
-        return contagemValores[key] !== undefined ? "Contado" : "Aguardando contagem";
+        return itemTemContagemRegistrada(item) ? "Contado" : "Aguardando contagem";
     }
     return isVerificacaoVazioContagem(item) ? "Ouvindo resposta: sim ou nao..." : "Ouvindo quantidade...";
 }
@@ -7202,8 +7217,7 @@ function obterResumoContagemMaquina(){
     const base = contagemItensMaquina.length ? contagemItensMaquina : contagemItens;
     const obrigatorios = base.filter(item => !isVerificacaoVazioContagem(item));
     const contadosMaquina = obrigatorios.filter(item => {
-        const key = itemKeyContagem(item);
-        return contagemValores[key] !== undefined || contagemHistoricoValores[key] !== undefined;
+        return itemTemContagemRegistrada(item);
     }).length;
     return {
         total: obrigatorios.length,
@@ -13928,9 +13942,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
 
 
 
