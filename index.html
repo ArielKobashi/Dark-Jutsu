@@ -4845,6 +4845,7 @@ let contagemItensMaquina = [];
 let contagemIndice = 0;
 let contagemValores = {};
 let contagemVerificacoesVazio = {};
+let contagemSaldosCongelados = {};
 let contagemSwipeStartX = 0;
 let contagemSwipeActive = false;
 let relContagens = {};
@@ -5037,6 +5038,11 @@ function chaveVerificacoesContagem(){
     return `contagemVerificacoes:${uid}`;
 }
 
+function chaveSaldosCongeladosContagem(){
+    const uid = window.auth?.currentUser?.uid || window.meuNickname || "local";
+    return `contagemSaldosCongelados:${uid}`;
+}
+
 function chaveSessaoContagem(){
     const uid = window.auth?.currentUser?.uid || window.meuNickname || "local";
     return `contagemSessao:${uid}`;
@@ -5060,11 +5066,13 @@ function limparRascunhoSessaoContagemLocal(){
     try{
         localStorage.removeItem(chaveRascunhoContagem());
         localStorage.removeItem(chaveVerificacoesContagem());
+        localStorage.removeItem(chaveSaldosCongeladosContagem());
         localStorage.removeItem(chaveSessaoContagem());
     }catch(e){}
     limparRascunhoContagemFirebase();
     contagemValores = {};
     contagemVerificacoesVazio = {};
+    contagemSaldosCongelados = {};
     contagemMaquinaAtual = "";
     contagemItensMaquina = [];
     contagemIndice = 0;
@@ -5082,11 +5090,13 @@ function limparRascunhoContagemMaquina(maquina){
             const key = itemKeyContagem(item);
             delete contagemValores[key];
             delete contagemVerificacoesVazio[key];
+            delete contagemSaldosCongelados[key];
         });
     salvarRascunhoContagem();
     if(!Object.keys(contagemValores).length && !Object.keys(contagemVerificacoesVazio).length){
         localStorage.removeItem(chaveRascunhoContagem());
         localStorage.removeItem(chaveVerificacoesContagem());
+        localStorage.removeItem(chaveSaldosCongeladosContagem());
         localStorage.removeItem(chaveSessaoContagem());
         limparRascunhoContagemFirebase();
         contagemMaquinaAtual = "";
@@ -5108,10 +5118,12 @@ function aplicarResetGlobalContagem(resetInfo, avisar = true){
         try{
             localStorage.removeItem(chaveRascunhoContagem());
             localStorage.removeItem(chaveVerificacoesContagem());
+            localStorage.removeItem(chaveSaldosCongeladosContagem());
             localStorage.removeItem(chaveSessaoContagem());
         }catch(e){}
         contagemValores = {};
         contagemVerificacoesVazio = {};
+        contagemSaldosCongelados = {};
         contagemMaquinaAtual = "";
         contagemItensMaquina = [];
         contagemIndice = 0;
@@ -5263,6 +5275,7 @@ function limparContagensBloqueadasDeOutrosUsuarios(){
     Object.keys(contagemValores || {}).forEach(key => {
         if(itemContagemBloqueadoPorOutro(key, "valor")){
             delete contagemValores[key];
+            delete contagemSaldosCongelados[key];
             removeu = true;
         }
     });
@@ -5276,6 +5289,7 @@ function limparContagensBloqueadasDeOutrosUsuarios(){
         try{
             localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
             localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
+            localStorage.setItem(chaveSaldosCongeladosContagem(), JSON.stringify(contagemSaldosCongelados));
         }catch(e){}
     }
     return removeu;
@@ -5296,6 +5310,39 @@ function normalizarRascunhoContagemFirebase(obj){
         normalizado[mapaChaves.get(safeKey) || safeKey] = entrada;
     });
     return normalizado;
+}
+
+function saldoAtualSistemaItemContagem(item){
+    return parsePlanilhaNumero(item?.saldo);
+}
+
+function saldoSistemaCongeladoItemContagem(item){
+    const key = itemKeyContagem(item);
+    if(key && contagemSaldosCongelados[key] !== undefined){
+        return parsePlanilhaNumero(contagemSaldosCongelados[key]);
+    }
+    return saldoAtualSistemaItemContagem(item);
+}
+
+function congelarSaldoSistemaItemContagem(item){
+    const key = itemKeyContagem(item);
+    if(!key || contagemSaldosCongelados[key] !== undefined) return;
+    const saldo = saldoAtualSistemaItemContagem(item);
+    if(saldo !== null) contagemSaldosCongelados[key] = saldo;
+}
+
+function preencherSaldosCongeladosAusentesContagem(){
+    let alterou = false;
+    contagemItens.forEach(item => {
+        if(!item || isVerificacaoVazioContagem(item)) return;
+        const key = itemKeyContagem(item);
+        if(!key || contagemValores[key] === undefined || contagemSaldosCongelados[key] !== undefined) return;
+        const saldo = saldoAtualSistemaItemContagem(item);
+        if(saldo === null) return;
+        contagemSaldosCongelados[key] = saldo;
+        alterou = true;
+    });
+    return alterou;
 }
 
 function payloadPresencaContagemFirebase(aberta = true){
@@ -5350,7 +5397,7 @@ function payloadProgressoItensContagemFirebase(){
             protheus:item.protheus || "",
             cooperat:item.cooperat || "",
             descricao:item.descricao || "",
-            saldoSistema:parsePlanilhaNumero(item.saldo),
+            saldoSistema:saldoSistemaCongeladoItemContagem(item),
             contado:contagemValores[key],
             updatedAt:Date.now()
         };
@@ -5377,6 +5424,7 @@ function payloadRascunhoContagemFirebase(){
         uid: uidRascunhoContagemFirebase(),
         valores: objetoRascunhoContagemFirebaseSeguro(contagemValores),
         verificacoesVazio: objetoRascunhoContagemFirebaseSeguro(contagemVerificacoesVazio),
+        saldosSistema: objetoRascunhoContagemFirebaseSeguro(contagemSaldosCongelados),
         sessao: carregarSessaoContagem(),
         progressoPorGrupo: objetoFirebaseSeguro(resumoProgressoGruposContagem()),
         progressoItens: payloadProgressoItensContagemFirebase(),
@@ -5538,11 +5586,13 @@ async function carregarRascunhoContagemFirebase(){
         const remoto = remotos.reduce((acc, atual) => {
             const valores = atual.valores && typeof atual.valores === "object" ? normalizarRascunhoContagemFirebase(atual.valores) : {};
             const verificacoes = atual.verificacoesVazio && typeof atual.verificacoesVazio === "object" ? normalizarRascunhoContagemFirebase(atual.verificacoesVazio) : {};
+            const saldosSistema = atual.saldosSistema && typeof atual.saldosSistema === "object" ? normalizarRascunhoContagemFirebase(atual.saldosSistema) : {};
             return {
                 ...acc,
                 ...atual,
                 valores:{ ...(acc.valores || {}), ...valores },
                 verificacoesVazio:{ ...(acc.verificacoesVazio || {}), ...verificacoes },
+                saldosSistema:{ ...(acc.saldosSistema || {}), ...saldosSistema },
                 sessao:Number(atual.sessao?.updatedAt || 0) >= Number(acc.sessao?.updatedAt || 0) ? (atual.sessao || acc.sessao || {}) : (acc.sessao || {}),
                 updatedAt:Math.max(Number(acc.updatedAt || 0), Number(atual.updatedAt || atual.sessao?.updatedAt || 0))
             };
@@ -5553,13 +5603,16 @@ async function carregarRascunhoContagemFirebase(){
         const localTs = Number(localSessao.updatedAt || 0);
         const valoresRemotos = remoto.valores && typeof remoto.valores === "object" ? remoto.valores : {};
         const verificacoesRemotas = remoto.verificacoesVazio && typeof remoto.verificacoesVazio === "object" ? remoto.verificacoesVazio : {};
+        const saldosRemotos = remoto.saldosSistema && typeof remoto.saldosSistema === "object" ? remoto.saldosSistema : {};
         if(localTs > remotoTs){
             contagemValores = { ...valoresRemotos, ...(contagemValores || {}) };
             contagemVerificacoesVazio = { ...verificacoesRemotas, ...(contagemVerificacoesVazio || {}) };
+            contagemSaldosCongelados = { ...saldosRemotos, ...(contagemSaldosCongelados || {}) };
             agendarSalvarRascunhoContagemFirebase(50);
         }else{
             contagemValores = { ...(contagemValores || {}), ...valoresRemotos };
             contagemVerificacoesVazio = { ...(contagemVerificacoesVazio || {}), ...verificacoesRemotas };
+            contagemSaldosCongelados = { ...(contagemSaldosCongelados || {}), ...saldosRemotos };
             try{
                 localStorage.setItem(chaveSessaoContagem(), JSON.stringify(sessaoRemota));
             }catch(e){}
@@ -5567,6 +5620,7 @@ async function carregarRascunhoContagemFirebase(){
         try{
             localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
             localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
+            localStorage.setItem(chaveSaldosCongeladosContagem(), JSON.stringify(contagemSaldosCongelados));
         }catch(e){}
         agendarSalvarRascunhoContagemFirebase(80);
         return true;
@@ -5609,6 +5663,10 @@ function mesclarRegistroSalvoNoRascunhoContagem(registro, indices){
         const contado = Number(String(item?.contado ?? "").replace(",", "."));
         if(!Number.isFinite(contado)) return;
         contagemValores[itemKey] = contado;
+        const saldoSistema = parsePlanilhaNumero(item?.saldoSistema);
+        if(saldoSistema !== null && contagemSaldosCongelados[itemKey] === undefined){
+            contagemSaldosCongelados[itemKey] = saldoSistema;
+        }
         aplicados += 1;
     });
     Object.values(registro.verificacoesVazio || {}).forEach(item => {
@@ -5657,6 +5715,7 @@ function salvarRascunhoContagem(opcoes = {}){
     try{
         localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
         localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
+        localStorage.setItem(chaveSaldosCongeladosContagem(), JSON.stringify(contagemSaldosCongelados));
     }catch(e){}
     if(opcoes.contagemAlterada) contagemRegistrosDesdeUltimoBackup += 1;
     const forcarBackup = opcoes.forcarFirebase || opcoes.contagemAlterada || contagemRegistrosDesdeUltimoBackup >= 5;
@@ -5679,6 +5738,14 @@ function carregarRascunhoContagem(){
 function carregarVerificacoesContagem(){
     try{
         return JSON.parse(localStorage.getItem(chaveVerificacoesContagem()) || "{}") || {};
+    }catch(e){
+        return {};
+    }
+}
+
+function carregarSaldosCongeladosContagem(){
+    try{
+        return JSON.parse(localStorage.getItem(chaveSaldosCongeladosContagem()) || "{}") || {};
     }catch(e){
         return {};
     }
@@ -6206,12 +6273,16 @@ async function abrirContagem(){
 
     contagemValores = carregarRascunhoContagem();
     contagemVerificacoesVazio = carregarVerificacoesContagem();
+    contagemSaldosCongelados = carregarSaldosCongeladosContagem();
     await carregarRascunhoContagemFirebase();
     await carregarContagensSalvasUsuarioAtual();
     await carregarPresencaContagemFirebaseAgora();
     recalcularMaquinasContagem();
     await carregarHistoricoContagemParaProgresso();
     limparContagensBloqueadasDeOutrosUsuarios();
+    if(preencherSaldosCongeladosAusentesContagem()){
+        salvarRascunhoContagem({ forcarFirebase:false });
+    }
     contagemSecaoAtual = primeiraSecaoDisponivelContagem();
     contagemMaquinaAtual = "";
     contagemItensMaquina = [];
@@ -7689,6 +7760,7 @@ function salvarAtualContagem(){
     const donoBloqueado = itemContagemBloqueadoPorOutro(key, "valor");
     if(donoBloqueado){
         delete contagemValores[key];
+        delete contagemSaldosCongelados[key];
         input.value = contagemHistoricoValores[key] !== undefined ? contagemHistoricoValores[key] : "";
         salvarSessaoContagem({ aberta:true, maquina:contagemMaquinaAtual, indice:contagemIndice, itemKey:key });
         atualizarProgressoContagem();
@@ -7699,10 +7771,12 @@ function salvarAtualContagem(){
     if(raw === ""){
         alterou = anterior !== undefined;
         delete contagemValores[key];
+        delete contagemSaldosCongelados[key];
     }else{
         const valor = Number(raw.replace(",", "."));
         if(Number.isFinite(valor) && valor >= 0){
             alterou = anterior !== valor;
+            congelarSaldoSistemaItemContagem(item);
             contagemValores[key] = valor;
         }
     }
@@ -7823,7 +7897,7 @@ function criarPayloadRascunhoRelatorioContagem(rascunho = true){
             descricao:item.descricao || "",
             armazem:item.armazemPrincipal || "",
             endereco:item.enderecoPrincipal || "",
-            saldoSistema:parsePlanilhaNumero(item.saldo),
+            saldoSistema:saldoSistemaCongeladoItemContagem(item),
             reposicao:obterReposicaoItemContagem(item),
             contado:contagemValores[key]
         };
@@ -7871,6 +7945,8 @@ function criarPayloadRascunhoFirebaseRelatorioContagem(remoto, uid = ""){
     if(!remoto || typeof remoto !== "object") return null;
     const valores = remoto.valores && typeof remoto.valores === "object" ? remoto.valores : {};
     const verificacoes = remoto.verificacoesVazio && typeof remoto.verificacoesVazio === "object" ? remoto.verificacoesVazio : {};
+    const saldosSistema = remoto.saldosSistema && typeof remoto.saldosSistema === "object" ? normalizarRascunhoContagemFirebase(remoto.saldosSistema) : {};
+    const progressoItens = remoto.progressoItens && typeof remoto.progressoItens === "object" ? remoto.progressoItens : {};
     if(!Object.keys(valores).length && !Object.keys(verificacoes).length) return null;
     const linhasBase = inserirVerificacoesSequenciaContagem(criarLinhasContagemPermitidas(Array.isArray(window.dados) ? window.dados : []));
     const porKey = new Map(linhasBase.map(item => [itemKeyContagem(item), item]));
@@ -7897,7 +7973,9 @@ function criarPayloadRascunhoFirebaseRelatorioContagem(remoto, uid = ""){
             descricao:item.descricao || "",
             armazem:item.armazemPrincipal || "",
             endereco:item.enderecoPrincipal || "",
-            saldoSistema:parsePlanilhaNumero(item.saldo),
+            saldoSistema:saldosSistema[key] !== undefined
+                ? parsePlanilhaNumero(saldosSistema[key])
+                : parsePlanilhaNumero(progressoItens[chaveFirebaseContagem(key)]?.saldoSistema ?? item.saldo),
             reposicao:obterReposicaoItemContagem(item),
             contado
         };
@@ -13963,6 +14041,3 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
-
-
