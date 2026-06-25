@@ -6875,6 +6875,14 @@ async function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido 
     contagemMaquinaAtual = maquina;
     contagemItensMaquina = itensGrupoContagem(maquina);
     const keysJaRegistradas = keysRegistradasGrupoContagem(maquina);
+    let ultimoRegistrado = -1;
+    contagemItensMaquina.forEach((item, idx) => {
+        const key = itemKeyContagem(item);
+        if(keysJaRegistradas.has(key)) ultimoRegistrado = idx;
+    });
+    const proximoSequencial = ultimoRegistrado >= 0 && ultimoRegistrado < contagemItensMaquina.length - 1
+        ? ultimoRegistrado + 1
+        : -1;
     const primeiroPendente = contagemItensMaquina.findIndex(item => {
         const key = itemKeyContagem(item);
         if(keysJaRegistradas.has(key)) return false;
@@ -6883,10 +6891,12 @@ async function selecionarMaquinaContagem(maquina, atualizarBar, indicePreferido 
             : contagemValores[key] === undefined;
     });
     const indicePorItem = itemKeyPreferido ? contagemItensMaquina.findIndex(item => itemKeyContagem(item) === itemKeyPreferido) : -1;
-    if(primeiroPendente >= 0){
-        contagemIndice = primeiroPendente;
+    if(proximoSequencial >= 0){
+        contagemIndice = proximoSequencial;
     }else if(indicePorItem >= 0){
         contagemIndice = indicePorItem;
+    }else if(primeiroPendente >= 0){
+        contagemIndice = primeiroPendente;
     }else if(Number.isFinite(indicePreferido)){
         contagemIndice = Math.max(0, Math.min(Number(indicePreferido), Math.max(contagemItensMaquina.length - 1, 0)));
     }else{
@@ -13510,7 +13520,6 @@ document.getElementById("adminBtn").onclick = function(){
 
 </body>
 </html>
-
 
 
 
