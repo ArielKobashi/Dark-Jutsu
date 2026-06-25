@@ -909,6 +909,19 @@
         inset: 5px;
     }
 
+    .ocorrenciasShell {
+        border-radius: 8px;
+    }
+
+    .ocorrenciasHeader {
+        padding: 12px;
+        align-items: flex-start;
+    }
+
+    .ocorrenciasHeader h2 {
+        font-size: 17px;
+    }
+
     .ocorrenciasBody {
         grid-template-columns: 1fr;
         gap: 8px;
@@ -942,6 +955,11 @@
 
     .ocorrenciasFiltros {
         grid-template-columns: 1fr;
+        gap: 7px;
+    }
+
+    .ocorrenciasFiltros button {
+        width: 100%;
     }
 
     .ocorrenciasCamposHeader,
@@ -957,6 +975,20 @@
 
     .ocorrenciasStats {
         grid-template-columns: 1fr 1fr;
+    }
+
+    .ocorrenciasResumoPainel {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .ocorrenciasResumoPainel button {
+        width: 100%;
+    }
+
+    .ocorrenciasLista {
+        max-height: none;
+        overflow: visible;
     }
 
     .ocorrenciasConsultaHeader {
