@@ -64,17 +64,17 @@ def carregar_macro(path: Path):
     return mod
 
 
-def executar_macro(path: Path):
+def executar_macro(path: Path, func_name: str = "play"):
     mod = carregar_macro(path)
-    if hasattr(mod, "play"):
-        mod.play()
+    if hasattr(mod, func_name):
+        getattr(mod, func_name)()
     else:
-        raise RuntimeError(f"{path.name} nao possui funcao play()")
+        raise RuntimeError(f"{path.name} nao possui funcao {func_name}()")
 
 
 def preparar_transicao_macro(logger: logging.Logger, controller: ExecutionController, macro: Path):
     nome = macro.name.lower()
-    if nome not in {"macro_007.py", "macro_008.py", "macro_009.py", "macro_012.py", "macro_013.py"}:
+    if nome not in {"macro_007.py", "macro_008.py", "macro_009.py", "macro_012.py"}:
         return
 
     espera = 8.0 if nome in {"macro_007.py", "macro_012.py"} else 2.5
@@ -335,7 +335,13 @@ def preparar_e_enviar_etapa(
     logger.info("CONFIRMACAO: envio Firebase via Automus concluido na %s.", etapa)
 
 
-def executar_macro_extra(logger: logging.Logger, controller: ExecutionController, macro: Path) -> None:
+def executar_macro_extra(
+    logger: logging.Logger,
+    controller: ExecutionController,
+    macro: Path,
+    func_name: str = "play",
+    etapa_nome: str | None = None,
+) -> None:
     if not macro.exists():
         raise FileNotFoundError(f"Nao encontrei {macro}")
     try:
@@ -343,15 +349,16 @@ def executar_macro_extra(logger: logging.Logger, controller: ExecutionController
     except RuntimeError as exc:
         logger.warning("Validacao de comentarios ignorada em %s: %s", macro.name, exc)
     preparar_transicao_macro(logger, controller, macro)
-    logger.info("Iniciando etapa extra: %s", macro.name)
-    executar_macro(macro)
-    logger.info("Etapa extra concluida com sucesso: %s", macro.name)
+    nome = etapa_nome or macro.name
+    logger.info("Iniciando etapa extra: %s", nome)
+    executar_macro(macro, func_name=func_name)
+    logger.info("Etapa extra concluida com sucesso: %s", nome)
 
 
 def preparar_mata185_e_registrar_encerradas(
     logger: logging.Logger,
     base: Path,
-    started_at_epoch: float,
+    started_at_epoch: float | None,
     project_root: Path,
 ) -> None:
     mapa = preparar_planilhas_para_importacao(
@@ -364,6 +371,31 @@ def preparar_mata185_e_registrar_encerradas(
     if not mapa.get("mata185", False):
         raise RuntimeError("Validacao forte falhou: mata185.xlsx nova nao encontrada para verificar requisicoes encerradas.")
     registrar_requisicoes_encerradas(logger, base, project_root)
+
+
+def executar_macro_012_com_verificador(
+    logger: logging.Logger,
+    controller: ExecutionController,
+    base: Path,
+    project_root: Path,
+    started_at_epoch: float | None = None,
+) -> None:
+    macro = base / "macro_012.py"
+    executar_macro_extra(
+        logger,
+        controller,
+        macro,
+        func_name="play_pre",
+        etapa_nome="macro_012.py antes do identificador",
+    )
+    preparar_mata185_e_registrar_encerradas(logger, base, started_at_epoch, project_root)
+    executar_macro_extra(
+        logger,
+        controller,
+        macro,
+        func_name="play_post",
+        etapa_nome="macro_012.py depois do identificador",
+    )
 
 
 def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_atualizacao: str | None = "todos"):
@@ -429,6 +461,30 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
             validate_macro_comment_sequence(macro)
         except RuntimeError as exc:
             logger.warning("Validacao de comentarios ignorada em %s: %s", macro.name, exc)
+        if macro_ref and macro.name.lower() == "macro_012.py":
+            try:
+                logger.info(
+                    "Iniciando macro_012 isolada com verificador de azuis e mata185.xlsx mais recente."
+                )
+                executar_macro_012_com_verificador(
+                    logger,
+                    controller,
+                    base,
+                    project_root,
+                    started_at_epoch=None,
+                )
+            except StopRequested as exc:
+                logger.warning("Parada solicitada durante macro_012 isolada: %s", exc)
+                break
+            except Exception as exc:
+                logger.exception("Falha na macro_012 isolada com verificador: %s", exc)
+                logger.error("Automacao encerrada com erro.")
+                failed = True
+                break
+            else:
+                logger.info("Macro_012 isolada com verificador concluida com sucesso.")
+                continue
+
         preparar_transicao_macro(logger, controller, macro)
         logger.info("Iniciando etapa: %s", macro.name)
 
@@ -450,9 +506,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
                     logger.info(
                         "CONFIRMACAO: primeira parte concluida. Iniciando verificacao de requisicoes encerradas antes do Firebase."
                     )
-                    executar_macro_extra(logger, controller, base / "macro_012.py")
-                    preparar_mata185_e_registrar_encerradas(logger, base, started_at_epoch, project_root)
-                    executar_macro_extra(logger, controller, base / "macro_013.py")
+                    executar_macro_012_com_verificador(logger, controller, base, project_root, started_at_epoch)
                     logger.info(
                         "CONFIRMACAO: verificacao de azuis concluida. Enviando nivel 1 ao Firebase."
                     )

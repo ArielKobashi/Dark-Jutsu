@@ -659,7 +659,6 @@ class _ControlWindow:
             ("Macro 4", "macro_004.py"),
             ("Macro 5", "macro_005.py"),
             ("Macro 12", "macro_012.py"),
-            ("Macro 13", "macro_013.py"),
         ]
 
         for index, (label, filename) in enumerate(macro_buttons):
@@ -1615,6 +1614,15 @@ class _SharedState:
         try:
             if not macro_path.exists():
                 raise FileNotFoundError(f"Não encontrei {macro_path}")
+            if macro_path.name.lower() == "macro_012.py":
+                emit_status("Iniciando Macro 12 com verificador de azuis e mata185.xlsx mais recente...")
+                mod = importlib.import_module("executar_tudo")
+                if not hasattr(mod, "main"):
+                    raise RuntimeError("executar_tudo.py nao possui funcao main().")
+                result = mod.main("macro_012.py", modo_atualizacao="nivel1")
+                if result is False:
+                    raise RuntimeError("Macro 12 com verificador nao completou.")
+                return
             emit_status(f"Iniciando {macro_path.name} pelo controlador...")
             spec = importlib.util.spec_from_file_location(macro_path.stem, macro_path)
             if spec is None or spec.loader is None:

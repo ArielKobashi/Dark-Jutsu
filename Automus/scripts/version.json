@@ -1,12 +1,12 @@
 {
   "app": "Automus",
-  "version": "1.0.44",
-  "releasedAt": "2026-06-25",
+  "version": "1.0.91",
+  "releasedAt": "2026-06-27",
   "updateManifestUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus\\latest.json",
   "updateManifestFirebasePath": "automus/releases/latest",
   "updateBaseUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "publishDir": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "notes": [
-    "Atualizacao Automus 1.0.44"
+    "Asdg"
   ]
 }
