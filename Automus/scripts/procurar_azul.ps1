@@ -57,17 +57,7 @@ function Send-CdpCommand {
 try {
     $targets = Invoke-RestMethod "http://127.0.0.1:$Port/json" -TimeoutSec 2
 } catch {
-    $chrome = Get-ChromePath
-    $profileDir = Join-Path $PSScriptRoot ".chrome-protheus-debug"
-    Start-Process -FilePath $chrome -ArgumentList @(
-        "--remote-debugging-port=$Port",
-        "--user-data-dir=$profileDir",
-        "--start-maximized",
-        "--new-window",
-        $Url
-    )
-    Start-Sleep -Seconds 5
-    $targets = Invoke-RestMethod "http://127.0.0.1:$Port/json" -TimeoutSec 10
+    throw "Chrome controlado nao encontrado na porta $Port. O verificador nao abre janela nova; abra o Protheus pelo fluxo do Automus/Chrome controlado e tente novamente."
 }
 
 $target = $targets |
