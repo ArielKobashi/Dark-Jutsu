@@ -117,24 +117,46 @@ def registrar_requisicoes_encerradas(
 
     logger.info("AZUL: iniciando verificador de requisicoes encerradas.")
     started = time.time()
-    subprocess.run(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(script),
-            "-OutputDir",
-            str(output_dir),
-        ],
-        check=True,
-        timeout=timeout_seconds,
-    )
-    logger.info("AZUL: verificador concluido em %.1fs.", time.time() - started)
-
-    keys = _read_keys(lista_path)
     mata185_path = _find_mata185(project_root)
+    keys: set[str] = set()
+    try:
+        result_process = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(script),
+                "-OutputDir",
+                str(output_dir),
+            ],
+            check=False,
+            timeout=timeout_seconds,
+            text=True,
+            capture_output=True,
+        )
+        if result_process.stdout:
+            logger.info("AZUL: saida do verificador: %s", result_process.stdout.strip())
+        if result_process.stderr:
+            logger.warning("AZUL: erro do verificador: %s", result_process.stderr.strip())
+        if result_process.returncode != 0:
+            logger.warning(
+                "AZUL: verificador nao executou com sucesso (codigo %s). "
+                "A aba de encerradas sera recriada vazia e o envio ao Firebase continuara.",
+                result_process.returncode,
+            )
+        else:
+            logger.info("AZUL: verificador concluido em %.1fs.", time.time() - started)
+            keys = _read_keys(lista_path)
+    except subprocess.TimeoutExpired as exc:
+        logger.warning(
+            "AZUL: verificador excedeu o tempo limite de %ss (%s). "
+            "A aba de encerradas sera recriada vazia e o envio ao Firebase continuara.",
+            timeout_seconds,
+            exc,
+        )
+
     result = _write_encerradas_sheet(mata185_path, keys)
     logger.info(
         "AZUL: aba %s atualizada em %s | azuis=%s | encerradas=%s",
