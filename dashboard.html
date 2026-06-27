@@ -2570,12 +2570,17 @@
                 (Array.isArray(lote?.parciais) ? lote.parciais : []).map(l => enriquecerLinhaMata185(l, itemPorCodigo)),
                 cfg.maquinaMovimentacao
             );
+            const encerradas = filtrarPorMaquina(
+                (Array.isArray(lote?.encerradas) ? lote.encerradas : []).map(l => enriquecerLinhaMata185(l, itemPorCodigo)),
+                cfg.maquinaMovimentacao
+            );
             return {
                 lotes,
                 lote,
                 maquinas,
                 itens,
                 parciais,
+                encerradas,
                 entradasPendentes
             };
         }
@@ -2913,6 +2918,32 @@
                 </div>
             `;
         }
+        function renderEncerradasMata185Tabela(encerradas){
+            const linhas = [...(encerradas || [])].sort((a,b) => Number(b.faltante || 0) - Number(a.faltante || 0));
+            return `
+                <div class="tableWrap">
+                    <table>
+                        <thead><tr><th>Req.</th><th>Seq.</th><th>Codigo</th><th>Descricao</th><th>Maquina</th><th>Un.</th><th class="num">Req.</th><th class="num">Atend.</th><th class="num">Falta</th><th>Status</th></tr></thead>
+                        <tbody>
+                            ${linhas.length ? linhas.slice(0, 80).map(l => `
+                                <tr>
+                                    <td>${esc(l.requisicao || "-")}</td>
+                                    <td>${esc(l.sequencia || "-")}</td>
+                                    <td class="codigo">${esc(l.codigo || "-")}</td>
+                                    <td class="descricao">${esc(l.descricao || "")}</td>
+                                    <td>${esc((l.maquinas || []).join(", ") || "-")}</td>
+                                    <td>${esc(l.unidade || "-")}</td>
+                                    <td class="num">${fmt(l.requisitado)}</td>
+                                    <td class="num">${fmt(l.atendido)}</td>
+                                    <td class="num">${fmt(l.faltante)}</td>
+                                    <td>${esc(l.status || "Requisicao encerrada")}</td>
+                                </tr>
+                            `).join("") : `<tr><td colspan="10">Sem requisicoes encerradas na MATA185 selecionada.</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
         function renderEntradasPendentesTabela(entradas){
             const linhas = [...(entradas || [])].sort((a,b) => Number(b.quantidade || 0) - Number(a.quantidade || 0));
             return `
@@ -2997,6 +3028,7 @@
                     <article class="card blue"><span>Movimentos</span><strong>${movimentacao.lista.length}</strong></article>
                     <article class="card red"><span>Zeraram</span><strong>${zeraram.length}</strong></article>
                     <article class="card"><span>Saidas MATA185</span><strong>${fmt(movMata185.itens.reduce((s,l) => s + Number(l.atendido || 0), 0))}</strong></article>
+                    <article class="card"><span>Encerradas</span><strong>${movMata185.encerradas.length}</strong></article>
                     <article class="card green"><span>Entradas pendentes</span><strong>${movMata185.entradasPendentes.length}</strong></article>
                 </section>
                 ${renderProgressoContagem(progressoContagem)}
@@ -3011,6 +3043,8 @@
                     ${renderBarras("Itens com mais registros de saida - armazem 04 MATA185", itensPorRegistrosMata185, "requisicoes")}
                     ${renderBarras("Maiores faltas em entregas parciais", (movMata185.parciais || []).map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", faltante:i.faltante || 0})), "faltante")}
                 </section>
+                <h2 class="sectionTitle">Requisições encerradas</h2>
+                ${renderEncerradasMata185Tabela(movMata185.encerradas)}
                 <h2 class="sectionTitle">Requisicoes entregues parcialmente - MATA185</h2>
                 ${renderParciaisMata185Tabela(movMata185.parciais)}
                 <h2 class="sectionTitle">Entradas pendentes de enderecamento - armazem 04</h2>

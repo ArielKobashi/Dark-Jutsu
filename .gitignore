@@ -4,9 +4,11 @@ __pycache__/
 *.pyo
 *.log
 scripts/controlador_config.json
+scripts/firebase_config.json
 scripts/atualizacao/automus_config.json
 scripts/atualizacao/automus_config.enc.json
 Automus/scripts/controlador_config.json
+Automus/scripts/firebase_config.json
 Automus/scripts/atualizacao/automus_config.json
 Automus/scripts/atualizacao/automus_config.enc.json
 Automus/AutomusData/

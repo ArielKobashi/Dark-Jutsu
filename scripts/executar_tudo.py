@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from atualizacao.automus_update import run_automus_update
+from azul_encerradas import registrar_requisicoes_encerradas
 from controladordeatualização import ExecutionController, StopRequested, push_status, validate_macro_comment_sequence
 
 
@@ -172,6 +173,31 @@ def enviar_atualizacao_automus(logger: logging.Logger, base: Path, automus_auth:
     )
     logger.info("AUTOMUS: envio concluido com sucesso.")
 
+
+def executar_macro_extra(logger: logging.Logger, macro: Path) -> None:
+    if not macro.exists():
+        raise FileNotFoundError(f"Nao encontrei {macro}")
+    try:
+        validate_macro_comment_sequence(macro)
+    except RuntimeError as exc:
+        logger.warning("Validacao de comentarios ignorada em %s: %s", macro.name, exc)
+    logger.info("Iniciando etapa extra: %s", macro.name)
+    executar_macro(macro)
+    logger.info("Etapa extra concluida com sucesso: %s", macro.name)
+
+
+def preparar_mata185_e_registrar_encerradas(
+    logger: logging.Logger,
+    base: Path,
+    started_at_epoch: float,
+    project_root: Path,
+) -> None:
+    mapa = preparar_planilhas_para_importacao(logger, base, started_at_epoch, project_root=project_root)
+    if not mapa.get("mata185", False):
+        raise RuntimeError("Validacao forte falhou: mata185.xlsx nova nao encontrada para verificar requisicoes encerradas.")
+    registrar_requisicoes_encerradas(logger, base, project_root)
+
+
 def main(macro_ref: str | None = None, automus_auth: dict | None = None):
     base = Path(os.environ.get("AUTOMUS_BUNDLED_SCRIPT_DIR") or Path(__file__).resolve().parent)
     project_root = Path(os.environ.get("AUTOMUS_PROJECT_ROOT") or base.parent)
@@ -252,11 +278,14 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None):
                             "Validacao forte falhou: nem todas as planilhas novas da execucao atual foram encontradas."
                         )
                     logger.info(
-                        "CONFIRMACAO: macro final de extracao concluida. Preparo final executado apos as 5 macros."
+                        "CONFIRMACAO: macro final de extracao concluida. Iniciando verificacao de requisicoes encerradas."
                     )
+                    executar_macro_extra(logger, base / "macro_012.py")
+                    preparar_mata185_e_registrar_encerradas(logger, base, started_at_epoch, project_root)
+                    executar_macro_extra(logger, base / "macro_013.py")
                     enviar_atualizacao_automus(logger, base, automus_auth=automus_auth, project_root=project_root)
                     logger.info(
-                        "CONFIRMACAO: envio Firebase via Automus executado apos a macro_005 (sem automacao de navegador)."
+                        "CONFIRMACAO: envio Firebase via Automus executado com requisicoes encerradas da MATA185."
                     )
                 except Exception as exc:
                     logger.exception("Falha no pos-processamento apos macro_005: %s", exc)
@@ -275,4 +304,3 @@ if __name__ == "__main__":
     parser.add_argument("macro", nargs="?", help="Nome da macro para executar isoladamente, como macro_001.py.")
     args = parser.parse_args()
     main(args.macro)
-

@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from atualizacao.automus_update import run_automus_update
+from azul_encerradas import registrar_requisicoes_encerradas
 from controladordeatualização import (
     ExecutionController,
     StopRequested,
@@ -73,10 +74,10 @@ def executar_macro(path: Path):
 
 def preparar_transicao_macro(logger: logging.Logger, controller: ExecutionController, macro: Path):
     nome = macro.name.lower()
-    if nome not in {"macro_007.py", "macro_008.py", "macro_009.py"}:
+    if nome not in {"macro_007.py", "macro_008.py", "macro_009.py", "macro_012.py", "macro_013.py"}:
         return
 
-    espera = 8.0 if nome == "macro_007.py" else 2.5
+    espera = 8.0 if nome in {"macro_007.py", "macro_012.py"} else 2.5
     logger.info("Preparando transicao para %s: aguardando %.1fs e refocando TOTVS.", macro.name, espera)
     if not sleep_with_controls(espera, controller):
         raise StopRequested(controller.get_stop_message())
@@ -333,6 +334,38 @@ def preparar_e_enviar_etapa(
     enviar_atualizacao_automus(logger, base, automus_auth=automus_auth, project_root=project_root)
     logger.info("CONFIRMACAO: envio Firebase via Automus concluido na %s.", etapa)
 
+
+def executar_macro_extra(logger: logging.Logger, controller: ExecutionController, macro: Path) -> None:
+    if not macro.exists():
+        raise FileNotFoundError(f"Nao encontrei {macro}")
+    try:
+        validate_macro_comment_sequence(macro)
+    except RuntimeError as exc:
+        logger.warning("Validacao de comentarios ignorada em %s: %s", macro.name, exc)
+    preparar_transicao_macro(logger, controller, macro)
+    logger.info("Iniciando etapa extra: %s", macro.name)
+    executar_macro(macro)
+    logger.info("Etapa extra concluida com sucesso: %s", macro.name)
+
+
+def preparar_mata185_e_registrar_encerradas(
+    logger: logging.Logger,
+    base: Path,
+    started_at_epoch: float,
+    project_root: Path,
+) -> None:
+    mapa = preparar_planilhas_para_importacao(
+        logger,
+        base,
+        started_at_epoch,
+        project_root=project_root,
+        required_codes=("mata185",),
+    )
+    if not mapa.get("mata185", False):
+        raise RuntimeError("Validacao forte falhou: mata185.xlsx nova nao encontrada para verificar requisicoes encerradas.")
+    registrar_requisicoes_encerradas(logger, base, project_root)
+
+
 def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_atualizacao: str | None = "todos"):
     base = Path(os.environ.get("AUTOMUS_BUNDLED_SCRIPT_DIR") or Path(__file__).resolve().parent)
     project_root = Path(os.environ.get("AUTOMUS_PROJECT_ROOT") or base.parent)
@@ -415,7 +448,13 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
                 try:
                     executar_scan_final_nivel1(logger, controller)
                     logger.info(
-                        "CONFIRMACAO: primeira parte concluida. Enviando mata105/mata225/mata226 ao Firebase antes de continuar."
+                        "CONFIRMACAO: primeira parte concluida. Iniciando verificacao de requisicoes encerradas antes do Firebase."
+                    )
+                    executar_macro_extra(logger, controller, base / "macro_012.py")
+                    preparar_mata185_e_registrar_encerradas(logger, base, started_at_epoch, project_root)
+                    executar_macro_extra(logger, controller, base / "macro_013.py")
+                    logger.info(
+                        "CONFIRMACAO: verificacao de azuis concluida. Enviando nivel 1 ao Firebase."
                     )
                     preparar_e_enviar_etapa(
                         logger,
@@ -475,4 +514,3 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     main(args.macro, modo_atualizacao=args.modo)
-

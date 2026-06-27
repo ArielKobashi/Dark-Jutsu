@@ -122,10 +122,34 @@ def _load_automus_config(config_path: Path, api_key: str, db_url: str) -> tuple[
     return {}, None
 
 
-def _read_sheet(path: Path) -> list[list[Any]]:
+def _sheet_name_key(value: Any) -> str:
+    txt = _safe_text(value).lower()
+    normalized = unicodedata.normalize("NFKD", txt)
+    return normalized.encode("ascii", "ignore").decode("ascii").strip()
+
+
+def _read_sheet(path: Path, sheet_name: str | None = None) -> list[list[Any]]:
     wb = load_workbook(path, data_only=True, read_only=True)
     try:
-        ws = wb[wb.sheetnames[0]]
+        ws_name = wb.sheetnames[0]
+        if sheet_name:
+            if sheet_name in wb.sheetnames:
+                ws_name = sheet_name
+            else:
+                alvo = _sheet_name_key(sheet_name)
+                ws_name_match = next(
+                    (
+                        name for name in wb.sheetnames
+                        if _sheet_name_key(name) == alvo
+                        or alvo in _sheet_name_key(name)
+                        or _sheet_name_key(name) in alvo
+                    ),
+                    None,
+                )
+                if not ws_name_match:
+                    return []
+                ws_name = ws_name_match
+        ws = wb[ws_name]
         out: list[list[Any]] = []
         for row in ws.iter_rows(values_only=True):
             out.append(list(row))
@@ -371,6 +395,14 @@ def _code_key(value: Any) -> str:
     return txt
 
 
+def _req_item_key(requisicao: Any, sequencia: Any) -> str:
+    req = re.sub(r"\D+", "", _safe_text(requisicao))
+    seq = re.sub(r"\D+", "", _safe_text(sequencia))
+    if not req or not seq:
+        return ""
+    return f"{req.zfill(6)};{seq.zfill(2)}"
+
+
 def _dead_address_from_row(row: list[Any]) -> str:
     endereco = _safe_text(row[3] if len(row) > 3 else "")
     return endereco if _is_endereco_valido(endereco) else ""
@@ -392,6 +424,7 @@ def _dead_addresses_index(rows: list[list[Any]] | None) -> dict[str, str]:
 
 def _montar_movimentacoes_mata185(
     mata185: list[list[Any]] | None,
+    mata185_encerradas: list[list[Any]] | None,
     itens: list[dict[str, Any]],
     historico_atual: dict[str, Any] | None,
     agora_ms: int,
@@ -407,7 +440,16 @@ def _montar_movimentacoes_mata185(
 
     agregados: dict[str, dict[str, Any]] = {}
     parciais: list[dict[str, Any]] = []
+    encerradas: list[dict[str, Any]] = []
     linhas_hash: list[dict[str, Any]] = []
+    encerradas_keys = {
+        key for key in (
+            _req_item_key(row[0] if len(row) > 0 else "", row[1] if len(row) > 1 else "")
+            for row in (mata185_encerradas or [])[1:]
+            if row
+        )
+        if key
+    }
 
     for idx, row in enumerate((mata185 or [])[1:], start=2):
         if not row:
@@ -444,8 +486,7 @@ def _montar_movimentacoes_mata185(
         ag["requisicoes"] += 1
         if atendida < requisitada:
             faltante = max(0.0, requisitada - atendida)
-            ag["parciais"] += 1
-            parciais.append({
+            payload = {
                 "requisicao": requisicao,
                 "sequencia": sequencia,
                 "codigo": codigo,
@@ -454,14 +495,21 @@ def _montar_movimentacoes_mata185(
                 "requisitado": requisitada,
                 "atendido": atendida,
                 "faltante": faltante,
-                "status": "Entregue parcialmente",
                 "rowIndex": idx,
-            })
+            }
+            if _req_item_key(requisicao, sequencia) in encerradas_keys:
+                payload["status"] = "Requisicao encerrada"
+                encerradas.append(payload)
+            else:
+                payload["status"] = "Entregue parcialmente"
+                ag["parciais"] += 1
+                parciais.append(payload)
 
     assinatura = _json_hash(linhas_hash)
     data_txt = datetime.fromtimestamp(agora_ms / 1000).strftime("%d/%m/%Y")
     agregados_lista = sorted(agregados.values(), key=lambda x: float(x.get("atendido") or 0), reverse=True)
     parciais = sorted(parciais, key=lambda x: float(x.get("faltante") or 0), reverse=True)
+    encerradas = sorted(encerradas, key=lambda x: float(x.get("faltante") or 0), reverse=True)
     historico = dict(historico_atual or {})
     lotes = historico.get("lotes") if isinstance(historico.get("lotes"), list) else []
     lotes = list(lotes)
@@ -475,8 +523,10 @@ def _montar_movimentacoes_mata185(
         "totalRequisitado": sum(float(x.get("requisitado") or 0) for x in agregados_lista),
         "totalAtendido": sum(float(x.get("atendido") or 0) for x in agregados_lista),
         "totalParciais": len(parciais),
+        "totalEncerradas": len(encerradas),
         "itens": agregados_lista[:500],
         "parciais": parciais[:500],
+        "encerradas": encerradas[:500],
     }
     if linhas_hash and (not lotes or lotes[-1].get("hash") != assinatura):
         lotes.append(lote)
@@ -895,6 +945,7 @@ def run_automus_update(
     estoque_minimo = _read_sheet(estoque_minimo_path) if estoque_minimo_path else None
     dados_mortos_planilha = _read_sheet(dados_mortos_planilha_path) if dados_mortos_planilha_path else None
     mata185 = _read_sheet(mata185_path) if mata185_path else None
+    mata185_encerradas = _read_sheet(mata185_path, "REQUISICOES ENCERRADAS") if mata185_path else None
     log.info(
         "TEST_PLANILHAS_LIDAS_OK | incluir_linhas=%s | saldoAtual_linhas=%s | saldoEndereco_linhas=%s | estoque_minimo_linhas=%s",
         len(incluir),
@@ -934,7 +985,13 @@ def run_automus_update(
         agora_ms,
     )
     _aplicar_sugestoes_estoque(novos_dados, historico_saldo)
-    movimentacoes_mata185 = _montar_movimentacoes_mata185(mata185, novos_dados, movimentacoes_mata185_anteriores, agora_ms)
+    movimentacoes_mata185 = _montar_movimentacoes_mata185(
+        mata185,
+        mata185_encerradas,
+        novos_dados,
+        movimentacoes_mata185_anteriores,
+        agora_ms,
+    )
 
     payload = {
         "dados": novos_dados,

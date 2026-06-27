@@ -649,6 +649,8 @@ class _ControlWindow:
         macro_exec_row1.pack(fill="x", pady=(0, 4))
         macro_exec_row2 = tk.Frame(macro_exec_frame, bg=palette["panel"])
         macro_exec_row2.pack(fill="x")
+        macro_exec_row3 = tk.Frame(macro_exec_frame, bg=palette["panel"])
+        macro_exec_row3.pack(fill="x", pady=(4, 0))
 
         macro_buttons = [
             ("Macro 1", "macro_001.py"),
@@ -656,10 +658,17 @@ class _ControlWindow:
             ("Macro 3", "macro_003.py"),
             ("Macro 4", "macro_004.py"),
             ("Macro 5", "macro_005.py"),
+            ("Macro 12", "macro_012.py"),
+            ("Macro 13", "macro_013.py"),
         ]
 
         for index, (label, filename) in enumerate(macro_buttons):
-            parent = macro_exec_row1 if index < 3 else macro_exec_row2
+            if index < 3:
+                parent = macro_exec_row1
+            elif index < 6:
+                parent = macro_exec_row2
+            else:
+                parent = macro_exec_row3
             button = make_button(
                 parent,
                 text=label,
