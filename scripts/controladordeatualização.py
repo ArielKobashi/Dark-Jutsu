@@ -1616,6 +1616,10 @@ class _SharedState:
                 raise FileNotFoundError(f"Não encontrei {macro_path}")
             if macro_path.name.lower() == "macro_012.py":
                 emit_status("Iniciando Macro 12 com verificador de azuis e mata185.xlsx mais recente...")
+                if "azul_encerradas" in sys.modules:
+                    importlib.reload(sys.modules["azul_encerradas"])
+                if "executar_tudo" in sys.modules:
+                    importlib.reload(sys.modules["executar_tudo"])
                 mod = importlib.import_module("executar_tudo")
                 if not hasattr(mod, "main"):
                     raise RuntimeError("executar_tudo.py nao possui funcao main().")

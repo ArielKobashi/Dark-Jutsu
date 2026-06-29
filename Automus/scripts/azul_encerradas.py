@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
+from pynput import keyboard  # type: ignore
 
 
 ENCERRADAS_SHEET = "REQUISICOES ENCERRADAS"
@@ -264,23 +265,138 @@ def _image_fingerprint(image) -> str:
     return "".join(parts)
 
 
-def _send_page_down(rect):
-    left, top, right, bottom = rect
-    x = int(left + (right - left) * 0.50)
-    y = int(top + (bottom - top) * 0.55)
+def _tap_scan_key(scan_code: int, hold: float = 0.012, extended: bool = True) -> None:
     user32 = ctypes.windll.user32
-    user32.SetCursorPos(x, y)
-    time.sleep(0.03)
+    ULONG_PTR = ctypes.POINTER(ctypes.c_ulong)
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = (
+            ("wVk", ctypes.wintypes.WORD),
+            ("wScan", ctypes.wintypes.WORD),
+            ("dwFlags", ctypes.wintypes.DWORD),
+            ("time", ctypes.wintypes.DWORD),
+            ("dwExtraInfo", ULONG_PTR),
+        )
+
+    class INPUT_UNION(ctypes.Union):
+        _fields_ = (("ki", KEYBDINPUT),)
+
+    class INPUT(ctypes.Structure):
+        _fields_ = (
+            ("type", ctypes.wintypes.DWORD),
+            ("union", INPUT_UNION),
+        )
+
+    input_keyboard = 1
+    keyeventf_keyup = 0x0002
+    keyeventf_scancode = 0x0008
+    keyeventf_extendedkey = 0x0001 if extended else 0
+
+    down = INPUT(
+        type=input_keyboard,
+        union=INPUT_UNION(
+            ki=KEYBDINPUT(0, scan_code, keyeventf_scancode | keyeventf_extendedkey, 0, None)
+        ),
+    )
+    up = INPUT(
+        type=input_keyboard,
+        union=INPUT_UNION(
+            ki=KEYBDINPUT(0, scan_code, keyeventf_scancode | keyeventf_extendedkey | keyeventf_keyup, 0, None)
+        ),
+    )
+    user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(INPUT))
+    time.sleep(hold)
+    user32.SendInput(1, ctypes.byref(up), ctypes.sizeof(INPUT))
+
+
+def _hold_scan_key(scan_code: int, hold: float = 0.35, extended: bool = True) -> None:
+    user32 = ctypes.windll.user32
+    ULONG_PTR = ctypes.POINTER(ctypes.c_ulong)
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = (
+            ("wVk", ctypes.wintypes.WORD),
+            ("wScan", ctypes.wintypes.WORD),
+            ("dwFlags", ctypes.wintypes.DWORD),
+            ("time", ctypes.wintypes.DWORD),
+            ("dwExtraInfo", ULONG_PTR),
+        )
+
+    class INPUT_UNION(ctypes.Union):
+        _fields_ = (("ki", KEYBDINPUT),)
+
+    class INPUT(ctypes.Structure):
+        _fields_ = (
+            ("type", ctypes.wintypes.DWORD),
+            ("union", INPUT_UNION),
+        )
+
+    input_keyboard = 1
+    keyeventf_keyup = 0x0002
+    keyeventf_scancode = 0x0008
+    keyeventf_extendedkey = 0x0001 if extended else 0
+    down = INPUT(type=input_keyboard, union=INPUT_UNION(ki=KEYBDINPUT(0, scan_code, keyeventf_scancode | keyeventf_extendedkey, 0, None)))
+    up = INPUT(type=input_keyboard, union=INPUT_UNION(ki=KEYBDINPUT(0, scan_code, keyeventf_scancode | keyeventf_extendedkey | keyeventf_keyup, 0, None)))
+    user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(INPUT))
+    time.sleep(hold)
+    user32.SendInput(1, ctypes.byref(up), ctypes.sizeof(INPUT))
+
+
+def _click_grid_top(_rect):
+    user32 = ctypes.windll.user32
     mouseeventf_leftdown = 0x0002
     mouseeventf_leftup = 0x0004
-    mouseeventf_wheel = 0x0800
+    grid_x = 101
+    grid_y = 226
+
+    user32.SetCursorPos(grid_x, grid_y)
+    time.sleep(0.12)
+    user32.SetCursorPos(grid_x + 2, grid_y)
+    time.sleep(0.04)
+    user32.SetCursorPos(grid_x, grid_y)
+    time.sleep(0.08)
     user32.mouse_event(mouseeventf_leftdown, 0, 0, 0, 0)
-    time.sleep(0.02)
+    time.sleep(0.09)
     user32.mouse_event(mouseeventf_leftup, 0, 0, 0, 0)
-    time.sleep(0.05)
-    for _ in range(8):
-        user32.mouse_event(mouseeventf_wheel, 0, 0, -120, 0)
-        time.sleep(0.015)
+    time.sleep(0.25)
+
+
+def _send_keyboard_scroll(rect, logger: logging.Logger | None = None, step_label: str = ""):
+    k = keyboard.Controller()
+
+    if logger:
+        logger.info("===== AZUL TECLADO %s | enviando PageDown x2 =====", step_label)
+
+    for _ in range(2):
+        k.press(keyboard.Key.page_down)
+        time.sleep(0.012)
+        k.release(keyboard.Key.page_down)
+        time.sleep(0.004)
+
+    if logger:
+        logger.info("===== AZUL TECLADO %s | segurando seta baixo em blocos x4 =====", step_label)
+
+    for _ in range(3):
+        k.press(keyboard.Key.down)
+        time.sleep(0.18)
+        k.release(keyboard.Key.down)
+        time.sleep(0.008)
+
+    if logger:
+        logger.info("===== AZUL TECLADO %s | enviando seta baixo rapida x120 =====", step_label)
+
+    for _ in range(180):
+        k.press(keyboard.Key.down)
+        time.sleep(0.0015)
+        k.release(keyboard.Key.down)
+        time.sleep(0.0005)
+
+    if logger:
+        logger.info("===== AZUL TECLADO %s | comandos de rolagem enviados =====", step_label)
+
+
+def _send_page_down(rect, logger: logging.Logger | None = None, step_label: str = ""):
+    _send_keyboard_scroll(rect, logger, step_label)
 
 
 def _send_home(rect):
@@ -305,7 +421,7 @@ def _visual_scan_azuis(
     mata185_path: Path,
     max_pages: int = 1300,
     stable_limit: int = 8,
-    page_delay: float = 0.55,
+    page_delay: float = 0.05,
 ) -> set[str]:
     hwnd, rect = _find_totvs_window()
     logger.info("===== AZUL VISUAL 01/08 | janela TOTVS encontrada | hwnd=%s | rect=%s =====", hwnd, rect)
@@ -315,6 +431,8 @@ def _visual_scan_azuis(
         pass
     time.sleep(0.4)
     logger.info("===== AZUL VISUAL 02/08 | mantendo posicao atual da grade, sem Ctrl+Home =====")
+    _click_grid_top(rect)
+    logger.info("===== AZUL FOCO | clique inicial enviado em X=101 Y=226; aguardando campo interno ativar =====")
     time.sleep(0.3)
 
     mata_keys = _read_mata185_keys(mata185_path)
@@ -400,12 +518,26 @@ def _visual_scan_azuis(
         estimated_first_index += step_rows
         if page <= 5 or page % 10 == 0:
             logger.info(
-                "===== AZUL VISUAL ROLAGEM | mouse wheel na grade | avanco_estimado=%s linhas | proxima_linha=%s =====",
+                "===== AZUL VISUAL ROLAGEM | teclado direto PageDown + seta x35 | avanco_estimado=%s linhas | proxima_linha=%s =====",
                 step_rows,
                 estimated_first_index + 1,
             )
-        _send_page_down(rect)
+        before_scroll_fingerprint = fingerprint
+        _send_page_down(rect, logger, f"pagina={page}")
         time.sleep(page_delay)
+        try:
+            verify_image = _capture_totvs_image(rect)
+            verify_fingerprint = _image_fingerprint(verify_image)
+            moved = verify_fingerprint != before_scroll_fingerprint
+            logger.info(
+                "===== AZUL VERIFICACAO ROLAGEM | pagina=%s | mudou_tela=%s | antes=%s | depois=%s =====",
+                page,
+                moved,
+                before_scroll_fingerprint[:24],
+                verify_fingerprint[:24],
+            )
+        except Exception as exc:
+            logger.warning("AZUL: falha ao verificar rolagem apos pagina %s: %s", page, exc)
 
     try:
         final_image = _capture_totvs_image(rect)
