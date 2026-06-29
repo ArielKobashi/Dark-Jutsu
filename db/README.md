@@ -4,6 +4,54 @@ Ambiente local PostgreSQL para suportar a migracao Firebase -> SQL.
 
 ## Subir
 
+### Opcao A: PostgreSQL local portatil
+
+Ambiente validado em `2026-06-29` usando os binarios em:
+
+```text
+C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql
+```
+
+Inicializar o cluster local do projeto:
+
+```powershell
+& 'C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql\bin\initdb.exe' -D 'C:\Users\Davi.souza\Desktop\Dark-Jutsu\db\data' -U postgres --auth=trust --encoding=UTF8
+Add-Content -Path 'C:\Users\Davi.souza\Desktop\Dark-Jutsu\db\data\postgresql.conf' -Value "`nport = 5433`nlisten_addresses = '127.0.0.1'`n"
+& 'C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql\bin\pg_ctl.exe' -D 'C:\Users\Davi.souza\Desktop\Dark-Jutsu\db\data' -l 'C:\Users\Davi.souza\Desktop\Dark-Jutsu\db\postgres.log' start
+```
+
+Criar login/base local:
+
+```powershell
+$psql='C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql\bin\psql.exe'
+& $psql -h 127.0.0.1 -p 5433 -U postgres -d postgres -c "do `$`$ begin if not exists (select 1 from pg_roles where rolname = 'dark_jutsu') then create role dark_jutsu login password 'dark_jutsu_dev'; end if; end `$`$;"
+& 'C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql\bin\createdb.exe' -h 127.0.0.1 -p 5433 -U postgres -O dark_jutsu dark_jutsu
+```
+
+Aplicar schema e seguranca:
+
+```powershell
+$psql='C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql\bin\psql.exe'
+& $psql -h 127.0.0.1 -p 5433 -U dark_jutsu -d dark_jutsu -v ON_ERROR_STOP=1 -f db\init\001_schema.sql
+& $psql -h 127.0.0.1 -p 5433 -U postgres -d dark_jutsu -v ON_ERROR_STOP=1 -c "do `$`$ begin if not exists (select 1 from pg_roles where rolname = 'dark_jutsu_readonly') then create role dark_jutsu_readonly nologin; end if; if not exists (select 1 from pg_roles where rolname = 'dark_jutsu_app') then create role dark_jutsu_app nologin; end if; if not exists (select 1 from pg_roles where rolname = 'dark_jutsu_service') then create role dark_jutsu_service nologin; end if; end `$`$;"
+& $psql -h 127.0.0.1 -p 5433 -U dark_jutsu -d dark_jutsu -v ON_ERROR_STOP=1 -f db\init\002_security.sql
+```
+
+Validar:
+
+```powershell
+& 'C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql\bin\pg_isready.exe' -h 127.0.0.1 -p 5433 -U postgres
+& 'C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql\bin\psql.exe' -h 127.0.0.1 -p 5433 -U dark_jutsu -d dark_jutsu -f db\check.sql
+```
+
+String local:
+
+```text
+postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu
+```
+
+### Opcao B: Docker
+
 ```powershell
 Copy-Item .env.example .env
 docker compose up -d

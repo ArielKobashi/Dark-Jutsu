@@ -469,6 +469,29 @@ class IntegrityChecker:
 3. Gerar `integrity-summary.md`.
 4. Falhar com exit code `1` se houver divergencia `high` ou `critical`.
 
+## Resultado inicial
+
+Primeiro verificador Cooperat executado em modo raw-only em `2026-06-29`:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain cooperat --run-id initial_cooperat_dry_run --fail-on high
+```
+
+Resultado:
+
+- `run_dir`: `_migration_runs/initial_cooperat_dry_run`
+- modo: `raw-only`
+- findings: `0`
+- severidade maxima: `ok`
+- raw codes: `10125`
+- raw events: `212339`
+
+Arquivos gerados:
+
+- `_migration_runs/initial_cooperat_dry_run/reports/integrity-cooperat.json`
+- `_migration_runs/initial_cooperat_dry_run/reports/integrity-cooperat.md`
+- `_migration_runs/initial_cooperat_dry_run/reports/integrity-differences.jsonl`
+
 ## Criterio de pronto
 
 - Verificador roda contra um export raw e o PostgreSQL.

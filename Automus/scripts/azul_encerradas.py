@@ -155,18 +155,24 @@ def _find_totvs_window() -> tuple[int, tuple[int, int, int, int]]:
 
 def _is_status_blue(rgb: tuple[int, int, int]) -> bool:
     r, g, b = rgb
-    return b >= 135 and g >= 90 and b >= r + 35 and b >= g + 15 and r <= 150
+    return (
+        b >= 115
+        and g >= 70
+        and b >= r + 25
+        and b >= g + 8
+        and r <= 170
+    )
 
 
 def _is_status_green(rgb: tuple[int, int, int]) -> bool:
     r, g, b = rgb
-    return g >= 135 and g >= r + 35 and g >= b + 35 and r <= 160 and b <= 170
+    return g >= 125 and g >= r + 28 and g >= b + 28 and r <= 175 and b <= 185
 
 
 def _cluster_rows(row_hits: dict[int, dict[str, int]]) -> list[dict[str, int]]:
     clusters: list[list[tuple[int, dict[str, int]]]] = []
     for y in sorted(row_hits):
-        if not clusters or y - clusters[-1][-1][0] > 3:
+        if not clusters or y - clusters[-1][-1][0] > 5:
             clusters.append([])
         clusters[-1].append((y, row_hits[y]))
 
@@ -175,11 +181,26 @@ def _cluster_rows(row_hits: dict[int, dict[str, int]]) -> list[dict[str, int]]:
         blue = sum(item["blue"] for _, item in cluster)
         green = sum(item["green"] for _, item in cluster)
         total = blue + green
-        if total < 8:
+        if total < 5:
             continue
         weighted_y = sum(y * (item["blue"] + item["green"]) for y, item in cluster) / total
-        rows.append({"y": int(round(weighted_y)), "blue": blue, "green": green})
+        rows.append({"y": int(round(weighted_y)), "blue": blue, "green": green, "score": blue - green})
     return rows
+
+
+def _merge_status_rows(*row_sets: list[dict[str, int]]) -> list[dict[str, int]]:
+    merged: list[dict[str, int]] = []
+    for rows in row_sets:
+        for row in rows:
+            match = next((item for item in merged if abs(item["y"] - row["y"]) <= 6), None)
+            if match:
+                match["blue"] = max(match["blue"], row["blue"])
+                match["green"] = max(match["green"], row["green"])
+                match["score"] = max(match.get("score", 0), row.get("score", row["blue"] - row["green"]))
+                match["y"] = int(round((match["y"] + row["y"]) / 2))
+            else:
+                merged.append(dict(row))
+    return sorted(merged, key=lambda item: item["y"])
 
 
 def _read_mata185_keys(mata185_path: Path) -> list[str]:
@@ -228,10 +249,10 @@ def _status_rows_from_image(image) -> list[dict[str, int]]:
     width, height = image.size
     pixels = image.load()
     row_hits: dict[int, dict[str, int]] = {}
-    x_min = 6
-    x_max = min(42, width)
-    y_min = min(max(160, int(height * 0.20)), height)
-    y_max = max(y_min, min(height - 35, int(height * 0.95)))
+    x_min = 3
+    x_max = min(58, width)
+    y_min = min(max(145, int(height * 0.18)), height)
+    y_max = max(y_min, min(height - 25, int(height * 0.97)))
 
     for y in range(y_min, y_max):
         blue = 0
@@ -242,7 +263,7 @@ def _status_rows_from_image(image) -> list[dict[str, int]]:
                 blue += 1
             elif _is_status_green(rgb):
                 green += 1
-        if blue + green >= 3:
+        if blue + green >= 2:
             row_hits[y] = {"blue": blue, "green": green}
 
     return _cluster_rows(row_hits)
@@ -470,7 +491,12 @@ def _visual_scan_azuis(
             seen_fingerprints[fingerprint] = page
             stable_count = 0
 
-        rows = _status_rows_from_image(image)
+        time.sleep(0.035)
+        image_confirm = _capture_totvs_image(rect)
+        rows = _merge_status_rows(
+            _status_rows_from_image(image),
+            _status_rows_from_image(image_confirm),
+        )
         if not rows:
             logger.warning("AZUL: pagina %s sem indicadores visuais detectados.", page)
         else:
@@ -479,7 +505,8 @@ def _visual_scan_azuis(
         blue_rows_this_page = 0
         for index, row in enumerate(rows):
             estimated_index = estimated_first_index + index
-            if row["blue"] <= row["green"]:
+            is_blue_row = row["blue"] >= 4 and row["blue"] >= row["green"] + 2
+            if not is_blue_row:
                 continue
             blue_rows_this_page += 1
 
@@ -545,21 +572,25 @@ def _visual_scan_azuis(
     except Exception:
         pass
 
-    (output_dir / "lista-azuis.txt").write_text(
-        "\n".join(sorted(azul_keys)) + ("\n" if azul_keys else ""),
-        encoding="utf-8",
-    )
-    logger.info("===== AZUL VISUAL 06/08 | lista salva | %s =====", output_dir / "lista-azuis.txt")
-    (output_dir / "lista-azuis-visual-debug.csv").write_text(
-        "\n".join(debug_lines) + "\n",
-        encoding="utf-8",
-    )
-    logger.info("===== AZUL VISUAL 07/08 | debug salvo | %s =====", output_dir / "lista-azuis-visual-debug.csv")
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    lista_text = "\n".join(sorted(azul_keys)) + ("\n" if azul_keys else "")
+    debug_text = "\n".join(debug_lines) + "\n"
+    lista_path = output_dir / "lista-azuis.txt"
+    debug_path = output_dir / "lista-azuis-visual-debug.csv"
+    lista_backup_path = output_dir / f"lista-azuis-{timestamp}.txt"
+    debug_backup_path = output_dir / f"lista-azuis-visual-debug-{timestamp}.csv"
+
+    lista_path.write_text(lista_text, encoding="utf-8")
+    lista_backup_path.write_text(lista_text, encoding="utf-8")
+    logger.info("===== AZUL VISUAL 06/08 | lista salva | %s | backup=%s =====", lista_path, lista_backup_path)
+    debug_path.write_text(debug_text, encoding="utf-8")
+    debug_backup_path.write_text(debug_text, encoding="utf-8")
+    logger.info("===== AZUL VISUAL 07/08 | debug salvo | %s | backup=%s =====", debug_path, debug_backup_path)
     logger.info(
         "===== AZUL VISUAL 08/08 | concluida | paginas=%s | azuis=%s | debug=%s =====",
         pages_scanned,
         len(azul_keys),
-        output_dir / "lista-azuis-visual-debug.csv",
+        debug_path,
     )
     return azul_keys
 

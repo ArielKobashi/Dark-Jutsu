@@ -32,6 +32,30 @@ Componentes:
 - `validators`: comparam totais/checksums Firebase x SQL.
 - `reports`: geram JSON/Markdown por rodada.
 
+## Estado implementado em 2026-06-29
+
+Arquivos criados no repositorio:
+
+- `scripts/migration/firebase_client.py`: cliente REST do Firebase Realtime Database, com login por `FIREBASE_ID_TOKEN` ou email/senha.
+- `scripts/migration/extract_firebase.py`: exporta caminhos Firebase para `_migration_runs/<run-id>/raw/*.json`.
+- `scripts/migration/run_transfer.py`: orquestra `inspect` e `transfer` por dominio.
+- `scripts/migration/domains/cooperat.py`: dominio piloto com dry-run e apply SQL.
+- `scripts/migration/domains/inventory.py`: inventario inicial de `estoqueGlobal` em inspect/dry-run.
+- `scripts/migration/integrity_check.py`: verificador pos-migracao Cooperat.
+
+Status por dominio:
+
+| Dominio | Extract | Inspect | Apply SQL | Integridade |
+| --- | --- | --- | --- | --- |
+| `cooperat` | via arquivo local ou Firebase exportado | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
+| `inventory` | pronto via `extract_firebase.py --path estoqueGlobal` ou export completo | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
+| demais dominios | pronto como export raw | pendente | pendente | pendente |
+
+O inspetor de `inventory` aceita dois formatos de origem:
+
+- JSON direto do caminho `estoqueGlobal`;
+- export completo do Realtime Database contendo a chave raiz `estoqueGlobal`.
+
 ## Diretorios propostos
 
 ```text
@@ -93,9 +117,9 @@ MIGRATION_RUN_DIR=_migration_runs
 Tambem deve aceitar argumentos CLI:
 
 ```powershell
-python scripts/migration/run_transfer.py --domain cooperat --mode dry-run
-python scripts/migration/run_transfer.py --domain cooperat --mode apply
-python scripts/migration/run_transfer.py --domain inventory --from-file _migration_runs/.../raw/estoqueGlobal.json --mode apply
+python scripts/migration/run_transfer.py transfer --domain cooperat --mode dry-run
+python scripts/migration/run_transfer.py transfer --domain cooperat --mode apply
+python scripts/migration/run_transfer.py transfer --domain inventory --source _migration_runs/.../raw/estoqueGlobal.json --mode dry-run
 ```
 
 ## Controle de execucao
@@ -353,13 +377,16 @@ Dominios que podem ter corte unico:
 
 ```powershell
 # baixa dados
-python scripts/migration/run_transfer.py extract --domain all
+python scripts/migration/extract_firebase.py --run-id firebase_export_initial
 
-# inspeciona ultimo export
-python scripts/migration/run_transfer.py inspect --run latest
+# baixa apenas estoqueGlobal
+python scripts/migration/extract_firebase.py --run-id firebase_inventory_initial --path estoqueGlobal
 
 # dry-run Cooperat
 python scripts/migration/run_transfer.py transfer --domain cooperat --mode dry-run
+
+# inventario do estoqueGlobal exportado
+python scripts/migration/run_transfer.py inspect --domain inventory --run-id firebase_inventory_initial --source _migration_runs/firebase_inventory_initial/raw/estoqueGlobal.json
 
 # aplica Cooperat
 python scripts/migration/run_transfer.py transfer --domain cooperat --mode apply
@@ -377,6 +404,134 @@ python scripts/migration/run_transfer.py compare --domain cooperat --run latest
 5. Rodar `dry-run` no `data/historico_cooperat_antigo.json`.
 6. Gravar `cooperat_import_runs`, `cooperat_purchase_codes`, `cooperat_purchase_events`.
 7. Validar 10.125 codigos e 212.339 eventos.
+
+## Resultado inicial
+
+Primeiro dry-run executado em `2026-06-29` com:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py inspect --domain cooperat --run-id initial_cooperat_dry_run --sample-size 25
+```
+
+Resultado:
+
+- `run_dir`: `_migration_runs/initial_cooperat_dry_run`
+- `source`: `data/historico_cooperat_antigo.json`
+- `source_hash`: `ca708c12ff4c3852541baac824ac2a5f1bb3acdd131ffdbfeeb6374676521744`
+- codigos declarados: `10125`
+- codigos contados: `10125`
+- eventos declarados: `212339`
+- eventos contados: `212339`
+- maior volume por codigo: `3822` eventos no codigo `62855`
+- status: `ok`
+
+Arquivos gerados:
+
+- `_migration_runs/initial_cooperat_dry_run/manifest.json`
+- `_migration_runs/initial_cooperat_dry_run/raw/historicoComprasCooperat.json`
+- `_migration_runs/initial_cooperat_dry_run/reports/cooperat-summary.json`
+- `_migration_runs/initial_cooperat_dry_run/reports/cooperat-summary.md`
+
+## Resultado SQL local
+
+PostgreSQL local portatil configurado em `2026-06-29`:
+
+- binarios: `C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql`
+- host: `127.0.0.1`
+- porta: `5433`
+- database: `dark_jutsu`
+- usuario local: `dark_jutsu`
+- schema aplicado: `36` tabelas, migrations `001_schema` e `002_security`
+- seguranca aplicada: `63` policies RLS
+
+Carga Cooperat executada:
+
+```powershell
+$env:DATABASE_URL='postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu'
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain cooperat --mode apply --run-id cooperat_apply_local_initial --sample-size 25
+```
+
+Resultado:
+
+- `run_id`: `cooperat_apply_local_initial`
+- `import_run_id`: `a608e8ba-a9c5-4298-b629-9bba5178b6d2`
+- codigos carregados: `10125`
+- eventos carregados: `212339`
+- hash fonte: `ca708c12ff4c3852541baac824ac2a5f1bb3acdd131ffdbfeeb6374676521744`
+
+Integridade pos-migracao:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain cooperat --run-id cooperat_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Resultado:
+
+- modo: `raw-vs-sql`
+- findings: `0`
+- status: `ok`
+
+## Resultado inventory real
+
+Primeiro inventario executado sobre o export completo do Firebase:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py inspect --domain inventory --run-id firebase_inventory_export_20260629 --source 'C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json' --sample-size 30
+```
+
+Resultado:
+
+- `run_id`: `firebase_inventory_export_20260629`
+- arquivo fonte: `C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json`
+- hash fonte: `13d5e3882ea394a8e4c28cc7533919ef54546b9d9d2b772a71c8ad86ca9b622e`
+- itens ativos: `7681`
+- itens mortos: `131`
+- ajustes: `3`
+- chaves de historico de saldo: `1256`
+- eventos de historico de saldo: `5562`
+- chaves MATA185: `4`
+- `configContagem`: presente
+- `configuracoesEtiquetas`: ausente dentro de `estoqueGlobal` neste export
+
+Arquivos gerados:
+
+- `_migration_runs/firebase_inventory_export_20260629/raw/estoqueGlobal.json`
+- `_migration_runs/firebase_inventory_export_20260629/manifest-inventory.json`
+- `_migration_runs/firebase_inventory_export_20260629/reports/inventory-summary.json`
+- `_migration_runs/firebase_inventory_export_20260629/reports/inventory-summary.md`
+
+## Resultado inventory SQL local
+
+Carga executada:
+
+```powershell
+$env:DATABASE_URL='postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu'
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain inventory --mode apply --run-id inventory_apply_local_initial --source 'C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json' --sample-size 30
+```
+
+Resultado:
+
+- `run_id`: `inventory_apply_local_initial`
+- `snapshot_id`: `bb45cb90-a26f-4ff2-8f76-ab740e04c6ee`
+- itens ativos carregados: `7681`
+- itens mortos carregados: `131`
+- enderecos carregados: `44548`
+- limites Cooperat carregados: `6191`
+- ajustes carregados: `3`
+- eventos de historico de saldo carregados: `5562`
+- snapshot raw de `movimentacoesMata185`: `1`
+
+Integridade pos-migracao:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain inventory --run-id inventory_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Resultado:
+
+- modo: `raw-vs-sql`
+- findings: `0`
+- status: `ok`
 
 ## Criterio de pronto do motor
 

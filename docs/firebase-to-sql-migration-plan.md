@@ -845,6 +845,92 @@ Ordem recomendada para implementar o motor:
 5. Repetir o padrao para `inventory`, depois `users`, `dashboard`, `counting`, `occurrences`, `labels`, `chat` e `automus`.
 6. Implementar o verificador de integridade pos-migracao antes de qualquer corte de leitura/escrita.
 
+Status da etapa inicial:
+
+- `scripts/migration/` criado.
+- Dominio `cooperat` implementado para `inspect`/`dry-run`.
+- Dry-run `initial_cooperat_dry_run` executado com sucesso em `2026-06-29`.
+- Totais validados: `10125` codigos e `212339` eventos.
+- Verificador de integridade Cooperat executado em modo raw-only, com `0` findings.
+- Cliente REST do Firebase criado em `scripts/migration/firebase_client.py`.
+- Extrator de snapshot criado em `scripts/migration/extract_firebase.py`.
+- Dominio `inventory` criado para inventariar `estoqueGlobal` em modo `inspect`/`dry-run`.
+- `run_transfer.py` agora aceita `--domain cooperat` e `--domain inventory`.
+- PostgreSQL local portatil iniciado em `127.0.0.1:5433`, usando `C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql`.
+- Schema SQL aplicado com sucesso: `36` tabelas, migrations `001_schema` e `002_security`, `63` policies RLS.
+- Driver `psycopg` instalado no Python portatil informado.
+- Cooperat aplicado no SQL local com sucesso no run `cooperat_apply_local_initial`.
+- Integridade Cooperat raw-vs-SQL executada com `0` findings.
+- Proximo passo tecnico: exportar `estoqueGlobal` real do Firebase e rodar `inspect --domain inventory`.
+
+Resultado Cooperat no SQL local:
+
+| Item | Valor |
+| --- | --- |
+| Run | `cooperat_apply_local_initial` |
+| Import run SQL | `a608e8ba-a9c5-4298-b629-9bba5178b6d2` |
+| Hash fonte | `ca708c12ff4c3852541baac824ac2a5f1bb3acdd131ffdbfeeb6374676521744` |
+| Codigos SQL | `10125` |
+| Eventos SQL | `212339` |
+| Integridade | `raw-vs-sql`, `0` findings |
+
+Resultado do primeiro export Firebase real:
+
+- Arquivo fonte: `C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json`
+- Tamanho aproximado: `48 MB`
+- Run de inventario: `firebase_inventory_export_20260629`
+- Hash fonte: `13d5e3882ea394a8e4c28cc7533919ef54546b9d9d2b772a71c8ad86ca9b622e`
+- `estoqueGlobal/dados`: `7681` itens ativos
+- `estoqueGlobal/dadosMortos`: `131` itens mortos
+- `estoqueGlobal/ajustesItens`: `3` ajustes
+- `estoqueGlobal/historicoSaldo`: `1256` chaves, `5562` eventos
+- `estoqueGlobal/movimentacoesMata185`: `4` chaves
+- `estoqueGlobal/configContagem`: presente
+- `estoqueGlobal/configuracoesEtiquetas`: nao encontrado dentro de `estoqueGlobal` neste export
+- `estoqueGlobal/ultimaAtualizacao`: `1782537018879`
+- `estoqueGlobal/atualizadoPor`: `atualizado automaticamente via Automus`
+- Carga SQL executada no run `inventory_apply_local_initial`
+- Snapshot SQL: `bb45cb90-a26f-4ff2-8f76-ab740e04c6ee`
+- `inventory_items`: `7681` ativos, `131` mortos, `7812` total
+- `inventory_item_addresses`: `44548` enderecos
+- `inventory_item_limits`: `6191` limites Cooperat
+- `inventory_adjustments`: `3` ajustes
+- `inventory_balance_history`: `5562` eventos
+- `inventory_movements`: `1` snapshot raw de `movimentacoesMata185`
+- Integridade inventory raw-vs-SQL: `0` findings
+
+Nos principais encontrados no export completo:
+
+| Caminho raiz | Medida inicial |
+| --- | --- |
+| `automus` | `1` chave |
+| `chatGlobal` | `100` chaves |
+| `chatReadState` | `6` usuarios/chaves |
+| `chatRooms` | `3` salas/chaves |
+| `contagemAtual` | `1` chave |
+| `contagemRascunhos` | `1` chave |
+| `contagemStatusMaquinas` | `1` chave |
+| `contagens` | `15` datas/chaves |
+| `dashboardConfig` | `3` chaves |
+| `estoqueGlobal` | `13` chaves |
+| `estoqueGlobalBackups` | `1` chave |
+| `historicoComprasCooperat` | `9` chaves |
+| `nicknames`, `nicknamesAuth`, `nicknamesSimple` | `1`, `37`, `25` chaves |
+| `ocorrencias` | `7` chaves |
+| `solicitacoesCadastro` | `30` chaves |
+| `solicitaçõesCadastro` | `17` chaves, caminho legado/acento a reconciliar |
+| `usuarios` | `25` usuarios/chaves |
+| `usuariosBanidos` | `12` usuarios/chaves |
+
+Comandos da proxima etapa:
+
+```powershell
+$env:FIREBASE_DATABASE_URL="https://<projeto>.firebaseio.com"
+$env:FIREBASE_ID_TOKEN="<id-token>"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\extract_firebase.py --run-id firebase_inventory_initial --path estoqueGlobal
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py inspect --domain inventory --run-id firebase_inventory_initial --source _migration_runs\firebase_inventory_initial\raw\estoqueGlobal.json
+```
+
 ## Criterios de sucesso
 
 - Totais migrados batem com o Firebase para cada no.

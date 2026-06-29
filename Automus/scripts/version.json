@@ -1,6 +1,6 @@
 {
   "app": "Automus",
-  "version": "1.0.99",
+  "version": "1.1.1",
   "releasedAt": "2026-06-29",
   "updateManifestUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus\\latest.json",
   "updateManifestFirebasePath": "automus/releases/latest",
