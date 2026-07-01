@@ -6,6 +6,8 @@ Ambiente local PostgreSQL para suportar a migracao Firebase -> SQL.
 
 ### Opcao A: PostgreSQL local portatil
 
+Para a maquina compartilhada da empresa, com PostgreSQL portable em `C:\DarkJutsu` e inicializacao por usuario Windows, veja tambem `docs\postgresql-portable-servidor-local.md`.
+
 Ambiente validado em `2026-06-29` usando os binarios em:
 
 ```text

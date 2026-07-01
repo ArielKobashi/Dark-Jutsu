@@ -1,6 +1,7 @@
 import argparse
 import getpass
 import json
+import os
 import queue
 import shutil
 import subprocess
@@ -41,9 +42,11 @@ def save_version(data: dict):
     VERSION_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def http_json(url: str, method: str = "GET", payload: dict | None = None, timeout: float = 30.0):
+def http_json(url: str, method: str = "GET", payload: dict | None = None, timeout: float = 30.0, headers_extra: dict | None = None):
     data = None
     headers = {"Accept": "application/json"}
+    if headers_extra:
+        headers.update(headers_extra)
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
@@ -54,7 +57,7 @@ def http_json(url: str, method: str = "GET", payload: dict | None = None, timeou
             return json.loads(raw.decode("utf-8")) if raw else None
     except HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Firebase HTTP {exc.code}: {body}") from exc
+        raise RuntimeError(f"HTTP {exc.code}: {body}") from exc
     except URLError as exc:
         raise RuntimeError(f"Falha de rede: {exc}") from exc
 
@@ -91,6 +94,21 @@ def publish_manifest_to_firebase(path: str, manifest: dict, login: str, senha: s
         raise RuntimeError("Caminho Firebase vazio.")
     http_json(f"{db_url}/{clean_path}.json?auth={token}", method="PUT", payload=manifest)
     log(f"Manifesto publicado no Firebase: {clean_path}")
+
+
+def publish_manifest_to_sql(channel: str, manifest: dict, log=print):
+    base_url = os.environ.get("DARK_JUTSU_API_BASE_URL", "http://127.0.0.1:8765").rstrip("/")
+    token = os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    clean_channel = (channel or "latest").strip().strip("/") or "latest"
+    result = http_json(
+        f"{base_url}/api/automus/releases/{clean_channel}",
+        method="PUT",
+        payload=manifest,
+        headers_extra=headers,
+    )
+    version = (result or {}).get("release", {}).get("version") or manifest.get("version")
+    log(f"Manifesto publicado no SQL: {clean_channel} {version}")
 
 
 def ensure_manifest_package_url(manifest_path: Path, version: str) -> dict:
@@ -175,6 +193,7 @@ def prepare_release(
     notes: list[str],
     publish_dir: str = "",
     publish_firebase: bool = True,
+    publish_sql: bool = True,
     firebase_login: str = "",
     firebase_password: str = "",
     open_folder: bool = True,
@@ -202,13 +221,19 @@ def prepare_release(
     if publish_dir:
         copy_to_publish_dir(version, publish_dir, log=log)
 
+    manifest = ensure_manifest_package_url(RELEASES / "latest.json", version)
+    if publish_sql:
+        try:
+            publish_manifest_to_sql("latest", manifest, log=log)
+        except Exception as exc:
+            log(f"Nao foi possivel publicar manifesto no SQL: {exc}")
+
     firebase_path = str(data.get("updateManifestFirebasePath") or "").strip().strip("/")
     if publish_firebase:
         if not firebase_path:
             raise RuntimeError("Configure updateManifestFirebasePath no version.json.")
         if not firebase_login or not firebase_password:
             raise RuntimeError("Informe login e senha ADM para publicar no Firebase.")
-        manifest = ensure_manifest_package_url(RELEASES / "latest.json", version)
         publish_manifest_to_firebase(firebase_path, manifest, firebase_login, firebase_password, log=log)
 
     if open_folder:

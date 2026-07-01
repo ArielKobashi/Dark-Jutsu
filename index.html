@@ -2195,6 +2195,16 @@ window.aprovar = async function(id){
             senhaReset: false
         });
         try{
+            if(typeof window.sqlApi === "function"){
+                await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}/approve`, {
+                    method: "POST",
+                    body: JSON.stringify({ uid, nivel })
+                });
+            }
+        }catch(sqlErr){
+            console.warn("Falha ao aprovar cadastro no SQL; mantendo fluxo Firebase:", sqlErr);
+        }
+        try{
             await set(ref(db, "nicknamesAuth/" + nickOnlyKey(dados.nickname)), {
                 nickname: dados.nickname,
                 criadoEm: Date.now()
@@ -2241,6 +2251,17 @@ window.recusar = async function(id){
     }
 
     try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: "recusado", decididoEm: Date.now() })
+            });
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao recusar cadastro no SQL; tentando Firebase:", sqlErr);
+    }
+
+    try{
         await set(ref(db, "solicitacoesCadastro/"+id), null);
     }catch(e){
         const msg = (e && (e.code || e.message)) ? (e.code || e.message) : "Erro ao recusar";
@@ -2268,6 +2289,16 @@ window.recusar = async function(id){
 
 window.alterarNivel = async function(uid, nivel){
     if(!uid) return;
+    try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/users/${encodeURIComponent(uid)}`, {
+                method: "PATCH",
+                body: JSON.stringify({ nivel })
+            });
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao alterar nivel no SQL; tentando Firebase:", sqlErr);
+    }
     await set(ref(db, "usuarios/" + uid + "/nivel"), nivel);
 };
 
@@ -2302,16 +2333,46 @@ window.toggleAtivo = async function(uid, isAtivo){
                     console.warn("Falha ao arquivar usuário banido:", e?.code || e);
                 }
             }
+        try{
+            if(typeof window.sqlApi === "function"){
+                await window.sqlApi(`/api/users/${encodeURIComponent(uid)}/ban`, {
+                    method: "POST",
+                    body: JSON.stringify({ banidoEm: Date.now() })
+                });
+            }
+        }catch(sqlErr){
+            console.warn("Falha ao banir usuario no SQL; seguindo Firebase:", sqlErr);
+        }
         await set(ref(db, "usuarios/" + uid), null);
         await rebuildNicknamesSimple();
     }else{
         // Reativar usuário bloqueado existente
+        try{
+            if(typeof window.sqlApi === "function"){
+                await window.sqlApi(`/api/users/${encodeURIComponent(uid)}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ ativo: true })
+                });
+            }
+        }catch(sqlErr){
+            console.warn("Falha ao reativar usuario no SQL; tentando Firebase:", sqlErr);
+        }
         await set(ref(db, "usuarios/" + uid + "/ativo"), true);
     }
 };
 
 window.resetSenha = async function(uid){
     if(!uid) return;
+    try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/users/${encodeURIComponent(uid)}/reset-password`, {
+                method: "POST",
+                body: JSON.stringify({})
+            });
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao marcar reset de senha no SQL; tentando Firebase:", sqlErr);
+    }
     await set(ref(db, "usuarios/" + uid + "/senha"), "");
     await set(ref(db, "usuarios/" + uid + "/senhaReset"), true);
 };
@@ -2364,6 +2425,15 @@ function iniciarListaBanidos(){
 
 window.apagarBanido = async function(uid){
     if(!uid) return;
+    try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/banned-users/${encodeURIComponent(uid)}`, {
+                method: "DELETE"
+            });
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao apagar banido no SQL; tentando Firebase:", sqlErr);
+    }
     await set(ref(db, "usuariosBanidos/" + uid), null);
 }
 
@@ -2375,6 +2445,15 @@ window.apagarBanidosSelecionados = async function(){
     for(const c of checks){
         const uid = c.getAttribute("data-uid");
         if(uid){
+            try{
+                if(typeof window.sqlApi === "function"){
+                    await window.sqlApi(`/api/banned-users/${encodeURIComponent(uid)}`, {
+                        method: "DELETE"
+                    });
+                }
+            }catch(sqlErr){
+                console.warn("Falha ao apagar banido selecionado no SQL; tentando Firebase:", sqlErr);
+            }
             await set(ref(db, "usuariosBanidos/" + uid), null);
         }
     }
@@ -3506,7 +3585,6 @@ async function salvarPacoteEtiquetasZip(blob){
 }
 
 async function registrarGeracaoEtiquetas(totalGeradas, codigosPorTamanho, naoEncontradosLinhas){
-    if(!window.db || !window.ref || !window.push) throw new Error("Firebase ainda nao esta pronto para registrar etiquetas.");
     const nick = window.meuNickname || "desconhecido";
     const usuarioKey = chaveFirebaseContagem(nick);
     const data = new Date().toISOString().slice(0, 10);
@@ -3519,6 +3597,18 @@ async function registrarGeracaoEtiquetas(totalGeradas, codigosPorTamanho, naoEnc
         porTamanho:Object.fromEntries(Object.entries(codigosPorTamanho || {}).map(([tamanho, lista]) => [tamanho, Array.isArray(lista) ? lista.length : 0])),
         teveNaoEncontrados:!!(naoEncontradosLinhas && naoEncontradosLinhas.length)
     };
+    try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi("/api/labels/jobs", {
+                method: "POST",
+                body: JSON.stringify(payload)
+            });
+            return true;
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao registrar etiquetas no SQL; tentando Firebase:", sqlErr);
+    }
+    if(!window.db || !window.ref || !window.push) throw new Error("Firebase ainda nao esta pronto para registrar etiquetas.");
     let salvouEmContagens = false;
     try{
         await window.push(window.ref(window.db, `etiquetasGeradas/${data}/${usuarioKey}`), payload);
@@ -5136,7 +5226,17 @@ function aplicarResetGlobalContagem(resetInfo, avisar = true){
 }
 
 async function checarResetGlobalContagem(){
-    if(contagemResetGlobalBloqueado || !window.get || !window.ref || !window.db) return;
+    if(contagemResetGlobalBloqueado) return;
+    if(typeof window.sqlApi === "function"){
+        try{
+            const data = await window.sqlApi("/api/settings/counting.resetGlobal");
+            if(data?.setting?.value) aplicarResetGlobalContagem(data.setting.value, false);
+            return;
+        }catch(sqlErr){
+            console.warn("Falha ao checar reset global no SQL; tentando Firebase:", sqlErr);
+        }
+    }
+    if(!window.get || !window.ref || !window.db) return;
     try{
         const snap = await window.get(window.ref(window.db, "contagemControle/resetGlobal"));
         if(snap.exists()) aplicarResetGlobalContagem(snap.val(), false);
@@ -5451,8 +5551,25 @@ function payloadStatusMaquinaContagemFirebase(grupo, resumo = {}, aberta = true)
 async function salvarStatusMaquinasContagemFirebase(payload = null, aberta = true){
     const usuario = usuarioLiveKeyContagemFirebase();
     const ciclo = chaveCicloContagemAtual();
-    if(!usuario || !window.set || !window.ref || !window.db) return false;
+    if(!usuario) return false;
     const maquinaAtual = resolverGrupoSessaoContagem(contagemMaquinaAtual || carregarSessaoContagem().maquina || "");
+    if(typeof window.sqlApi === "function" && maquinaAtual){
+        try{
+            const resumo = resumoProgressoGruposContagem()[maquinaAtual] || { grupo:maquinaAtual, total:totalItensGrupoContagem(maquinaAtual), contados:0 };
+            await window.sqlApi("/api/counting/machine-status", {
+                method: "PUT",
+                body: JSON.stringify({
+                    ...payloadStatusMaquinaContagemFirebase(maquinaAtual, resumo, aberta),
+                    ciclo,
+                    usuarioKey: usuario
+                })
+            });
+            return true;
+        }catch(sqlErr){
+            console.warn("Falha ao salvar status das maquinas no SQL; tentando Firebase:", sqlErr);
+        }
+    }
+    if(!window.set || !window.ref || !window.db) return false;
     const writes = [];
     if(maquinaAtual){
         const resumo = resumoProgressoGruposContagem()[maquinaAtual] || { grupo:maquinaAtual, total:totalItensGrupoContagem(maquinaAtual), contados:0 };
@@ -5476,8 +5593,22 @@ async function salvarRascunhoContagemFirebaseAgora(){
         contagemRascunhoFirebaseTimer = null;
     }
     const paths = pathsRascunhoContagemFirebase();
-    if(!paths.length || !window.set || !window.ref || !window.db) return false;
+    if(!paths.length) return false;
     const payload = payloadRascunhoContagemFirebase();
+    if(typeof window.sqlApi === "function"){
+        try{
+            await window.sqlApi("/api/counting/drafts", {
+                method: "PUT",
+                body: JSON.stringify({ ...payload, ciclo: chaveCicloContagemAtual() })
+            });
+            await salvarStatusMaquinasContagemFirebase(payload, true);
+            contagemRascunhoFirebaseAvisoErro = false;
+            return true;
+        }catch(sqlErr){
+            console.warn("Falha ao salvar rascunho da contagem no SQL; tentando Firebase:", sqlErr);
+        }
+    }
+    if(!window.set || !window.ref || !window.db) return false;
     const writes = [];
     paths.forEach(path => {
         writes.push(window.set(window.ref(window.db, path), payload));
@@ -5510,7 +5641,20 @@ async function salvarRascunhoContagemFirebaseAgora(){
 async function salvarPresencaContagemFirebase(aberta = true){
     const usuario = usuarioLiveKeyContagemFirebase();
     const ciclo = chaveCicloContagemAtual();
-    if(!usuario || !window.set || !window.ref || !window.db) return false;
+    if(!usuario) return false;
+    if(typeof window.sqlApi === "function"){
+        try{
+            const presenca = payloadPresencaContagemFirebase(aberta);
+            await window.sqlApi("/api/counting/machine-status", {
+                method: "PUT",
+                body: JSON.stringify({ ...presenca, ciclo, usuarioKey: usuario, grupo: contagemMaquinaAtual || carregarSessaoContagem().maquina || "geral" })
+            });
+            return true;
+        }catch(sqlErr){
+            console.warn("Falha ao salvar presenca da contagem no SQL; tentando Firebase:", sqlErr);
+        }
+    }
+    if(!window.set || !window.ref || !window.db) return false;
     try{
         const presenca = payloadPresencaContagemFirebase(aberta);
         const writes = [
@@ -5545,6 +5689,14 @@ async function limparRascunhoContagemFirebase(){
         contagemRascunhoFirebaseTimer = null;
     }
     const paths = pathsRascunhoContagemFirebase();
+    const uid = uidRascunhoContagemFirebase();
+    if(typeof window.sqlApi === "function" && uid){
+        try{
+            await window.sqlApi(`/api/counting/drafts/${encodeURIComponent(uid)}`, { method: "DELETE" });
+        }catch(sqlErr){
+            console.warn("Falha ao limpar rascunho da contagem no SQL; tentando Firebase:", sqlErr);
+        }
+    }
     if(!paths.length || !window.set || !window.ref || !window.db) return;
     try{
         const writes = [];
@@ -6582,6 +6734,17 @@ function fecharConfigUnificacaoContagem(){
 
 async function persistirAliasesMaquinasContagem(){
     salvarAliasesMaquinasContagemLocal();
+    if(typeof window.sqlApi === "function"){
+        try{
+            await window.sqlApi("/api/settings/inventory.countingConfig", {
+                method: "PUT",
+                body: JSON.stringify({ value: { maquinasAlias: contagemAliasesMaquinas || {} } })
+            });
+            return true;
+        }catch(sqlErr){
+            console.warn("Falha ao salvar unificacao de maquinas no SQL; tentando Firebase:", sqlErr);
+        }
+    }
     if(window.firebaseUpdate && window.ref && window.db){
         try{
             await window.firebaseUpdate(window.ref(window.db, "estoqueGlobal/configContagem"), {
@@ -7841,8 +8004,22 @@ async function finalizarContagem(){
     const totalRegistros = totalItens + totalVazios;
     if(!confirm(`Finalizar contagem?\n\nRegistros contados: ${totalRegistros}\nItens com quantidade: ${totalItens}\nVazios/fantasmas: ${totalVazios}.`)) return;
     try{
-        const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
-        await window.push(baseRef, payload);
+        let salvouSql = false;
+        if(typeof window.sqlApi === "function"){
+            try{
+                await window.sqlApi("/api/counting/sessions", {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                });
+                salvouSql = true;
+            }catch(sqlErr){
+                console.warn("Falha ao salvar contagem no SQL; tentando Firebase:", sqlErr);
+            }
+        }
+        if(!salvouSql){
+            const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
+            await window.push(baseRef, payload);
+        }
         await salvarRascunhoContagemFirebaseAgora();
         contagemFinalizadaSemSessao = true;
         historicoContagemPlanilhasCarregado = false;
@@ -8252,8 +8429,22 @@ async function salvarContagemPeloRelatorio(){
     const totalRegistros = totalItens + totalVazios;
     if(!confirm(`Salvar contagem?\n\nRegistros contados: ${totalRegistros}\nItens com quantidade: ${totalItens}\nVazios/fantasmas: ${totalVazios}.`)) return;
     try{
-        const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
-        await window.push(baseRef, payload);
+        let salvouSql = false;
+        if(typeof window.sqlApi === "function"){
+            try{
+                await window.sqlApi("/api/counting/sessions", {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                });
+                salvouSql = true;
+            }catch(sqlErr){
+                console.warn("Falha ao salvar contagem no SQL; tentando Firebase:", sqlErr);
+            }
+        }
+        if(!salvouSql){
+            const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
+            await window.push(baseRef, payload);
+        }
         await salvarRascunhoContagemFirebaseAgora();
         contagemFinalizadaSemSessao = true;
         historicoContagemPlanilhasCarregado = false;
@@ -8675,7 +8866,7 @@ async function resetarContagemGlobalAdmin(){
         mostrarNotificacao("Apenas admin pode zerar a contagem.");
         return;
     }
-    if(!window.set || !window.ref || !window.db){
+    if(typeof window.sqlApi !== "function" && (!window.set || !window.ref || !window.db)){
         mostrarNotificacao("Firebase ainda nao esta pronto.");
         return;
     }
@@ -8687,11 +8878,18 @@ async function resetarContagemGlobalAdmin(){
         formatarContagem:true
     };
     try{
-        await Promise.all([
-            window.set(window.ref(window.db, "contagemControle/resetGlobal"), resetInfo),
-            window.set(window.ref(window.db, `contagemAtual/${chaveCicloContagemAtual()}`), null),
-            window.set(window.ref(window.db, "contagemStatusMaquinas"), null)
-        ]);
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi("/api/counting/reset", {
+                method: "POST",
+                body: JSON.stringify(resetInfo)
+            });
+        }else{
+            await Promise.all([
+                window.set(window.ref(window.db, "contagemControle/resetGlobal"), resetInfo),
+                window.set(window.ref(window.db, `contagemAtual/${chaveCicloContagemAtual()}`), null),
+                window.set(window.ref(window.db, "contagemStatusMaquinas"), null)
+            ]);
+        }
         aplicarResetGlobalContagem(resetInfo, false);
         historicoContagemPlanilhasCarregado = false;
         carregarHistoricoContagemPlanilhas(true);
@@ -11136,6 +11334,42 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
+const DEFAULT_SQL_API_BASE = (
+    location.protocol.startsWith("http") && location.hostname
+        ? `${location.protocol}//${location.hostname}:8765`
+        : "http://192.168.5.44:8765"
+);
+const SQL_API_BASE = (
+    new URLSearchParams(location.search).get("apiBase") ||
+    localStorage.getItem("darkJutsuApiBase") ||
+    window.DARK_JUTSU_API_BASE_URL ||
+    DEFAULT_SQL_API_BASE
+).replace(/\/+$/, "");
+const SQL_API_FALLBACK_BASES = [
+    SQL_API_BASE,
+    "http://192.168.5.38:8765"
+].filter((base, index, bases) => base && bases.indexOf(base) === index);
+const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
+
+window.sqlApi = async function(path, options = {}){
+    const headers = { ...(options.headers || {}) };
+    if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    if(SQL_API_TOKEN) headers.Authorization = `Bearer ${SQL_API_TOKEN}`;
+    let lastError = null;
+    for(const base of SQL_API_FALLBACK_BASES){
+        try{
+            const response = await fetch(`${base}${path}`, { ...options, headers });
+            const data = await response.json().catch(() => ({}));
+            if(!response.ok || data?.ok === false){
+                throw new Error(data?.error || `Falha HTTP ${response.status}`);
+            }
+            return data;
+        } catch(error){
+            lastError = error;
+        }
+    }
+    throw lastError || new Error("API SQL indisponivel.");
+};
 
 // auth secundario para criar usuarios sem trocar a sessao do admin
 const adminApp = initializeApp(firebaseConfig, "adminApp");
@@ -12602,6 +12836,18 @@ async function salvarOcorrencia(event){
 
 async function salvarOcorrenciaFirebase(id, ocorrencia){
     try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi("/api/occurrences", {
+                method: "POST",
+                body: JSON.stringify(ocorrencia)
+            });
+            setOcorrenciasStorageModo("sql");
+            return OCORRENCIAS_PRIMARY_PATH;
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao salvar ocorrencia no SQL; tentando Firebase:", sqlErr);
+    }
+    try{
         await set(ref(db, `${OCORRENCIAS_PRIMARY_PATH}/${id}`), ocorrencia);
         setOcorrenciasStorageModo("primary");
         return OCORRENCIAS_PRIMARY_PATH;
@@ -12614,6 +12860,22 @@ async function salvarOcorrenciaFirebase(id, ocorrencia){
         setOcorrenciasStorageModo("fallback");
         return OCORRENCIAS_FALLBACK_PATH;
     }
+}
+
+async function atualizarOcorrenciaStorage(id, storagePath, patch){
+    try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/occurrences/${encodeURIComponent(id)}`, {
+                method: "PATCH",
+                body: JSON.stringify(patch)
+            });
+            return "sql";
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao atualizar ocorrencia no SQL; tentando Firebase:", sqlErr);
+    }
+    await update(ref(db, storagePath), patch);
+    return "firebase";
 }
 
 async function atualizarStatusOcorrencia(id, status){
@@ -12631,19 +12893,20 @@ async function atualizarStatusOcorrencia(id, status){
     if(!usuario) return;
     const agora = Date.now();
     const storagePath = oc._storagePath || `${OCORRENCIAS_PRIMARY_PATH}/${id}`;
+    const patch = {
+        status,
+        atualizadoEm: agora,
+        atualizadoPor: usuario.uid,
+        [`historico/status_${agora}`]: {
+            em: agora,
+            porUid: usuario.uid,
+            porNome: window.meuNickname || usuario.email || "Usuario",
+            acao: "status",
+            valor: status
+        }
+    };
     try{
-        await update(ref(db, storagePath), {
-            status,
-            atualizadoEm: agora,
-            atualizadoPor: usuario.uid,
-            [`historico/status_${agora}`]: {
-                em: agora,
-                porUid: usuario.uid,
-                porNome: window.meuNickname || usuario.email || "Usuario",
-                acao: "status",
-                valor: status
-            }
-        });
+        await atualizarOcorrenciaStorage(id, storagePath, patch);
         mostrarNotificacao("Status da ocorrencia atualizado.");
     }catch(err){
         console.error("Erro ao atualizar status da ocorrencia:", err);
@@ -12660,23 +12923,24 @@ async function assumirTratativaOcorrencia(id){
     const identidade = identidadeTratativaOcorrencia();
     const agora = Date.now();
     const storagePath = oc._storagePath || `${OCORRENCIAS_PRIMARY_PATH}/${id}`;
+    const patch = {
+        responsavelUid: identidade.uid,
+        responsavelNome: identidade.nome,
+        responsavelCracha: identidade.cracha,
+        responsavelSetor: identidade.setor,
+        responsavelAtribuidoEm: agora,
+        atualizadoEm: agora,
+        atualizadoPor: identidade.uid,
+        [`historico/responsavel_${agora}`]: {
+            em: agora,
+            porUid: identidade.uid,
+            porNome: identidade.nome,
+            acao: "responsavel",
+            valor: identidade.nome
+        }
+    };
     try{
-        await update(ref(db, storagePath), {
-            responsavelUid: identidade.uid,
-            responsavelNome: identidade.nome,
-            responsavelCracha: identidade.cracha,
-            responsavelSetor: identidade.setor,
-            responsavelAtribuidoEm: agora,
-            atualizadoEm: agora,
-            atualizadoPor: identidade.uid,
-            [`historico/responsavel_${agora}`]: {
-                em: agora,
-                porUid: identidade.uid,
-                porNome: identidade.nome,
-                acao: "responsavel",
-                valor: identidade.nome
-            }
-        });
+        await atualizarOcorrenciaStorage(id, storagePath, patch);
         mostrarNotificacao("Responsavel atribuido.");
     }catch(err){
         console.error("Erro ao assumir ocorrencia:", err);
@@ -12700,36 +12964,37 @@ async function salvarTratativaOcorrencia(id){
     const agora = Date.now();
     const storagePath = oc._storagePath || `${OCORRENCIAS_PRIMARY_PATH}/${id}`;
     const statusTratado = STATUS_OCORRENCIA.includes("analisada") ? "analisada" : (STATUS_OCORRENCIA[0] || oc.status || "aberta");
-    try{
-        await update(ref(db, storagePath), {
-            responsavelUid: oc.responsavelUid || identidade.uid,
+    const patch = {
+        responsavelUid: oc.responsavelUid || identidade.uid,
+        responsavelNome: oc.responsavelNome || identidade.nome,
+        responsavelCracha: oc.responsavelCracha || identidade.cracha,
+        responsavelSetor: oc.responsavelSetor || identidade.setor,
+        tratativaRealizada: tratativa,
+        tratativaAssinatura: assinatura,
+        tratativaEm: agora,
+        tratativaPorUid: identidade.uid,
+        tratativaPorNome: identidade.nome,
+        documentoTratativa: {
+            tipo: "ocorrencia_almoxarifado",
+            geradoEm: agora,
+            ocorrenciaId: id,
             responsavelNome: oc.responsavelNome || identidade.nome,
-            responsavelCracha: oc.responsavelCracha || identidade.cracha,
-            responsavelSetor: oc.responsavelSetor || identidade.setor,
-            tratativaRealizada: tratativa,
-            tratativaAssinatura: assinatura,
-            tratativaEm: agora,
-            tratativaPorUid: identidade.uid,
-            tratativaPorNome: identidade.nome,
-            documentoTratativa: {
-                tipo: "ocorrencia_almoxarifado",
-                geradoEm: agora,
-                ocorrenciaId: id,
-                responsavelNome: oc.responsavelNome || identidade.nome,
-                tratativa,
-                assinatura
-            },
-            status: statusTratado,
-            atualizadoEm: agora,
-            atualizadoPor: identidade.uid,
-            [`historico/tratativa_${agora}`]: {
-                em: agora,
-                porUid: identidade.uid,
-                porNome: identidade.nome,
-                acao: "tratativa",
-                valor: statusTratado
-            }
-        });
+            tratativa,
+            assinatura
+        },
+        status: statusTratado,
+        atualizadoEm: agora,
+        atualizadoPor: identidade.uid,
+        [`historico/tratativa_${agora}`]: {
+            em: agora,
+            porUid: identidade.uid,
+            porNome: identidade.nome,
+            acao: "tratativa",
+            valor: statusTratado
+        }
+    };
+    try{
+        await atualizarOcorrenciaStorage(id, storagePath, patch);
         mostrarNotificacao("Tratativa registrada e assinada.");
     }catch(err){
         console.error("Erro ao salvar tratativa:", err);
@@ -13361,6 +13626,17 @@ async function persistirLeituraSala(roomId, timestamp = Date.now()){
     saveReadStateForUid(uid);
     recalcularUnreadCounts();
     try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi("/api/chat/read-state", {
+                method: "PUT",
+                body: JSON.stringify({ user_id: uid, room_id: roomId, timestamp: nextTs })
+            });
+            return;
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao persistir leitura no SQL; tentando Firebase:", sqlErr);
+    }
+    try{
         await set(ref(db, `chatReadState/${uid}/${roomId}`), nextTs);
     }catch(e){}
 }
@@ -13892,7 +14168,7 @@ async function limparMensagensSala(){
 window.limparMensagensSala = limparMensagensSala;
 
 // Sobrescreve a função de enviar chat para usar Firebase
-window.enviarMensagem = function() {
+window.enviarMensagem = async function() {
     if(privateRoomGateState && privateRoomGateState.roomId === salaAtual) return;
     let input = document.getElementById("chatInput");
     let texto = input.value.trim();
@@ -13904,13 +14180,28 @@ window.enviarMensagem = function() {
     }
 
     setDigitando(salaAtual, false);
-    const novaMsgRef = push(getChatRef(salaAtual));
-    set(novaMsgRef, {
+    const payload = {
         nome: window.meuNickname,
         texto: texto,
         data: new Date().toLocaleTimeString(), // Apenas hora no chat fica mais limpo
-        timestamp: Date.now()
-    });
+        timestamp: Date.now(),
+        uid: auth.currentUser?.uid || "",
+        sessionId: chatSessionState?.sessionId || ""
+    };
+    try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(salaAtual)}/messages`, {
+                method: "POST",
+                body: JSON.stringify(payload)
+            });
+        }else{
+            throw new Error("API SQL indisponivel.");
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao enviar mensagem no SQL; tentando Firebase:", sqlErr);
+        const novaMsgRef = push(getChatRef(salaAtual));
+        await set(novaMsgRef, payload);
+    }
 
     input.value = "";
     persistirLeituraSala(salaAtual, Date.now());

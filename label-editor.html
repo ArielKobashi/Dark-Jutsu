@@ -980,8 +980,44 @@
         const auth = getAuth(app);
         const db = getDatabase(app);
         const configRef = ref(db, window.etiquetaEditorFirebaseConfigPath || "estoqueGlobal/configuracoesEtiquetas");
+        const DEFAULT_SQL_API_BASE = (
+            location.protocol.startsWith("http") && location.hostname
+                ? `${location.protocol}//${location.hostname}:8765`
+                : "http://192.168.5.44:8765"
+        );
+        const SQL_API_BASE = (
+            new URLSearchParams(location.search).get("apiBase") ||
+            localStorage.getItem("darkJutsuApiBase") ||
+            window.DARK_JUTSU_API_BASE_URL ||
+            DEFAULT_SQL_API_BASE
+        ).replace(/\/+$/, "");
+        const SQL_API_FALLBACK_BASES = [
+            SQL_API_BASE,
+            "http://192.168.5.38:8765"
+        ].filter((base, index, bases) => base && bases.indexOf(base) === index);
+        const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
         let timerSalvarCompartilhado = null;
         let usuarioCompartilhado = "";
+
+        async function sqlApi(path, options = {}){
+            const headers = { ...(options.headers || {}) };
+            if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+            if(SQL_API_TOKEN) headers.Authorization = `Bearer ${SQL_API_TOKEN}`;
+            let lastError = null;
+            for(const base of SQL_API_FALLBACK_BASES){
+                try{
+                    const response = await fetch(`${base}${path}`, { ...options, headers });
+                    const data = await response.json().catch(() => ({}));
+                    if(!response.ok || data?.ok === false){
+                        throw new Error(data?.error || `Falha HTTP ${response.status}`);
+                    }
+                    return data;
+                } catch(error){
+                    lastError = error;
+                }
+            }
+            throw lastError || new Error("API SQL indisponivel.");
+        }
 
         try{
             await setPersistence(auth, browserSessionPersistence);
@@ -1005,6 +1041,15 @@
             const config = window.getEtiquetaEditorConfigCompartilhada();
             config.atualizadoPor = usuarioCompartilhado || (auth.currentUser.email || "").split("@")[0] || auth.currentUser.uid;
             try{
+                await sqlApi("/api/settings/label.config", {
+                    method: "PUT",
+                    body: JSON.stringify({ value: config })
+                });
+                return;
+            }catch(sqlErr){
+                console.warn("Nao foi possivel salvar layout compartilhado no SQL; tentando Firebase:", sqlErr);
+            }
+            try{
                 await set(configRef, config);
             }catch(e){
                 console.warn("Nao foi possivel salvar layout compartilhado das etiquetas:", e);
@@ -1019,6 +1064,15 @@
         onAuthStateChanged(auth, async user => {
             if(!user) return;
             usuarioCompartilhado = await carregarNomeUsuario(user);
+            try{
+                const data = await sqlApi("/api/settings/label.config");
+                if(data?.setting?.value && typeof window.aplicarEtiquetaEditorConfigCompartilhada === "function"){
+                    window.aplicarEtiquetaEditorConfigCompartilhada(data.setting.value);
+                    return;
+                }
+            }catch(sqlErr){
+                console.warn("Nao foi possivel carregar layout compartilhado do SQL; tentando Firebase:", sqlErr);
+            }
             try{
                 const snap = await get(configRef);
                 if(snap.exists() && typeof window.aplicarEtiquetaEditorConfigCompartilhada === "function"){

@@ -763,24 +763,41 @@
         let mata111Cache = null;
         let mata112Cache = null;
         let historicoCooperatCache = null;
+        const DEFAULT_SQL_API_BASE = (
+            location.protocol.startsWith("http") && location.hostname
+                ? `${location.protocol}//${location.hostname}:8765`
+                : "http://192.168.5.44:8765"
+        );
         const SQL_API_BASE = (
             params.get("apiBase") ||
             localStorage.getItem("darkJutsuApiBase") ||
             window.DARK_JUTSU_API_BASE_URL ||
-            "http://127.0.0.1:8765"
+            DEFAULT_SQL_API_BASE
         ).replace(/\/+$/, "");
+        const SQL_API_FALLBACK_BASES = [
+            SQL_API_BASE,
+            "http://192.168.5.38:8765"
+        ].filter((base, index, bases) => base && bases.indexOf(base) === index);
         const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
 
         async function sqlApi(path, options = {}){
             const headers = { ...(options.headers || {}) };
             if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
             if(SQL_API_TOKEN) headers.Authorization = `Bearer ${SQL_API_TOKEN}`;
-            const response = await fetch(`${SQL_API_BASE}${path}`, { ...options, headers });
-            const data = await response.json().catch(() => ({}));
-            if(!response.ok || data?.ok === false){
-                throw new Error(data?.error || `Falha HTTP ${response.status}`);
+            let lastError = null;
+            for(const base of SQL_API_FALLBACK_BASES){
+                try{
+                    const response = await fetch(`${base}${path}`, { ...options, headers });
+                    const data = await response.json().catch(() => ({}));
+                    if(!response.ok || data?.ok === false){
+                        throw new Error(data?.error || `Falha HTTP ${response.status}`);
+                    }
+                    return data;
+                } catch(error){
+                    lastError = error;
+                }
             }
-            return data;
+            throw lastError || new Error("API SQL indisponivel.");
         }
 
         function parametroPermitido(valor, permitidos, padrao){

@@ -102,6 +102,14 @@ Endpoints iniciais por area:
 - `GET /api/inventory`
 - `PATCH /api/inventory/items/:code/adjustments`
 - `POST /api/inventory/import`
+- `GET /api/users`
+- `PATCH /api/users/:id`
+- `POST /api/users/:id/ban`
+- `POST /api/users/:id/reset-password`
+- `GET /api/signup-requests`
+- `PATCH /api/signup-requests/:id`
+- `POST /api/signup-requests/:id/approve`
+- `DELETE /api/banned-users/:id`
 - `GET /api/counting/sessions`
 - `POST /api/counting/records`
 - `GET /api/dashboard`
@@ -113,6 +121,15 @@ Endpoints iniciais por area:
 - `POST /api/chat/rooms/:room/messages`
 
 No primeiro ciclo, a API pode aceitar payloads parecidos com os atuais para reduzir alteracoes no frontend.
+
+Status em 2026-07-01:
+
+- API local ja cobre leituras principais, dashboard, ocorrencias, chat, etiquetas e administracao inicial de usuarios/cadastro/banidos.
+- `index.html` e `dashboard.html` ja tentam SQL primeiro em varios fluxos administrativos e mantem Firebase como fallback de transicao.
+- A aprovacao de cadastro ainda depende do Firebase Auth para criar o `uid`; depois disso o SQL recebe `POST /api/signup-requests/:id/approve`.
+- Contagens agora tem escrita SQL inicial para sessoes finalizadas, rascunhos, status de maquinas e reset global.
+- O editor de etiquetas salva/carrega a configuracao compartilhada em `app_settings` via `PUT /api/settings/label.config`.
+- O publicador do Automus tenta gravar o manifesto em `automus_releases` via `PUT /api/automus/releases/latest`.
 
 ### Fase 4: Migração de dados
 
@@ -996,6 +1013,9 @@ Resultado da primeira API SQL local:
 - Endpoints iniciais testados: `/health`, `/api/inventory`, `/api/chat/rooms`, `/api/automus/releases/latest`
 - Endpoints de leitura ampliados: usuarios, solicitacoes, banidos, contagens, etiquetas e configuracoes
 - Primeiras escritas SQL implementadas e testadas: `PUT /api/dashboard/panels/{id}` e `PUT /api/dashboard/evaluations/{legacyKey}`
+- Escritas de ocorrencias implementadas e testadas: `POST /api/occurrences` e `PATCH /api/occurrences/{id}`
+- Escritas de chat implementadas e testadas: `POST /api/chat/rooms/{roomId}/messages` e `PUT /api/chat/read-state`
+- Escrita de etiquetas implementada e testada: `POST /api/labels/jobs`
 - Papel: ponte inicial para substituir leituras Firebase por leituras SQL antes das escritas e da autenticacao final.
 
 Comandos da proxima etapa:

@@ -1,6 +1,6 @@
 # Analise de termino da integracao Firebase -> SQL
 
-Data: 2026-06-30
+Data: 2026-07-01
 
 ## Estado atual
 
@@ -31,22 +31,40 @@ Concluido:
 | Estoque | `GET /api/inventory` | testado |
 | Estoque | `GET /api/inventory/{codigo}` | implementado |
 | Usuarios | `GET /api/users` | testado |
+| Usuarios | `PATCH /api/users/{id}` | testado |
+| Usuarios | `POST /api/users/{id}/ban` | testado |
+| Usuarios | `POST /api/users/{id}/reset-password` | testado |
 | Cadastro | `GET /api/signup-requests` | testado |
+| Cadastro | `PATCH /api/signup-requests/{id}` | testado |
+| Cadastro | `POST /api/signup-requests/{id}/approve` | testado |
 | Banidos | `GET /api/banned-users` | implementado |
+| Banidos | `DELETE /api/banned-users/{id}` | testado |
 | Dashboard | `GET /api/dashboard` | implementado |
 | Dashboard | `PUT /api/dashboard/panels/{id}` | testado |
 | Dashboard | `PUT /api/dashboard/evaluations/{legacyKey}` | testado |
 | Contagens | `GET /api/counting/sessions` | testado |
+| Contagens | `POST /api/counting/sessions` | testado |
 | Contagens | `GET /api/counting/sessions/{sessionId}/items` | implementado |
 | Contagens | `GET /api/counting/drafts` | implementado |
+| Contagens | `PUT /api/counting/drafts` | testado |
+| Contagens | `DELETE /api/counting/drafts/{uid}` | testado |
 | Contagens | `GET /api/counting/machine-status` | implementado |
+| Contagens | `PUT /api/counting/machine-status` | testado |
+| Contagens | `POST /api/counting/reset` | implementado; nao disparado em teste real por ser destrutivo |
 | Etiquetas | `GET /api/labels/jobs` | testado |
+| Etiquetas | `POST /api/labels/jobs` | testado |
 | Configuracoes | `GET /api/settings/{key}` | testado |
+| Configuracoes | `PUT /api/settings/{key}` | testado |
 | Cooperat | `GET /api/cooperat/history/{codigo}` | implementado |
 | Ocorrencias | `GET /api/occurrences` | implementado |
+| Ocorrencias | `POST /api/occurrences` | testado |
+| Ocorrencias | `PATCH /api/occurrences/{id}` | testado |
 | Chat | `GET /api/chat/rooms` | testado |
 | Chat | `GET /api/chat/rooms/{roomId}/messages` | implementado |
+| Chat | `POST /api/chat/rooms/{roomId}/messages` | testado |
+| Chat | `PUT /api/chat/read-state` | testado |
 | Automus | `GET /api/automus/releases/{channel}` | testado |
+| Automus | `PUT /api/automus/releases/{channel}` | testado |
 
 ## O que ainda falta para terminar a integracao
 
@@ -71,26 +89,26 @@ O banco ja tem tabelas, mas o frontend e o Automus ainda escrevem no Firebase. P
 | `estoqueGlobal` | atualizar estoque pelo Automus, aplicar ajustes manuais, salvar `configContagem`, criar backup/snapshot |
 | `dashboardConfig/paineis` | pronto na API inicial; falta trocar frontend |
 | `dashboardConfig/avaliadorPedidos` | pronto na API inicial; falta trocar frontend |
-| `usuarios` | aprovar solicitacao, alterar nivel, ativar/desativar, resetar status de senha |
-| `solicitacoesCadastro` | criar solicitacao, aprovar, rejeitar, remover duplicadas |
-| `usuariosBanidos` | banir/desbanir |
+| `usuarios` | admin inicial pronto: aprovar solicitacao, alterar nivel, ativar/desativar, banir e resetar status de senha tentam SQL antes do Firebase; falta login/API auth real e criacao publica |
+| `solicitacoesCadastro` | aprovar/rejeitar pronto no admin; falta criar solicitacao publica e remover duplicadas via SQL |
+| `usuariosBanidos` | banir/apagar banido pronto no admin; falta revisar fluxo final de reativacao/desbanimento apos corte Firebase |
 | `nicknames*` | substituir por constraints/consultas SQL e endpoints de validacao |
-| `contagens` | criar sessao, gravar itens contados, verificacoes vazias e sessoes importadas |
-| `contagemAtual` | salvar progresso vivo ou substituir por WebSocket/SSE/TTL |
-| `contagemRascunhos` | salvar/remover rascunhos |
-| `contagemStatusMaquinas` | salvar status/progresso por maquina |
-| `contagemControle/resetGlobal` | registrar evento administrativo de reset |
-| `etiquetasGeradas` | registrar job de etiqueta |
-| `rankingEtiquetas` | recalcular via SQL/view em vez de transacao Firebase |
-| `ocorrencias` | criar, atribuir, atualizar status, tratar, anexar historico |
+| `contagens` | finalizacao de sessao pronta na API e frontend tenta SQL antes do Firebase; faltam leituras historicas totalmente por SQL e correcao/movimento de historico entre usuarios |
+| `contagemAtual` | rascunho/progresso principal vai para SQL; falta tempo real por SSE/WebSocket para substituir `onValue` |
+| `contagemRascunhos` | salvar/remover rascunhos pronto na API e frontend tenta SQL antes do Firebase |
+| `contagemStatusMaquinas` | salvar status/progresso pronto na API e frontend tenta SQL antes do Firebase |
+| `contagemControle/resetGlobal` | endpoint SQL implementado e frontend tenta SQL; teste destrutivo final deve ser feito em janela combinada |
+| `etiquetasGeradas` | pronto na API inicial; frontend tenta SQL antes do fallback Firebase |
+| `rankingEtiquetas` | substituir por query/view SQL; evento base ja vai para `label_print_jobs` |
+| `ocorrencias` | pronto na API inicial para criar/atualizar/tratar com historico; falta validar autenticacao final |
 | `dashboardConfig/ocorrenciasCampos` | salvar listas de campos |
 | `dashboardConfig/ocorrenciasAvaliadorSenha` | trocar por hash/segredo controlado na API |
-| `chatRooms/*/messages` | enviar mensagem |
-| `chatReadState` | atualizar leitura |
+| `chatRooms/*/messages` | pronto na API inicial; frontend tenta SQL antes do fallback Firebase |
+| `chatReadState` | pronto na API inicial; frontend tenta SQL antes do fallback Firebase |
 | `chatRooms/*/typing` | substituir por dado transitorio via WebSocket/SSE/TTL |
 | `chatRooms/*/senha` | criar/alterar senha com hash, nunca texto puro |
-| `estoqueGlobal/configuracoesEtiquetas` | salvar configuracao do editor de etiquetas |
-| `automus/releases/latest` | publicar manifest de release via API/SQL |
+| `estoqueGlobal/configuracoesEtiquetas` | `label-editor.html` salva/carrega `label.config` no SQL primeiro; fallback Firebase mantido |
+| `automus/releases/latest` | publicar manifest via API/SQL pronto; script de preparo tenta SQL automaticamente quando a API esta ativa |
 
 ### 3. Troca do frontend para API
 
@@ -113,9 +131,9 @@ Falta criar uma camada JS de dados, por exemplo `api-client.js`, e substituir po
    - dashboard panels;
    - avaliador;
    - ocorrencias;
-   - usuarios.
+   - usuarios/cadastro admin: primeira versao implementada.
 3. Escritas operacionais:
-   - contagens;
+   - contagens: primeira versao de escrita implementada;
    - etiquetas;
    - chat;
    - estoque/Automus.
@@ -173,19 +191,22 @@ Antes de desligar escrita no Firebase:
 
 ## Proxima implementacao recomendada
 
-Comecar pelos endpoints de escrita de menor risco:
+Fluxos de escrita de menor risco ja implementados:
 
 1. `PUT /api/dashboard/panels/{id}`: implementado e testado.
 2. `PUT /api/dashboard/evaluations/{legacyKey}`: implementado e testado.
-3. `POST /api/occurrences`
-4. `PATCH /api/occurrences/{id}`
-5. `POST /api/chat/rooms/{roomId}/messages`
+3. `POST /api/occurrences`: implementado e testado.
+4. `PATCH /api/occurrences/{id}`: implementado e testado.
+5. `POST /api/chat/rooms/{roomId}/messages`: implementado e testado.
+6. `POST /api/labels/jobs`: implementado e testado.
+7. Endpoints admin de usuarios/cadastro/banidos: implementados e testados.
 
-Depois ir para os fluxos grandes:
+Proximos fluxos grandes:
 
 1. `POST /api/counting/sessions`
-2. `POST /api/labels/jobs`
-3. `POST /api/inventory/automus-update`
+2. `POST /api/inventory/automus-update`
+3. endpoints de criacao publica de cadastro e validacao de nickname
+4. leituras historicas de contagem 100% SQL no frontend
 
 ## Como ajudar a descobrir o restante
 
