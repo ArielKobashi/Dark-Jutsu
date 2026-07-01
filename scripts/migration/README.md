@@ -4,7 +4,8 @@ Incrementos implementados:
 
 - dominio `cooperat` com dry-run, apply SQL e integridade;
 - extrator Firebase REST para snapshots raw;
-- dominio `inventory` em modo inspect/dry-run para o snapshot `estoqueGlobal`.
+- dominio `inventory` em modo inspect/dry-run para o snapshot `estoqueGlobal`;
+- dominios `users`, `dashboard`, `counting`, `occurrences`, `chat` e `automus` com apply SQL e integridade.
 
 ## Modos
 
@@ -67,6 +68,90 @@ $env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_ju
 C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain inventory --run-id inventory_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
 ```
 
+Aplicar usuarios, solicitacoes e banidos no PostgreSQL local portatil:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain users --mode apply --run-id users_apply_local_initial --source "C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json" --sample-size 20
+```
+
+Verificar integridade users raw-vs-SQL:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain users --run-id users_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Aplicar dashboard/avaliador no PostgreSQL local portatil:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain dashboard --mode apply --run-id dashboard_apply_local_initial --source "C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json" --sample-size 20
+```
+
+Verificar integridade dashboard raw-vs-SQL:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain dashboard --run-id dashboard_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Aplicar contagens/etiquetas no PostgreSQL local portatil:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain counting --mode apply --run-id counting_apply_local_initial --source "C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json" --sample-size 20
+```
+
+Verificar integridade counting raw-vs-SQL:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain counting --run-id counting_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Aplicar ocorrencias no PostgreSQL local portatil:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain occurrences --mode apply --run-id occurrences_apply_local_initial --source "C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json" --sample-size 20
+```
+
+Verificar integridade occurrences raw-vs-SQL:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain occurrences --run-id occurrences_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Aplicar chat no PostgreSQL local portatil:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain chat --mode apply --run-id chat_apply_local_initial --source "C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json" --sample-size 20
+```
+
+Verificar integridade chat raw-vs-SQL:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain chat --run-id chat_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Aplicar Automus no PostgreSQL local portatil:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain automus --mode apply --run-id automus_apply_local_initial --source "C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json" --sample-size 20
+```
+
+Verificar integridade Automus raw-vs-SQL:
+
+```powershell
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain automus --run-id automus_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
 ## Saidas
 
 Cada execucao gera:
@@ -84,6 +169,42 @@ _migration_runs/<run-id>/
   reports/integrity-inventory.json
   reports/integrity-inventory.md
   reports/integrity-inventory-differences.jsonl
+  raw/users-domain.json
+  reports/users-summary.json
+  reports/users-summary.md
+  reports/integrity-users.json
+  reports/integrity-users.md
+  reports/integrity-users-differences.jsonl
+  raw/dashboardConfig.json
+  reports/dashboard-summary.json
+  reports/dashboard-summary.md
+  reports/integrity-dashboard.json
+  reports/integrity-dashboard.md
+  reports/integrity-dashboard-differences.jsonl
+  raw/counting-domain.json
+  reports/counting-summary.json
+  reports/counting-summary.md
+  reports/integrity-counting.json
+  reports/integrity-counting.md
+  reports/integrity-counting-differences.jsonl
+  raw/occurrences-domain.json
+  reports/occurrences-summary.json
+  reports/occurrences-summary.md
+  reports/integrity-occurrences.json
+  reports/integrity-occurrences.md
+  reports/integrity-occurrences-differences.jsonl
+  raw/chat-domain.json
+  reports/chat-summary.json
+  reports/chat-summary.md
+  reports/integrity-chat.json
+  reports/integrity-chat.md
+  reports/integrity-chat-differences.jsonl
+  raw/automus-domain.json
+  reports/automus-summary.json
+  reports/automus-summary.md
+  reports/integrity-automus.json
+  reports/integrity-automus.md
+  reports/integrity-automus-differences.jsonl
   reports/integrity-cooperat.json
   reports/integrity-cooperat.md
   reports/integrity-differences.jsonl
@@ -121,10 +242,26 @@ Implementado:
 - suporte a export completo do Realtime Database como origem para `inventory`.
 - carga SQL de `inventory_items`, `inventory_item_addresses`, `inventory_item_limits`, `inventory_adjustments`, `inventory_balance_history`, `inventory_movements` e `inventory_snapshots`;
 - verificador de integridade Inventory em modo raw-only e raw-vs-SQL.
+- carga SQL de `users`, `signup_requests` e `banned_users`;
+- reconciliacao dos caminhos `solicitacoesCadastro` e `solicitaçõesCadastro`;
+- sanitizacao de senhas legadas em `raw_data` e bloqueio de senha pura em `signup_requests.password_plain_legacy`;
+- verificador de integridade Users em modo raw-only e raw-vs-SQL.
+- carga SQL de `dashboard_panels`, `purchase_evaluations` e `app_settings` para `occurrences.fields`;
+- verificador de integridade Dashboard em modo raw-only e raw-vs-SQL.
+- carga SQL de `counting_sessions`, `counting_items`, `counting_empty_checks`, `counting_drafts`, `counting_machine_status`, `label_print_jobs` e `label_user_ranking`;
+- verificador de integridade Counting em modo raw-only e raw-vs-SQL.
+- carga SQL de `occurrences` e `occurrence_history`;
+- deduplicacao entre `ocorrencias` e fallback `chatGlobal/ocorrencias`;
+- verificador de integridade Occurrences em modo raw-only e raw-vs-SQL.
+- carga SQL de `chat_rooms`, `chat_messages` e `chat_read_states`;
+- migracao de `chatGlobal` legado para sala sintetica `chatGlobal`;
+- hash para senhas de salas privadas e sanitizacao de `raw_data`;
+- verificador de integridade Chat em modo raw-only e raw-vs-SQL.
+- carga SQL de `automus_releases`;
+- verificador de integridade Automus em modo raw-only e raw-vs-SQL.
 
 Pendente:
 
-- instalar driver PostgreSQL para `apply`;
-- subir PostgreSQL para testar `apply`;
-- rodar integridade Cooperat em modo raw-vs-SQL;
-- criar cargas SQL para `users`, `dashboard`, `counting`, `occurrences`, `labels`, `chat` e `automus`.
+- criar API backend e trocar o frontend para ler/escrever via API;
+- adaptar Automus para enviar atualizacoes ao SQL/API em vez de Firebase;
+- preparar etapa de escrita dupla ou corte controlado antes de producao.

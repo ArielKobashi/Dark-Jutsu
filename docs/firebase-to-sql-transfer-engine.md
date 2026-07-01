@@ -49,7 +49,12 @@ Status por dominio:
 | --- | --- | --- | --- | --- |
 | `cooperat` | via arquivo local ou Firebase exportado | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
 | `inventory` | pronto via `extract_firebase.py --path estoqueGlobal` ou export completo | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
-| demais dominios | pronto como export raw | pendente | pendente | pendente |
+| `users` | pronto via export completo | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
+| `dashboard` | pronto via export completo | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
+| `counting` | pronto via export completo | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
+| `occurrences` | pronto via export completo | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
+| `chat` | pronto via export completo | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
+| `automus` | pronto via export completo | pronto | executado no PostgreSQL local | raw-only e raw-vs-SQL prontos, `0` findings |
 
 O inspetor de `inventory` aceita dois formatos de origem:
 
@@ -533,6 +538,188 @@ Resultado:
 - findings: `0`
 - status: `ok`
 
+## Resultado users SQL local
+
+Carga executada:
+
+```powershell
+$env:DATABASE_URL='postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu'
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain users --mode apply --run-id users_apply_local_initial --source 'C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json' --sample-size 20
+```
+
+Resultado:
+
+- `run_id`: `users_apply_local_initial`
+- usuarios carregados: `25`
+- usuarios banidos carregados: `12`
+- solicitacoes carregadas: `47`
+- `solicitacoesCadastro`: `30`
+- `solicitaçõesCadastro`: `17`
+- senhas puras em `signup_requests.password_plain_legacy`: `0`
+- senhas legadas nao sanitizadas em `users.raw_data`: `0`
+- senhas nao sanitizadas em `signup_requests.raw_data`: `0`
+
+Integridade pos-migracao:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain users --run-id users_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Resultado:
+
+- modo: `raw-vs-sql`
+- findings: `0`
+- status: `ok`
+
+## Resultado dashboard SQL local
+
+Carga executada:
+
+```powershell
+$env:DATABASE_URL='postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu'
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain dashboard --mode apply --run-id dashboard_apply_local_initial --source 'C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json' --sample-size 20
+```
+
+Resultado:
+
+- `run_id`: `dashboard_apply_local_initial`
+- `dashboard_panels`: `5`
+- `purchase_evaluations`: `11`
+- `app_settings`: `1`
+- configuracao carregada: `occurrences.fields`
+
+Integridade pos-migracao:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain dashboard --run-id dashboard_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Resultado:
+
+- modo: `raw-vs-sql`
+- findings: `0`
+- status: `ok`
+
+## Resultado counting SQL local
+
+Carga executada:
+
+```powershell
+$env:DATABASE_URL='postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu'
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain counting --mode apply --run-id counting_apply_local_initial --source 'C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json' --sample-size 20
+```
+
+Resultado:
+
+- `run_id`: `counting_apply_local_initial`
+- `counting_sessions`: `20`
+- `counting_items`: `3557`
+- `counting_empty_checks`: `410`
+- `counting_drafts`: `1`
+- `counting_machine_status`: `16`
+- `label_print_jobs`: `20`
+- `label_user_ranking`: `0`, ausente no export
+
+Integridade pos-migracao:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain counting --run-id counting_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Resultado:
+
+- modo: `raw-vs-sql`
+- findings: `0`
+- status: `ok`
+
+## Resultado occurrences SQL local
+
+Carga executada:
+
+```powershell
+$env:DATABASE_URL='postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu'
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain occurrences --mode apply --run-id occurrences_apply_local_initial --source 'C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json' --sample-size 20
+```
+
+Resultado:
+
+- `run_id`: `occurrences_apply_local_initial`
+- `occurrences`: `7`
+- `occurrence_history`: `11`
+- fallback `chatGlobal/ocorrencias`: `0`, ausente neste export
+
+Integridade pos-migracao:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain occurrences --run-id occurrences_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Resultado:
+
+- modo: `raw-vs-sql`
+- findings: `0`
+- status: `ok`
+
+## Resultado chat SQL local
+
+Carga executada:
+
+```powershell
+$env:DATABASE_URL='postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu'
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain chat --mode apply --run-id chat_apply_local_initial --source 'C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json' --sample-size 20
+```
+
+Resultado:
+
+- `run_id`: `chat_apply_local_initial`
+- `chat_rooms`: `4`, incluindo a sala legada sintetica `chatGlobal`
+- `chat_messages`: `227`
+- `chat_read_states`: `14`
+- salas privadas com senha migrada para hash: `2`
+- mensagens legadas de `chatGlobal`: `100`
+- senhas em texto aberto em `chat_rooms.raw_data`: `0`
+
+Integridade pos-migracao:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain chat --run-id chat_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Resultado:
+
+- modo: `raw-vs-sql`
+- findings: `0`
+- status: `ok`
+
+## Resultado Automus SQL local
+
+Carga executada:
+
+```powershell
+$env:DATABASE_URL='postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu'
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py transfer --domain automus --mode apply --run-id automus_apply_local_initial --source 'C:\Users\Davi.souza\Desktop\chat-fiasul-default-rtdb-export.json' --sample-size 20
+```
+
+Resultado:
+
+- `run_id`: `automus_apply_local_initial`
+- `automus_releases`: `1`
+- canal carregado: `latest`
+- versao: `1.1.1`
+- manifesto com `sha256`: `1`
+
+Integridade pos-migracao:
+
+```powershell
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\integrity_check.py --domain automus --run-id automus_apply_local_initial --database-url $env:DATABASE_URL --fail-on high
+```
+
+Resultado:
+
+- modo: `raw-vs-sql`
+- findings: `0`
+- status: `ok`
+
 ## Criterio de pronto do motor
 
 - Roda em modo `dry-run` e `apply`.
@@ -544,3 +731,11 @@ Resultado:
 - Nao imprime segredos.
 - Usa `app.role='service'` no SQL.
 - Permite retomar lote grande sem duplicar dados.
+
+## Integracao API/frontend
+
+A migracao dos dados do export Firebase para SQL esta completa no ambiente local. A etapa seguinte e trocar consumidores para a API SQL.
+
+Documento de acompanhamento:
+
+- [sql-integration-gap-analysis.md](sql-integration-gap-analysis.md)

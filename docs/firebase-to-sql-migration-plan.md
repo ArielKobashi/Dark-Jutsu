@@ -309,6 +309,7 @@ Para a matriz direta endereco Firebase -> arquivo raiz -> destino SQL/API, use t
 - [firebase-address-traceability.md](firebase-address-traceability.md)
 - [firebase-to-sql-transfer-engine.md](firebase-to-sql-transfer-engine.md)
 - [post-migration-integrity-checker.md](post-migration-integrity-checker.md)
+- [sql-integration-gap-analysis.md](sql-integration-gap-analysis.md)
 
 ### Resumo por caminho
 
@@ -922,13 +923,86 @@ Nos principais encontrados no export completo:
 | `usuarios` | `25` usuarios/chaves |
 | `usuariosBanidos` | `12` usuarios/chaves |
 
+Resultado da carga de usuarios no SQL local:
+
+- Run: `users_apply_local_initial`
+- `users`: `25`
+- `signup_requests`: `47`
+- `banned_users`: `12`
+- `solicitacoesCadastro`: `30`
+- `solicitaçõesCadastro`: `17`, caminho legado/acento preservado em `raw_data.source_path`
+- `signup_requests.password_plain_legacy`: `0` registros preenchidos
+- Senhas legadas em `raw_data`: sanitizadas como `[redacted]`
+- Integridade users raw-vs-SQL: `0` findings
+
+Resultado da carga de dashboard/avaliador no SQL local:
+
+- Run: `dashboard_apply_local_initial`
+- `dashboard_panels`: `5`
+- `purchase_evaluations`: `11`
+- `app_settings`: `1`
+- Configuracao carregada em `app_settings`: `occurrences.fields`
+- Integridade dashboard raw-vs-SQL: `0` findings
+
+Resultado da carga de contagens/etiquetas no SQL local:
+
+- Run: `counting_apply_local_initial`
+- `counting_sessions`: `20`
+- `counting_items`: `3557`
+- `counting_empty_checks`: `410`
+- `counting_drafts`: `1`
+- `counting_machine_status`: `16`
+- `label_print_jobs`: `20`
+- `label_user_ranking`: `0`, ausente no export
+- `etiquetasGeradas`: ausente no export; eventos de etiqueta vieram de `contagens/*/*/_etiquetas`
+- `rankingEtiquetas`: ausente no export
+- Integridade counting raw-vs-SQL: `0` findings
+
+Resultado da carga de ocorrencias no SQL local:
+
+- Run: `occurrences_apply_local_initial`
+- `occurrences`: `7`
+- `occurrence_history`: `11`
+- `chatGlobal/ocorrencias`: `0`, ausente no export
+- Integridade occurrences raw-vs-SQL: `0` findings
+
+Resultado da carga de chat no SQL local:
+
+- Run: `chat_apply_local_initial`
+- `chat_rooms`: `4`, incluindo a sala sintetica `chatGlobal` para mensagens legadas
+- `chat_messages`: `227`
+- `chat_read_states`: `14`
+- salas privadas com senha migrada para hash: `2`
+- mensagens legadas de `chatGlobal`: `100`
+- senhas em texto aberto em `chat_rooms.raw_data`: `0`
+- Integridade chat raw-vs-SQL: `0` findings
+
+Resultado da carga Automus no SQL local:
+
+- Run: `automus_apply_local_initial`
+- `automus_releases`: `1`
+- canal carregado: `latest`
+- versao: `1.1.1`
+- manifesto com `sha256`: `1`
+- Integridade Automus raw-vs-SQL: `0` findings
+
+Resultado da primeira API SQL local:
+
+- Arquivo: `api/dark_jutsu_api.py`
+- Atalho de inicio: `api/iniciar_api.bat`
+- Atalho de status: `api/status_api.bat`
+- Atalho de parada: `api/parar_api.bat`
+- URL local: `http://127.0.0.1:8765`
+- Endpoints iniciais testados: `/health`, `/api/inventory`, `/api/chat/rooms`, `/api/automus/releases/latest`
+- Endpoints de leitura ampliados: usuarios, solicitacoes, banidos, contagens, etiquetas e configuracoes
+- Primeiras escritas SQL implementadas e testadas: `PUT /api/dashboard/panels/{id}` e `PUT /api/dashboard/evaluations/{legacyKey}`
+- Papel: ponte inicial para substituir leituras Firebase por leituras SQL antes das escritas e da autenticacao final.
+
 Comandos da proxima etapa:
 
 ```powershell
-$env:FIREBASE_DATABASE_URL="https://<projeto>.firebaseio.com"
-$env:FIREBASE_ID_TOKEN="<id-token>"
-C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\extract_firebase.py --run-id firebase_inventory_initial --path estoqueGlobal
-C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe scripts\migration\run_transfer.py inspect --domain inventory --run-id firebase_inventory_initial --source _migration_runs\firebase_inventory_initial\raw\estoqueGlobal.json
+$env:DATABASE_URL="postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
+C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe api\dark_jutsu_api.py
 ```
 
 ## Criterios de sucesso

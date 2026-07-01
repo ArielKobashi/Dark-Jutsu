@@ -12,6 +12,36 @@ Ambiente validado em `2026-06-29` usando os binarios em:
 C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql
 ```
 
+Uso diario:
+
+Interface em janela Python:
+
+```powershell
+db\abrir_sql_janela.bat
+```
+
+Na janela, use os botoes `Iniciar`, `Parar`, `Reiniciar`, `Status` e `Verificar`.
+O `.bat` chama `db\abrir_sql_janela.ps1`, que localiza automaticamente o Python portatil `WPy64-3.13.12.0`.
+
+Atalhos diretos:
+
+```powershell
+db\iniciar_sql.bat
+db\parar_sql.bat
+db\status_sql.bat
+db\verificar_sql.bat
+```
+
+Ou pelo PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File db\postgres-server.ps1 start
+powershell -NoProfile -ExecutionPolicy Bypass -File db\postgres-server.ps1 stop
+powershell -NoProfile -ExecutionPolicy Bypass -File db\postgres-server.ps1 restart
+powershell -NoProfile -ExecutionPolicy Bypass -File db\postgres-server.ps1 status
+powershell -NoProfile -ExecutionPolicy Bypass -File db\postgres-server.ps1 check
+```
+
 Inicializar o cluster local do projeto:
 
 ```powershell

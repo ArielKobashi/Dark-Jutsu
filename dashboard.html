@@ -763,6 +763,25 @@
         let mata111Cache = null;
         let mata112Cache = null;
         let historicoCooperatCache = null;
+        const SQL_API_BASE = (
+            params.get("apiBase") ||
+            localStorage.getItem("darkJutsuApiBase") ||
+            window.DARK_JUTSU_API_BASE_URL ||
+            "http://127.0.0.1:8765"
+        ).replace(/\/+$/, "");
+        const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
+
+        async function sqlApi(path, options = {}){
+            const headers = { ...(options.headers || {}) };
+            if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+            if(SQL_API_TOKEN) headers.Authorization = `Bearer ${SQL_API_TOKEN}`;
+            const response = await fetch(`${SQL_API_BASE}${path}`, { ...options, headers });
+            const data = await response.json().catch(() => ({}));
+            if(!response.ok || data?.ok === false){
+                throw new Error(data?.error || `Falha HTTP ${response.status}`);
+            }
+            return data;
+        }
 
         function parametroPermitido(valor, permitidos, padrao){
             return permitidos.includes(valor) ? valor : padrao;
@@ -831,15 +850,29 @@
         btnAtualizar.addEventListener("click", () => carregar());
 
         async function salvarDashboardPanelConfig(id){
+            const conf = configPainelDashboard(id);
+            const payload = {
+                limite: conf.limite,
+                codigosOcultos: (conf.codigosOcultos || []).join(","),
+                atualizadoPor: auth.currentUser?.uid || auth.currentUser?.email || ""
+            };
             try{
-                const conf = configPainelDashboard(id);
+                await sqlApi(`/api/dashboard/panels/${encodeURIComponent(id)}`, {
+                    method: "PUT",
+                    body: JSON.stringify(payload)
+                });
+                return true;
+            }catch(sqlError){
+                console.warn("Falha ao salvar painel no SQL; tentando Firebase:", sqlError);
+            }
+            try{
                 await set(ref(db, `dashboardConfig/paineis/${id}`), {
-                    limite: conf.limite,
-                    codigosOcultos: (conf.codigosOcultos || []).join(",")
+                    limite: payload.limite,
+                    codigosOcultos: payload.codigosOcultos
                 });
                 return true;
             }catch(e){
-                alert("Nao foi possivel salvar a configuracao compartilhada do dashboard no Firebase.");
+                alert("Nao foi possivel salvar a configuracao compartilhada do dashboard.");
                 console.warn("Falha ao salvar painel do dashboard:", e);
                 return false;
             }
@@ -1838,6 +1871,16 @@
         }
         async function salvarAvaliacaoPedido(codigo, payload){
             const chave = ajusteKey(codigo);
+            try{
+                await sqlApi(`/api/dashboard/evaluations/${encodeURIComponent(chave)}`, {
+                    method: "PUT",
+                    body: JSON.stringify(payload)
+                });
+                avaliadorPedidosConfig[chave] = payload;
+                return;
+            }catch(sqlError){
+                console.warn("Falha ao salvar avaliacao no SQL; tentando Firebase:", sqlError);
+            }
             await set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), payload);
             avaliadorPedidosConfig[chave] = payload;
         }
