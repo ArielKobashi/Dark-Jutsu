@@ -1441,6 +1441,26 @@
       }
       document.getElementById("entryDialog").close();
     });
+    document.getElementById("entryForm").addEventListener("keydown", event => {
+      if(activeType !== "stock" || event.key !== "Enter" || event.shiftKey) return;
+      const target = event.target;
+      if(!target || !(target.matches("input,select,textarea"))) return;
+      if(target.tagName === "TEXTAREA" || target.type === "file") return;
+      const order = ["date","item","desc","output","expected","actual"];
+      const currentName = target.name;
+      const currentIndex = order.indexOf(currentName);
+      if(currentIndex < 0) return;
+      event.preventDefault();
+      if(currentIndex === order.length - 1){
+        const form = event.currentTarget;
+        if(typeof form.requestSubmit === "function") form.requestSubmit();
+        return;
+      }
+      const nextName = order[currentIndex + 1];
+      const next = event.currentTarget.querySelector(`[name="${nextName}"]`);
+      next?.focus();
+      if(next?.select) next.select();
+    });
     document.getElementById("stockReviewForm").addEventListener("submit", event => {
       if(event.submitter && event.submitter.value === "pause") return;
       event.preventDefault();
