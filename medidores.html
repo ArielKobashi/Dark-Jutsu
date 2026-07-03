@@ -94,8 +94,9 @@
     .row-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
     .row-action{width:28px;height:28px;border:1px solid #b8c9d7;background:#fff;color:#31536b;display:grid;place-items:center;border-radius:2px;font-size:14px;line-height:1}
     .row-action.danger{color:#a83d45;border-color:#efc0c4}
-    .sync-line{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
-    .sync-status{font-size:12px;color:var(--muted);line-height:1.25}
+    .sync-line{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;flex-wrap:wrap;font-size:13px}
+    .sync-status{font-size:11px;color:var(--muted);line-height:1.2;margin-top:6px}
+    .sync-btn{padding:7px 10px;min-height:32px;font-size:12px}
     .stack-actions{display:grid;gap:8px}
     .dash-slots{display:grid;grid-template-columns:repeat(2,minmax(300px,1fr));gap:10px;margin-top:12px}
     .dash-slot{border:1px dashed #aac1d4;background:#f8fbfd;min-height:260px;display:flex;flex-direction:column}
@@ -220,8 +221,8 @@
               <span>Dados compartilhados entre PCs</span>
               <span class="tag" id="syncStateTag">carregando</span>
             </div>
-            <button class="btn secondary" type="button" id="syncNow">Sincronizar agora</button>
-            <div class="sync-status" id="syncStatus">Aguardando conexão com a base compartilhada.</div>
+            <button class="btn secondary sync-btn" type="button" id="syncNow">Sincronizar</button>
+            <div class="sync-status" id="syncStatus">Modo local ativo.</div>
           </div></article>
           <article class="setup-card"><h3>Limpeza por módulo</h3><div class="body">
             <div class="stack-actions">
@@ -480,6 +481,8 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
+    window.auth = auth;
+    window.db = db;
     window.darkJutsuFirebaseReady = new Promise(resolve => {
       onAuthStateChanged(auth, user => resolve({ db, user }));
     });
@@ -710,7 +713,7 @@
         setSyncStatus(`Base compartilhada atualizada ${reason ? `(${reason})` : ""}.`);
       }catch(err){
         setSyncStateTag("local", "");
-        setSyncStatus(err.message || "Base compartilhada indisponível; mantendo modo local.");
+        setSyncStatus("Modo local ativo.");
       }finally{
         syncBusy = false;
       }
@@ -738,10 +741,10 @@
           return false;
         }
         setSyncStateTag("local", "");
-        setSyncStatus("Base compartilhada indisponível; usando dados locais.");
+        setSyncStatus("Modo local ativo.");
       }catch(err){
         setSyncStateTag("local", "");
-        setSyncStatus("Base compartilhada indisponível; usando dados locais.");
+        setSyncStatus("Modo local ativo.");
       }
       return false;
     }
@@ -1292,7 +1295,7 @@
       setText("internalTopOwner", topValue(internal, "owner"));
       setSyncStateTag(sharedStateUpdatedAt ? "sincronizado" : "local", sharedStateUpdatedAt ? "green" : "");
       const rhTrend = rhUnlocked ? groupByDate(rh) : [];
-      drawBars("rhChart", rhTrend, "#2f82b7", {minScale: rhTrend.length <= 3 ? 4 : 1, note: rhTrend.length <= 3 ? "Poucos registros no período" : ""});
+      drawBars("rhChart", rhTrend, "#2f82b7", {minScale: rhTrend.length <= 3 ? 6 : 1, note: rhTrend.length <= 3 ? "Poucos registros no período" : ""});
       drawBars("machineChart", groupByDate(machine, hours), "#4aa3d8", {minScale: 1});
       drawLine("stockChart", stockAccuracyTrend(stock), "#2f82b7");
       drawBars("internalChart", groupByField(internal, "classification"), "#6fb7df", {minScale: 1});
