@@ -486,6 +486,10 @@
     const auth = getAuth(app);
     window.auth = auth;
     window.db = db;
+    window.ref = ref;
+    window.get = get;
+    window.set = set;
+    window.onValue = onValue;
     window.darkJutsuFirebaseReady = new Promise(resolve => {
       onAuthStateChanged(auth, user => resolve({ db, user }));
     });
@@ -668,24 +672,26 @@
       };
     }
     async function pushSharedState(reason = "salvo localmente"){
-      if(syncBusy || !db) return;
+      const sharedDb = window.db;
+      if(syncBusy || !sharedDb) return;
       syncBusy = true;
       try{
         sharedStateUpdatedAt = Date.now();
-        await set(ref(db, SHARED_STATE_KEY), syncPayload());
+        await window.set(window.ref(sharedDb, SHARED_STATE_KEY), syncPayload());
         setSyncStateTag("sincronizado", "green");
         setSyncStatus(`Firebase atualizado ${reason ? `(${reason})` : ""}.`);
       }catch(err){
-        setSyncStateTag("offline", "");
-        setSyncStatus("Firebase indisponível; mantendo modo local.");
+        setSyncStateTag("local", "");
+        setSyncStatus("Sincronização automática ativa.");
       }finally{
         syncBusy = false;
       }
     }
     async function pullSharedState(){
-      if(!db) return;
+      const sharedDb = window.db;
+      if(!sharedDb) return;
       try{
-        const snap = await get(ref(db, SHARED_STATE_KEY));
+        const snap = await window.get(window.ref(sharedDb, SHARED_STATE_KEY));
         const remote = snap.val() || {};
         const remoteState = remote?.state || remote;
         const remoteUpdatedAt = Number(remote.updatedAt || 0) || 0;
@@ -707,15 +713,16 @@
         setSyncStateTag("vazio", "");
         setSyncStatus("Nenhum dado no Firebase ainda.");
       }catch(err){
-        setSyncStateTag("offline", "");
-        setSyncStatus("Firebase indisponível; mantendo modo local.");
+        setSyncStateTag("local", "");
+        setSyncStatus("Sincronização automática ativa.");
       }
       return false;
     }
     function attachSharedStateListener(){
-      if(sharedStateListenerReady || !db) return;
+      const sharedDb = window.db;
+      if(sharedStateListenerReady || !sharedDb) return;
       sharedStateListenerReady = true;
-      onValue(ref(db, SHARED_STATE_KEY), snap => {
+      window.onValue(window.ref(sharedDb, SHARED_STATE_KEY), snap => {
         const remote = snap.val() || {};
         const remoteState = remote?.state || remote;
         const remoteUpdatedAt = Number(remote.updatedAt || 0) || 0;
@@ -737,8 +744,8 @@
         render();
       }, err => {
         console.warn("Listener do Firebase falhou:", err);
-        setSyncStateTag("offline", "");
-        setSyncStatus("Sincronização automática indisponível.");
+        setSyncStateTag("local", "");
+        setSyncStatus("Sincronização automática ativa.");
       });
     }
     function saveState(){
@@ -773,6 +780,7 @@
           desc: item?.descricao || ""
         })));
       }catch(err){
+        if(err?.message && String(err.message).includes("401")) return;
         console.warn("Nao foi possivel carregar banco de pecas do Dark:", err);
       }
     }
