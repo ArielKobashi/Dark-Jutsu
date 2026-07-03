@@ -665,11 +665,41 @@
       const el = document.getElementById("syncStatus");
       if(el) el.textContent = text;
     }
-    function syncPayload(){
+    function hasSharedData(data = state){
+      return ["rh","machine","stock","stockMovements","internal"]
+        .some(key => Array.isArray(data?.[key]) && data[key].length);
+    }
+    function removeDemoRows(base = state){
+      const clean = {...EMPTY_STATE, ...(base || {})};
+      return {
+        rh:(clean.rh || []).filter(row => !row.demo && !isDemoRow(row)),
+        machine:(clean.machine || []).filter(row => !row.demo && !isDemoRow(row)),
+        stock:(clean.stock || []).filter(row => !row.demo && !isDemoRow(row)),
+        stockMovements:(clean.stockMovements || []).filter(row => !row.demo && !isDemoRow(row)),
+        internal:(clean.internal || []).filter(item => item.source === "Dark-Jutsu" && !item.demo && !isDemoRow(item))
+      };
+    }
+    async function waitSharedFirebaseUser(timeoutMs = 12000){
+      if(!window.db || !window.ref || !window.get || !window.set || !window.onValue){
+        throw new Error("Firebase do Dark ainda nao carregou.");
+      }
+      if(typeof window.darkJutsuWaitFirebaseUser !== "function"){
+        throw new Error("Sessao do Dark ainda nao foi exposta para o Medidores.");
+      }
+      const user = await window.darkJutsuWaitFirebaseUser(timeoutMs);
+      if(!user) throw new Error("Login do Dark nao encontrado nesta aba. Abra pelo Dark-Jutsu logado para sincronizar.");
+      return user;
+    }
+    function reportSyncError(err){
+      console.error("Sincronizacao Firebase Medidores falhou:", err);
+      setSyncStateTag("erro", "red");
+      setSyncStatus(err?.message || "Firebase bloqueou a sincronizacao.");
+    }
+    function syncPayload(user = window.auth?.currentUser){
       return {
         state: normalizeState(state),
         updatedAt: sharedStateUpdatedAt || Date.now(),
-        updatedBy: window.auth?.currentUser?.uid || localStorage.getItem("darkJutsuApiToken") || ""
+        updatedBy: user?.uid || localStorage.getItem("darkJutsuApiToken") || ""
       };
     }
     async function pushSharedState(reason = "salvo localmente"){
@@ -677,13 +707,13 @@
       if(syncBusy || !sharedDb) return;
       syncBusy = true;
       try{
+        const user = await waitSharedFirebaseUser();
         sharedStateUpdatedAt = Date.now();
-        await window.set(window.ref(sharedDb, SHARED_STATE_KEY), syncPayload());
+        await window.set(window.ref(sharedDb, SHARED_STATE_KEY), syncPayload(user));
         setSyncStateTag("sincronizado", "green");
         setSyncStatus(`Firebase atualizado ${reason ? `(${reason})` : ""}.`);
       }catch(err){
-        setSyncStateTag("local", "");
-        setSyncStatus("Sincronização automática ativa.");
+        reportSyncError(err);
       }finally{
         syncBusy = false;
       }
@@ -692,11 +722,12 @@
       const sharedDb = window.db;
       if(!sharedDb) return;
       try{
+        await waitSharedFirebaseUser();
         const snap = await window.get(window.ref(sharedDb, SHARED_STATE_KEY));
         const remote = snap.val() || {};
         const remoteState = remote?.state || remote;
         const remoteUpdatedAt = Number(remote.updatedAt || 0) || 0;
-        if(remoteState && typeof remoteState === "object"){
+        if(remoteState && typeof remoteState === "object" && hasSharedData(remoteState)){
           if(remoteUpdatedAt > sharedStateUpdatedAt || !sharedStateUpdatedAt){
             state = normalizeState(remoteState);
             sharedStateUpdatedAt = remoteUpdatedAt || Date.now();
@@ -711,25 +742,38 @@
           setSyncStatus("Base local já está atualizada.");
           return false;
         }
+        if(hasSharedData(state)){
+          await pushSharedState("primeira carga local");
+          return true;
+        }
         setSyncStateTag("vazio", "");
         setSyncStatus("Nenhum dado no Firebase ainda.");
       }catch(err){
-        setSyncStateTag("local", "");
-        setSyncStatus("Sincronização automática ativa.");
+        reportSyncError(err);
       }
       return false;
     }
-    function attachSharedStateListener(){
+    async function attachSharedStateListener(){
       const sharedDb = window.db;
       if(sharedStateListenerReady || !sharedDb) return;
       sharedStateListenerReady = true;
+      try{
+        await waitSharedFirebaseUser();
+      }catch(err){
+        sharedStateListenerReady = false;
+        reportSyncError(err);
+        return;
+      }
       window.onValue(window.ref(sharedDb, SHARED_STATE_KEY), snap => {
         const remote = snap.val() || {};
         const remoteState = remote?.state || remote;
         const remoteUpdatedAt = Number(remote.updatedAt || 0) || 0;
-        if(!remoteState || typeof remoteState !== "object") {
-          setSyncStateTag("vazio", "");
-          setSyncStatus("Sincronização automática ativa.");
+        if(!remoteState || typeof remoteState !== "object" || !hasSharedData(remoteState)) {
+          if(hasSharedData(state)) void pushSharedState("primeira carga local");
+          else {
+            setSyncStateTag("vazio", "");
+            setSyncStatus("Aguardando dados no Firebase.");
+          }
           return;
         }
         if(remoteUpdatedAt && remoteUpdatedAt <= sharedStateUpdatedAt && sharedStateUpdatedAt){
@@ -743,11 +787,7 @@
         setSyncStateTag("sincronizado", "green");
         setSyncStatus("Atualizado automaticamente pelo Firebase.");
         render();
-      }, err => {
-        console.warn("Listener do Firebase falhou:", err);
-        setSyncStateTag("local", "");
-        setSyncStatus("Sincronização automática ativa.");
-      });
+      }, err => reportSyncError(err));
     }
     function saveState(){
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -1304,6 +1344,98 @@
     }
     function makeRecordId(prefix){
       return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    }
+    function addDemoData(){
+      const next = removeDemoRows(state);
+      const demoBatch = makeRecordId("demo");
+      const rhPeople = ["Andre Silva","Bianca Rocha","Carlos Lima","Daniela Souza","Eduardo Alves","Fernanda Costa"];
+      const rhTypes = ["Falta","Atestado","Treinamento","Advertencia","Atraso","Ocorrencia disciplinar"];
+      const machines = ["Injetora 03","Prensa 02","Corte 01","Dobradeira 04","Linha 07","Embaladora 02"];
+      const parts = [
+        ["2308000001","EMB-CORDA TRANC PET 4MM"],
+        ["2305000004","EMB-FITA ADESIVA TRANSPARENTE HOT MELT"],
+        ["3101000903","FS-16I.930.366 MOTOR ACIONAM. ROTOR CONSERTO"],
+        ["2503000011","FR-C1UL UDR SAPHIR NR. 3/0 ISO 45.0"],
+        ["2405000003","EMB-SACO DE LIXO PRETO 150 LTS"]
+      ];
+      const classes = ["Reposicao","Atendimento","Divergencia","Solicitacao","Ajuste interno"];
+      const severities = ["Baixa","Media","Alta","Critica"];
+      const owners = ["Almoxarifado","Recebimento","PCP","Manutencao","Qualidade"];
+      for(let day = 44; day >= 0; day--){
+        const date = dateDaysAgo(day);
+        if(day % 5 === 0 || day % 11 === 0){
+          const idx = day % rhPeople.length;
+          next.rh.push({
+            id: makeRecordId("rhDemo"),
+            demo: true,
+            demoBatch,
+            date,
+            employee: rhPeople[idx],
+            sector: idx % 2 ? "Recebimento" : "Almoxarifado",
+            type: rhTypes[idx],
+            doc: `ocorrencia-${date}-${idx + 1}.pdf`,
+            notes: "Registro de teste apagavel."
+          });
+        }
+        if(day % 4 === 0 || day % 9 === 0){
+          const part = parts[day % parts.length];
+          const startHour = 6 + (day % 10);
+          const duration = 20 + (day % 6) * 15;
+          const endTotal = startHour * 60 + duration;
+          next.machine.push({
+            id: makeRecordId("mpDemo"),
+            demo: true,
+            demoBatch,
+            date,
+            start: timeAt(startHour, (day * 7) % 60),
+            end: timeAt(Math.floor(endTotal / 60), endTotal % 60),
+            machine: machines[day % machines.length],
+            code: part[0],
+            part: part[1],
+            stopType: day % 2 ? "Parcial" : "Total",
+            notes: "Registro de teste apagavel."
+          });
+        }
+        if(day % 3 === 0){
+          const part = parts[day % parts.length];
+          const expected = 35 + (day % 17);
+          const output = 1 + (day % 6);
+          const actual = day % 4 === 0 ? expected - 1 : expected;
+          next.stock.push({
+            id: makeRecordId("acDemo"),
+            demo: true,
+            demoBatch,
+            date,
+            item: part[0],
+            desc: part[1],
+            output,
+            expected,
+            actual,
+            source: "teste-manual"
+          });
+        }
+        if(day % 2 === 0){
+          const idx = day % classes.length;
+          next.internal.push({
+            id: makeRecordId("djDemo"),
+            demo: true,
+            demoBatch,
+            date,
+            darkId: `DJ-${date.replaceAll("-","")}-${idx}`,
+            classification: classes[idx],
+            severity: severities[day % severities.length],
+            owner: owners[day % owners.length],
+            status: day % 5 === 0 ? "Aberta" : "Concluida",
+            text: `Parametro de teste apagavel para validar visualizacao completa de ${classes[idx]}.`,
+            source: "Dark-Jutsu"
+          });
+        }
+      }
+      state = next;
+      saveState();
+      rebuildItemCatalog();
+      render();
+      setActiveView("dashboard");
     }
     function readFileAsDataUrl(file){
       return new Promise((resolve, reject) => {
@@ -1888,8 +2020,12 @@
     document.querySelectorAll("[data-view-tab]").forEach(tab => tab.addEventListener("click", () => setActiveView(tab.dataset.viewTab)));
     document.querySelectorAll("[data-sync-internal]").forEach(btn => btn.addEventListener("click", () => syncInternalFromDark(false)));
     document.getElementById("closeDashChooser").addEventListener("click", () => document.getElementById("dashChooser").close());
+    document.getElementById("loadDemoData").addEventListener("click", () => {
+      if(!confirm("Carregar uma massa de dados de teste apagavel para validar o dashboard?")) return;
+      addDemoData();
+    });
     document.getElementById("resetDemoData").addEventListener("click", () => {
-      state = normalizeState(state);
+      state = removeDemoRows(state);
       saveState();
       render();
       setActiveView("dashboard");
@@ -1932,13 +2068,14 @@
     window.addEventListener("dark-jutsu-firebase-ready", () => {
       syncInternalFromDark(true);
       loadItemCatalogFromDark();
-      attachSharedStateListener();
+      void attachSharedStateListener();
       void pullSharedState();
     }, {once:true});
     rebuildItemCatalog();
     loadItemCatalogFromDark();
     renderDashSlots();
     render();
+    void attachSharedStateListener();
     void pullSharedState();
     window.addEventListener("focus", () => { void pullSharedState(); });
     document.addEventListener("visibilitychange", () => {
