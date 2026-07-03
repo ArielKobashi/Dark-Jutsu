@@ -1,11 +1,10 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dark-Jutsu | Medidores</title>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-  <style>
+    <style>
     :root{
       --bg:#edf1f5;
       --panel:#ffffff;
@@ -214,8 +213,8 @@
           <article class="data-card"><h3>Inserir informações</h3><div class="body"><div class="data-actions">
             <button class="btn" data-open="rh" type="button">Ocorrência RH</button>
             <button class="btn" data-open="machine" type="button">Máquina parada</button>
-            <button class="btn" data-open="stock" type="button">Planilha estoque</button>
-            <button class="btn" data-review-stock type="button">Relatar contagem</button>
+            <button class="btn" data-open="stock" type="button">Lançar acuracidade</button>
+            <button class="btn" data-review-stock type="button">Nova contagem</button>
             <button class="btn" data-sync-internal type="button">Atualizar do Dark</button>
           </div></div></article>
           <article class="data-card"><h3>Resumo da base</h3><div class="body">
@@ -266,8 +265,8 @@
           <section class="quick-actions">
             <button class="btn" data-open="rh" type="button">+ Ocorrência RH</button>
             <button class="btn" data-open="machine" type="button">+ Máquina parada</button>
-            <button class="btn" data-open="stock" type="button">+ Planilha estoque</button>
-            <button class="btn" data-review-stock type="button">Relatar contagem</button>
+            <button class="btn" data-open="stock" type="button">+ Lançar acuracidade</button>
+            <button class="btn" data-review-stock type="button">Nova contagem</button>
             <button class="btn" data-sync-internal type="button">Atualizar ocorrências do Dark</button>
           </section>
 
@@ -322,8 +321,8 @@
               <div class="module-header">
                 <h3>3. Acuracidade de Estoque</h3>
                 <div class="dash-slot-actions">
-                  <button class="btn secondary" data-open="stock" type="button">Importar planilha</button>
-                  <button class="btn secondary" data-review-stock type="button">Relatar contagem</button>
+                  <button class="btn secondary" data-open="stock" type="button">Lançamento manual</button>
+                  <button class="btn secondary" data-review-stock type="button">Nova contagem</button>
                 </div>
               </div>
               <div class="module-body">
@@ -335,9 +334,9 @@
                     <div class="kpi"><strong id="stockTopDivergence">-</strong><span>item mais divergente</span></div>
                   </div>
                   <ul class="workflow">
-                    <li>Importar um ou vários relatórios .xlsx por dia.</li>
-                    <li>Confirmar manualmente o saldo do dia seguinte.</li>
-                    <li>Comparar saldo esperado x saldo confirmado.</li>
+                    <li>Informar a data inicial uma única vez para a sessão.</li>
+                    <li>Lançar código, quantidade saída, quantidade suposta e quantidade contada.</li>
+                    <li>Comparar quantidade suposta x quantidade contada.</li>
                   </ul>
                 </div>
                 <div class="mini-list" id="stockModuleList"></div>
@@ -380,7 +379,7 @@
           <div class="filter-card"><h3><span>Ano</span><span>≡</span></h3><div class="filter-list"><button class="filter-pill" type="button">2026</button></div></div>
           <div class="filter-card"><h3><span>Período</span><span>≡</span></h3><div class="filters"><div><label for="fromDate">Data inicial</label><input id="fromDate" type="date"></div><div><label for="toDate">Data final</label><input id="toDate" type="date"></div></div></div>
           <div class="filter-card"><h3><span>Filtro Geral</span><span>≡</span></h3><input id="filterText" type="search" placeholder="máquina, peça, setor, status"></div>
-          <div class="filter-card"><h3><span>Indicador</span><span>≡</span></h3><div class="filter-list"><button class="filter-pill" type="button" data-open="rh">Ocorrências RH</button><button class="filter-pill" type="button" data-open="machine">Máquina Parada</button><button class="filter-pill" type="button" data-open="stock">Planilha estoque</button><button class="filter-pill" type="button" data-review-stock>Relatar contagem</button><button class="filter-pill" type="button" data-sync-internal>Ocorrências Internas</button></div></div>
+          <div class="filter-card"><h3><span>Indicador</span><span>≡</span></h3><div class="filter-list"><button class="filter-pill" type="button" data-open="rh">Ocorrências RH</button><button class="filter-pill" type="button" data-open="machine">Máquina Parada</button><button class="filter-pill" type="button" data-open="stock">Lançar acuracidade</button><button class="filter-pill" type="button" data-review-stock>Nova contagem</button><button class="filter-pill" type="button" data-sync-internal>Ocorrências Internas</button></div></div>
           <div class="filter-card"><button class="btn secondary" id="clearFilters" type="button">Limpar filtros</button></div>
         </aside>
         </div>
@@ -1068,7 +1067,7 @@
       if(rhUnlocked) table("rhList", [{label:"Data",key:"date"},{label:"Colaborador",key:"employee"},{label:"Setor",key:"sector"},{label:"Tipo",key:"type"},{label:"Documento",key:"doc"}], rhList);
       else document.getElementById("rhList").innerHTML = lockedHtml();
       table("machineList", [{label:"Data",key:"date"},{label:"Maquina",key:"machine"},{label:"Peca",render:r=>`${r.part}<br><span class="caption">${r.code || ""}</span>`},{label:"Parada",render:r=>`${r.stopType}<br>${r.start || ""} - ${r.end || ""}`}], machineList);
-      table("stockList", [{label:"Data",key:"date"},{label:"Item",key:"item"},{label:"Saldo esperado",key:"expected"},{label:"Saldo confirmado",key:"actual"},{label:"Resultado",render:r=>Number(r.expected)===Number(r.actual) ? "Correto" : "Incorreto"}], stockList);
+      table("stockList", [{label:"Data",key:"date"},{label:"Item",key:"item"},{label:"Qtd. saída",key:"output"},{label:"Qtd. suposta",key:"expected"},{label:"Qtd. contada",key:"actual"},{label:"Resultado",render:r=>Number(r.expected)===Number(r.actual) ? "Correto" : "Incorreto"}], stockList);
       table("internalList", [{label:"Data",key:"date"},{label:"Dark-Jutsu",key:"darkId"},{label:"Classificação",key:"classification"},{label:"Gravidade",key:"severity"},{label:"Solicitante",key:"requester"},{label:"Responsavel",key:"owner"},{label:"Status",key:"status"}], internalList);
       if(rhUnlocked) renderMiniList("rhModuleList", rhList, r => miniRow(r.date, r.employee || "-", r.type || "-"));
       else document.getElementById("rhModuleList").innerHTML = lockedHtml();
@@ -1102,14 +1101,22 @@
       machine:{title:"Relatar maquina parada", fields:[
         ["date","Data","date",today],["machine","Maquina","text",""],["start","Hora inicial","time",""],["end","Hora final","time",""],["part","Peca faltante","text",""],["code","Codigo da peca","text",""],["stopType","Tipo de parada","select","Total",["Total","Parcial"]],["notes","Observacao","textarea",""]
       ]},
-      stock:{title:"Importar relatorio de saidas", fields:[
-        ["xlsxFile","Arquivos MATR275 .xlsx","file",""]
+      stock:{title:"Lançar acuracidade manual", fields:[
+        ["date","Data inicial da sessão","date",lastStockCountDate || today],
+        ["item","Código do item","text",""],
+        ["desc","Descrição / observação do item","text",""],
+        ["output","Quantidade saída","number",""],
+        ["expected","Quantidade suposta","number",""],
+        ["actual","Quantidade contada","number",""]
       ]},
       internal:{title:"Inserir ocorrencia interna", fields:[
         ["date","Data","date",today],["darkId","Ocorrencia Dark-Jutsu","text","DJ-"],["requester","Solicitante","text",""],["sector","Setor","text",""],["type","Tipo de atendimento","text",""],["owner","Responsavel","text",""],["status","Status","select","Aberta",["Aberta","Em atendimento","Concluida"]],["due","Prazo","date",today],["notes","Observacao","textarea",""]
       ]}
     };
     function extraFormHtml(type){
+      if(type === "stock") return `
+        <datalist id="stockCodeOptions">${itemCatalog.map(item => `<option value="${escHtml(item.code || item.desc)}">${escHtml(item.desc || "")}</option>`).join("")}</datalist>
+      `;
       if(type !== "machine") return "";
       return `
         <datalist id="partOptions">${itemCatalog.map(item => `<option value="${escHtml(item.desc || item.code)}">${escHtml(item.code || "")}</option>`).join("")}</datalist>
@@ -1117,6 +1124,20 @@
       `;
     }
     function bindDialogHelpers(type){
+      if(type === "stock"){
+        const item = document.querySelector('#entryDialog [name="item"]');
+        const desc = document.querySelector('#entryDialog [name="desc"]');
+        if(item){
+          item.setAttribute("list", "stockCodeOptions");
+          const fillDesc = () => {
+            const found = findCatalogItem(item.value);
+            if(found && desc && !desc.value) desc.value = found.desc || "";
+          };
+          item.addEventListener("change", fillDesc);
+          item.addEventListener("blur", fillDesc);
+        }
+        return;
+      }
       if(type !== "machine") return;
       const part = document.querySelector('#entryDialog [name="part"]');
       const code = document.querySelector('#entryDialog [name="code"]');
@@ -1137,32 +1158,51 @@
       const cfg = configs[type];
       document.getElementById("dialogTitle").textContent = cfg.title;
       document.getElementById("formFields").innerHTML = cfg.fields.map(([name,label,type,value,options]) => {
-        const full = type === "textarea" || name === "xlsxFile" ? " full" : "";
+        const full = type === "textarea" ? " full" : "";
         if(type === "textarea") return `<div class="${full}"><label>${label}</label><textarea name="${name}">${value}</textarea></div>`;
         if(type === "select") return `<div><label>${label}</label><select name="${name}">${options.map(o=>`<option ${o===value?"selected":""}>${o}</option>`).join("")}</select></div>`;
-        const accept = name === "xlsxFile" ? ' accept=".xlsx,.xls" multiple' : "";
-        return `<div class="${full}"><label>${label}</label><input name="${name}" type="${type}" value="${type==="file" ? "" : value}"${accept}></div>`;
-      }).join("") + extraFormHtml(type) + (type === "stock" ? '<div class="review-box full" id="stockPreview">Anexe um ou vários relatórios MATR275. Isso só grava a base de saídas; para conferir saldos use o botão Relatar contagem. Cada bloco começa quando a coluna A tem produto; as linhas seguintes com coluna A vazia continuam no mesmo perfil até o próximo produto.</div>' : "");
+        const step = type === "number" ? ' step="0.01" inputmode="decimal"' : "";
+        const required = activeType === "stock" && ["date","item","output","expected","actual"].includes(name) ? " required" : "";
+        return `<div class="${full}"><label>${label}</label><input name="${name}" type="${type}" value="${type==="file" ? "" : value}"${step}${required}></div>`;
+      }).join("") + extraFormHtml(type) + (type === "stock" ? '<div class="review-box full" id="stockPreview">Use a data inicial como parâmetro da sessão. Depois lance código, quantidade saída, quantidade suposta e quantidade contada. Ao salvar, o formulário fica aberto para o próximo item.</div>' : "");
       document.getElementById("entryDialog").showModal();
       bindDialogHelpers(type);
     }
     document.querySelectorAll("[data-open]").forEach(btn => btn.addEventListener("click", () => openDialog(btn.dataset.open)));
-    document.querySelectorAll("[data-review-stock]").forEach(btn => btn.addEventListener("click", startStockReview));
+    document.querySelectorAll("[data-review-stock]").forEach(btn => btn.addEventListener("click", () => openDialog("stock")));
     document.getElementById("entryForm").addEventListener("submit", async event => {
       if(event.submitter && event.submitter.value === "cancel") return;
       event.preventDefault();
       const data = new FormData(event.currentTarget);
-      if(activeType === "stock" && data.getAll("xlsxFile").some(file => file && file.name)){
-        await importStockFile(data);
-      } else {
-        const row = Object.fromEntries(data.entries());
-        if(activeType === "rh") row.doc = data.get("docFile")?.name || row.doc || "documento-anexado.pdf";
-        delete row.docFile; delete row.xlsxFile;
-        state[activeType].push(row);
+      const row = Object.fromEntries(data.entries());
+      if(activeType === "rh") row.doc = data.get("docFile")?.name || row.doc || "documento-anexado.pdf";
+      delete row.docFile;
+      if(activeType === "stock"){
+        row.item = String(row.item || "").trim();
+        const found = findCatalogItem(row.item);
+        row.desc = String(row.desc || found?.desc || "").trim();
+        row.output = toNumber(row.output);
+        row.expected = toNumber(row.expected);
+        row.actual = toNumber(row.actual);
+        row.source = "manual";
+        row.countDate = row.date;
+        lastStockCountDate = row.date || today;
       }
+      state[activeType].push(row);
       saveState();
-      document.getElementById("entryDialog").close();
       render();
+      if(activeType === "stock"){
+        const form = event.currentTarget;
+        ["item","desc","output","expected","actual"].forEach(name => {
+          const field = form.querySelector(`[name="${name}"]`);
+          if(field) field.value = "";
+        });
+        const dateField = form.querySelector('[name="date"]');
+        if(dateField) dateField.value = lastStockCountDate;
+        form.querySelector('[name="item"]')?.focus();
+        return;
+      }
+      document.getElementById("entryDialog").close();
     });
     document.getElementById("stockReviewForm").addEventListener("submit", event => {
       if(event.submitter && event.submitter.value === "pause") return;
@@ -1366,7 +1406,7 @@
         <span>Saida total do dia<b>${item.output}</b></span>
         <span>Entrada total do dia<b>${item.input || 0}</b></span>
         <span>Saldo inicial do bloco<b>${item.initial || 0}</b></span>
-        <span>Saldo esperado final<b>${item.expected}</b></span>
+        <span>Qtd. suposta final<b>${item.expected}</b></span>
       `;
       document.getElementById("stockReviewProgress").textContent = `Movimento ${stockReviewIndex + 1} de ${stockReviewQueue.length}. Pressione Enter para salvar e ir ao proximo codigo.`;
       document.getElementById("stockReviewCountDate").value = lastStockCountDate;
@@ -1438,12 +1478,12 @@
       const kept = (state.stockMovements || []).filter(row => !affected.has([row.source, row.date, row.item].map(value => String(value || "")).join("|")));
       state.stockMovements = [...kept, ...movements].sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
       rebuildItemCatalog();
-      alert(`${movements.length} item(ns)/dia importado(s) para a base. Use Relatar contagem para conferir saldos.`);
+      alert(`${movements.length} item(ns)/dia importado(s) para a base.`);
     }
     function startStockReview(){
       stockReviewAllMovements = aggregateDailyItemMovements([...(state.stockMovements || [])]).sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
       if(!stockReviewAllMovements.length){
-        alert("Importe uma planilha MATR275 antes de relatar contagem.");
+        openDialog("stock");
         return;
       }
       const dates = stockReviewAvailableDates();
@@ -1467,7 +1507,7 @@
       const rows = [["medidor","data","referencia","detalhe","status"]];
       state.rh.forEach(r => rows.push(["RH", r.date, r.employee || "", r.type || "", r.doc || ""]));
       state.machine.forEach(r => rows.push(["Maquina Parada", r.date, r.machine || "", r.part || "", r.stopType || ""]));
-      state.stock.forEach(r => rows.push(["Acuracidade", r.date, r.item || "", `${r.expected} x ${r.actual}`, Number(r.expected) === Number(r.actual) ? "Correto" : "Incorreto"]));
+      state.stock.forEach(r => rows.push(["Acuracidade", r.date, r.item || "", `Saída: ${r.output || 0} | Suposta: ${r.expected} | Contada: ${r.actual}`, Number(r.expected) === Number(r.actual) ? "Correto" : "Incorreto"]));
       state.internal.forEach(r => rows.push(["Ocorrencia Interna", r.date, r.darkId || "", r.owner || "", r.status || ""]));
       const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"','""')}"`).join(";")).join("\n");
       const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
