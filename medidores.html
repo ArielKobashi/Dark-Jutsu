@@ -90,6 +90,13 @@
     .list-title h3{margin:0;font-size:13px;color:#34495a;line-height:1.25}
     .list-panel > div:last-child{max-height:300px;overflow:auto}
     .list-panel table thead th{position:sticky;top:0;z-index:1}
+    .list-panel td:last-child,.list-panel th:last-child{position:sticky;right:0;background:#fff}
+    .row-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+    .row-action{width:28px;height:28px;border:1px solid #b8c9d7;background:#fff;color:#31536b;display:grid;place-items:center;border-radius:2px;font-size:14px;line-height:1}
+    .row-action.danger{color:#a83d45;border-color:#efc0c4}
+    .sync-line{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+    .sync-status{font-size:12px;color:var(--muted);line-height:1.25}
+    .stack-actions{display:grid;gap:8px}
     .dash-slots{display:grid;grid-template-columns:repeat(2,minmax(300px,1fr));gap:10px;margin-top:12px}
     .dash-slot{border:1px dashed #aac1d4;background:#f8fbfd;min-height:260px;display:flex;flex-direction:column}
     .dash-slot-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;background:#edf5fa;border-bottom:1px solid #d6e4ee}
@@ -201,8 +208,25 @@
             <label style="margin-top:10px">Período final</label><input type="date" id="configTo">
           </div></article>
           <article class="setup-card"><h3>Dados locais</h3><div class="body">
-            <button class="btn secondary" type="button" id="resetDemoData">Limpar dados fictícios</button>
-            <button class="btn danger" type="button" id="clearStockCounts" style="margin-top:8px">Zerar relatos de contagem</button>
+            <div class="stack-actions">
+              <button class="btn secondary" type="button" id="resetDemoData">Limpar dados fictícios</button>
+              <button class="btn danger" type="button" id="clearStockCounts">Zerar relatos de contagem</button>
+            </div>
+          </div></article>
+          <article class="setup-card"><h3>Sincronização</h3><div class="body">
+            <div class="sync-line">
+              <span>Dados compartilhados entre PCs</span>
+              <span class="tag" id="syncStateTag">carregando</span>
+            </div>
+            <button class="btn secondary" type="button" id="syncNow">Sincronizar agora</button>
+            <div class="sync-status" id="syncStatus">Aguardando conexão com a base compartilhada.</div>
+          </div></article>
+          <article class="setup-card"><h3>Limpeza por módulo</h3><div class="body">
+            <div class="stack-actions">
+              <button class="btn danger" type="button" id="clearRhData">Apagar dados de RH</button>
+              <button class="btn danger" type="button" id="clearMachineData">Apagar dados de máquina</button>
+              <button class="btn danger" type="button" id="clearStockData">Apagar dados de acuracidade</button>
+            </div>
           </div></article>
         </div>
       </section>
