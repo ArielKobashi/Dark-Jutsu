@@ -147,6 +147,8 @@
     .mini-list-row b{color:#34495a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .mini-list-row span{color:#6d7b88}
     .tag{background:#dfeaf2;color:#31536b;border:1px solid #cad9e4;padding:3px 6px;font-size:11px;white-space:nowrap;line-height:1.15}
+    .tag.green{background:#dbf3ea;color:#1b7c65;border-color:#b8ded3}
+    .tag.red{background:#f7e0e3;color:#a83d45;border-color:#efc0c4}
     table{width:100%;border-collapse:collapse;font-size:12px}
     th,td{padding:8px;border-bottom:1px solid #e8eef3;text-align:left;vertical-align:top;line-height:1.25}
     th{color:#617383;font-weight:700;background:#f3f6f9}
@@ -513,6 +515,12 @@
   <script>
     const STORAGE_KEY = "darkJutsuMedidores.v2";
     const DASH_SLOT_KEY = "darkJutsuMedidores.dashboardSlots.v1";
+    const SHARED_STATE_KEY = "medidores.state.v1";
+    const SQL_API_FALLBACK_BASES = [
+      "http://127.0.0.1:8765",
+      "http://127.0.0.1:4174",
+      "http://192.168.5.38:8765"
+    ];
     const FIREBASE_DB_URL = "https://chat-fiasul-default-rtdb.firebaseio.com";
     const today = new Date().toISOString().slice(0,10);
     const EMPTY_STATE = {rh:[], machine:[], stock:[], stockMovements:[], internal:[]};
@@ -526,6 +534,10 @@
     let lastStockCountDate = today;
     let rhUnlocked = sessionStorage.getItem("darkJutsuMedidores.rhUnlocked") === "1";
     let itemCatalog = [];
+    let sharedStateUpdatedAt = 0;
+    let syncBusy = false;
+    let editingRecord = null;
+    let visibleRows = {rh:[], machine:[], stock:[], internal:[]};
     const dashboardOptions = [
       {id:"estoque04", group:"Estoque", title:"Dashboard de Estoque - Armazem 04", desc:"Resumo principal do estoque filtrado no armazem 04.", url:"dashboard.html?armazem=04&limite=50"},
       {id:"estoque05", group:"Estoque", title:"Dashboard de Estoque - Armazem 05", desc:"Resumo principal do estoque filtrado no armazem 05.", url:"dashboard.html?armazem=05&limite=50"},
@@ -632,10 +644,111 @@
       try {
         return normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY)) || EMPTY_STATE);
       }
-      catch(e){ return {...EMPTY_STATE, rh:[], machine:[], stock:[], internal:[]}; }
+      catch(e){ return {...EMPTY_STATE, rh:[], machine:[], stock:[], stockMovements:[], internal:[]}; }
     }
-    function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-    saveState();
+    async function resolveSqlAuthHeader(){
+      const token = localStorage.getItem("darkJutsuApiToken") || "";
+      if(token) return `Bearer ${token}`;
+      if(auth?.currentUser && typeof auth.currentUser.getIdToken === "function"){
+        try{
+          return `Bearer ${await auth.currentUser.getIdToken()}`;
+        }catch(err){
+          console.warn("Falha ao obter token do Firebase para o SQL API:", err);
+        }
+      }
+      return "";
+    }
+    window.sqlApi = async function(path, options = {}){
+      const headers = { ...(options.headers || {}) };
+      if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      const authHeader = await resolveSqlAuthHeader();
+      if(authHeader) headers.Authorization = authHeader;
+      let lastError = null;
+      for(const base of SQL_API_FALLBACK_BASES){
+        try{
+          const response = await fetch(`${base}${path}`, { ...options, headers });
+          const data = await response.json().catch(() => ({}));
+          if(!response.ok || data?.ok === false) throw new Error(data?.error || `Falha HTTP ${response.status}`);
+          return data;
+        }catch(error){
+          lastError = error;
+        }
+      }
+      throw lastError || new Error("API SQL indisponivel.");
+    };
+    function setSyncStateTag(text, tone = ""){
+      const el = document.getElementById("syncStateTag");
+      if(!el) return;
+      el.textContent = text;
+      el.className = tone ? `tag ${tone}` : "tag";
+    }
+    function setSyncStatus(text){
+      const el = document.getElementById("syncStatus");
+      if(el) el.textContent = text;
+    }
+    function syncPayload(){
+      return {
+        state: normalizeState(state),
+        updatedAt: sharedStateUpdatedAt || Date.now()
+      };
+    }
+    async function pushSharedState(reason = "salvo localmente"){
+      if(syncBusy || typeof window.sqlApi !== "function") return;
+      syncBusy = true;
+      try{
+        sharedStateUpdatedAt = Date.now();
+        const result = await window.sqlApi(`/api/settings/${encodeURIComponent(SHARED_STATE_KEY)}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            value: syncPayload(),
+            updated_by: auth?.currentUser?.uid || localStorage.getItem("darkJutsuApiToken") || ""
+          })
+        });
+        sharedStateUpdatedAt = Number(Date.parse(result?.setting?.updated_at) || sharedStateUpdatedAt) || sharedStateUpdatedAt;
+        setSyncStateTag("sincronizado", "green");
+        setSyncStatus(`Base compartilhada atualizada ${reason ? `(${reason})` : ""}.`);
+      }catch(err){
+        setSyncStateTag("somente local", "red");
+        setSyncStatus(err.message || "Falha ao sincronizar a base compartilhada.");
+      }finally{
+        syncBusy = false;
+      }
+    }
+    async function pullSharedState(){
+      if(typeof window.sqlApi !== "function") return;
+      try{
+        const data = await window.sqlApi(`/api/settings/${encodeURIComponent(SHARED_STATE_KEY)}`);
+        const remote = data?.setting?.value || {};
+        const remoteState = remote?.state || remote;
+        const remoteUpdatedAt = Number(remote.updatedAt || data?.setting?.updated_at?.getTime?.() || Date.parse(data?.setting?.updated_at) || 0) || 0;
+        if(remoteState && typeof remoteState === "object"){
+          if(remoteUpdatedAt > sharedStateUpdatedAt || !sharedStateUpdatedAt){
+            state = normalizeState(remoteState);
+            sharedStateUpdatedAt = remoteUpdatedAt || Date.now();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            setSyncStateTag("sincronizado", "green");
+            setSyncStatus("Base compartilhada carregada.");
+            rebuildItemCatalog();
+            render();
+            return true;
+          }
+          setSyncStateTag("sincronizado", "green");
+          setSyncStatus("A base local ja esta tao nova quanto a compartilhada.");
+          return false;
+        }
+        setSyncStateTag("vazio", "");
+        setSyncStatus("Nenhuma base compartilhada encontrada; usando dados locais.");
+      }catch(err){
+        setSyncStateTag("offline", "red");
+        setSyncStatus("Sem acesso à base compartilhada; usando dados locais.");
+      }
+      return false;
+    }
+    function saveState(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      void pushSharedState("salvo");
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     function itemKeyForCatalog(item){
       return String(item?.code || item?.item || item?.protheus || item?.protheusKey || item?.cooperat || "").trim().toUpperCase();
     }
@@ -1042,10 +1155,88 @@
     function table(target, columns, rows){
       const el = document.getElementById(target);
       if(!rows.length){ el.innerHTML = '<div class="empty">Nenhum registro encontrado.</div>'; return; }
-      el.innerHTML = `<table><thead><tr>${columns.map(c=>`<th title="${escHtml(c.label)}">${escHtml(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(c=>`<td>${cellHtml(c.render ? c.render(row) : escHtml(row[c.key] || ""))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+      el.innerHTML = `<table><thead><tr>${columns.map(c=>`<th title="${escHtml(c.label)}">${escHtml(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(c=>`<td>${cellHtml(c.render ? c.render(row) : escHtml(row[c.key] ?? ""))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    }
+    function renderRecordTable(target, type, rows, columns){
+      const el = document.getElementById(target);
+      visibleRows[type] = rows;
+      if(!el) return;
+      if(!rows.length){ el.innerHTML = '<div class="empty">Nenhum registro encontrado.</div>'; return; }
+      const baseColumns = [...columns, {label:"Acoes", key:"__actions"}];
+      el.innerHTML = `
+        <table>
+          <thead><tr>${baseColumns.map(c=>`<th title="${escHtml(c.label)}">${escHtml(c.label)}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${rows.map((row, index) => `
+              <tr data-row-index="${index}">
+                ${columns.map(c=>`<td>${cellHtml(c.render ? c.render(row) : escHtml(row[c.key] ?? ""))}</td>`).join("")}
+                <td>
+                  <div class="row-actions">
+                    <button class="row-action" type="button" title="Editar" data-row-action="edit" data-row-type="${type}" data-row-index="${index}">✎</button>
+                    ${type === "rh" && row.docData ? `<button class="row-action" type="button" title="Baixar documento" data-row-action="download" data-row-type="${type}" data-row-index="${index}">⭳</button>` : ""}
+                    <button class="row-action danger" type="button" title="Apagar" data-row-action="delete" data-row-type="${type}" data-row-index="${index}">×</button>
+                  </div>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+      el.querySelectorAll("[data-row-action]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const rowType = btn.dataset.rowType;
+          const rowIndex = btn.dataset.rowIndex;
+          const action = btn.dataset.rowAction;
+          if(action === "edit") return editRecord(rowType, rowIndex);
+          if(action === "delete") return deleteRecord(rowType, rowIndex);
+          if(action === "download") return downloadRhDocument(rowByTypeAndIndex(rowType, rowIndex));
+        });
+      });
     }
     function lockedHtml(label = "Conteúdo protegido por senha."){
       return `<div class="empty">${label}</div>`;
+    }
+    function makeRecordId(prefix){
+      return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    }
+    function readFileAsDataUrl(file){
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error || new Error("Falha ao ler o arquivo."));
+        reader.readAsDataURL(file);
+      });
+    }
+    function setRecordMode(type, row = null){
+      editingRecord = row ? { type, row } : null;
+    }
+    function rowByTypeAndIndex(type, index){
+      const list = visibleRows[type] || [];
+      return list[Number(index)] || null;
+    }
+    function deleteRecord(type, index){
+      const row = rowByTypeAndIndex(type, index);
+      if(!row) return;
+      const label = type === "rh" ? "RH" : type === "machine" ? "maquina" : type === "stock" ? "acuracidade" : "ocorrencia interna";
+      if(!confirm(`Apagar este registro de ${label}?`)) return;
+      state[type] = (state[type] || []).filter(item => item !== row);
+      saveState();
+      render();
+    }
+    function downloadRhDocument(row){
+      if(!row?.docData){
+        alert("Este registro ainda nao tem anexo salvo para baixar.");
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = row.docData;
+      link.download = row.docName || row.doc || "documento-rh";
+      link.click();
+    }
+    function editRecord(type, index){
+      const row = rowByTypeAndIndex(type, index);
+      if(!row) return;
+      openDialog(type, row);
     }
     function render(){
       const rh = filtered("rh"), machine = filtered("machine"), stock = filtered("stock"), internal = filtered("internal");
@@ -1084,15 +1275,16 @@
       setText("internalTopSeverity", topValue(internal, "severity"));
       setText("internalCritical", internalCritical);
       setText("internalTopOwner", topValue(internal, "owner"));
+      setSyncStateTag(sharedStateUpdatedAt ? "sincronizado" : "somente local", sharedStateUpdatedAt ? "green" : "");
       drawBars("rhChart", rhUnlocked ? groupByDate(rh) : [], "#2f82b7");
       drawBars("machineChart", groupByDate(machine, hours), "#4aa3d8");
       drawLine("stockChart", stockAccuracyTrend(stock), "#2f82b7");
       drawBars("internalChart", groupByField(internal, "classification"), "#6fb7df");
-      if(rhUnlocked) table("rhList", [{label:"Data",key:"date"},{label:"Colaborador",key:"employee"},{label:"Setor",key:"sector"},{label:"Tipo",key:"type"},{label:"Documento",key:"doc"}], rhList);
+      if(rhUnlocked) renderRecordTable("rhList", "rh", rhList, [{label:"Data",key:"date"},{label:"Colaborador",key:"employee"},{label:"Setor",key:"sector"},{label:"Tipo",key:"type"},{label:"Documento",render:r=>r.docName || r.doc || "-"}]);
       else document.getElementById("rhList").innerHTML = lockedHtml();
-      table("machineList", [{label:"Data",key:"date"},{label:"Maquina",key:"machine"},{label:"Peca",render:r=>`${r.part}<br><span class="caption">${r.code || ""}</span>`},{label:"Parada",render:r=>`${r.stopType}<br>${r.start || ""} - ${r.end || ""}`}], machineList);
-      table("stockList", [{label:"Data",key:"date"},{label:"Item",key:"item"},{label:"Qtd. saída",key:"output"},{label:"Qtd. suposta",key:"expected"},{label:"Qtd. contada",key:"actual"},{label:"Resultado",render:r=>Number(r.expected)===Number(r.actual) ? "Correto" : "Incorreto"}], stockList);
-      table("internalList", [{label:"Data",key:"date"},{label:"Dark-Jutsu",key:"darkId"},{label:"Classificação",key:"classification"},{label:"Gravidade",key:"severity"},{label:"Solicitante",key:"requester"},{label:"Responsavel",key:"owner"},{label:"Status",key:"status"}], internalList);
+      renderRecordTable("machineList", "machine", machineList, [{label:"Data",key:"date"},{label:"Maquina",key:"machine"},{label:"Peca",render:r=>`${r.part}<br><span class="caption">${r.code || ""}</span>`},{label:"Parada",render:r=>`${r.stopType}<br>${r.start || ""} - ${r.end || ""}`}]);
+      renderRecordTable("stockList", "stock", stockList, [{label:"Data",key:"date"},{label:"Item",key:"item"},{label:"Qtd. saída",key:"output"},{label:"Qtd. suposta",key:"expected"},{label:"Qtd. contada",key:"actual"},{label:"Resultado",render:r=>Number(r.expected)===Number(r.actual) ? "Correto" : "Incorreto"}]);
+      renderRecordTable("internalList", "internal", internalList, [{label:"Data",key:"date"},{label:"Dark-Jutsu",key:"darkId"},{label:"Classificação",key:"classification"},{label:"Gravidade",key:"severity"},{label:"Solicitante",key:"requester"},{label:"Responsavel",key:"owner"},{label:"Status",key:"status"}]);
       if(rhUnlocked) renderMiniList("rhModuleList", rhList, r => miniRow(r.date, r.employee || "-", r.type || "-"));
       else document.getElementById("rhModuleList").innerHTML = lockedHtml();
       renderMiniList("machineModuleList", machineList, r => miniRow(r.date, r.machine || "-", `${(hours(r)).toFixed(1)}h`));
@@ -1176,18 +1368,21 @@
         code.addEventListener("blur", () => syncMachinePartFields("code"));
       }
     }
-    function openDialog(type){
+    function openDialog(type, row = null){
       if(type === "rh" && !requireRhPassword()) return;
       activeType = type;
+      setRecordMode(type, row);
       const cfg = configs[type];
-      document.getElementById("dialogTitle").textContent = cfg.title;
+      document.getElementById("dialogTitle").textContent = row ? `Editar ${cfg.title}` : cfg.title;
       document.getElementById("formFields").innerHTML = cfg.fields.map(([name,label,type,value,options]) => {
+        const currentValue = row && row[name] !== undefined && row[name] !== null && row[name] !== "" ? row[name] : value;
         const full = type === "textarea" ? " full" : "";
-        if(type === "textarea") return `<div class="${full}"><label>${label}</label><textarea name="${name}">${value}</textarea></div>`;
-        if(type === "select") return `<div><label>${label}</label><select name="${name}">${options.map(o=>`<option ${o===value?"selected":""}>${o}</option>`).join("")}</select></div>`;
+        if(type === "textarea") return `<div class="${full}"><label>${label}</label><textarea name="${name}">${escHtml(currentValue || "")}</textarea></div>`;
+        if(type === "select") return `<div><label>${label}</label><select name="${name}">${options.map(o=>`<option ${o===currentValue?"selected":""}>${o}</option>`).join("")}</select></div>`;
         const step = type === "number" ? ' step="0.01" inputmode="decimal"' : "";
         const required = activeType === "stock" && ["date","item","output","expected","actual"].includes(name) ? " required" : "";
-        return `<div class="${full}"><label>${label}</label><input name="${name}" type="${type}" value="${type==="file" ? "" : value}"${step}${required}></div>`;
+        const inputValue = type === "file" ? "" : escHtml(currentValue || "");
+        return `<div class="${full}"><label>${label}</label><input name="${name}" type="${type}" value="${inputValue}"${step}${required}></div>`;
       }).join("") + extraFormHtml(type) + (type === "stock" ? '<div class="review-box full" id="stockPreview">Use a data inicial como parâmetro da sessão. Depois lance código, quantidade saída, quantidade suposta e quantidade contada. Ao salvar, o formulário fica aberto para o próximo item.</div>' : "");
       document.getElementById("entryDialog").showModal();
       bindDialogHelpers(type);
@@ -1198,9 +1393,19 @@
       if(event.submitter && event.submitter.value === "cancel") return;
       event.preventDefault();
       const data = new FormData(event.currentTarget);
-      const row = Object.fromEntries(data.entries());
-      if(activeType === "rh") row.doc = data.get("docFile")?.name || row.doc || "documento-anexado.pdf";
-      delete row.docFile;
+      const baseRow = editingRecord?.row ? {...editingRecord.row} : {};
+      const row = {...baseRow, ...Object.fromEntries(data.entries())};
+      if(activeType === "rh"){
+        const file = data.get("docFile");
+        if(file && file.size){
+          row.docName = file.name;
+          row.docMime = file.type || "application/octet-stream";
+          row.docData = await readFileAsDataUrl(file);
+        }
+        row.doc = row.docName || row.doc || baseRow.doc || "documento-anexado.pdf";
+        if(!row.docData && baseRow.docData) row.docData = baseRow.docData;
+        delete row.docFile;
+      }
       if(activeType === "stock"){
         row.item = String(row.item || "").trim();
         const found = findCatalogItem(row.item);
@@ -1212,7 +1417,15 @@
         row.countDate = row.date;
         lastStockCountDate = row.date || today;
       }
-      state[activeType].push(row);
+      if(!row.id) row.id = editingRecord?.row?.id || makeRecordId(activeType);
+      if(editingRecord?.row){
+        const idx = (state[activeType] || []).indexOf(editingRecord.row);
+        if(idx >= 0) state[activeType].splice(idx, 1, row);
+        else state[activeType].push(row);
+      }else{
+        state[activeType].push(row);
+      }
+      editingRecord = null;
       saveState();
       render();
       if(activeType === "stock"){
@@ -1492,17 +1705,18 @@
         const workbook = XLSX.read(buffer);
         return movementsFromWorkbook(workbook, file.name);
       }));
-      const rawMovements = batches.flat();
+      const rawMovements = batches.flat().sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
       const movements = aggregateDailyItemMovements(rawMovements);
-      if(!movements.length){
+      if(!rawMovements.length || !movements.length){
         alert("Nao encontrei saidas para conferir nesses arquivos.");
         return;
       }
-      const affected = new Set(movements.map(row => [row.source, row.date, row.item].map(value => String(value || "")).join("|")));
-      const kept = (state.stockMovements || []).filter(row => !affected.has([row.source, row.date, row.item].map(value => String(value || "")).join("|")));
-      state.stockMovements = [...kept, ...movements].sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
+      const affected = new Set(rawMovements.map(row => [row.date, row.item].map(value => String(value || "")).join("|")));
+      const kept = (state.stockMovements || []).filter(row => !affected.has([row.date, row.item].map(value => String(value || "")).join("|")));
+      state.stockMovements = [...kept, ...rawMovements].sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
       rebuildItemCatalog();
       alert(`${movements.length} item(ns)/dia importado(s) para a base.`);
+      saveState();
     }
     function startStockReview(){
       stockReviewAllMovements = aggregateDailyItemMovements([...(state.stockMovements || [])]).sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
@@ -1552,6 +1766,37 @@
       render();
       setActiveView("dashboard");
     });
+    document.getElementById("syncNow").addEventListener("click", async () => {
+      setSyncStatus("Atualizando base compartilhada...");
+      await pullSharedState();
+      await pushSharedState("sincronizado manualmente");
+      render();
+    });
+    document.getElementById("clearRhData").addEventListener("click", () => {
+      if(!confirm("Apagar todos os dados de RH?")) return;
+      state.rh = [];
+      saveState();
+      render();
+    });
+    document.getElementById("clearMachineData").addEventListener("click", () => {
+      if(!confirm("Apagar todos os dados de máquina?")) return;
+      state.machine = [];
+      saveState();
+      render();
+    });
+    document.getElementById("clearStockData").addEventListener("click", () => {
+      if(!confirm("Apagar todos os dados de acuracidade, incluindo importações e contagens?")) return;
+      state.stock = [];
+      state.stockMovements = [];
+      saveState();
+      render();
+    });
+    document.getElementById("clearStockCounts").addEventListener("click", () => {
+      if(!confirm("Zerar somente os relatos de contagem salvos?")) return;
+      state.stock = [];
+      saveState();
+      render();
+    });
     document.getElementById("exportReport").addEventListener("click", exportCsv);
     document.getElementById("clearFilters").addEventListener("click", () => {
       fromDate.value = ""; toDate.value = ""; filterText.value = ""; render();
@@ -1564,6 +1809,8 @@
     loadItemCatalogFromDark();
     renderDashSlots();
     render();
+    void pullSharedState();
+    setInterval(() => pullSharedState(), 30000);
     setTimeout(() => syncInternalFromDark(true), 1200);
   </script>
 </body>
