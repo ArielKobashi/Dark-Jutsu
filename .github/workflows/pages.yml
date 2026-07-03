@@ -1,0 +1,56 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare static site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf public
+          mkdir -p public
+
+          git ls-files -z \
+            | grep -zvE '^(\.github/|api/|db/|_migration_runs/|\.vscode/|docker-compose\.yml$|\.env($|\.))' \
+            | tar --null -T - -cf - \
+            | tar -xf - -C public
+
+          touch public/.nojekyll
+          echo "Public artifact size:"
+          du -sh public
+          echo "Largest published files:"
+          find public -type f -printf '%s %p\n' | sort -nr | head -20
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
