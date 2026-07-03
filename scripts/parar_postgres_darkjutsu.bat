@@ -5,9 +5,14 @@ set "PG_BIN=C:\DarkJutsu\PostgreSQL\pgsql\bin"
 set "PGDATA=C:\DarkJutsu\postgres-data"
 set "PGPORT=5433"
 set "LOGDIR=C:\DarkJutsu\logs"
-set "LOGFILE=%LOGDIR%\postgres_shutdown.log"
 
-if not exist "%LOGDIR%" mkdir "%LOGDIR%"
+if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
+copy /Y NUL "%LOGDIR%\.write_test" >nul 2>&1
+if not %errorlevel%==0 set "LOGDIR=%TEMP%\DarkJutsu\logs"
+if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
+del "%LOGDIR%\.write_test" >nul 2>&1
+
+set "LOGFILE=%LOGDIR%\postgres_shutdown.log"
 
 echo ================================================== >> "%LOGFILE%"
 echo [%date% %time%] Solicitando parada do PostgreSQL Dark-Jutsu... >> "%LOGFILE%"

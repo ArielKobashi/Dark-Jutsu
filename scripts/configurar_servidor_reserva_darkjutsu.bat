@@ -57,6 +57,9 @@ if not exist "%PY_ROOT%\WPy64-3.13.12.0\python\python.exe" (
     echo Python portable ja existe em %PY_ROOT%\WPy64-3.13.12.0.
 )
 
+call "%SHARE_ROOT%\scripts\corrigir_python_reserva_darkjutsu.bat"
+if errorlevel 1 exit /b 1
+
 echo Copiando pacote Dark-Jutsu para %APP_ROOT%...
 mkdir "%APP_ROOT%" 2>nul
 xcopy "%PROJECT_SOURCE%" "%APP_ROOT%\" /E /I /Y
@@ -102,8 +105,10 @@ if "%LATEST_BACKUP%"=="" (
 )
 
 echo Instalando atalhos de inicializacao para este usuario...
-call "%SHARE_ROOT%\scripts\instalar_atalho_postgres_darkjutsu.bat"
-call "%SHARE_ROOT%\scripts\instalar_atalho_api_darkjutsu.bat"
+call "%SHARE_ROOT%\scripts\instalar_atalho_servidor_guardiao_darkjutsu.bat"
+
+echo Iniciando API Dark-Jutsu...
+call "%SHARE_ROOT%\scripts\iniciar_servidor_se_necessario_darkjutsu.bat"
 
 echo.
 echo ==================================================

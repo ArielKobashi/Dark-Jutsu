@@ -25,7 +25,23 @@ $env:DARK_JUTSU_API_PORT="8765"
 C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe api\dark_jutsu_api.py
 ```
 
-Se `DARK_JUTSU_API_TOKEN` for definido, as chamadas precisam enviar:
+## Autenticacao
+
+A API valida dois tipos de autenticacao:
+
+- Navegador: `Authorization: Bearer <Firebase ID token>`. `index.html`, `dashboard.html` e `label-editor.html` pegam `auth.currentUser.getIdToken()` automaticamente.
+- Servico/script: `DARK_JUTSU_API_TOKEN`, quando definido, autoriza chamadas como `service`.
+
+Variaveis:
+
+```text
+FIREBASE_PROJECT_ID=chat-fiasul
+DARK_JUTSU_REQUIRE_AUTH=1
+DARK_JUTSU_ALLOWED_ORIGINS=*
+DARK_JUTSU_API_TOKEN=
+```
+
+Para scripts, envie:
 
 ```text
 Authorization: Bearer <token>
@@ -37,10 +53,13 @@ ou:
 X-API-Token: <token>
 ```
 
+Com `DARK_JUTSU_REQUIRE_AUTH=1`, chamadas sem token Firebase/servico recebem `401`.
+
 ## Endpoints iniciais
 
 ```text
 GET /health
+GET /api/me
 GET /api/inventory?limit=100&offset=0&q=texto
 GET /api/inventory/{codigo}
 GET /api/users?limit=100&offset=0

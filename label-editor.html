@@ -999,10 +999,18 @@
         let timerSalvarCompartilhado = null;
         let usuarioCompartilhado = "";
 
+        async function resolveSqlAuthHeader(){
+            if(SQL_API_TOKEN) return `Bearer ${SQL_API_TOKEN}`;
+            const user = auth.currentUser;
+            if(!user || typeof user.getIdToken !== "function") return "";
+            return `Bearer ${await user.getIdToken()}`;
+        }
+
         async function sqlApi(path, options = {}){
             const headers = { ...(options.headers || {}) };
             if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
-            if(SQL_API_TOKEN) headers.Authorization = `Bearer ${SQL_API_TOKEN}`;
+            const authHeader = await resolveSqlAuthHeader();
+            if(authHeader) headers.Authorization = authHeader;
             let lastError = null;
             for(const base of SQL_API_FALLBACK_BASES){
                 try{

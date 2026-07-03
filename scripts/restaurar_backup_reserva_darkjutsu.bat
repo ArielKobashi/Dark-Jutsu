@@ -8,13 +8,13 @@ set "DB_NAME=dark_jutsu"
 set "DB_OWNER=dark_jutsu"
 set "BACKUP_DIR=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\backups"
 set "LOGDIR=C:\DarkJutsu\logs"
-set "LOGFILE=%LOGDIR%\postgres_reserva_restore.log"
+set "LOGFILE=%LOGDIR%\postgres_restore_inativo.log"
 set "STATEFILE=%LOGDIR%\ultimo_backup_restaurado.txt"
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 
 echo ================================================== >> "%LOGFILE%"
-echo [%date% %time%] Verificando backup para servidor reserva... >> "%LOGFILE%"
+echo [%date% %time%] Verificando backup para servidor inativo... >> "%LOGFILE%"
 
 netstat -ano -p tcp | findstr /R /C:":8765 .*LISTENING" >nul
 if %errorlevel%==0 (

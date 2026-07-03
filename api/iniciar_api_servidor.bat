@@ -6,8 +6,6 @@ for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass
 
 if "%PYTHON_EXE%"=="" (
   echo Python portatil valido nao encontrado no Desktop.
-  echo Esperado: pasta "aplicacoes code" ou "aplicacoes code" com WPy64-3.13.12.0\python completo e psycopg.
-  pause
   exit /b 1
 )
 
@@ -18,4 +16,3 @@ if "%DARK_JUTSU_API_PORT%"=="" set "DARK_JUTSU_API_PORT=8765"
 cd /d "%ROOT%"
 echo Iniciando API SQL em http://%DARK_JUTSU_API_HOST%:%DARK_JUTSU_API_PORT%
 "%PYTHON_EXE%" api\dark_jutsu_api.py
-pause

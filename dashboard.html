@@ -32,6 +32,62 @@
             color:var(--text);
             font-family:Segoe UI, Arial, sans-serif;
         }
+        body.embed{
+            min-height:100vh;
+            background:#0D0D12;
+            overflow:hidden;
+        }
+        body.embed header{display:none}
+        body.embed main{
+            width:100%;
+            height:100vh;
+            padding:0;
+            margin:0;
+            overflow:hidden;
+        }
+        body.embed .cards,
+        body.embed .toolbar,
+        body.embed .filters,
+        body.embed .sectionTitle,
+        body.embed .tableWrap,
+        body.embed .kanbanFiltroBar,
+        body.embed .kanbanMore{
+            display:none !important;
+        }
+        body.embed .vizGrid{
+            display:block;
+            margin:0;
+        }
+        body.embed .vizPanel{
+            width:100%;
+            height:100vh;
+            border-radius:0;
+            border:0;
+            padding:12px;
+            overflow:auto;
+            box-shadow:none;
+        }
+        body.embed .contagemProgressPanel{
+            width:100%;
+            height:100vh;
+            margin:0;
+            border-radius:0;
+            border:0;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+        }
+        body.embed .vizPanelControls{display:none}
+        body.embed .barRow{
+            grid-template-columns:auto minmax(120px,1fr) 3fr auto;
+        }
+        body.embed .login{
+            max-width:none;
+            height:100vh;
+            margin:0;
+            border-radius:0;
+            box-shadow:none;
+        }
         header{
             border-bottom:1px solid rgba(122,60,255,.35);
             background:rgba(13,13,18,.86);
@@ -728,6 +784,7 @@
             <div class="headerActions">
                 <span class="sub" id="ultimaAtualizacao"></span>
                 <a class="secondaryBtn" href="dashboard.html?ambiente=avaliador&armazem=04&status=todos&limite=50">Avaliador</a>
+                <a class="secondaryBtn" href="medidores.html">Medidores</a>
                 <a class="secondaryBtn" href="index.html">Abrir Dark</a>
                 <button class="primaryBtn" id="btnAtualizar" type="button">Atualizar</button>
             </div>
@@ -780,10 +837,18 @@
         ].filter((base, index, bases) => base && bases.indexOf(base) === index);
         const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
 
+        async function resolveSqlAuthHeader(){
+            if(SQL_API_TOKEN) return `Bearer ${SQL_API_TOKEN}`;
+            const user = auth.currentUser;
+            if(!user || typeof user.getIdToken !== "function") return "";
+            return `Bearer ${await user.getIdToken()}`;
+        }
+
         async function sqlApi(path, options = {}){
             const headers = { ...(options.headers || {}) };
             if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
-            if(SQL_API_TOKEN) headers.Authorization = `Bearer ${SQL_API_TOKEN}`;
+            const authHeader = await resolveSqlAuthHeader();
+            if(authHeader) headers.Authorization = authHeader;
             let lastError = null;
             for(const base of SQL_API_FALLBACK_BASES){
                 try{
@@ -840,8 +905,11 @@
             movimentoDirecao: parametroPermitido((params.get("movimentoDirecao") || "desc").toLowerCase(), ["asc","desc"], "desc"),
             periodoMovimentacao: parametroPermitido((params.get("periodoMovimentacao") || params.get("periodo") || "dia").toLowerCase(), ["dia","semana","mes"], "dia"),
             dataMovimentacao: params.get("dataMovimentacao") || "",
-            maquinaMovimentacao: (params.get("maquinaMovimentacao") || params.get("maquina") || "").trim().toUpperCase()
+            maquinaMovimentacao: (params.get("maquinaMovimentacao") || params.get("maquina") || "").trim().toUpperCase(),
+            embed: boolParam("embed", "embutido"),
+            painel: params.get("painel") || ""
         };
+        if(cfg.embed) document.body.classList.add("embed");
         const regexArmazemBusca = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
         const armazemNaBusca = cfg.busca.match(regexArmazemBusca);
         if(armazemNaBusca && !cfg.armazens.length){
@@ -930,6 +998,27 @@
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
+        }
+        function aplicarModoEmbed(){
+            if(!cfg.embed) return;
+            document.body.classList.add("embed");
+            const alvo = painelDashboardId(cfg.painel || "");
+            const paineis = [...root.querySelectorAll("[data-panel-key]")];
+            if(!alvo || !paineis.length) return;
+            let achou = false;
+            paineis.forEach(panel => {
+                const manter = panel.dataset.panelKey === alvo;
+                if(manter) achou = true;
+                panel.style.display = manter ? "" : "none";
+            });
+            [...root.children].forEach(child => {
+                if(child.matches("[data-panel-key]")) return;
+                if(child.querySelector?.(`[data-panel-key="${CSS.escape(alvo)}"]`)) return;
+                child.style.display = "none";
+            });
+            if(!achou){
+                root.innerHTML = `<section class="empty">Painel "${esc(cfg.painel)}" nao encontrado neste dashboard.</section>`;
+            }
         }
         function num(valor){
             if(valor === null || valor === undefined || valor === "") return null;
@@ -2349,6 +2438,7 @@
                 </section>
             `;
             bindFiltros();
+            aplicarModoEmbed();
         }
         function incrementarRanking(mapa, usuario, qtd = 1){
             const nome = String(usuario || "").trim() || "Sem usuario";
@@ -2413,13 +2503,14 @@
             return { total, feitas, percentual, secoes };
         }
         function renderProgressoContagem(progresso){
+            const id = painelDashboardId("Progresso de contagem - armazens 04 e 05");
             const pct = Math.round((progresso?.percentual || 0) * 10) / 10;
             const tooltipSecoes = Object.values(progresso?.secoes || {}).map(secao => {
                 const pctSecao = Math.round((secao.percentual || 0) * 10) / 10;
                 return `${secao.label}: ${fmt(pctSecao)}% (${fmt(secao.feitas || 0)} de ${fmt(secao.total || 0)})`;
             }).join("\n");
             return `
-                <section class="contagemProgressPanel">
+                <section class="contagemProgressPanel" data-panel-key="${esc(id)}">
                     <div class="contagemProgressTop">
                         <div>
                             <span>Progresso de contagem - armazens 04 e 05</span>
@@ -2460,10 +2551,11 @@
             return [...mapa.values()].sort((a,b) => (b.quantidade - a.quantidade) || (b.eventos - a.eventos));
         }
         function renderRankingUsuarios(titulo, linhas, rotuloQtd){
+            const id = painelDashboardId(titulo);
             const top = linhas.slice(0, 8);
             const max = Math.max(1, ...top.map(l => Number(l.quantidade || l.eventos || 0)));
             return `
-                <section class="vizPanel">
+                <section class="vizPanel" data-panel-key="${esc(id)}">
                     <h2>${esc(titulo)}</h2>
                     <div class="bars">
                         ${top.length ? top.map((l, idx) => {
@@ -2898,7 +2990,7 @@
             const unidadeEscala = campoValor === "dias" ? " dias" : "";
             const opcoesLimite = [5,8,10,15,20,30,50,100];
             return `
-                <section class="vizPanel">
+                <section class="vizPanel" data-panel-key="${esc(id)}">
                     <div class="vizPanelHeader">
                         <h2>${esc(titulo)}</h2>
                         <div class="vizPanelControls">
@@ -2924,11 +3016,12 @@
             `;
         }
         function renderPizza(abaixo, acima, ok){
+            const id = painelDashboardId("Distribuicao");
             const total = Math.max(1, abaixo + acima + ok);
             const p1 = (abaixo / total) * 100;
             const p2 = p1 + (acima / total) * 100;
             return `
-                <section class="vizPanel">
+                <section class="vizPanel" data-panel-key="${esc(id)}">
                     <h2>Distribuicao</h2>
                     <div class="pieWrap">
                         <div class="pie" style="--abaixo:${p1}%;--acima:${p2}%"></div>
@@ -3138,6 +3231,7 @@
                 ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
+            aplicarModoEmbed();
         }
         function movimentoValor(e, campo, idx){
             if(campo === "rank") return idx + 1;
@@ -3460,6 +3554,7 @@
                 ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
+            aplicarModoEmbed();
         }
 
         onAuthStateChanged(auth, user => {

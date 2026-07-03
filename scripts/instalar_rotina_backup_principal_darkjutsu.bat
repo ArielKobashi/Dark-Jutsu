@@ -4,9 +4,9 @@ setlocal EnableExtensions
 set "SCRIPT=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts\backup_postgres_darkjutsu.bat"
 set "TASK_NAME=Dark-Jutsu Backup PostgreSQL Principal"
 
-schtasks /Create /F /TN "%TASK_NAME%" /SC MINUTE /MO 30 /TR "\"%SCRIPT%\"" >nul 2>&1
+schtasks /Create /F /TN "%TASK_NAME%" /SC MINUTE /MO 5 /TR "\"%SCRIPT%\"" >nul 2>&1
 if %errorlevel%==0 (
-    echo Rotina instalada: backup a cada 30 minutos.
+    echo Rotina instalada: backup a cada 5 minutos.
     exit /b 0
 )
 

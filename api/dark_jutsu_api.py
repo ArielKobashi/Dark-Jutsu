@@ -4,14 +4,18 @@ import base64
 import json
 import re
 import os
+import time
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.error import URLError
 from urllib.parse import parse_qs, unquote, urlparse
+from urllib.request import urlopen
 
+import jwt
 import psycopg
 from psycopg.rows import dict_row
 
@@ -28,6 +32,11 @@ DATABASE_URL = _env("DATABASE_URL", DEFAULT_DATABASE_URL)
 API_HOST = _env("DARK_JUTSU_API_HOST", "127.0.0.1")
 API_PORT = int(_env("DARK_JUTSU_API_PORT", "8765"))
 API_TOKEN = _env("DARK_JUTSU_API_TOKEN")
+FIREBASE_PROJECT_ID = _env("FIREBASE_PROJECT_ID", "chat-fiasul")
+REQUIRE_AUTH = _env("DARK_JUTSU_REQUIRE_AUTH", "1").lower() not in {"0", "false", "no", "nao"}
+ALLOWED_ORIGINS = [origin.strip().rstrip("/") for origin in _env("DARK_JUTSU_ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
+FIREBASE_CERTS_URL = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+_FIREBASE_CERTS: dict[str, Any] = {"expires_at": 0.0, "certs": {}}
 
 
 def _json_default(value: Any) -> Any:
@@ -128,6 +137,71 @@ class ApiError(Exception):
         self.message = message
 
 
+class AuthContext:
+    def __init__(
+        self,
+        authenticated: bool = False,
+        user_id: str | None = None,
+        role: str = "anon",
+        service: bool = False,
+        claims: dict[str, Any] | None = None,
+    ):
+        self.authenticated = authenticated
+        self.user_id = user_id
+        self.role = role
+        self.service = service
+        self.claims = claims or {}
+
+
+def _firebase_certs() -> dict[str, str]:
+    now = time.time()
+    if _FIREBASE_CERTS["certs"] and _FIREBASE_CERTS["expires_at"] > now:
+        return _FIREBASE_CERTS["certs"]
+    try:
+        with urlopen(FIREBASE_CERTS_URL, timeout=10) as response:
+            raw = response.read()
+            cache_control = response.headers.get("Cache-Control", "")
+    except URLError as exc:
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Nao foi possivel carregar certificados Firebase.") from exc
+    certs = json.loads(raw.decode("utf-8"))
+    max_age = 3600
+    match = re.search(r"max-age=(\d+)", cache_control)
+    if match:
+        max_age = int(match.group(1))
+    _FIREBASE_CERTS["certs"] = certs
+    _FIREBASE_CERTS["expires_at"] = now + max(60, max_age - 30)
+    return certs
+
+
+def _verify_firebase_id_token(token: str) -> dict[str, Any]:
+    try:
+        header = jwt.get_unverified_header(token)
+    except jwt.PyJWTError as exc:
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Token Firebase invalido.") from exc
+    kid = header.get("kid")
+    cert = _firebase_certs().get(kid)
+    if not cert:
+        _FIREBASE_CERTS["expires_at"] = 0
+        cert = _firebase_certs().get(kid)
+    if not cert:
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Certificado do token Firebase nao encontrado.")
+    issuer = f"https://securetoken.google.com/{FIREBASE_PROJECT_ID}"
+    try:
+        claims = jwt.decode(
+            token,
+            cert,
+            algorithms=["RS256"],
+            audience=FIREBASE_PROJECT_ID,
+            issuer=issuer,
+            options={"require": ["exp", "iat", "aud", "iss", "sub"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Token Firebase expirado ou invalido.") from exc
+    if not _clean_text(claims.get("sub")):
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Token Firebase sem usuario.")
+    return claims
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "DarkJutsuSQL/0.1"
 
@@ -136,10 +210,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def _send_json(self, payload: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, ensure_ascii=False, default=_json_default).encode("utf-8")
+        origin = self.headers.get("Origin", "").rstrip("/")
+        allow_origin = "*"
+        if ALLOWED_ORIGINS and ALLOWED_ORIGINS != ["*"]:
+            allow_origin = origin if origin in ALLOWED_ORIGINS else ALLOWED_ORIGINS[0]
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", allow_origin)
+        self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Headers", "authorization, content-type, x-api-token")
         self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE, OPTIONS")
         self.end_headers()
@@ -150,8 +229,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         try:
-            if not self._authorized():
-                raise ApiError(HTTPStatus.UNAUTHORIZED, "Token da API ausente ou invalido.")
+            self.auth_context = self._authenticate()
             parsed = urlparse(self.path)
             query = parse_qs(parsed.query)
             parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
@@ -176,8 +254,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_write(self, method: str) -> None:
         try:
-            if not self._authorized():
-                raise ApiError(HTTPStatus.UNAUTHORIZED, "Token da API ausente ou invalido.")
+            self.auth_context = self._authenticate()
             parsed = urlparse(self.path)
             parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
             payload = self._read_json_body()
@@ -188,29 +265,87 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
-    def _authorized(self) -> bool:
+    def _authenticate(self) -> AuthContext:
         if self.path.startswith("/health"):
-            return True
-        if not API_TOKEN:
-            return True
+            return AuthContext(authenticated=True, role="service", service=True)
         bearer = self.headers.get("Authorization", "")
         token = self.headers.get("X-API-Token", "")
-        return bearer == f"Bearer {API_TOKEN}" or token == API_TOKEN
+        if API_TOKEN and (bearer == f"Bearer {API_TOKEN}" or token == API_TOKEN):
+            return AuthContext(authenticated=True, role="service", service=True)
+        if bearer.startswith("Bearer "):
+            raw_token = bearer.removeprefix("Bearer ").strip()
+            if raw_token:
+                claims = _verify_firebase_id_token(raw_token)
+                return self._auth_context_from_firebase_claims(claims)
+        if not REQUIRE_AUTH:
+            return AuthContext(authenticated=True, role="service", service=True)
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Autenticacao Firebase obrigatoria.")
+
+    def _auth_context_from_firebase_claims(self, claims: dict[str, Any]) -> AuthContext:
+        uid = _clean_text(claims.get("sub") or claims.get("user_id"))
+        if not uid:
+            raise ApiError(HTTPStatus.UNAUTHORIZED, "Token Firebase sem uid.")
+        rows = self._query_as_service(
+            """
+            select u.id, u.firebase_uid, u.role, u.active, b.user_id as banned_user_id
+            from users u
+            left join banned_users b on b.user_id = u.id
+            where u.id = %s or u.firebase_uid = %s
+            order by u.active desc
+            limit 1
+            """,
+            (uid, uid),
+        )
+        if not rows:
+            raise ApiError(HTTPStatus.FORBIDDEN, "Usuario autenticado nao existe no SQL.")
+        user = rows[0]
+        if not user.get("active"):
+            raise ApiError(HTTPStatus.FORBIDDEN, "Usuario inativo.")
+        if user.get("banned_user_id"):
+            raise ApiError(HTTPStatus.FORBIDDEN, "Usuario banido.")
+        role = _clean_text(user.get("role")) or "op"
+        return AuthContext(authenticated=True, user_id=user["id"], role=role, claims=claims)
+
+    def _require_auth(self) -> AuthContext:
+        auth = getattr(self, "auth_context", AuthContext())
+        if not auth.authenticated:
+            raise ApiError(HTTPStatus.UNAUTHORIZED, "Autenticacao obrigatoria.")
+        return auth
+
+    def _require_roles(self, *roles: str) -> AuthContext:
+        auth = self._require_auth()
+        if auth.service:
+            return auth
+        allowed = set(roles)
+        if auth.role not in allowed:
+            raise ApiError(HTTPStatus.FORBIDDEN, "Permissao insuficiente.")
+        return auth
+
+    def _require_staff(self) -> AuthContext:
+        return self._require_roles("mod", "admin")
+
+    def _require_admin(self) -> AuthContext:
+        return self._require_roles("admin")
 
     def _route(self, parts: list[str], query: dict[str, list[str]]) -> Any:
         if parts == ["health"]:
             return self._health()
         if parts[:1] != ["api"]:
             raise ApiError(HTTPStatus.NOT_FOUND, "Endpoint nao encontrado.")
+        if parts == ["api", "me"]:
+            return self._me()
         if parts == ["api", "inventory"]:
             return self._inventory(query)
         if len(parts) == 3 and parts[:2] == ["api", "inventory"]:
             return self._inventory_item(parts[2])
         if parts == ["api", "users"]:
+            self._require_staff()
             return self._users(query)
         if parts == ["api", "signup-requests"]:
+            self._require_staff()
             return self._signup_requests(query)
         if parts == ["api", "banned-users"]:
+            self._require_staff()
             return self._banned_users(query)
         if parts == ["api", "dashboard"]:
             return self._dashboard()
@@ -240,8 +375,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _write_route(self, method: str, parts: list[str], payload: dict[str, Any]) -> Any:
         if method == "PUT" and len(parts) == 4 and parts[:3] == ["api", "dashboard", "panels"]:
+            self._require_staff()
             return self._put_dashboard_panel(parts[3], payload)
         if method == "PUT" and len(parts) == 4 and parts[:3] == ["api", "dashboard", "evaluations"]:
+            self._require_staff()
             return self._put_dashboard_evaluation(parts[3], payload)
         if method == "POST" and parts == ["api", "occurrences"]:
             return self._post_occurrence(payload)
@@ -262,22 +399,31 @@ class Handler(BaseHTTPRequestHandler):
         if method in {"PUT", "POST", "PATCH"} and parts == ["api", "counting", "machine-status"]:
             return self._put_counting_machine_status(payload)
         if method == "POST" and parts == ["api", "counting", "reset"]:
+            self._require_admin()
             return self._post_counting_reset(payload)
         if method in {"PUT", "PATCH"} and len(parts) == 3 and parts[:2] == ["api", "settings"]:
+            self._require_staff()
             return self._put_setting(parts[2], payload)
         if method in {"POST", "PUT"} and len(parts) == 4 and parts[:3] == ["api", "automus", "releases"]:
+            self._require_admin()
             return self._put_automus_release(parts[3], payload)
         if method == "PATCH" and len(parts) == 3 and parts[:2] == ["api", "users"]:
+            self._require_staff()
             return self._patch_user(parts[2], payload)
         if method == "POST" and len(parts) == 4 and parts[:2] == ["api", "users"] and parts[3] == "ban":
+            self._require_staff()
             return self._ban_user(parts[2], payload)
         if method == "POST" and len(parts) == 4 and parts[:2] == ["api", "users"] and parts[3] == "reset-password":
+            self._require_staff()
             return self._reset_user_password(parts[2], payload)
         if method == "DELETE" and len(parts) == 3 and parts[:2] == ["api", "banned-users"]:
+            self._require_staff()
             return self._delete_banned_user(parts[2])
         if method == "PATCH" and len(parts) == 3 and parts[:2] == ["api", "signup-requests"]:
+            self._require_staff()
             return self._patch_signup_request(parts[2], payload)
         if method == "POST" and len(parts) == 4 and parts[:2] == ["api", "signup-requests"] and parts[3] == "approve":
+            self._require_staff()
             return self._approve_signup_request(parts[2], payload)
         raise ApiError(HTTPStatus.NOT_FOUND, "Endpoint de escrita nao encontrado.")
 
@@ -295,25 +441,48 @@ class Handler(BaseHTTPRequestHandler):
         return payload
 
     def _query(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+        auth = getattr(self, "auth_context", AuthContext(role="service", service=True))
         with _connect() as conn:
             with conn.cursor() as cur:
-                cur.execute("set local app.role = 'service'")
+                cur.execute("select set_config('app.role', %s, true)", (auth.role,))
+                cur.execute("select set_config('app.user_id', %s, true)", (auth.user_id or "",))
                 cur.execute(sql, params)
                 return list(cur.fetchall())
 
     def _execute_one(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any]:
+        auth = getattr(self, "auth_context", AuthContext(role="service", service=True))
         with _connect() as conn:
             with conn.cursor() as cur:
-                cur.execute("set local app.role = 'service'")
+                cur.execute("select set_config('app.role', %s, true)", (auth.role,))
+                cur.execute("select set_config('app.user_id', %s, true)", (auth.user_id or "",))
                 cur.execute(sql, params)
                 row = cur.fetchone()
                 if row is None:
                     return {}
                 return dict(row)
 
+    def _query_as_service(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("select set_config('app.role', 'service', true)")
+                cur.execute("select set_config('app.user_id', '', true)")
+                cur.execute(sql, params)
+                return list(cur.fetchall())
+
     def _health(self) -> dict[str, Any]:
         rows = self._query("select now() as database_time")
         return {"ok": True, "database_time": rows[0]["database_time"], "database_url": "configured"}
+
+    def _me(self) -> dict[str, Any]:
+        auth = getattr(self, "auth_context", AuthContext())
+        return {
+            "authenticated": auth.authenticated,
+            "service": auth.service,
+            "user_id": auth.user_id,
+            "role": auth.role,
+            "firebase_uid": auth.claims.get("sub") or auth.claims.get("user_id"),
+            "email": auth.claims.get("email"),
+        }
 
     def _inventory(self, query: dict[str, list[str]]) -> dict[str, Any]:
         limit = _limit(query, 100, 500)

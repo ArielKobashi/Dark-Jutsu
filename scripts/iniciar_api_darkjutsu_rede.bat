@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-set "DARK_JUTSU_ROOT=C:\Users\Davi.souza\Desktop\Dark-Jutsu"
+set "DARK_JUTSU_ROOT=%USERPROFILE%\Desktop\Dark-Jutsu"
 set "DARK_JUTSU_API_HOST=0.0.0.0"
 set "POSTGRES_STARTER=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts\iniciar_postgres_darkjutsu.bat"
 
@@ -20,5 +20,5 @@ if exist "%POSTGRES_STARTER%" (
     call "%POSTGRES_STARTER%"
 )
 
-cd /d "%DARK_JUTSU_ROOT%"
-call "%DARK_JUTSU_ROOT%\api\iniciar_api.bat"
+start "Dark-Jutsu API" /MIN cmd /c "cd /d ""%DARK_JUTSU_ROOT%"" && api\iniciar_api_servidor.bat"
+exit /b 0

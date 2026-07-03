@@ -6,6 +6,7 @@ set "PGHOST=127.0.0.1"
 set "PGPORT=5433"
 set "PGUSER=dark_jutsu"
 set "PGDATABASE=dark_jutsu"
+set "API_URL=http://127.0.0.1:8765/health"
 set "BACKUP_DIR=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\backups"
 set "LOGDIR=C:\DarkJutsu\logs"
 set "LOGFILE=%LOGDIR%\postgres_backup.log"
@@ -18,6 +19,12 @@ set "BACKUP_FILE=%BACKUP_DIR%\darkjutsu_backup_%STAMP%.backup"
 
 echo ================================================== >> "%LOGFILE%"
 echo [%date% %time%] Iniciando backup Dark-Jutsu... >> "%LOGFILE%"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r=Invoke-RestMethod -Uri '%API_URL%' -TimeoutSec 3; if ($r.ok -eq $true) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+if not %errorlevel%==0 (
+    echo [%date% %time%] API local nao esta ativa. Backup ignorado; esta maquina nao e o servidor em uso. >> "%LOGFILE%"
+    exit /b 0
+)
 
 if not exist "%PG_BIN%\pg_dump.exe" (
     echo [%date% %time%] ERRO: pg_dump.exe nao encontrado em %PG_BIN%. >> "%LOGFILE%"
@@ -36,8 +43,8 @@ if not %errorlevel%==0 (
     exit /b 1
 )
 
-echo [%date% %time%] Backup criado: %BACKUP_FILE% >> "%LOGFILE%"
+echo [%date% %time%] Backup criado pela maquina ativa: %BACKUP_FILE% >> "%LOGFILE%"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%BACKUP_DIR%' -Filter 'darkjutsu_backup_*.backup' | Sort-Object LastWriteTime -Descending | Select-Object -Skip 12 | Remove-Item -Force" >> "%LOGFILE%" 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%BACKUP_DIR%' -Filter 'darkjutsu_backup_*.backup' | Sort-Object LastWriteTime -Descending | Select-Object -Skip 72 | Remove-Item -Force" >> "%LOGFILE%" 2>&1
 
 exit /b 0

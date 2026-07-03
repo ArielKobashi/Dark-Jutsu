@@ -99,7 +99,7 @@ display:none;
 
 #mainActions{
     display:grid;
-    grid-template-columns:repeat(4, minmax(0, 1fr));
+    grid-template-columns:repeat(5, minmax(0, 1fr));
     gap:6px;
     flex-shrink:0;
     margin-top:6px;
@@ -107,7 +107,8 @@ display:none;
 
 #btnContagem,
 #btnOcorrencias,
-#btnDashboard{
+#btnDashboard,
+#btnMedidores{
     display:flex;
     align-items:center;
     justify-content:center;
@@ -139,6 +140,17 @@ display:none;
 #btnDashboard:hover{
     filter:brightness(1.08);
     box-shadow:0 0 12px rgba(34,211,238,0.42);
+}
+
+#btnMedidores{
+    background:linear-gradient(145deg,#0F766E,#14B8A6);
+    border-color:#5EEAD4;
+    color:#F0FDFA;
+}
+
+#btnMedidores:hover{
+    filter:brightness(1.08);
+    box-shadow:0 0 12px rgba(45,212,191,0.42);
 }
 
 #btnOcorrencias{

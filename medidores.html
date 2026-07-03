@@ -1,0 +1,1453 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dark-Jutsu | Medidores</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    :root{
+      --bg:#edf1f5;
+      --panel:#ffffff;
+      --panel-2:#f3f6f9;
+      --line:#d8e0e7;
+      --text:#26333f;
+      --muted:#6d7b88;
+      --nav:#293846;
+      --nav-2:#405568;
+      --blue:#3997d3;
+      --blue-dark:#2179b6;
+      --green:#29a37f;
+      --red:#df5b61;
+      --yellow:#f0b429;
+      --shadow:0 10px 26px rgba(38,51,63,.12);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text)}
+    button,input,select,textarea{font:inherit}
+    button{border:0;cursor:pointer}
+    .shell{min-height:100vh}
+    header{background:var(--nav);border-bottom:4px solid #4e8db5;color:#fff}
+    .topbar{max-width:1240px;margin:0 auto;padding:0 18px;display:flex;gap:16px;align-items:center;justify-content:space-between;height:46px}
+    .brand{display:flex;align-items:center;gap:12px;min-width:220px}
+    .brand img{width:26px;height:26px;object-fit:contain}
+    .brand h1{font-size:15px;margin:0;letter-spacing:0}
+    .brand span{display:none}
+    .tabs{display:flex;align-self:stretch}
+    .tab{display:flex;align-items:center;padding:0 18px;border-left:1px solid rgba(255,255,255,.08);font-size:12px;color:#d9e4ec;background:transparent;white-space:nowrap}
+    .tab.active{background:var(--nav-2);color:#fff;font-weight:700}
+    .subnav{background:#31536b;color:#d9edf8;border-bottom:1px solid #9fc4da}
+    .subnav-inner{max-width:1240px;margin:0 auto;padding:5px 18px;display:flex;gap:28px;justify-content:center;font-size:12px}
+    .filters{display:flex;flex-direction:column;gap:10px}
+    label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px;font-weight:700;line-height:1.25}
+    input,select,textarea{background:#fff;color:var(--text);border:1px solid var(--line);border-radius:3px;padding:8px 9px;min-height:34px;width:100%}
+    textarea{resize:vertical;min-height:86px}
+    .btn{border-radius:3px;padding:9px 11px;background:var(--blue);color:#fff;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;text-align:center;line-height:1.15;white-space:normal}
+    .btn.secondary{background:#dce5ec;color:#34495a;border:1px solid #c4d0d9}
+    .btn.danger{background:var(--red);color:#fff}
+    main{max-width:1240px;margin:0 auto;padding:18px;background:#fff;box-shadow:var(--shadow);min-height:calc(100vh - 75px)}
+    .page-title{font-size:16px;margin:0 0 14px;color:#34495a;font-weight:800}
+    .view{display:none}
+    .view.active{display:block}
+    .setup-grid,.data-grid,.report-grid{display:grid;grid-template-columns:repeat(2,minmax(280px,1fr));gap:12px}
+    .setup-card,.data-card,.report-card{border:1px solid var(--line);background:#fff}
+    .setup-card h3,.data-card h3,.report-card h3{margin:0;padding:10px 12px;background:#f0f6fa;border-bottom:1px solid var(--line);font-size:14px;color:#263f54}
+    .setup-card .body,.data-card .body,.report-card .body{padding:12px}
+    .setting-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #edf1f5;font-size:13px;line-height:1.25}
+    .setting-row:last-child{border-bottom:0}
+    .toggle{width:42px;height:22px;border-radius:999px;background:#2f82b7;position:relative}
+    .toggle:after{content:"";position:absolute;right:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff}
+    .data-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .report-total{font-size:32px;color:#2f82b7;line-height:1;font-weight:800}
+    .report-label{font-size:12px;color:#6d7b88;margin-top:5px}
+    .dashboard-layout{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:14px;align-items:start}
+    .dashboard-main{min-width:0}
+    .side-panel{background:#f7f9fb;border-left:1px solid var(--line);padding:0 0 10px}
+    .filter-card{border-bottom:1px solid var(--line);padding:10px}
+    .filter-card h3{margin:0 0 7px;font-size:12px;color:#34495a;display:flex;justify-content:space-between;gap:8px;line-height:1.25}
+    .filter-list{display:grid;gap:5px}
+    .filter-pill{background:#cfd5db;border:1px solid #c4ccd3;color:#34495a;padding:6px 8px;font-size:12px;text-align:left;border-radius:2px;line-height:1.2;overflow-wrap:anywhere}
+    .quick-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px;margin-top:12px}
+    .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+    .metric{position:relative;background:var(--blue);color:#fff;border-radius:0;box-shadow:none;padding:10px 12px 10px 76px;min-height:70px;display:block;border-right:4px solid #fff;min-width:0}
+    .metric:before{content:attr(data-icon);position:absolute;left:12px;top:12px;width:48px;height:48px;border:2px solid rgba(255,255,255,.75);border-radius:50%;display:grid;place-items:center;font-size:24px;color:#fff}
+    .metric-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+    .metric h2{font-size:11px;margin:0 0 8px;line-height:1.2;color:#eaf6ff;font-weight:700;overflow-wrap:anywhere}
+    .value{font-size:25px;font-weight:500;line-height:1;color:#fff;white-space:nowrap}
+    .caption{color:#6d7b88;font-size:12px;margin-top:5px}
+    .metric .caption{display:none}
+    .chart-grid{display:grid;grid-template-columns:repeat(2,minmax(300px,1fr));gap:10px}
+    .chart-panel{border:1px solid #e4e9ee;background:#fff;padding:10px}
+    .chart-panel h3{margin:0 0 8px;text-align:center;font-size:13px;color:#34495a;line-height:1.25}
+    canvas{width:100%;height:225px;background:#fff;border:1px solid #edf1f5;border-radius:0}
+    .status-row{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{font-size:12px;border-radius:0;padding:5px 7px;background:#eef4f8;color:#577083;border:1px solid #d8e4ec;line-height:1.2}
+    .chip.green{color:#1b7c65;border-color:#b8ded3}
+    .chip.red{color:#a83d45;border-color:#f0c1c5}
+    .lists{display:grid;grid-template-columns:repeat(2,minmax(300px,1fr));gap:10px;margin-top:12px}
+    .list-panel{background:var(--panel);border:1px solid var(--line);border-radius:0;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+    .list-title{padding:9px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;background:#f7f9fb;min-width:0}
+    .list-title h3{margin:0;font-size:13px;color:#34495a;line-height:1.25}
+    .list-panel > div:last-child{max-height:300px;overflow:auto}
+    .list-panel table thead th{position:sticky;top:0;z-index:1}
+    .dash-slots{display:grid;grid-template-columns:repeat(2,minmax(300px,1fr));gap:10px;margin-top:12px}
+    .dash-slot{border:1px dashed #aac1d4;background:#f8fbfd;min-height:260px;display:flex;flex-direction:column}
+    .dash-slot-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;background:#edf5fa;border-bottom:1px solid #d6e4ee}
+    .dash-slot-title{font-size:13px;font-weight:800;color:#263f54;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dash-slot-actions{display:flex;gap:6px;flex:0 0 auto}
+    .icon-btn{width:28px;height:28px;border:1px solid #b9cedd;background:#fff;color:#31536b;font-size:18px;line-height:1;display:grid;place-items:center}
+    .dash-frame-wrap{flex:1;min-height:220px;background:#fff}
+    .dash-frame{width:100%;height:100%;min-height:220px;border:0;background:#0D0D12;display:block}
+    .dash-panel-card{height:100%;min-height:220px;padding:12px;display:grid;grid-template-rows:auto 1fr auto;gap:10px}
+    .dash-panel-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+    .dash-panel-meta .tag{background:#eef6fb}
+    .dash-panel-chart{display:grid;gap:6px;align-content:center;min-height:110px}
+    .dash-panel-row{display:grid;grid-template-columns:74px minmax(0,1fr) 46px;gap:8px;align-items:center;font-size:12px}
+    .dash-panel-row span{color:#536677;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dash-panel-track{height:13px;background:#e9f0f5;border:1px solid #d9e5ee}
+    .dash-panel-fill{height:100%;background:#3997d3}
+    .dash-panel-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#6d7b88;font-size:12px;line-height:1.25}
+    .dash-panel-foot a{color:#2179b6;font-weight:800;text-decoration:none}
+    .dash-empty{height:100%;min-height:220px;display:grid;place-items:center;padding:18px;text-align:center;color:#6d7b88}
+    .dash-empty button{width:54px;height:54px;border-radius:50%;font-size:32px;margin:0 auto 10px;background:#3997d3;color:#fff}
+    .dash-empty strong{display:block;color:#263f54;margin-bottom:4px}
+    .chooser-list{display:grid;gap:8px}
+    .chooser-option{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);background:#f7f9fb;padding:10px;text-align:left;color:#26333f}
+    .chooser-option strong{display:block;font-size:13px;color:#263f54;line-height:1.2}
+    .chooser-option span{display:block;font-size:12px;color:#6d7b88;margin-top:3px;line-height:1.25}
+    .review-current{border:1px solid var(--line);background:#f7f9fb;padding:12px;display:grid;gap:8px}
+    .review-current h3{margin:0;color:#263f54;font-size:15px}
+    .review-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .review-meta span{display:block;background:#fff;border:1px solid #e1e9ef;padding:7px;font-size:12px;color:#536677;line-height:1.25}
+    .review-meta b{display:block;color:#26333f;margin-top:2px;overflow-wrap:anywhere}
+    .internal-source-note{font-size:12px;color:#536677;line-height:1.35;background:#f7f9fb;border-left:3px solid #6fb7df;padding:8px;margin-top:8px}
+    .module-grid{display:grid;grid-template-columns:repeat(2,minmax(300px,1fr));gap:10px;margin-top:12px}
+    .module{border:1px solid var(--line);background:#fff}
+    .module-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;background:#eef5fa;border-bottom:1px solid var(--line);min-width:0;flex-wrap:wrap}
+    .module-header .btn{flex:0 0 auto}
+    .module-header .dash-slot-actions{flex-wrap:wrap;justify-content:flex-end}
+    .module-header h3{margin:0;font-size:14px;color:#263f54;line-height:1.25;min-width:0}
+    .module-body{display:grid;grid-template-columns:1fr 1.1fr;gap:10px;padding:10px}
+    .module-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+    .kpi{background:#f7f9fb;border:1px solid #e3eaf0;padding:8px}
+    .kpi strong{display:block;font-size:20px;color:#2f82b7;line-height:1.05;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .kpi span{display:block;font-size:11px;color:#6d7b88;margin-top:5px}
+    .workflow{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+    .workflow li{font-size:12px;color:#536677;background:#f7f9fb;border-left:3px solid #6fb7df;padding:7px 8px;line-height:1.3}
+    .mini-list{border:1px solid #e3eaf0;background:#fff;max-height:190px;overflow:auto}
+    .mini-list-row{display:grid;grid-template-columns:82px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 8px;border-bottom:1px solid #edf1f5;font-size:12px;min-width:0}
+    .mini-list-row:last-child{border-bottom:0}
+    .mini-list-row b{color:#34495a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mini-list-row span{color:#6d7b88}
+    .tag{background:#dfeaf2;color:#31536b;border:1px solid #cad9e4;padding:3px 6px;font-size:11px;white-space:nowrap;line-height:1.15}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th,td{padding:8px;border-bottom:1px solid #e8eef3;text-align:left;vertical-align:top;line-height:1.25}
+    th{color:#617383;font-weight:700;background:#f3f6f9}
+    td{color:#26333f;overflow-wrap:anywhere}
+    .truncate{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+    .empty{padding:22px;color:var(--muted)}
+    dialog{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:4px;box-shadow:var(--shadow);width:min(720px,calc(100vw - 28px));padding:0}
+    dialog::backdrop{background:rgba(0,0,0,.65)}
+    .modal-head,.modal-foot{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .modal-foot{border-top:1px solid var(--line);border-bottom:0;justify-content:flex-end}
+    .modal-head h2{font-size:18px;margin:0}
+    .modal-body{padding:18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+    .modal-body .full{grid-column:1/-1}
+    .close{background:transparent;color:var(--muted);font-size:22px;line-height:1}
+    .secure-note{font-size:12px;color:var(--muted);line-height:1.25;text-align:right}
+    .review-box{grid-column:1/-1;background:#f7f9fb;color:#536677;border:1px solid var(--line);border-radius:6px;padding:12px;max-height:220px;overflow:auto;line-height:1.35}
+    .review-line{display:grid;grid-template-columns:1fr 120px 120px;gap:8px;align-items:center;margin-bottom:8px}
+    @media (max-width:1100px){.dashboard-layout{grid-template-columns:1fr}.side-panel{border-left:0;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(2,1fr)}.metric-grid,.quick-actions{grid-template-columns:repeat(2,1fr)}.chart-grid,.lists,.module-grid,.dash-slots{grid-template-columns:1fr}.module-body{grid-template-columns:1fr}}
+    @media (max-width:640px){main{padding:12px}.metric-grid,.quick-actions,.side-panel,.setup-grid,.data-grid,.report-grid{grid-template-columns:1fr}.modal-body{grid-template-columns:1fr}.review-line{grid-template-columns:1fr}.brand{min-width:0}.tabs{overflow:auto}.tab{padding:10px}.topbar{height:auto;padding:10px 14px;align-items:flex-start;flex-direction:column}.subnav-inner{justify-content:flex-start;overflow:auto}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="topbar">
+        <div class="brand">
+          <img src="logo-tab.png" alt="">
+          <div>
+            <h1>Medidores Dark-Jutsu</h1>
+            <span>RH, paradas, acuracidade e atendimentos</span>
+          </div>
+        </div>
+        <div class="tabs" aria-label="Navegação">
+          <button class="tab" type="button" data-view-tab="config">1. Configurações</button>
+          <button class="tab" type="button" data-view-tab="data">2. Dados</button>
+          <button class="tab active" type="button" data-view-tab="dashboard">3. Dashboard</button>
+          <button class="tab" type="button" data-view-tab="reports">4. Relatórios</button>
+        </div>
+      </div>
+      <div class="subnav"><div class="subnav-inner" id="subnavText"><span>3.1. Resumo Indicadores</span><span>3.2. Listas</span></div></div>
+    </header>
+
+    <main>
+      <section class="view" data-view="config">
+        <h2 class="page-title">Configurações</h2>
+        <div class="setup-grid">
+          <article class="setup-card"><h3>Permissões e segurança</h3><div class="body">
+            <div class="setting-row"><span>Lista de RH protegida</span><span class="toggle"></span></div>
+            <div class="setting-row"><span>Anexos obrigatórios para RH</span><span class="toggle"></span></div>
+            <div class="setting-row"><span>Ocorrência interna exige vínculo Dark-Jutsu</span><span class="toggle"></span></div>
+          </div></article>
+          <article class="setup-card"><h3>Regras dos medidores</h3><div class="body">
+            <div class="setting-row"><span>1 documento de RH soma 1 ocorrência</span><span class="tag">Ativo</span></div>
+            <div class="setting-row"><span>Máquina parada mede horas entre início e fim</span><span class="tag">Ativo</span></div>
+            <div class="setting-row"><span>Acuracidade compara saldo esperado x confirmado</span><span class="tag">Ativo</span></div>
+          </div></article>
+          <article class="setup-card"><h3>Filtros padrão</h3><div class="body">
+            <label>Período inicial</label><input type="date" id="configFrom">
+            <label style="margin-top:10px">Período final</label><input type="date" id="configTo">
+          </div></article>
+          <article class="setup-card"><h3>Dados locais</h3><div class="body">
+            <button class="btn secondary" type="button" id="resetDemoData">Limpar dados fictícios</button>
+          </div></article>
+        </div>
+      </section>
+
+      <section class="view" data-view="data">
+        <h2 class="page-title">Dados</h2>
+        <div class="data-grid">
+          <article class="data-card"><h3>Inserir informações</h3><div class="body"><div class="data-actions">
+            <button class="btn" data-open="rh" type="button">Ocorrência RH</button>
+            <button class="btn" data-open="machine" type="button">Máquina parada</button>
+            <button class="btn" data-open="stock" type="button">Planilha estoque</button>
+            <button class="btn" data-review-stock type="button">Relatar contagem</button>
+            <button class="btn" data-sync-internal type="button">Atualizar do Dark</button>
+          </div></div></article>
+          <article class="data-card"><h3>Resumo da base</h3><div class="body">
+            <div class="module-kpis">
+              <div class="kpi"><strong id="dataRhCount">0</strong><span>registros RH</span></div>
+              <div class="kpi"><strong id="dataMachineCount">0</strong><span>paradas</span></div>
+              <div class="kpi"><strong id="dataStockCount">0</strong><span>conferências estoque</span></div>
+              <div class="kpi"><strong id="dataInternalCount">0</strong><span>ocorrências internas</span></div>
+            </div>
+          </div></article>
+          <article class="data-card"><h3>Últimos dados RH</h3><div class="body"><div class="mini-list" id="dataRhList"></div></div></article>
+          <article class="data-card"><h3>Últimos dados operacionais</h3><div class="body"><div class="mini-list" id="dataOpsList"></div></div></article>
+        </div>
+      </section>
+
+      <section class="view active" data-view="dashboard">
+        <h2 class="page-title">Resumo de Indicadores</h2>
+        <div class="dashboard-layout">
+        <div class="dashboard-main">
+          <section class="metric-grid">
+            <article class="metric" data-icon="RH">
+              <div class="metric-head"><div><h2>Ocorrências de RH</h2><div class="caption">1 documento = 1 ocorrência</div></div><div class="value" id="rhValue">0</div></div>
+              <div class="status-row"><span class="chip green" id="rhDocs">0 documentos seguros</span></div>
+            </article>
+            <article class="metric" data-icon="MP">
+              <div class="metric-head"><div><h2>Máquina Parada</h2><div class="caption">total ou parcial</div></div><div class="value" id="machineValue">0</div></div>
+              <div class="status-row"><span class="chip red" id="machineHours">0h paradas</span></div>
+            </article>
+            <article class="metric" data-icon="%">
+              <div class="metric-head"><div><h2>Acuracidade Estoque</h2><div class="caption">saldo correto x incorreto</div></div><div class="value" id="stockValue">0%</div></div>
+              <div class="status-row"><span class="chip green" id="stockCorrect">0 corretos</span><span class="chip red" id="stockWrong">0 incorretos</span></div>
+            </article>
+            <article class="metric" data-icon="DJ">
+              <div class="metric-head"><div><h2>Ocorrências Internas</h2><div class="caption">vinculadas ao Dark-Jutsu</div></div><div class="value" id="internalValue">0</div></div>
+              <div class="status-row"><span class="chip" id="internalOpen">0 abertas</span></div>
+            </article>
+          </section>
+
+          <section class="chart-grid">
+            <div class="chart-panel"><h3>Ocorrências RH</h3><canvas id="rhChart" width="620" height="260"></canvas></div>
+            <div class="chart-panel"><h3>Máquina Parada por Falta de Peça</h3><canvas id="machineChart" width="460" height="260"></canvas></div>
+            <div class="chart-panel"><h3>Acuracidade de Estoque</h3><canvas id="stockChart" width="620" height="260"></canvas></div>
+            <div class="chart-panel"><h3>Ocorrências Internas por Classificação</h3><canvas id="internalChart" width="460" height="260"></canvas></div>
+          </section>
+
+          <section class="dash-slots" id="dashSlots"></section>
+
+          <section class="quick-actions">
+            <button class="btn" data-open="rh" type="button">+ Ocorrência RH</button>
+            <button class="btn" data-open="machine" type="button">+ Máquina parada</button>
+            <button class="btn" data-open="stock" type="button">+ Planilha estoque</button>
+            <button class="btn" data-review-stock type="button">Relatar contagem</button>
+            <button class="btn" data-sync-internal type="button">Atualizar ocorrências do Dark</button>
+          </section>
+
+          <section class="module-grid">
+            <article class="module">
+              <div class="module-header">
+                <h3>1. Ocorrências de RH</h3>
+                <button class="btn secondary" data-open="rh" type="button">Inserir</button>
+              </div>
+              <div class="module-body">
+                <div>
+                  <div class="module-kpis">
+                    <div class="kpi"><strong id="rhMonthValue">0</strong><span>no mês atual</span></div>
+                    <div class="kpi"><strong id="rhTopSector">-</strong><span>setor com mais registros</span></div>
+                    <div class="kpi"><strong id="rhTopType">-</strong><span>tipo mais comum</span></div>
+                    <div class="kpi"><strong id="rhLastDate">-</strong><span>última ocorrência</span></div>
+                  </div>
+                  <ul class="workflow">
+                    <li>Anexar documento da ocorrência.</li>
+                    <li>Cada documento anexado soma 1 ocorrência.</li>
+                    <li>Lista protegida abaixo para consulta e auditoria.</li>
+                  </ul>
+                </div>
+                <div class="mini-list" id="rhModuleList"></div>
+              </div>
+            </article>
+
+            <article class="module">
+              <div class="module-header">
+                <h3>2. Máquina Parada por Falta de Peça</h3>
+                <button class="btn secondary" data-open="machine" type="button">Relatar</button>
+              </div>
+              <div class="module-body">
+                <div>
+                  <div class="module-kpis">
+                    <div class="kpi"><strong id="machineTotalHours">0h</strong><span>tempo total parado</span></div>
+                    <div class="kpi"><strong id="machineTopName">-</strong><span>máquina crítica</span></div>
+                    <div class="kpi"><strong id="machineTopPart">-</strong><span>peça mais faltante</span></div>
+                    <div class="kpi"><strong id="machineTotalStops">0</strong><span>relatos no filtro</span></div>
+                  </div>
+                  <ul class="workflow">
+                    <li>Registrar máquina, data, hora e peça faltante.</li>
+                    <li>Classificar parada como total ou parcial.</li>
+                    <li>Medir horas paradas e recorrência por peça.</li>
+                  </ul>
+                </div>
+                <div class="mini-list" id="machineModuleList"></div>
+              </div>
+            </article>
+
+            <article class="module">
+              <div class="module-header">
+                <h3>3. Acuracidade de Estoque</h3>
+                <div class="dash-slot-actions">
+                  <button class="btn secondary" data-open="stock" type="button">Importar planilha</button>
+                  <button class="btn secondary" data-review-stock type="button">Relatar contagem</button>
+                </div>
+              </div>
+              <div class="module-body">
+                <div>
+                  <div class="module-kpis">
+                    <div class="kpi"><strong id="stockModuleAccuracy">0%</strong><span>acuracidade geral</span></div>
+                    <div class="kpi"><strong id="stockCheckedItems">0</strong><span>itens conferidos</span></div>
+                    <div class="kpi"><strong id="stockDivergenceRate">0%</strong><span>divergência</span></div>
+                    <div class="kpi"><strong id="stockTopDivergence">-</strong><span>item mais divergente</span></div>
+                  </div>
+                  <ul class="workflow">
+                    <li>Importar um ou vários relatórios .xlsx por dia.</li>
+                    <li>Confirmar manualmente o saldo do dia seguinte.</li>
+                    <li>Comparar saldo esperado x saldo confirmado.</li>
+                  </ul>
+                </div>
+                <div class="mini-list" id="stockModuleList"></div>
+              </div>
+            </article>
+
+            <article class="module">
+              <div class="module-header">
+                <h3>4. Ocorrências Internas</h3>
+                <button class="btn secondary" data-sync-internal type="button">Atualizar</button>
+              </div>
+              <div class="module-body">
+                <div>
+                  <div class="module-kpis">
+                    <div class="kpi"><strong id="internalTopClass">-</strong><span>classificação mais comum</span></div>
+                    <div class="kpi"><strong id="internalTopSeverity">-</strong><span>gravidade mais comum</span></div>
+                    <div class="kpi"><strong id="internalCritical">0</strong><span>alta/crítica</span></div>
+                    <div class="kpi"><strong id="internalTopOwner">-</strong><span>responsável mais acionado</span></div>
+                  </div>
+                  <ul class="workflow">
+                    <li>Vincular diretamente a uma ocorrência Dark-Jutsu.</li>
+                    <li>Acompanhar responsável, prazo e status.</li>
+                    <li>Separar por classificação, gravidade e responsável.</li>
+                  </ul>
+                  <div class="internal-source-note" id="internalSyncStatus">Este medidor vem direto das ocorrências do Dark-Jutsu. Não há cadastro manual por esta tela.</div>
+                </div>
+                <div class="mini-list" id="internalModuleList"></div>
+              </div>
+            </article>
+          </section>
+
+          <section class="lists">
+            <div class="list-panel"><div class="list-title"><h3>Lista RH</h3><span class="secure-note">documentos protegidos no protótipo local</span></div><div id="rhList"></div></div>
+            <div class="list-panel"><div class="list-title"><h3>Lista Máquina Parada</h3></div><div id="machineList"></div></div>
+            <div class="list-panel"><div class="list-title"><h3>Lista Acuracidade</h3></div><div id="stockList"></div></div>
+            <div class="list-panel"><div class="list-title"><h3>Lista Ocorrências Internas</h3></div><div id="internalList"></div></div>
+          </section>
+        </div>
+        <aside class="side-panel">
+          <div class="filter-card"><h3><span>Ano</span><span>≡</span></h3><div class="filter-list"><button class="filter-pill" type="button">2026</button></div></div>
+          <div class="filter-card"><h3><span>Período</span><span>≡</span></h3><div class="filters"><div><label for="fromDate">Data inicial</label><input id="fromDate" type="date"></div><div><label for="toDate">Data final</label><input id="toDate" type="date"></div></div></div>
+          <div class="filter-card"><h3><span>Filtro Geral</span><span>≡</span></h3><input id="filterText" type="search" placeholder="máquina, peça, setor, status"></div>
+          <div class="filter-card"><h3><span>Indicador</span><span>≡</span></h3><div class="filter-list"><button class="filter-pill" type="button" data-open="rh">Ocorrências RH</button><button class="filter-pill" type="button" data-open="machine">Máquina Parada</button><button class="filter-pill" type="button" data-open="stock">Planilha estoque</button><button class="filter-pill" type="button" data-review-stock>Relatar contagem</button><button class="filter-pill" type="button" data-sync-internal>Ocorrências Internas</button></div></div>
+          <div class="filter-card"><button class="btn secondary" id="clearFilters" type="button">Limpar filtros</button></div>
+        </aside>
+        </div>
+      </section>
+
+      <section class="view" data-view="reports">
+        <h2 class="page-title">Relatórios</h2>
+        <div class="report-grid">
+          <article class="report-card"><h3>Resumo geral</h3><div class="body"><div class="module-kpis">
+            <div><div class="report-total" id="reportTotalRecords">0</div><div class="report-label">registros totais</div></div>
+            <div><div class="report-total" id="reportAccuracy">0%</div><div class="report-label">acuracidade</div></div>
+          </div></div></article>
+          <article class="report-card"><h3>Exportação</h3><div class="body"><button class="btn" type="button" id="exportReport">Exportar relatório CSV</button></div></article>
+          <article class="report-card"><h3>Ranking de atenção</h3><div class="body"><div class="mini-list" id="reportAttentionList"></div></div></article>
+          <article class="report-card"><h3>Status internos</h3><div class="body"><div class="mini-list" id="reportStatusList"></div></div></article>
+        </div>
+      </section>
+    </main>
+  </div>
+  <dialog id="entryDialog">
+    <form method="dialog" id="entryForm">
+      <div class="modal-head"><h2 id="dialogTitle">Novo registro</h2><button class="close" value="cancel" type="submit">x</button></div>
+      <div class="modal-body" id="formFields"></div>
+      <div class="modal-foot"><button class="btn secondary" value="cancel" type="submit">Cancelar</button><button class="btn" id="saveBtn" value="default" type="submit">Salvar</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dashChooser">
+    <div class="modal-head"><h2>Escolher dashboard</h2><button class="close" type="button" id="closeDashChooser">x</button></div>
+    <div class="modal-body full" style="display:block">
+      <div class="chooser-list" id="dashChooserList"></div>
+    </div>
+  </dialog>
+
+  <dialog id="stockReviewDialog">
+    <form method="dialog" id="stockReviewForm">
+      <div class="modal-head"><h2>Conferir acuracidade</h2><button class="close" value="pause" type="submit">x</button></div>
+      <div class="modal-body full" style="display:block">
+        <div class="review-current">
+          <h3 id="stockReviewTitle">Item</h3>
+          <div class="review-meta" id="stockReviewMeta"></div>
+          <label for="stockReviewCountDate" style="margin-top:6px">Data da contagem</label>
+          <input id="stockReviewCountDate" name="countDate" type="date" required>
+          <label for="stockReviewActual" style="margin-top:6px">Saldo contado manualmente</label>
+          <input id="stockReviewActual" name="actual" type="number" step="0.01" inputmode="decimal" required>
+          <div class="caption" id="stockReviewProgress"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn secondary" value="pause" type="submit">Pausar</button>
+        <button class="btn" value="save" type="submit">Salvar e próximo</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyChPIkc1NxpxtpvOU92NxyXsxCFpe3mzgE",
+      authDomain: "chat-fiasul.firebaseapp.com",
+      databaseURL: "https://chat-fiasul-default-rtdb.firebaseio.com",
+      projectId: "chat-fiasul",
+      storageBucket: "chat-fiasul.firebasestorage.app",
+      messagingSenderId: "263776720116",
+      appId: "1:263776720116:web:713fd43f4cb196b0527aa1",
+      measurementId: "G-KC5F0QT711"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+    window.darkJutsuFirebaseReady = new Promise(resolve => {
+      onAuthStateChanged(auth, user => resolve({ db, user }));
+    });
+    window.darkJutsuWaitFirebaseUser = function(timeoutMs = 6000){
+      return new Promise(resolve => {
+        const current = auth.currentUser;
+        if(current) return resolve(current);
+        let done = false;
+        const timer = setTimeout(() => {
+          if(done) return;
+          done = true;
+          unsub();
+          resolve(auth.currentUser || null);
+        }, timeoutMs);
+        const unsub = onAuthStateChanged(auth, user => {
+          if(done || !user) return;
+          done = true;
+          clearTimeout(timer);
+          unsub();
+          resolve(user);
+        });
+      });
+    };
+    window.darkJutsuGetFirebasePath = async function(path){
+      const { db: readyDb } = await window.darkJutsuFirebaseReady;
+      const user = await window.darkJutsuWaitFirebaseUser();
+      if(!user) throw new Error("Sessao Firebase nao encontrada. Abra/login no Dark-Jutsu antes de sincronizar.");
+      const snap = await get(ref(readyDb, path));
+      return snap.val();
+    };
+    window.dispatchEvent(new CustomEvent("dark-jutsu-firebase-ready"));
+  </script>
+  <script>
+    const STORAGE_KEY = "darkJutsuMedidores.v2";
+    const DASH_SLOT_KEY = "darkJutsuMedidores.dashboardSlots.v1";
+    const FIREBASE_DB_URL = "https://chat-fiasul-default-rtdb.firebaseio.com";
+    const today = new Date().toISOString().slice(0,10);
+    const EMPTY_STATE = {rh:[], machine:[], stock:[], stockMovements:[], internal:[]};
+    const seed = buildSeedData();
+    let state = loadState();
+    let activeType = "";
+    let activeDashSlot = 0;
+    let stockReviewAllMovements = [];
+    let stockReviewQueue = [];
+    let stockReviewIndex = 0;
+    let lastStockCountDate = today;
+    let rhUnlocked = sessionStorage.getItem("darkJutsuMedidores.rhUnlocked") === "1";
+    let itemCatalog = [];
+    const dashboardOptions = [
+      {id:"estoque04", group:"Estoque", title:"Dashboard de Estoque - Armazem 04", desc:"Resumo principal do estoque filtrado no armazem 04.", url:"dashboard.html?armazem=04&limite=50"},
+      {id:"estoque05", group:"Estoque", title:"Dashboard de Estoque - Armazem 05", desc:"Resumo principal do estoque filtrado no armazem 05.", url:"dashboard.html?armazem=05&limite=50"},
+      {id:"abaixo", group:"Estoque", title:"Itens abaixo do minimo", desc:"Itens abaixo do limite, focado em reposicao.", url:"dashboard.html?armazem=04&status=abaixo&ordenar=reposicao&direcao=desc&limite=50"},
+      {id:"fora", group:"Estoque", title:"Itens fora da faixa", desc:"Itens abaixo ou acima dos limites configurados.", url:"dashboard.html?armazem=04&status=fora&ordenar=reposicao&direcao=desc&limite=50"},
+      {id:"sem_pedido", group:"Estoque", title:"Itens sem solicitacao", desc:"Itens filtrados sem solicitacao ou pedido ativo.", url:"dashboard.html?armazem=04&status=abaixo&semSolicitacao=1&ordenar=reposicao&direcao=desc&limite=50"},
+      {id:"maior_reposicao", group:"Estoque", title:"Maiores necessidades de reposicao", desc:"Itens ordenados pela maior quantidade sugerida para reposicao.", url:"dashboard.html?armazem=04&status=abaixo&ordenar=reposicao&direcao=desc&limite=100"},
+      {id:"distribuicao", group:"Estoque", title:"Distribuicao abaixo / acima / ok", panel:"Distribuicao", desc:"Painel de distribuicao do estoque por faixa.", url:"dashboard.html?armazem=04&status=todos&limite=50"},
+
+      {id:"pedidos_demorados", group:"Pedidos", title:"Pedidos que mais demoraram", panel:"Pedidos que mais demoraram ou ainda estao em aberto", desc:"Pedidos com maior tempo ate chegada ou ainda em aberto.", url:"dashboard.html?armazem=04&ordenar=pedido&direcao=desc&limite=50"},
+      {id:"pedidos_abertos", group:"Pedidos", title:"Pedidos em aberto", panel:"Pedidos que mais demoraram ou ainda estao em aberto", desc:"Pedidos sem chegada confirmada, monitorados por dias.", url:"dashboard.html?armazem=04&status=todos&ordenar=pedido&direcao=desc&limite=80"},
+      {id:"avaliador", group:"Pedidos", title:"Avaliador de Pedidos", desc:"Itens abaixo do minimo, fila de avaliacao e kanban de compras.", url:"dashboard.html?ambiente=avaliador&armazem=04&status=todos&limite=50"},
+      {id:"avaliador_fila", group:"Pedidos", title:"Fila de avaliacao", desc:"Itens abaixo do minimo ainda sem avaliacao.", url:"dashboard.html?ambiente=avaliador&armazem=04&status=abaixo&limite=100"},
+      {id:"avaliados", group:"Pedidos", title:"Itens avaliados", desc:"Itens ja avaliados e acompanhados no avaliador.", url:"dashboard.html?ambiente=avaliador&armazem=04&status=todos&kanbanGestao=avaliador&limite=80"},
+      {id:"avaliados_sem_solicitacao", group:"Pedidos", title:"Avaliados sem solicitacao", desc:"Itens avaliados como passiveis mas sem processo aberto.", url:"dashboard.html?ambiente=avaliador&armazem=04&status=abaixo&semSolicitacao=1&limite=80"},
+      {id:"kanban_compras", group:"Pedidos", title:"Kanban de compras", desc:"Solicitacao, aprovacao, pedido, entrada pendente e entregue.", url:"dashboard.html?ambiente=avaliador&armazem=04&status=todos&kanbanExpandido=1&limite=80"},
+
+      {id:"movimentacao", group:"Movimentacao", title:"Dashboard de Movimentacao", desc:"Visao geral de movimentacao e rankings operacionais.", url:"dashboard.html?ambiente=movimentacao&armazem=04&limite=80"},
+      {id:"mais_saida_unidades", group:"Movimentacao", title:"Itens com mais saida em unidades", panel:"Itens com mais saida em unidades - armazem 04 MATA185", desc:"Ranking MATA185 por quantidade atendida.", url:"dashboard.html?ambiente=movimentacao&armazem=04&periodoMovimentacao=mes&limite=100"},
+      {id:"mais_saida_registros", group:"Movimentacao", title:"Itens com mais registros de saida", panel:"Itens com mais registros de saida - armazem 04 MATA185", desc:"Ranking MATA185 por quantidade de requisicoes.", url:"dashboard.html?ambiente=movimentacao&armazem=04&periodoMovimentacao=mes&limite=100"},
+      {id:"zeraram", group:"Movimentacao", title:"Itens que zeraram apos movimentacao", panel:"Itens que zeraram apos movimentacao - mes anterior", desc:"Itens cujo saldo foi a zero no periodo.", url:"dashboard.html?ambiente=movimentacao&armazem=04&periodoMovimentacao=mes&limite=100"},
+      {id:"faltas_parciais", group:"Movimentacao", title:"Maiores faltas em entregas parciais", panel:"Maiores faltas em entregas parciais", desc:"Requisicoes com maior quantidade faltante.", url:"dashboard.html?ambiente=movimentacao&armazem=04&periodoMovimentacao=mes&limite=100"},
+      {id:"entregas_parciais", group:"Movimentacao", title:"Requisicoes entregues parcialmente", desc:"Tabela de entregas parciais da MATA185.", url:"dashboard.html?ambiente=movimentacao&armazem=04&periodoMovimentacao=mes&limite=100"},
+      {id:"encerradas", group:"Movimentacao", title:"Requisicoes encerradas", desc:"Requisicoes encerradas com diferencas/faltas.", url:"dashboard.html?ambiente=movimentacao&armazem=04&periodoMovimentacao=mes&limite=100"},
+      {id:"entradas_pendentes", group:"Movimentacao", title:"Entradas pendentes de enderecamento", desc:"Entradas pendentes no armazem 04.", url:"dashboard.html?ambiente=movimentacao&armazem=04&periodoMovimentacao=mes&limite=100"},
+
+      {id:"quem_pede_reposicao", group:"Usuarios", title:"Quem mais pede reposicao", panel:"Quem mais pede reposicao", desc:"Ranking de usuarios por solicitacoes de reposicao.", url:"dashboard.html?armazem=04&status=todos&limite=80"},
+      {id:"quem_conta_pecas", group:"Usuarios", title:"Quem mais conta pecas", panel:"Quem mais conta pecas", desc:"Ranking de usuarios por itens contados.", url:"dashboard.html?armazem=04&status=todos&limite=80"},
+      {id:"quem_faz_etiqueta", group:"Usuarios", title:"Quem mais faz etiqueta", panel:"Quem mais faz etiqueta", desc:"Ranking de usuarios por etiquetas geradas.", url:"dashboard.html?armazem=04&status=todos&limite=80"},
+      {id:"progresso_contagem", group:"Contagem", title:"Progresso de contagem", panel:"Progresso de contagem - armazens 04 e 05", desc:"Progresso de contagem dos armazens 04 e 05.", url:"dashboard.html?armazem=04,05&status=todos&limite=50"}
+    ];
+    let dashSlots = loadDashSlots();
+
+    function dateDaysAgo(days){
+      const d = new Date();
+      d.setDate(d.getDate() - days);
+      return d.toISOString().slice(0,10);
+    }
+    function timeAt(hour, minute){
+      return `${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
+    }
+    function buildSeedData(){
+      const employees = ["Operador A","Colaborador B","Auxiliar C","Lider D","Conferente E","Operador F"];
+      const sectors = ["Producao","Almoxarifado","Manutencao","Expedicao","Qualidade"];
+      const rhTypes = ["Advertencia","Atestado","Falta","Treinamento","Ocorrencia disciplinar"];
+      const machines = ["Injetora 03","Prensa 02","Corte 01","Dobradeira 04","Linha 07","Embaladora 02"];
+      const parts = [
+        ["Sensor indutivo M12","SN-M12"],["Correia A-42","CR-A42"],["Rolamento 6204","ROL-6204"],
+        ["Valvula 5/2","VAL-52"],["Parafuso M8","PAR-M8"],["Cilindro pneumatico","CIL-PN"]
+      ];
+      const items = [
+        ["ROL-6204","Rolamento 6204",38],["PAR-M8","Parafuso M8",120],["SN-M12","Sensor indutivo M12",14],
+        ["CR-A42","Correia A-42",22],["VAL-52","Valvula 5/2",9],["CIL-PN","Cilindro pneumatico",11],
+        ["CAB-PP","Cabo PP 2x1,5",80],["CON-10A","Conector 10A",45]
+      ];
+      const requesters = ["Manutencao","Producao","Qualidade","PCP","Expedicao","Almoxarifado"];
+      const owners = ["Almoxarifado","Suprimentos","Manutencao","Lideranca"];
+      const statuses = ["Aberta","Em atendimento","Concluida"];
+      const data = {rh:[], machine:[], stock:[], internal:[]};
+      for(let day=59; day>=0; day--){
+        const date = dateDaysAgo(day);
+        if(day % 4 === 0 || day % 9 === 0){
+          const idx = day % employees.length;
+          data.rh.push({date, employee:employees[idx], sector:sectors[(day+1)%sectors.length], type:rhTypes[day%rhTypes.length], doc:`rh-${date}-${idx+1}.pdf`, notes:"Registro ficticio para demonstracao."});
+        }
+        if(day % 3 === 0 || day % 11 === 0){
+          const part = parts[day % parts.length];
+          const startHour = 7 + (day % 9);
+          const startMin = (day * 7) % 50;
+          const duration = 25 + (day % 5) * 18;
+          const endTotal = startHour * 60 + startMin + duration;
+          data.machine.push({date, start:timeAt(startHour,startMin), end:timeAt(Math.floor(endTotal/60), endTotal%60), machine:machines[day%machines.length], part:part[0], code:part[1], stopType:day%2 ? "Parcial" : "Total", notes:"Parada ficticia por falta de peca."});
+        }
+        if(day % 2 === 0){
+          items.forEach((item, idx) => {
+            if((day + idx) % 3 !== 0) return;
+            const expected = item[2] + ((day + idx) % 7) - 3;
+            const diverges = (day + idx) % 5 === 0;
+            data.stock.push({date, item:item[0], desc:item[1], expected, actual:diverges ? expected - (1 + idx % 4) : expected, source:`movimentacao-${date}.xlsx`});
+          });
+        }
+      }
+      return data;
+    }
+    function isDemoRow(row){
+      const text = JSON.stringify(row || {}).toLowerCase();
+      return text.includes("ficticio")
+        || text.includes("fictícia")
+        || text.includes("ficticia")
+        || String(row?.doc || "").startsWith("rh-")
+        || String(row?.source || "").startsWith("movimentacao-");
+    }
+    function normalizeState(raw){
+      const base = {...EMPTY_STATE, ...(raw || {})};
+      return {
+        rh:(base.rh || []).filter(row => !isDemoRow(row)),
+        machine:(base.machine || []).filter(row => !isDemoRow(row)),
+        stock:(base.stock || []).filter(row => !isDemoRow(row)),
+        stockMovements:(base.stockMovements || []).filter(row => !isDemoRow(row)),
+        internal:(base.internal || []).filter(item => item.source === "Dark-Jutsu" && !isDemoRow(item))
+      };
+    }
+    function loadState(){
+      try {
+        return normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY)) || EMPTY_STATE);
+      }
+      catch(e){ return {...EMPTY_STATE, rh:[], machine:[], stock:[], internal:[]}; }
+    }
+    function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    saveState();
+    function itemKeyForCatalog(item){
+      return String(item?.code || item?.item || item?.protheus || item?.protheusKey || item?.cooperat || "").trim().toUpperCase();
+    }
+    function itemDescForCatalog(item){
+      return String(item?.desc || item?.descricao || item?.description || "").trim();
+    }
+    function rebuildItemCatalog(extra = []){
+      const map = new Map();
+      [...(state.stockMovements || []), ...extra].forEach(item => {
+        const code = itemKeyForCatalog(item);
+        const desc = itemDescForCatalog(item);
+        if(!code && !desc) return;
+        const key = code || desc.toUpperCase();
+        if(!map.has(key)) map.set(key, {code, desc});
+      });
+      itemCatalog = [...map.values()].sort((a,b) => (a.code || a.desc).localeCompare(b.code || b.desc, "pt-BR", {numeric:true}));
+    }
+    async function loadItemCatalogFromDark(){
+      rebuildItemCatalog();
+      try{
+        const data = await fetchFirebasePath("estoqueGlobal/dados");
+        const list = Array.isArray(data) ? data : Object.values(data || {});
+        rebuildItemCatalog(list.map(item => ({
+          code: item?.protheus || item?.protheusKey || item?.cooperat || "",
+          desc: item?.descricao || ""
+        })));
+      }catch(err){
+        console.warn("Nao foi possivel carregar banco de pecas do Dark:", err);
+      }
+    }
+    function findCatalogItem(value){
+      const text = String(value || "").trim().toLowerCase();
+      if(!text) return null;
+      return itemCatalog.find(item =>
+        String(item.code || "").toLowerCase() === text ||
+        String(item.desc || "").toLowerCase() === text
+      ) || itemCatalog.find(item =>
+        String(item.code || "").toLowerCase().includes(text) ||
+        String(item.desc || "").toLowerCase().includes(text)
+      ) || null;
+    }
+    function syncMachinePartFields(source){
+      const part = document.querySelector('#entryDialog [name="part"]');
+      const code = document.querySelector('#entryDialog [name="code"]');
+      if(!part || !code) return;
+      const found = findCatalogItem(source === "code" ? code.value : part.value);
+      if(!found) return;
+      if(source === "code" && found.desc) part.value = found.desc;
+      if(source === "part" && found.code) code.value = found.code;
+    }
+    function requireRhPassword(){
+      if(rhUnlocked) return true;
+      const password = prompt("Digite a senha para acessar ocorrências de RH:");
+      if(password === "123456"){
+        rhUnlocked = true;
+        sessionStorage.setItem("darkJutsuMedidores.rhUnlocked", "1");
+        render();
+        return true;
+      }
+      if(password !== null) alert("Senha incorreta.");
+      return false;
+    }
+    function occurrenceToInternal(oc){
+      const created = oc.criadoEm || oc.atualizadoEm || Date.now();
+      const date = oc.data || new Date(Number(created)).toISOString().slice(0,10);
+      const classification = oc.classificacao || oc.categoria || oc.tipo || "Sem classificação";
+      const severity = oc.gravidade || oc.prioridade || "Sem gravidade";
+      return {
+        date,
+        darkId: oc.id || "-",
+        requester: oc.operadorNome || oc.acusadoNome || "Dark-Jutsu",
+        sector: oc.operadorSetor || oc.acusadoSetor || "",
+        type: classification,
+        classification,
+        severity,
+        owner: oc.responsavelNome || "Sem responsavel",
+        status: oc.status === "aberta" ? "Aberta" : oc.status === "analisada" ? "Em atendimento" : oc.status === "concluida" ? "Concluida" : (oc.status || "Aberta"),
+        due: date,
+        notes: oc.descricao || oc.tratativa || "",
+        source:"Dark-Jutsu"
+      };
+    }
+    async function fetchFirebasePath(path){
+      if(typeof window.darkJutsuGetFirebasePath === "function"){
+        try{
+          return await window.darkJutsuGetFirebasePath(path);
+        }catch(err){
+          console.warn(`Leitura autenticada falhou em ${path}; tentando fallback publico.`, err);
+        }
+      }
+      const res = await fetch(`${FIREBASE_DB_URL}/${path}.json`);
+      if(!res.ok) throw new Error(`${path}: ${res.status}`);
+      return await res.json();
+    }
+    async function syncInternalFromDark(silent = false){
+      const btns = document.querySelectorAll("[data-sync-internal]");
+      btns.forEach(btn => btn.setAttribute("disabled","disabled"));
+      setInternalSyncStatus("Sincronizando ocorrências do Dark-Jutsu...");
+      try{
+        const [primary, fallback] = await Promise.all([
+          fetchFirebasePath("ocorrencias").catch(() => null),
+          fetchFirebasePath("chatGlobal/ocorrencias").catch(() => null)
+        ]);
+        const merged = [];
+        [primary, fallback].forEach(group => {
+          Object.entries(group || {}).forEach(([id, oc]) => merged.push({ id, ...oc }));
+        });
+        const byId = new Map();
+        merged.forEach(oc => byId.set(oc.id, occurrenceToInternal(oc)));
+        state.internal = [...byId.values()].sort((a,b) => b.date.localeCompare(a.date));
+        saveState();
+        render();
+        setInternalSyncStatus(state.internal.length
+          ? `${state.internal.length} ocorrência(s) carregada(s) diretamente do Dark-Jutsu.`
+          : "Nenhuma ocorrência encontrada. Se houver ocorrências no Dark, faça login nele neste navegador e clique em Atualizar.");
+        if(!silent && !state.internal.length) alert("Nao encontrei ocorrencias do Dark nos caminhos liberados ou a sessao do Firebase nao esta logada.");
+      }catch(err){
+        console.warn("Falha ao carregar ocorrencias do Dark:", err);
+        setInternalSyncStatus(err.message || "Falha ao sincronizar ocorrências do Dark-Jutsu.");
+        if(!silent) alert(err.message || "Nao foi possivel carregar ocorrencias do Dark. Verifique permissao/conexao do Firebase.");
+      }finally{
+        btns.forEach(btn => btn.removeAttribute("disabled"));
+      }
+    }
+    function loadDashSlots(){
+      try { return JSON.parse(localStorage.getItem(DASH_SLOT_KEY)) || [null,null,null,null]; }
+      catch(e){ return [null,null,null,null]; }
+    }
+    function saveDashSlots(){ localStorage.setItem(DASH_SLOT_KEY, JSON.stringify(dashSlots)); }
+    function escHtml(value){
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
+    }
+    function byDateAndText(row){
+      const from = document.getElementById("fromDate").value;
+      const to = document.getElementById("toDate").value;
+      const text = document.getElementById("filterText").value.trim().toLowerCase();
+      if(from && row.date < from) return false;
+      if(to && row.date > to) return false;
+      if(!text) return true;
+      return JSON.stringify(row).toLowerCase().includes(text);
+    }
+    function filtered(key){ return state[key].filter(byDateAndText); }
+    function groupByDate(rows, valueFn){
+      const map = {};
+      rows.forEach(row => { map[row.date] = (map[row.date] || 0) + (valueFn ? valueFn(row) : 1); });
+      return Object.entries(map).sort(([a],[b]) => a.localeCompare(b)).slice(-12);
+    }
+    function groupByField(rows, field){
+      const map = {};
+      rows.forEach(row => { map[row[field] || "Sem status"] = (map[row[field] || "Sem status"] || 0) + 1; });
+      return Object.entries(map).sort((a,b) => b[1] - a[1]);
+    }
+    function stockAccuracyTrend(rows){
+      const map = {};
+      rows.forEach(row => {
+        if(!map[row.date]) map[row.date] = {ok:0, total:0};
+        map[row.date].total += 1;
+        if(Number(row.expected) === Number(row.actual)) map[row.date].ok += 1;
+      });
+      return Object.entries(map)
+        .sort(([a],[b]) => a.localeCompare(b))
+        .slice(-12)
+        .map(([date, stats]) => [date, Math.round((stats.ok / stats.total) * 100)]);
+    }
+    function topValue(rows, field){
+      const top = groupByField(rows, field)[0];
+      return top ? top[0] : "-";
+    }
+    function monthKey(date){
+      return String(date || "").slice(0,7);
+    }
+    function currentMonthRows(rows){
+      return rows.filter(row => monthKey(row.date) === monthKey(today));
+    }
+    function setText(id, value){
+      const el = document.getElementById(id);
+      if(el) {
+        el.textContent = value;
+        el.title = String(value ?? "");
+      }
+    }
+    function setInternalSyncStatus(text){
+      const el = document.getElementById("internalSyncStatus");
+      if(el) el.textContent = text;
+    }
+    function renderMiniList(id, rows, renderRow){
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(!rows.length){ el.innerHTML = '<div class="empty">Nenhum registro encontrado.</div>'; return; }
+      el.innerHTML = rows.slice(0,8).map(renderRow).join("");
+    }
+    function stripHtml(value){
+      const div = document.createElement("div");
+      div.innerHTML = String(value ?? "");
+      return div.textContent || div.innerText || "";
+    }
+    function cellHtml(value){
+      const html = String(value ?? "");
+      const plain = stripHtml(html);
+      return `<span class="truncate" title="${escHtml(plain)}">${html}</span>`;
+    }
+    function miniRow(date, main, tag){
+      const plain = `${date || ""} ${main || ""} ${tag || ""}`.trim();
+      return `<div class="mini-list-row" title="${escHtml(plain)}"><span title="${escHtml(date || "")}">${date || ""}</span><b title="${escHtml(main || "-")}">${escHtml(main || "-")}</b><em class="tag" title="${escHtml(tag || "-")}">${escHtml(tag || "-")}</em></div>`;
+    }
+    function dashPreviewRows(option){
+      const stock = filtered("stock");
+      const machine = filtered("machine");
+      const rh = filtered("rh");
+      const internal = filtered("internal");
+      const byItem = groupByField(stock, "item").slice(0,5).map(([label,total]) => ({label,total}));
+      const byPart = groupByField(machine, "part").slice(0,5).map(([label,total]) => ({label,total}));
+      const byRequester = groupByField(internal, "requester").slice(0,5).map(([label,total]) => ({label,total}));
+      const sets = {
+        estoque04: byItem,
+        estoque05: byItem,
+        abaixo: stock.filter(r => Number(r.actual) < Number(r.expected)).slice(0,5).map(r => ({label:r.item,total:Math.abs(Number(r.expected)-Number(r.actual)) || 1})),
+        fora: stock.filter(r => Number(r.actual) !== Number(r.expected)).slice(0,5).map(r => ({label:r.item,total:Math.abs(Number(r.expected)-Number(r.actual)) || 1})),
+        sem_pedido: byRequester,
+        maior_reposicao: byItem,
+        distribuicao: [
+          {label:"Corretos", total: stock.filter(r => Number(r.expected) === Number(r.actual)).length},
+          {label:"Incorretos", total: stock.filter(r => Number(r.expected) !== Number(r.actual)).length},
+          {label:"Conferidos", total: stock.length}
+        ],
+        pedidos_demorados: byPart,
+        pedidos_abertos: byPart,
+        avaliador: byItem,
+        avaliador_fila: byItem,
+        avaliados: byItem,
+        avaliados_sem_solicitacao: byItem,
+        kanban_compras: [
+          {label:"Solicitacao", total: 12},
+          {label:"Aprovacao", total: 8},
+          {label:"Pedido", total: 15},
+          {label:"Entrada", total: 6}
+        ],
+        movimentacao: byItem,
+        mais_saida_unidades: byItem,
+        mais_saida_registros: byItem,
+        zeraram: stock.filter(r => Number(r.actual) === 0).slice(0,5).map(r => ({label:r.item,total:Number(r.output || 1)})),
+        faltas_parciais: byPart,
+        entregas_parciais: byPart,
+        encerradas: byPart,
+        entradas_pendentes: byItem,
+        quem_pede_reposicao: byRequester,
+        quem_conta_pecas: groupByField(rh, "employee").slice(0,5).map(([label,total]) => ({label,total})),
+        quem_faz_etiqueta: byRequester,
+        progresso_contagem: [
+          {label:"Armazem 04", total: Math.min(100, stock.length * 2)},
+          {label:"Armazem 05", total: Math.min(100, stock.length)}
+        ]
+      };
+      const fallback = [
+        {label:"Mês atual", total: currentMonthRows(stock).length + currentMonthRows(machine).length},
+        {label:"60 dias", total: stock.length + machine.length + internal.length},
+        {label:"Abertos", total: internal.filter(r => r.status !== "Concluida").length}
+      ];
+      return (sets[option.id] || fallback).filter(row => Number(row.total || 0) > 0).slice(0,5);
+    }
+    function renderDashPanel(option){
+      const rows = dashPreviewRows(option);
+      const max = Math.max(1, ...rows.map(row => Number(row.total || 0)));
+      const sourceLabel = option.group === "Movimentacao" || option.group === "Pedidos" || option.group === "Usuarios" || option.group === "Contagem" ? "Dark-Jutsu" : "Medidores";
+      return `
+        <div class="dash-panel-card">
+          <div>
+            <div class="dash-panel-meta"><span class="tag">${escHtml(option.group)}</span><span class="tag">${escHtml(sourceLabel)}</span></div>
+            <p class="caption">${escHtml(option.desc)}</p>
+          </div>
+          <div class="dash-panel-chart">
+            ${rows.length ? rows.map(row => `
+              <div class="dash-panel-row">
+                <span title="${escHtml(row.label)}">${escHtml(row.label)}</span>
+                <div class="dash-panel-track"><div class="dash-panel-fill" style="width:${Math.max(4, (Number(row.total || 0) / max) * 100)}%"></div></div>
+                <strong>${escHtml(row.total)}</strong>
+              </div>
+            `).join("") : `<div class="empty">Sem dados filtrados para este quadro.</div>`}
+          </div>
+          <div class="dash-panel-foot">
+            <span>Painel isolado no quadrado. Não carrega a página completa.</span>
+            <a href="${escHtml(option.url)}" target="_blank" rel="noopener">Abrir origem</a>
+          </div>
+        </div>
+      `;
+    }
+    function dashboardEmbedUrl(option){
+      const url = new URL(option.url, window.location.href);
+      url.searchParams.set("embed", "1");
+      if(option.panel) url.searchParams.set("painel", option.panel);
+      return `${url.pathname}${url.search}`;
+    }
+    function renderDashSlots(){
+      const rootSlots = document.getElementById("dashSlots");
+      if(!rootSlots) return;
+      rootSlots.innerHTML = dashSlots.map((slot, index) => {
+        const option = dashboardOptions.find(item => item.id === slot?.id);
+        return `
+          <article class="dash-slot">
+            <div class="dash-slot-header">
+              <div class="dash-slot-title">${option ? option.title : `Quadro de dashboard ${index + 1}`}</div>
+              <div class="dash-slot-actions">
+                <button class="icon-btn" type="button" title="Escolher dashboard" data-choose-dash="${index}">+</button>
+                ${option ? `<button class="icon-btn" type="button" title="Limpar quadro" data-clear-dash="${index}">x</button>` : ""}
+              </div>
+            </div>
+            <div class="dash-frame-wrap">
+              ${option
+                ? `<iframe class="dash-frame" src="${escHtml(dashboardEmbedUrl(option))}" title="${escHtml(option.title)}"></iframe>`
+                : `<div class="dash-empty"><div><button type="button" data-choose-dash="${index}">+</button><strong>Adicionar dashboard</strong><span>Escolha um painel do Dark-Jutsu para fixar aqui.</span></div></div>`}
+            </div>
+          </article>
+        `;
+      }).join("");
+      rootSlots.querySelectorAll("[data-choose-dash]").forEach(btn => btn.addEventListener("click", () => openDashChooser(Number(btn.dataset.chooseDash))));
+      rootSlots.querySelectorAll("[data-clear-dash]").forEach(btn => btn.addEventListener("click", () => {
+        dashSlots[Number(btn.dataset.clearDash)] = null;
+        saveDashSlots();
+        renderDashSlots();
+      }));
+    }
+    function openDashChooser(slotIndex){
+      activeDashSlot = slotIndex;
+      document.getElementById("dashChooserList").innerHTML = dashboardOptions.map(option => `
+        <button class="chooser-option" type="button" data-dashboard-option="${option.id}">
+          <span><strong>${option.title}</strong><span>${option.group} - ${option.desc}</span></span>
+          <em class="tag">Selecionar</em>
+        </button>
+      `).join("");
+      document.querySelectorAll("[data-dashboard-option]").forEach(btn => btn.addEventListener("click", () => {
+        const option = dashboardOptions.find(item => item.id === btn.dataset.dashboardOption);
+        dashSlots[activeDashSlot] = option ? {id:option.id} : null;
+        saveDashSlots();
+        renderDashSlots();
+        document.getElementById("dashChooser").close();
+      }));
+      document.getElementById("dashChooser").showModal();
+    }
+    function drawBars(id, entries, color){
+      const canvas = document.getElementById(id);
+      const ctx = canvas.getContext("2d");
+      const left = 34, right = 12, top = 24, bottom = 36;
+      const chartW = canvas.width - left - right;
+      const chartH = canvas.height - top - bottom;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle = "#e7edf2";
+      ctx.lineWidth = 1;
+      for(let i=0;i<5;i++){ const y=top+i*(chartH/4); ctx.beginPath(); ctx.moveTo(left,y); ctx.lineTo(canvas.width-right,y); ctx.stroke(); }
+      if(!entries.length){
+        ctx.fillStyle = "#8a98a5"; ctx.font = "16px Segoe UI"; ctx.fillText("Sem dados no filtro", left + 80, top + chartH / 2); return;
+      }
+      const max = Math.max(...entries.map(([,v]) => v), 1);
+      const gap = Math.max(5, Math.min(12, chartW / entries.length * .12));
+      const w = (chartW - gap * (entries.length - 1)) / entries.length;
+      entries.forEach(([label,val],i) => {
+        const h = Math.max(5, (val / max) * (chartH - 12));
+        const x = left + i * (w + gap);
+        const y = top + chartH - h;
+        ctx.fillStyle = color;
+        ctx.fillRect(x,y,w,h);
+        ctx.fillStyle = "#34495a"; ctx.font = "bold 13px Segoe UI"; ctx.fillText(String(Math.round(val * 10) / 10), x + 4, y - 6);
+        ctx.fillStyle = "#7b8b99"; ctx.font = "10px Segoe UI"; ctx.fillText(label.includes("-") ? label.slice(5) : label.slice(0,10), x, canvas.height - 12);
+      });
+    }
+    function drawLine(id, entries, color){
+      const canvas = document.getElementById(id);
+      const ctx = canvas.getContext("2d");
+      const left = 36, right = 14, top = 24, bottom = 36;
+      const chartW = canvas.width - left - right;
+      const chartH = canvas.height - top - bottom;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle = "#e7edf2";
+      for(let i=0;i<5;i++){ const y=top+i*(chartH/4); ctx.beginPath(); ctx.moveTo(left,y); ctx.lineTo(canvas.width-right,y); ctx.stroke(); }
+      if(!entries.length){ ctx.fillStyle = "#8a98a5"; ctx.font = "16px Segoe UI"; ctx.fillText("Sem dados no filtro", left + 80, top + chartH / 2); return; }
+      const step = entries.length === 1 ? chartW : chartW / (entries.length - 1);
+      ctx.beginPath();
+      entries.forEach(([label,val],i) => {
+        const x = left + i * step;
+        const y = top + chartH - (Math.max(0, Math.min(100, val)) / 100) * chartH;
+        if(i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      entries.forEach(([label,val],i) => {
+        const x = left + i * step;
+        const y = top + chartH - (Math.max(0, Math.min(100, val)) / 100) * chartH;
+        ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+        if(i % 2 === 0 || entries.length <= 7){ ctx.fillStyle = "#7b8b99"; ctx.font = "10px Segoe UI"; ctx.fillText(label.slice(5), x - 12, canvas.height - 12); }
+      });
+      ctx.fillStyle = "#34495a"; ctx.font = "bold 12px Segoe UI"; ctx.fillText("100%", 2, top + 4); ctx.fillText("0%", 10, top + chartH);
+    }
+    function hours(row){
+      if(!row.start || !row.end) return 0;
+      const [sh,sm] = row.start.split(":").map(Number);
+      const [eh,em] = row.end.split(":").map(Number);
+      return Math.max(0, ((eh*60+em) - (sh*60+sm)) / 60);
+    }
+    function table(target, columns, rows){
+      const el = document.getElementById(target);
+      if(!rows.length){ el.innerHTML = '<div class="empty">Nenhum registro encontrado.</div>'; return; }
+      el.innerHTML = `<table><thead><tr>${columns.map(c=>`<th title="${escHtml(c.label)}">${escHtml(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(c=>`<td>${cellHtml(c.render ? c.render(row) : escHtml(row[c.key] || ""))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    }
+    function lockedHtml(label = "Conteúdo protegido por senha."){
+      return `<div class="empty">${label}</div>`;
+    }
+    function render(){
+      const rh = filtered("rh"), machine = filtered("machine"), stock = filtered("stock"), internal = filtered("internal");
+      const rhList = [...rh].sort((a,b) => b.date.localeCompare(a.date));
+      const machineList = [...machine].sort((a,b) => b.date.localeCompare(a.date));
+      const stockList = [...stock].sort((a,b) => b.date.localeCompare(a.date));
+      const internalList = [...internal].sort((a,b) => b.date.localeCompare(a.date));
+      const correct = stock.filter(r => Number(r.expected) === Number(r.actual)).length;
+      const wrong = stock.length - correct;
+      const accuracy = stock.length ? Math.round((correct / stock.length) * 100) : 0;
+      const totalMachineHours = machine.reduce((s,r)=>s+hours(r),0);
+      const internalCritical = internal.filter(r => ["alta","critica","crítica"].includes(String(r.severity || "").toLowerCase())).length;
+      const divergentStock = stock.filter(r => Number(r.expected) !== Number(r.actual));
+      document.getElementById("rhValue").textContent = rhUnlocked ? rh.length : "****";
+      document.getElementById("rhDocs").textContent = rhUnlocked ? `${rh.length} documentos seguros` : "bloqueado por senha";
+      document.getElementById("machineValue").textContent = machine.length;
+      document.getElementById("machineHours").textContent = `${totalMachineHours.toFixed(1)}h paradas`;
+      document.getElementById("stockValue").textContent = `${accuracy}%`;
+      document.getElementById("stockCorrect").textContent = `${correct} corretos`;
+      document.getElementById("stockWrong").textContent = `${wrong} incorretos`;
+      document.getElementById("internalValue").textContent = internal.length;
+      document.getElementById("internalOpen").textContent = `${internalCritical} alta/crítica`;
+      setText("rhMonthValue", rhUnlocked ? currentMonthRows(rh).length : "****");
+      setText("rhTopSector", rhUnlocked ? topValue(rh, "sector") : "bloqueado");
+      setText("rhTopType", rhUnlocked ? topValue(rh, "type") : "bloqueado");
+      setText("rhLastDate", rhUnlocked ? (rhList[0]?.date || "-") : "bloqueado");
+      setText("machineTotalHours", `${totalMachineHours.toFixed(1)}h`);
+      setText("machineTopName", topValue(machine, "machine"));
+      setText("machineTopPart", topValue(machine, "part"));
+      setText("machineTotalStops", machine.length);
+      setText("stockModuleAccuracy", `${accuracy}%`);
+      setText("stockCheckedItems", stock.length);
+      setText("stockDivergenceRate", `${stock.length ? Math.round((divergentStock.length / stock.length) * 100) : 0}%`);
+      setText("stockTopDivergence", topValue(divergentStock, "item"));
+      setText("internalTopClass", topValue(internal, "classification"));
+      setText("internalTopSeverity", topValue(internal, "severity"));
+      setText("internalCritical", internalCritical);
+      setText("internalTopOwner", topValue(internal, "owner"));
+      drawBars("rhChart", rhUnlocked ? groupByDate(rh) : [], "#2f82b7");
+      drawBars("machineChart", groupByDate(machine, hours), "#4aa3d8");
+      drawLine("stockChart", stockAccuracyTrend(stock), "#2f82b7");
+      drawBars("internalChart", groupByField(internal, "classification"), "#6fb7df");
+      if(rhUnlocked) table("rhList", [{label:"Data",key:"date"},{label:"Colaborador",key:"employee"},{label:"Setor",key:"sector"},{label:"Tipo",key:"type"},{label:"Documento",key:"doc"}], rhList);
+      else document.getElementById("rhList").innerHTML = lockedHtml();
+      table("machineList", [{label:"Data",key:"date"},{label:"Maquina",key:"machine"},{label:"Peca",render:r=>`${r.part}<br><span class="caption">${r.code || ""}</span>`},{label:"Parada",render:r=>`${r.stopType}<br>${r.start || ""} - ${r.end || ""}`}], machineList);
+      table("stockList", [{label:"Data",key:"date"},{label:"Item",key:"item"},{label:"Saldo esperado",key:"expected"},{label:"Saldo confirmado",key:"actual"},{label:"Resultado",render:r=>Number(r.expected)===Number(r.actual) ? "Correto" : "Incorreto"}], stockList);
+      table("internalList", [{label:"Data",key:"date"},{label:"Dark-Jutsu",key:"darkId"},{label:"Classificação",key:"classification"},{label:"Gravidade",key:"severity"},{label:"Solicitante",key:"requester"},{label:"Responsavel",key:"owner"},{label:"Status",key:"status"}], internalList);
+      if(rhUnlocked) renderMiniList("rhModuleList", rhList, r => miniRow(r.date, r.employee || "-", r.type || "-"));
+      else document.getElementById("rhModuleList").innerHTML = lockedHtml();
+      renderMiniList("machineModuleList", machineList, r => miniRow(r.date, r.machine || "-", `${(hours(r)).toFixed(1)}h`));
+      renderMiniList("stockModuleList", stockList, r => miniRow(r.date, r.item || "-", Number(r.expected)===Number(r.actual) ? "OK" : "Divergente"));
+      renderMiniList("internalModuleList", internalList, r => miniRow(r.date, r.classification || r.darkId || "-", r.severity || "-"));
+      setText("dataRhCount", rhUnlocked ? state.rh.length : "****");
+      setText("dataMachineCount", state.machine.length);
+      setText("dataStockCount", state.stock.length);
+      setText("dataInternalCount", state.internal.length);
+      setText("reportTotalRecords", (rhUnlocked ? state.rh.length : 0) + state.machine.length + state.stock.length + state.internal.length);
+      setText("reportAccuracy", `${accuracy}%`);
+      if(rhUnlocked) renderMiniList("dataRhList", rhList, r => miniRow(r.date, r.employee || "-", r.sector || "-"));
+      else document.getElementById("dataRhList").innerHTML = lockedHtml();
+      renderMiniList("dataOpsList", [...machineList.slice(0,4), ...internalList.slice(0,4)].sort((a,b) => b.date.localeCompare(a.date)), r => miniRow(r.date, r.machine || r.classification || r.darkId || "-", r.severity || r.status || r.stopType || "-"));
+      renderMiniList("reportAttentionList", [
+        ...groupByField(machine, "part").slice(0,4).map(([name,total]) => ({date:"Peça", name, total})),
+        ...groupByField(divergentStock, "item").slice(0,4).map(([name,total]) => ({date:"Estoque", name, total}))
+      ], r => miniRow(r.date, r.name, r.total));
+      renderMiniList("reportStatusList", groupByField(internal, "classification").map(([name,total]) => ({date:"Classificação", name, total})), r => miniRow(r.date, r.name, r.total));
+    }
+    const configs = {
+      rh:{title:"Inserir ocorrencia de RH", fields:[
+        ["date","Data","date",today],
+        ["employee","Colaborador","text",""],
+        ["sector","Setor","select","Almoxarifado",["Almoxarifado","Recebimento"]],
+        ["type","Tipo","select","Advertencia",["Advertencia","Atestado","Falta","Atraso","Treinamento","Desvio de conduta","Elogio","Outro"]],
+        ["docFile","Documento","file",""],
+        ["notes","Observacao","textarea",""]
+      ]},
+      machine:{title:"Relatar maquina parada", fields:[
+        ["date","Data","date",today],["machine","Maquina","text",""],["start","Hora inicial","time",""],["end","Hora final","time",""],["part","Peca faltante","text",""],["code","Codigo da peca","text",""],["stopType","Tipo de parada","select","Total",["Total","Parcial"]],["notes","Observacao","textarea",""]
+      ]},
+      stock:{title:"Importar relatorio de saidas", fields:[
+        ["xlsxFile","Arquivos MATR275 .xlsx","file",""]
+      ]},
+      internal:{title:"Inserir ocorrencia interna", fields:[
+        ["date","Data","date",today],["darkId","Ocorrencia Dark-Jutsu","text","DJ-"],["requester","Solicitante","text",""],["sector","Setor","text",""],["type","Tipo de atendimento","text",""],["owner","Responsavel","text",""],["status","Status","select","Aberta",["Aberta","Em atendimento","Concluida"]],["due","Prazo","date",today],["notes","Observacao","textarea",""]
+      ]}
+    };
+    function extraFormHtml(type){
+      if(type !== "machine") return "";
+      return `
+        <datalist id="partOptions">${itemCatalog.map(item => `<option value="${escHtml(item.desc || item.code)}">${escHtml(item.code || "")}</option>`).join("")}</datalist>
+        <datalist id="codeOptions">${itemCatalog.map(item => `<option value="${escHtml(item.code || item.desc)}">${escHtml(item.desc || "")}</option>`).join("")}</datalist>
+      `;
+    }
+    function bindDialogHelpers(type){
+      if(type !== "machine") return;
+      const part = document.querySelector('#entryDialog [name="part"]');
+      const code = document.querySelector('#entryDialog [name="code"]');
+      if(part) {
+        part.setAttribute("list", "partOptions");
+        part.addEventListener("change", () => syncMachinePartFields("part"));
+        part.addEventListener("blur", () => syncMachinePartFields("part"));
+      }
+      if(code) {
+        code.setAttribute("list", "codeOptions");
+        code.addEventListener("change", () => syncMachinePartFields("code"));
+        code.addEventListener("blur", () => syncMachinePartFields("code"));
+      }
+    }
+    function openDialog(type){
+      if(type === "rh" && !requireRhPassword()) return;
+      activeType = type;
+      const cfg = configs[type];
+      document.getElementById("dialogTitle").textContent = cfg.title;
+      document.getElementById("formFields").innerHTML = cfg.fields.map(([name,label,type,value,options]) => {
+        const full = type === "textarea" || name === "xlsxFile" ? " full" : "";
+        if(type === "textarea") return `<div class="${full}"><label>${label}</label><textarea name="${name}">${value}</textarea></div>`;
+        if(type === "select") return `<div><label>${label}</label><select name="${name}">${options.map(o=>`<option ${o===value?"selected":""}>${o}</option>`).join("")}</select></div>`;
+        const accept = name === "xlsxFile" ? ' accept=".xlsx,.xls" multiple' : "";
+        return `<div class="${full}"><label>${label}</label><input name="${name}" type="${type}" value="${type==="file" ? "" : value}"${accept}></div>`;
+      }).join("") + extraFormHtml(type) + (type === "stock" ? '<div class="review-box full" id="stockPreview">Anexe um ou vários relatórios MATR275. Isso só grava a base de saídas; para conferir saldos use o botão Relatar contagem. Cada bloco começa quando a coluna A tem produto; as linhas seguintes com coluna A vazia continuam no mesmo perfil até o próximo produto.</div>' : "");
+      document.getElementById("entryDialog").showModal();
+      bindDialogHelpers(type);
+    }
+    document.querySelectorAll("[data-open]").forEach(btn => btn.addEventListener("click", () => openDialog(btn.dataset.open)));
+    document.querySelectorAll("[data-review-stock]").forEach(btn => btn.addEventListener("click", startStockReview));
+    document.getElementById("entryForm").addEventListener("submit", async event => {
+      if(event.submitter && event.submitter.value === "cancel") return;
+      event.preventDefault();
+      const data = new FormData(event.currentTarget);
+      if(activeType === "stock" && data.getAll("xlsxFile").some(file => file && file.name)){
+        await importStockFile(data);
+      } else {
+        const row = Object.fromEntries(data.entries());
+        if(activeType === "rh") row.doc = data.get("docFile")?.name || row.doc || "documento-anexado.pdf";
+        delete row.docFile; delete row.xlsxFile;
+        state[activeType].push(row);
+      }
+      saveState();
+      document.getElementById("entryDialog").close();
+      render();
+    });
+    document.getElementById("stockReviewForm").addEventListener("submit", event => {
+      if(event.submitter && event.submitter.value === "pause") return;
+      event.preventDefault();
+      const current = stockReviewQueue[stockReviewIndex];
+      if(!current) return;
+      const actual = toNumber(document.getElementById("stockReviewActual").value);
+      const countDate = document.getElementById("stockReviewCountDate").value || today;
+      lastStockCountDate = countDate;
+      state.stock.push({
+        date: countDate,
+        movementDate: current.date,
+        item: current.item,
+        desc: current.desc,
+        expected: current.expected,
+        actual,
+        source: current.source,
+        document: current.document,
+        series: current.series,
+        output: current.output,
+        address: current.address,
+        warehouse: current.warehouse,
+        initial: current.initial,
+        countDate
+      });
+      saveState();
+      render();
+      rebuildStockReviewQueue(countDate);
+      showStockReviewItem();
+    });
+    document.getElementById("stockReviewActual").addEventListener("keydown", event => {
+      if(event.key !== "Enter") return;
+      event.preventDefault();
+      const form = document.getElementById("stockReviewForm");
+      if(typeof form.requestSubmit === "function") form.requestSubmit();
+    });
+    document.getElementById("stockReviewCountDate").addEventListener("keydown", event => {
+      if(event.key !== "Enter") return;
+      event.preventDefault();
+      document.getElementById("stockReviewActual")?.focus();
+    });
+    document.getElementById("stockReviewCountDate").addEventListener("change", event => {
+      rebuildStockReviewQueue(event.currentTarget.value || today);
+      showStockReviewItem();
+    });
+    function normalizeHeader(value){
+      return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    }
+    function parseExcelDate(value){
+      if(value instanceof Date && !isNaN(value)) return value.toISOString().slice(0,10);
+      if(typeof value === "number" && value > 20000){
+        const d = new Date(Math.round((value - 25569) * 86400 * 1000));
+        return d.toISOString().slice(0,10);
+      }
+      const text = String(value || "").trim();
+      const m = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+      if(m){
+        const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+        return `${year}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+      }
+      return text || today;
+    }
+    function toNumber(value){
+      if(typeof value === "number") return value;
+      const clean = String(value || "").replace(/\./g, "").replace(",", ".").trim();
+      const num = Number(clean);
+      return Number.isFinite(num) ? num : 0;
+    }
+    function findHeaderIndex(rows){
+      return rows.findIndex(row => row.some(cell => normalizeHeader(cell) === "produto") && row.some(cell => normalizeHeader(cell) === "saida"));
+    }
+    function columnMap(header){
+      const map = {};
+      header.forEach((cell, index) => { map[normalizeHeader(cell)] = index; });
+      return map;
+    }
+    function stockCell(row, map, key){
+      const idx = map[key];
+      return idx === undefined ? "" : row[idx];
+    }
+    function brDate(iso){
+      const [y,m,d] = String(iso || "").split("-");
+      return y && m && d ? `${d}/${m}/${y}` : String(iso || "");
+    }
+    function nextDayLabel(iso){
+      const d = new Date(`${iso}T00:00:00`);
+      if(isNaN(d)) return brDate(iso);
+      d.setDate(d.getDate() + 1);
+      return brDate(d.toISOString().slice(0,10));
+    }
+    function previousDate(iso){
+      const d = new Date(`${iso}T00:00:00`);
+      if(isNaN(d)) return iso;
+      d.setDate(d.getDate() - 1);
+      return d.toISOString().slice(0,10);
+    }
+    function productCodeNumber(code){
+      const digits = String(code || "").replace(/\D/g, "");
+      return digits ? Number(digits) : Number.POSITIVE_INFINITY;
+    }
+    function compareStockMovements(a,b){
+      const na = productCodeNumber(a.item);
+      const nb = productCodeNumber(b.item);
+      if(na !== nb) return na - nb;
+      return String(a.item || "").localeCompare(String(b.item || ""), "pt-BR", {numeric:true})
+        || a.date.localeCompare(b.date)
+        || a.document.localeCompare(b.document)
+        || a.source.localeCompare(b.source);
+    }
+    function stockMovementKey(row, countDate = row.countDate || row.date){
+      return [countDate, row.date, row.item, row.document, row.series, row.source, row.output].map(value => String(value || "")).join("|");
+    }
+    function rebuildStockReviewQueue(selectedDate = lastStockCountDate){
+      lastStockCountDate = selectedDate || today;
+      const movementDate = previousDate(lastStockCountDate);
+      const done = new Set(state.stock.map(row => stockMovementKey(row, row.countDate || row.date)));
+      stockReviewQueue = stockReviewAllMovements
+        .filter(item => item.date === movementDate)
+        .map(item => ({...item, countDate:lastStockCountDate}))
+        .filter(item => !done.has(stockMovementKey(item, lastStockCountDate)))
+        .sort(compareStockMovements);
+      stockReviewIndex = 0;
+    }
+    function stockReviewAvailableDates(){
+      return [...new Set(stockReviewAllMovements.map(item => item.date).filter(Boolean))].sort();
+    }
+    function showStockReviewItem(){
+      const item = stockReviewQueue[stockReviewIndex];
+      if(!item){
+        const availableDates = stockReviewAvailableDates();
+        const msg = availableDates.length
+          ? `Nao ha movimentos pendentes para a contagem de ${brDate(lastStockCountDate)}. A data de saida procurada foi ${brDate(previousDate(lastStockCountDate))}. Datas no relatorio: ${availableDates.map(brDate).join(", ")}.`
+          : "Nao ha movimentos pendentes para conferir.";
+        document.getElementById("stockReviewTitle").textContent = "Sem itens nessa data";
+        document.getElementById("stockReviewMeta").innerHTML = `<span>Data da contagem<b>${brDate(lastStockCountDate)}</b></span><span>Data das saidas buscadas<b>${brDate(previousDate(lastStockCountDate))}</b></span><span>Movimentos pendentes<b>0</b></span>`;
+        document.getElementById("stockReviewProgress").textContent = msg;
+        document.getElementById("stockReviewCountDate").value = lastStockCountDate;
+        document.getElementById("stockReviewActual").value = "";
+        document.getElementById("stockReviewActual").disabled = true;
+        document.getElementById("stockReviewDialog").showModal();
+        saveState();
+        render();
+        return;
+      }
+      document.getElementById("stockReviewActual").disabled = false;
+      document.getElementById("stockReviewTitle").textContent = `${item.item} - ${item.desc || "Sem descricao"}`;
+      document.getElementById("stockReviewMeta").innerHTML = `
+        <span>Perfil aberto pela coluna A<b>${item.item}</b></span>
+        <span>Data da saida<b>${brDate(item.date)}</b></span>
+        <span>Data da contagem<b>${brDate(lastStockCountDate)}</b></span>
+        <span>Documento<b>${item.document || "-"}</b></span>
+        <span>Serie<b>${item.series || "-"}</b></span>
+        <span>Endereco<b>${item.address || "-"}</b></span>
+        <span>Saida<b>${item.output}</b></span>
+        <span>Saldo inicial do bloco<b>${item.initial || 0}</b></span>
+        <span>Saldo esperado no relatorio<b>${item.expected}</b></span>
+      `;
+      document.getElementById("stockReviewProgress").textContent = `Movimento ${stockReviewIndex + 1} de ${stockReviewQueue.length}. Pressione Enter para salvar e ir ao proximo codigo.`;
+      document.getElementById("stockReviewCountDate").value = lastStockCountDate;
+      document.getElementById("stockReviewActual").value = "";
+      document.getElementById("stockReviewDialog").showModal();
+      setTimeout(() => document.getElementById("stockReviewActual")?.focus(), 50);
+    }
+    function movementsFromWorkbook(workbook, fileName){
+      const sheetName = workbook.SheetNames.find(name => normalizeHeader(name).includes("movimentos")) || workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:""});
+      const headerIndex = findHeaderIndex(rows);
+      if(headerIndex < 0) throw new Error("Nao encontrei a tabela de movimentos com Produto/Saida.");
+      const map = columnMap(rows[headerIndex]);
+      const out = [];
+      let current = {};
+      rows.slice(headerIndex + 1).forEach(row => {
+        const product = String(stockCell(row, map, "produto") || "").trim();
+        const desc = String(stockCell(row, map, "descricao") || "").trim();
+        const warehouse = String(stockCell(row, map, "armazem") || "").trim();
+        const address = String(stockCell(row, map, "endereco") || "").trim();
+        if(product){
+          current = {
+            item: product,
+            desc,
+            warehouse,
+            address,
+            initial: toNumber(stockCell(row, map, "saldo inicial"))
+          };
+        }
+        const saida = toNumber(stockCell(row, map, "saida"));
+        const rawDate = stockCell(row, map, "data");
+        if(!current.item || !saida) return;
+        const date = parseExcelDate(rawDate);
+        const expected = toNumber(stockCell(row, map, "saldo"));
+        out.push({
+          date,
+          item: current.item,
+          desc: current.desc,
+          warehouse: current.warehouse,
+          address: current.address,
+          initial: current.initial,
+          document: String(stockCell(row, map, "documento") || "").trim(),
+          series: String(stockCell(row, map, "serie") || "").trim(),
+          output: saida,
+          expected,
+          source:fileName
+        });
+      });
+      return out.sort((a,b) => a.date.localeCompare(b.date) || a.document.localeCompare(b.document) || a.item.localeCompare(b.item));
+    }
+    async function importStockFile(data){
+      const files = data.getAll("xlsxFile").filter(file => file && file.name);
+      const batches = await Promise.all(files.map(async file => {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer);
+        return movementsFromWorkbook(workbook, file.name);
+      }));
+      const movements = batches.flat();
+      if(!movements.length){
+        alert("Nao encontrei saidas para conferir nesses arquivos.");
+        return;
+      }
+      const existing = new Set((state.stockMovements || []).map(row => stockMovementKey(row, row.date)));
+      const newMovements = movements.filter(row => !existing.has(stockMovementKey(row, row.date)));
+      state.stockMovements = [...(state.stockMovements || []), ...newMovements].sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
+      rebuildItemCatalog();
+      alert(`${newMovements.length} saída(s) importada(s) para a base. Use Relatar contagem para conferir saldos.`);
+    }
+    function startStockReview(){
+      stockReviewAllMovements = [...(state.stockMovements || [])].sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
+      if(!stockReviewAllMovements.length){
+        alert("Importe uma planilha MATR275 antes de relatar contagem.");
+        return;
+      }
+      const dates = stockReviewAvailableDates();
+      lastStockCountDate = dates.includes(lastStockCountDate) ? lastStockCountDate : (dates[0] || today);
+      rebuildStockReviewQueue(lastStockCountDate);
+      showStockReviewItem();
+    }
+    function setActiveView(view){
+      document.querySelectorAll("[data-view]").forEach(section => section.classList.toggle("active", section.dataset.view === view));
+      document.querySelectorAll("[data-view-tab]").forEach(tab => tab.classList.toggle("active", tab.dataset.viewTab === view));
+      const labels = {
+        config:["1.1. Segurança","1.2. Regras"],
+        data:["2.1. Entrada de Dados","2.2. Base Local"],
+        dashboard:["3.1. Resumo Indicadores","3.2. Listas"],
+        reports:["4.1. Resumo","4.2. Exportação"]
+      };
+      document.getElementById("subnavText").innerHTML = labels[view].map(label => `<span>${label}</span>`).join("");
+    }
+    function exportCsv(){
+      if(state.rh.length && !requireRhPassword()) return;
+      const rows = [["medidor","data","referencia","detalhe","status"]];
+      state.rh.forEach(r => rows.push(["RH", r.date, r.employee || "", r.type || "", r.doc || ""]));
+      state.machine.forEach(r => rows.push(["Maquina Parada", r.date, r.machine || "", r.part || "", r.stopType || ""]));
+      state.stock.forEach(r => rows.push(["Acuracidade", r.date, r.item || "", `${r.expected} x ${r.actual}`, Number(r.expected) === Number(r.actual) ? "Correto" : "Incorreto"]));
+      state.internal.forEach(r => rows.push(["Ocorrencia Interna", r.date, r.darkId || "", r.owner || "", r.status || ""]));
+      const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"','""')}"`).join(";")).join("\n");
+      const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `relatorio-medidores-${today}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+    ["fromDate","toDate","filterText"].forEach(id => document.getElementById(id).addEventListener("input", render));
+    document.querySelectorAll("[data-view-tab]").forEach(tab => tab.addEventListener("click", () => setActiveView(tab.dataset.viewTab)));
+    document.querySelectorAll("[data-sync-internal]").forEach(btn => btn.addEventListener("click", () => syncInternalFromDark(false)));
+    document.getElementById("closeDashChooser").addEventListener("click", () => document.getElementById("dashChooser").close());
+    document.getElementById("resetDemoData").addEventListener("click", () => {
+      state = normalizeState(state);
+      saveState();
+      render();
+      setActiveView("dashboard");
+    });
+    document.getElementById("exportReport").addEventListener("click", exportCsv);
+    document.getElementById("clearFilters").addEventListener("click", () => {
+      fromDate.value = ""; toDate.value = ""; filterText.value = ""; render();
+    });
+    window.addEventListener("dark-jutsu-firebase-ready", () => {
+      syncInternalFromDark(true);
+      loadItemCatalogFromDark();
+    }, {once:true});
+    rebuildItemCatalog();
+    loadItemCatalogFromDark();
+    renderDashSlots();
+    render();
+    setTimeout(() => syncInternalFromDark(true), 1200);
+  </script>
+</body>
+</html>

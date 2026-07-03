@@ -70,15 +70,15 @@ Concluido:
 
 ### 1. Autenticacao real da API
 
-Hoje a API aceita `DARK_JUTSU_API_TOKEN` opcional e usa `app.role='service'` no SQL. Isso serve para desenvolvimento local, mas nao para producao.
+Status: primeira versao implementada.
 
-Falta:
+A API agora aceita `Authorization: Bearer <Firebase ID token>`, valida assinatura/issuer/audience do projeto `chat-fiasul`, localiza o usuario em `users`, bloqueia usuarios inativos/banidos e aplica `app.user_id`/`app.role` por requisicao. `DARK_JUTSU_API_TOKEN` continua existindo como token de servico para scripts locais.
 
-- validar Firebase ID token no backend enquanto Firebase Auth continuar ativo;
-- carregar `users.role`, `users.active` e `banned_users` a partir do SQL;
-- aplicar `app.user_id` e `app.role` por requisicao;
-- restringir CORS para a origem real do app;
+Ainda falta para endurecer antes de producao:
+
 - criar usuario PostgreSQL de login para a API que nao seja owner/superuser.
+- definir `DARK_JUTSU_ALLOWED_ORIGINS` com a origem real do app em vez de `*`;
+- revisar endpoints administrativos com checagens explicitas de papel alem das politicas SQL: primeira camada adicionada em 2026-07-03 para usuarios/cadastro/banidos, dashboard, settings, reset de contagem e publicacao Automus.
 
 ### 2. Endpoints de escrita
 
