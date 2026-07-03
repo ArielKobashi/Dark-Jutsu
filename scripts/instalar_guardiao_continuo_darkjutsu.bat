@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-set "SCRIPT=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts\guardiao_servidor_darkjutsu_hidden.vbs"
+set "SCRIPT=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts\guardiao_continuo_tick_darkjutsu_hidden.vbs"
 set "TASK_NAME=Dark-Jutsu Guardiao Servidor"
 
 if not exist "%SCRIPT%" (

@@ -203,6 +203,7 @@
           </div></article>
           <article class="setup-card"><h3>Dados locais</h3><div class="body">
             <button class="btn secondary" type="button" id="resetDemoData">Limpar dados fictícios</button>
+            <button class="btn danger" type="button" id="clearStockCounts" style="margin-top:8px">Zerar relatos de contagem</button>
           </div></article>
         </div>
       </section>
@@ -1271,14 +1272,61 @@
         || a.document.localeCompare(b.document)
         || a.source.localeCompare(b.source);
     }
+    function aggregateDailyItemMovements(rows){
+      // Regra: o saldo esperado final NUNCA deve ser lido de uma unica linha (a "ultima"
+      // do bloco), pois a nocao de "ultima" depende de ordenacao e quebra sempre que uma
+      // linha de continuacao vem sem numero de documento, ou quando dados de dias/arquivos
+      // diferentes sao reagrupados. Em vez disso, o saldo esperado e sempre recalculado
+      // por aritmetica: saldo inicial (somado uma unica vez por endereco/bloco) + entradas
+      // do dia - saidas do dia. Isso é imune a ordem das linhas, ao numero do documento, e
+      // a repetidas agregacoes sobre o mesmo item/data.
+      const map = new Map();
+      rows.forEach((row, index) => {
+        const key = [row.date, row.item].map(value => String(value || "")).join("|");
+        const current = map.get(key) || {
+          ...row,
+          output:0,
+          input:0,
+          documents:[],
+          document:"",
+          initialSum:0,
+          _seenBlocks:new Set(),
+          _maxOrder:-Infinity
+        };
+        const order = Number(row.order ?? index);
+        const blockId = String(row.address || row.warehouse || "");
+        if(!current._seenBlocks.has(blockId)){
+          current._seenBlocks.add(blockId);
+          current.initialSum += Number(row.initial || 0);
+        }
+        current.output += Number(row.output || 0);
+        current.input += Number(row.input || 0);
+        if(row.document && !current.documents.includes(row.document)) current.documents.push(row.document);
+        if(order > current._maxOrder){
+          current.address = row.address || current.address;
+          current.warehouse = row.warehouse || current.warehouse;
+          current.series = row.series || current.series;
+          current._maxOrder = order;
+        }
+        current.document = current.documents.join(", ");
+        current.initial = current.initialSum;
+        current.expected = current.initialSum + current.input - current.output;
+        map.set(key, current);
+      });
+      return [...map.values()]
+        .filter(row => Number(row.output || 0) > 0)
+        .map(({_seenBlocks, _maxOrder, initialSum, ...row}) => row)
+        .sort(compareStockMovements);
+    }
     function stockMovementKey(row, countDate = row.countDate || row.date){
-      return [countDate, row.date, row.item, row.document, row.series, row.source, row.output].map(value => String(value || "")).join("|");
+      const movementDate = row.movementDate || row.date;
+      return [countDate, movementDate, row.item, row.source, row.output, row.expected].map(value => String(value || "")).join("|");
     }
     function rebuildStockReviewQueue(selectedDate = lastStockCountDate){
       lastStockCountDate = selectedDate || today;
       const movementDate = previousDate(lastStockCountDate);
       const done = new Set(state.stock.map(row => stockMovementKey(row, row.countDate || row.date)));
-      stockReviewQueue = stockReviewAllMovements
+      stockReviewQueue = aggregateDailyItemMovements(stockReviewAllMovements)
         .filter(item => item.date === movementDate)
         .map(item => ({...item, countDate:lastStockCountDate}))
         .filter(item => !done.has(stockMovementKey(item, lastStockCountDate)))
@@ -1312,12 +1360,13 @@
         <span>Perfil aberto pela coluna A<b>${item.item}</b></span>
         <span>Data da saida<b>${brDate(item.date)}</b></span>
         <span>Data da contagem<b>${brDate(lastStockCountDate)}</b></span>
-        <span>Documento<b>${item.document || "-"}</b></span>
+        <span>Documento(s)<b>${item.document || "-"}</b></span>
         <span>Serie<b>${item.series || "-"}</b></span>
         <span>Endereco<b>${item.address || "-"}</b></span>
-        <span>Saida<b>${item.output}</b></span>
+        <span>Saida total do dia<b>${item.output}</b></span>
+        <span>Entrada total do dia<b>${item.input || 0}</b></span>
         <span>Saldo inicial do bloco<b>${item.initial || 0}</b></span>
-        <span>Saldo esperado no relatorio<b>${item.expected}</b></span>
+        <span>Saldo esperado final<b>${item.expected}</b></span>
       `;
       document.getElementById("stockReviewProgress").textContent = `Movimento ${stockReviewIndex + 1} de ${stockReviewQueue.length}. Pressione Enter para salvar e ir ao proximo codigo.`;
       document.getElementById("stockReviewCountDate").value = lastStockCountDate;
@@ -1348,9 +1397,10 @@
             initial: toNumber(stockCell(row, map, "saldo inicial"))
           };
         }
+        const entrada = toNumber(stockCell(row, map, "entrada"));
         const saida = toNumber(stockCell(row, map, "saida"));
         const rawDate = stockCell(row, map, "data");
-        if(!current.item || !saida) return;
+        if(!current.item || (!saida && !entrada)) return;
         const date = parseExcelDate(rawDate);
         const expected = toNumber(stockCell(row, map, "saldo"));
         out.push({
@@ -1362,12 +1412,14 @@
           initial: current.initial,
           document: String(stockCell(row, map, "documento") || "").trim(),
           series: String(stockCell(row, map, "serie") || "").trim(),
+          input: entrada,
           output: saida,
           expected,
-          source:fileName
+          source:fileName,
+          order: out.length
         });
       });
-      return out.sort((a,b) => a.date.localeCompare(b.date) || a.document.localeCompare(b.document) || a.item.localeCompare(b.item));
+      return out.sort((a,b) => a.date.localeCompare(b.date) || a.item.localeCompare(b.item) || a.order - b.order);
     }
     async function importStockFile(data){
       const files = data.getAll("xlsxFile").filter(file => file && file.name);
@@ -1376,19 +1428,20 @@
         const workbook = XLSX.read(buffer);
         return movementsFromWorkbook(workbook, file.name);
       }));
-      const movements = batches.flat();
+      const rawMovements = batches.flat();
+      const movements = aggregateDailyItemMovements(rawMovements);
       if(!movements.length){
         alert("Nao encontrei saidas para conferir nesses arquivos.");
         return;
       }
-      const existing = new Set((state.stockMovements || []).map(row => stockMovementKey(row, row.date)));
-      const newMovements = movements.filter(row => !existing.has(stockMovementKey(row, row.date)));
-      state.stockMovements = [...(state.stockMovements || []), ...newMovements].sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
+      const affected = new Set(movements.map(row => [row.source, row.date, row.item].map(value => String(value || "")).join("|")));
+      const kept = (state.stockMovements || []).filter(row => !affected.has([row.source, row.date, row.item].map(value => String(value || "")).join("|")));
+      state.stockMovements = [...kept, ...movements].sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
       rebuildItemCatalog();
-      alert(`${newMovements.length} saída(s) importada(s) para a base. Use Relatar contagem para conferir saldos.`);
+      alert(`${movements.length} item(ns)/dia importado(s) para a base. Use Relatar contagem para conferir saldos.`);
     }
     function startStockReview(){
-      stockReviewAllMovements = [...(state.stockMovements || [])].sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
+      stockReviewAllMovements = aggregateDailyItemMovements([...(state.stockMovements || [])]).sort((a,b) => a.date.localeCompare(b.date) || compareStockMovements(a,b));
       if(!stockReviewAllMovements.length){
         alert("Importe uma planilha MATR275 antes de relatar contagem.");
         return;
