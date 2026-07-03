@@ -649,9 +649,10 @@
     async function resolveSqlAuthHeader(){
       const token = localStorage.getItem("darkJutsuApiToken") || "";
       if(token) return `Bearer ${token}`;
-      if(auth?.currentUser && typeof auth.currentUser.getIdToken === "function"){
+      const currentAuth = window.auth;
+      if(currentAuth?.currentUser && typeof currentAuth.currentUser.getIdToken === "function"){
         try{
-          return `Bearer ${await auth.currentUser.getIdToken()}`;
+          return `Bearer ${await currentAuth.currentUser.getIdToken()}`;
         }catch(err){
           console.warn("Falha ao obter token do Firebase para o SQL API:", err);
         }
@@ -701,15 +702,15 @@
           method: "PUT",
           body: JSON.stringify({
             value: syncPayload(),
-            updated_by: auth?.currentUser?.uid || localStorage.getItem("darkJutsuApiToken") || ""
+            updated_by: window.auth?.currentUser?.uid || localStorage.getItem("darkJutsuApiToken") || ""
           })
         });
         sharedStateUpdatedAt = Number(Date.parse(result?.setting?.updated_at) || sharedStateUpdatedAt) || sharedStateUpdatedAt;
         setSyncStateTag("sincronizado", "green");
         setSyncStatus(`Base compartilhada atualizada ${reason ? `(${reason})` : ""}.`);
       }catch(err){
-        setSyncStateTag("somente local", "red");
-        setSyncStatus(err.message || "Falha ao sincronizar a base compartilhada.");
+        setSyncStateTag("local", "");
+        setSyncStatus(err.message || "Base compartilhada indisponível; mantendo modo local.");
       }finally{
         syncBusy = false;
       }
@@ -736,11 +737,11 @@
           setSyncStatus("A base local ja esta tao nova quanto a compartilhada.");
           return false;
         }
-        setSyncStateTag("vazio", "");
-        setSyncStatus("Nenhuma base compartilhada encontrada; usando dados locais.");
+        setSyncStateTag("local", "");
+        setSyncStatus("Base compartilhada indisponível; usando dados locais.");
       }catch(err){
-        setSyncStateTag("offline", "red");
-        setSyncStatus("Sem acesso à base compartilhada; usando dados locais.");
+        setSyncStateTag("local", "");
+        setSyncStatus("Base compartilhada indisponível; usando dados locais.");
       }
       return false;
     }
@@ -1087,14 +1088,18 @@
       }));
       document.getElementById("dashChooser").showModal();
     }
-    function drawBars(id, entries, color){
+    function drawBars(id, entries, color, options = {}){
       const canvas = document.getElementById(id);
       const ctx = canvas.getContext("2d");
-      const left = 34, right = 12, top = 24, bottom = 36;
+      const left = 40, right = 14, top = 22, bottom = 40;
       const chartW = canvas.width - left - right;
       const chartH = canvas.height - top - bottom;
+      const scaleMax = Math.max(options.minScale || 1, ...entries.map(([,v]) => v), options.forceScale || 0);
       ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.fillStyle = "#ffffff";
+      const bg = ctx.createLinearGradient(0,0,0,canvas.height);
+      bg.addColorStop(0, "#ffffff");
+      bg.addColorStop(1, "#f8fbfd");
+      ctx.fillStyle = bg;
       ctx.fillRect(0,0,canvas.width,canvas.height);
       ctx.strokeStyle = "#e7edf2";
       ctx.lineWidth = 1;
@@ -1102,18 +1107,28 @@
       if(!entries.length){
         ctx.fillStyle = "#8a98a5"; ctx.font = "16px Segoe UI"; ctx.fillText("Sem dados no filtro", left + 80, top + chartH / 2); return;
       }
-      const max = Math.max(...entries.map(([,v]) => v), 1);
+      const max = Math.max(scaleMax, 1);
       const gap = Math.max(5, Math.min(12, chartW / entries.length * .12));
       const w = (chartW - gap * (entries.length - 1)) / entries.length;
       entries.forEach(([label,val],i) => {
         const h = Math.max(5, (val / max) * (chartH - 12));
         const x = left + i * (w + gap);
         const y = top + chartH - h;
-        ctx.fillStyle = color;
+        const fill = ctx.createLinearGradient(0,y,0,y+h);
+        fill.addColorStop(0, color);
+        fill.addColorStop(1, "#7fb9df");
+        ctx.fillStyle = fill;
         ctx.fillRect(x,y,w,h);
-        ctx.fillStyle = "#34495a"; ctx.font = "bold 13px Segoe UI"; ctx.fillText(String(Math.round(val * 10) / 10), x + 4, y - 6);
-        ctx.fillStyle = "#7b8b99"; ctx.font = "10px Segoe UI"; ctx.fillText(label.includes("-") ? label.slice(5) : label.slice(0,10), x, canvas.height - 12);
+        ctx.fillStyle = "#2f3b48"; ctx.font = "bold 13px Segoe UI"; ctx.fillText(String(Math.round(val * 10) / 10), x + 4, y - 6);
+        ctx.fillStyle = "#7b8b99"; ctx.font = "10px Segoe UI";
+        const short = label.includes("-") ? label.slice(5) : label.slice(0,10);
+        ctx.fillText(short, x, canvas.height - 14);
       });
+      if(options.note && entries.length <= 3){
+        ctx.fillStyle = "#9aa7b3";
+        ctx.font = "12px Segoe UI";
+        ctx.fillText(options.note, left, 14);
+      }
     }
     function drawLine(id, entries, color){
       const canvas = document.getElementById(id);
@@ -1275,11 +1290,12 @@
       setText("internalTopSeverity", topValue(internal, "severity"));
       setText("internalCritical", internalCritical);
       setText("internalTopOwner", topValue(internal, "owner"));
-      setSyncStateTag(sharedStateUpdatedAt ? "sincronizado" : "somente local", sharedStateUpdatedAt ? "green" : "");
-      drawBars("rhChart", rhUnlocked ? groupByDate(rh) : [], "#2f82b7");
-      drawBars("machineChart", groupByDate(machine, hours), "#4aa3d8");
+      setSyncStateTag(sharedStateUpdatedAt ? "sincronizado" : "local", sharedStateUpdatedAt ? "green" : "");
+      const rhTrend = rhUnlocked ? groupByDate(rh) : [];
+      drawBars("rhChart", rhTrend, "#2f82b7", {minScale: rhTrend.length <= 3 ? 4 : 1, note: rhTrend.length <= 3 ? "Poucos registros no período" : ""});
+      drawBars("machineChart", groupByDate(machine, hours), "#4aa3d8", {minScale: 1});
       drawLine("stockChart", stockAccuracyTrend(stock), "#2f82b7");
-      drawBars("internalChart", groupByField(internal, "classification"), "#6fb7df");
+      drawBars("internalChart", groupByField(internal, "classification"), "#6fb7df", {minScale: 1});
       if(rhUnlocked) renderRecordTable("rhList", "rh", rhList, [{label:"Data",key:"date"},{label:"Colaborador",key:"employee"},{label:"Setor",key:"sector"},{label:"Tipo",key:"type"},{label:"Documento",render:r=>r.docName || r.doc || "-"}]);
       else document.getElementById("rhList").innerHTML = lockedHtml();
       renderRecordTable("machineList", "machine", machineList, [{label:"Data",key:"date"},{label:"Maquina",key:"machine"},{label:"Peca",render:r=>`${r.part}<br><span class="caption">${r.code || ""}</span>`},{label:"Parada",render:r=>`${r.stopType}<br>${r.start || ""} - ${r.end || ""}`}]);
