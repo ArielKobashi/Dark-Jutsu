@@ -36,7 +36,7 @@ jobs:
           mkdir -p public
 
           git ls-files -z \
-            | grep -zvE '^(\.github/|api/|db/|_migration_runs/|\.vscode/|docker-compose\.yml$|\.env($|\.))' \
+            | grep -zvE '^(\.github/|api/|db/|_migration_runs/|\.vscode/|docker-compose\.yml$|\.env($|\.)|data/historico_cooperat_antigo\.json$)' \
             | tar --null -T - -cf - \
             | tar -xf - -C public
 
