@@ -1318,12 +1318,12 @@
         ["date","Data","date",today],["machine","Maquina","text",""],["start","Hora inicial","time",""],["end","Hora final","time",""],["part","Peca faltante","text",""],["code","Codigo da peca","text",""],["stopType","Tipo de parada","select","Total",["Total","Parcial"]],["notes","Observacao","textarea",""]
       ]},
       stock:{title:"Lançar acuracidade manual", fields:[
-        ["date","Data inicial da sessão","date",lastStockCountDate || today],
+        ["date","Data do movimento","date",lastStockCountDate || today],
         ["item","Código do item","text",""],
-        ["desc","Descrição / observação do item","text",""],
-        ["output","Quantidade saída","number",""],
-        ["expected","Quantidade suposta","number",""],
-        ["actual","Quantidade contada","number",""]
+        ["desc","Descrição do item","text",""],
+        ["output","Quantidade saiu","number",""],
+        ["expected","Saldo esperado","number",""],
+        ["actual","Saldo contado","number",""]
       ]},
       internal:{title:"Inserir ocorrencia interna", fields:[
         ["date","Data","date",today],["darkId","Ocorrencia Dark-Jutsu","text","DJ-"],["requester","Solicitante","text",""],["sector","Setor","text",""],["type","Tipo de atendimento","text",""],["owner","Responsavel","text",""],["status","Status","select","Aberta",["Aberta","Em atendimento","Concluida"]],["due","Prazo","date",today],["notes","Observacao","textarea",""]
@@ -1383,7 +1383,7 @@
         const required = activeType === "stock" && ["date","item","output","expected","actual"].includes(name) ? " required" : "";
         const inputValue = type === "file" ? "" : escHtml(currentValue || "");
         return `<div class="${full}"><label>${label}</label><input name="${name}" type="${type}" value="${inputValue}"${step}${required}></div>`;
-      }).join("") + extraFormHtml(type) + (type === "stock" ? '<div class="review-box full" id="stockPreview">Use a data inicial como parâmetro da sessão. Depois lance código, quantidade saída, quantidade suposta e quantidade contada. Ao salvar, o formulário fica aberto para o próximo item.</div>' : "");
+      }).join("") + extraFormHtml(type) + (type === "stock" ? '<div class="review-box full" id="stockPreview">Preencha data, código, saída, saldo esperado e saldo contado. Enter avança para o próximo campo; ao salvar, o formulário continua aberto para o próximo item.</div>' : "");
       document.getElementById("entryDialog").showModal();
       bindDialogHelpers(type);
     }
