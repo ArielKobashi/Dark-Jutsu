@@ -78,8 +78,11 @@
     .metric .caption{display:none}
     .chart-grid{display:grid;grid-template-columns:repeat(2,minmax(300px,1fr));gap:10px}
     .chart-panel{border:1px solid #e4e9ee;background:#fff;padding:10px}
+    .chart-panel{position:relative}
     .chart-panel h3{margin:0 0 8px;text-align:center;font-size:13px;color:#34495a;line-height:1.25}
     canvas{width:100%;height:225px;background:#fff;border:1px solid #edf1f5;border-radius:0}
+    .chart-tooltip{position:absolute;z-index:5;pointer-events:none;background:rgba(36,49,61,.96);color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:3px;padding:6px 8px;font-size:11px;line-height:1.25;max-width:220px;box-shadow:0 6px 16px rgba(0,0,0,.2);transform:translate(-50%,-110%);opacity:0;transition:opacity .08s ease}
+    .chart-tooltip strong{display:block;font-size:12px;margin-bottom:2px}
     .status-row{display:flex;gap:8px;flex-wrap:wrap}
     .chip{font-size:12px;border-radius:0;padding:5px 7px;background:#eef4f8;color:#577083;border:1px solid #d8e4ec;line-height:1.2}
     .chip.green{color:#1b7c65;border-color:#b8ded3}
@@ -218,11 +221,11 @@
           </div></article>
           <article class="setup-card"><h3>Sincronização</h3><div class="body">
             <div class="sync-line">
-              <span>Dados compartilhados entre PCs</span>
-              <span class="tag" id="syncStateTag">carregando</span>
+              <span>Firebase compartilhado</span>
+              <span class="tag" id="syncStateTag">ativo</span>
             </div>
             <button class="btn secondary sync-btn" type="button" id="syncNow">Sincronizar</button>
-            <div class="sync-status" id="syncStatus">Modo local ativo.</div>
+            <div class="sync-status" id="syncStatus">Sincronização automática ativa.</div>
           </div></article>
           <article class="setup-card"><h3>Limpeza por módulo</h3><div class="body">
             <div class="stack-actions">
@@ -464,7 +467,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { getDatabase, ref, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -518,12 +521,7 @@
   <script>
     const STORAGE_KEY = "darkJutsuMedidores.v2";
     const DASH_SLOT_KEY = "darkJutsuMedidores.dashboardSlots.v1";
-    const SHARED_STATE_KEY = "medidores.state.v1";
-    const SQL_API_FALLBACK_BASES = [
-      "http://127.0.0.1:8765",
-      "http://127.0.0.1:4174",
-      "http://192.168.5.38:8765"
-    ];
+    const SHARED_STATE_KEY = "medidores/state";
     const FIREBASE_DB_URL = "https://chat-fiasul-default-rtdb.firebaseio.com";
     const today = new Date().toISOString().slice(0,10);
     const EMPTY_STATE = {rh:[], machine:[], stock:[], stockMovements:[], internal:[]};
@@ -539,8 +537,11 @@
     let itemCatalog = [];
     let sharedStateUpdatedAt = 0;
     let syncBusy = false;
+    let sharedStateListenerReady = false;
     let editingRecord = null;
     let visibleRows = {rh:[], machine:[], stock:[], internal:[]};
+    let chartTooltipEl = null;
+    const chartBarMeta = new Map();
     const dashboardOptions = [
       {id:"estoque04", group:"Estoque", title:"Dashboard de Estoque - Armazem 04", desc:"Resumo principal do estoque filtrado no armazem 04.", url:"dashboard.html?armazem=04&limite=50"},
       {id:"estoque05", group:"Estoque", title:"Dashboard de Estoque - Armazem 05", desc:"Resumo principal do estoque filtrado no armazem 05.", url:"dashboard.html?armazem=05&limite=50"},
@@ -649,37 +650,6 @@
       }
       catch(e){ return {...EMPTY_STATE, rh:[], machine:[], stock:[], stockMovements:[], internal:[]}; }
     }
-    async function resolveSqlAuthHeader(){
-      const token = localStorage.getItem("darkJutsuApiToken") || "";
-      if(token) return `Bearer ${token}`;
-      const currentAuth = window.auth;
-      if(currentAuth?.currentUser && typeof currentAuth.currentUser.getIdToken === "function"){
-        try{
-          return `Bearer ${await currentAuth.currentUser.getIdToken()}`;
-        }catch(err){
-          console.warn("Falha ao obter token do Firebase para o SQL API:", err);
-        }
-      }
-      return "";
-    }
-    window.sqlApi = async function(path, options = {}){
-      const headers = { ...(options.headers || {}) };
-      if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
-      const authHeader = await resolveSqlAuthHeader();
-      if(authHeader) headers.Authorization = authHeader;
-      let lastError = null;
-      for(const base of SQL_API_FALLBACK_BASES){
-        try{
-          const response = await fetch(`${base}${path}`, { ...options, headers });
-          const data = await response.json().catch(() => ({}));
-          if(!response.ok || data?.ok === false) throw new Error(data?.error || `Falha HTTP ${response.status}`);
-          return data;
-        }catch(error){
-          lastError = error;
-        }
-      }
-      throw lastError || new Error("API SQL indisponivel.");
-    };
     function setSyncStateTag(text, tone = ""){
       const el = document.getElementById("syncStateTag");
       if(!el) return;
@@ -693,60 +663,83 @@
     function syncPayload(){
       return {
         state: normalizeState(state),
-        updatedAt: sharedStateUpdatedAt || Date.now()
+        updatedAt: sharedStateUpdatedAt || Date.now(),
+        updatedBy: window.auth?.currentUser?.uid || localStorage.getItem("darkJutsuApiToken") || ""
       };
     }
     async function pushSharedState(reason = "salvo localmente"){
-      if(syncBusy || typeof window.sqlApi !== "function") return;
+      if(syncBusy || !db) return;
       syncBusy = true;
       try{
         sharedStateUpdatedAt = Date.now();
-        const result = await window.sqlApi(`/api/settings/${encodeURIComponent(SHARED_STATE_KEY)}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            value: syncPayload(),
-            updated_by: window.auth?.currentUser?.uid || localStorage.getItem("darkJutsuApiToken") || ""
-          })
-        });
-        sharedStateUpdatedAt = Number(Date.parse(result?.setting?.updated_at) || sharedStateUpdatedAt) || sharedStateUpdatedAt;
+        await set(ref(db, SHARED_STATE_KEY), syncPayload());
         setSyncStateTag("sincronizado", "green");
-        setSyncStatus(`Base compartilhada atualizada ${reason ? `(${reason})` : ""}.`);
+        setSyncStatus(`Firebase atualizado ${reason ? `(${reason})` : ""}.`);
       }catch(err){
-        setSyncStateTag("local", "");
-        setSyncStatus("Modo local ativo.");
+        setSyncStateTag("offline", "");
+        setSyncStatus("Firebase indisponível; mantendo modo local.");
       }finally{
         syncBusy = false;
       }
     }
     async function pullSharedState(){
-      if(typeof window.sqlApi !== "function") return;
+      if(!db) return;
       try{
-        const data = await window.sqlApi(`/api/settings/${encodeURIComponent(SHARED_STATE_KEY)}`);
-        const remote = data?.setting?.value || {};
+        const snap = await get(ref(db, SHARED_STATE_KEY));
+        const remote = snap.val() || {};
         const remoteState = remote?.state || remote;
-        const remoteUpdatedAt = Number(remote.updatedAt || data?.setting?.updated_at?.getTime?.() || Date.parse(data?.setting?.updated_at) || 0) || 0;
+        const remoteUpdatedAt = Number(remote.updatedAt || 0) || 0;
         if(remoteState && typeof remoteState === "object"){
           if(remoteUpdatedAt > sharedStateUpdatedAt || !sharedStateUpdatedAt){
             state = normalizeState(remoteState);
             sharedStateUpdatedAt = remoteUpdatedAt || Date.now();
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
             setSyncStateTag("sincronizado", "green");
-            setSyncStatus("Base compartilhada carregada.");
+            setSyncStatus("Firebase carregado.");
             rebuildItemCatalog();
             render();
             return true;
           }
           setSyncStateTag("sincronizado", "green");
-          setSyncStatus("A base local ja esta tao nova quanto a compartilhada.");
+          setSyncStatus("Base local já está atualizada.");
           return false;
         }
-        setSyncStateTag("local", "");
-        setSyncStatus("Modo local ativo.");
+        setSyncStateTag("vazio", "");
+        setSyncStatus("Nenhum dado no Firebase ainda.");
       }catch(err){
-        setSyncStateTag("local", "");
-        setSyncStatus("Modo local ativo.");
+        setSyncStateTag("offline", "");
+        setSyncStatus("Firebase indisponível; mantendo modo local.");
       }
       return false;
+    }
+    function attachSharedStateListener(){
+      if(sharedStateListenerReady || !db) return;
+      sharedStateListenerReady = true;
+      onValue(ref(db, SHARED_STATE_KEY), snap => {
+        const remote = snap.val() || {};
+        const remoteState = remote?.state || remote;
+        const remoteUpdatedAt = Number(remote.updatedAt || 0) || 0;
+        if(!remoteState || typeof remoteState !== "object") {
+          setSyncStateTag("vazio", "");
+          setSyncStatus("Sincronização automática ativa.");
+          return;
+        }
+        if(remoteUpdatedAt && remoteUpdatedAt <= sharedStateUpdatedAt && sharedStateUpdatedAt){
+          setSyncStateTag("sincronizado", "green");
+          return;
+        }
+        state = normalizeState(remoteState);
+        sharedStateUpdatedAt = remoteUpdatedAt || Date.now();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        rebuildItemCatalog();
+        setSyncStateTag("sincronizado", "green");
+        setSyncStatus("Atualizado automaticamente pelo Firebase.");
+        render();
+      }, err => {
+        console.warn("Listener do Firebase falhou:", err);
+        setSyncStateTag("offline", "");
+        setSyncStatus("Sincronização automática indisponível.");
+      });
     }
     function saveState(){
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -900,22 +893,60 @@
       rows.forEach(row => { map[row.date] = (map[row.date] || 0) + (valueFn ? valueFn(row) : 1); });
       return Object.entries(map).sort(([a],[b]) => a.localeCompare(b)).slice(-12);
     }
+    function parseIsoDateSafe(value){
+      const d = new Date(`${value}T00:00:00`);
+      return isNaN(d) ? null : d;
+    }
+    function isoDate(value){
+      return value.toISOString().slice(0,10);
+    }
+    function addDays(date, days){
+      const d = new Date(date);
+      d.setDate(d.getDate() + days);
+      return d;
+    }
+    function buildDailySeries(rows, valueFn, options = {}){
+      const fromFilter = document.getElementById("fromDate").value;
+      const toFilter = document.getElementById("toDate").value;
+      const dates = rows.map(row => row.date).filter(Boolean).sort();
+      if(!dates.length) return [];
+      let start = fromFilter ? parseIsoDateSafe(fromFilter) : parseIsoDateSafe(dates[0]);
+      let end = toFilter ? parseIsoDateSafe(toFilter) : parseIsoDateSafe(dates[dates.length - 1]);
+      if(!start || !end) return [];
+      const maxDays = options.maxDays || 14;
+      const totalDays = Math.floor((end - start) / 86400000) + 1;
+      if(totalDays > maxDays && !fromFilter && !toFilter){
+        start = addDays(end, -(maxDays - 1));
+      }
+      const map = new Map();
+      rows.forEach(row => {
+        if(!row.date) return;
+        map.set(row.date, (map.get(row.date) || 0) + Number(valueFn ? valueFn(row) : 1));
+      });
+      const out = [];
+      for(let d = new Date(start); d <= end; d = addDays(d, 1)){
+        const key = isoDate(d);
+        out.push([key, map.get(key) || 0]);
+      }
+      return out;
+    }
     function groupByField(rows, field){
       const map = {};
       rows.forEach(row => { map[row[field] || "Sem status"] = (map[row[field] || "Sem status"] || 0) + 1; });
       return Object.entries(map).sort((a,b) => b[1] - a[1]);
     }
     function stockAccuracyTrend(rows){
+      const daily = buildDailySeries(rows, () => 1, {maxDays: 14});
       const map = {};
       rows.forEach(row => {
         if(!map[row.date]) map[row.date] = {ok:0, total:0};
         map[row.date].total += 1;
         if(Number(row.expected) === Number(row.actual)) map[row.date].ok += 1;
       });
-      return Object.entries(map)
-        .sort(([a],[b]) => a.localeCompare(b))
-        .slice(-12)
-        .map(([date, stats]) => [date, Math.round((stats.ok / stats.total) * 100)]);
+      return daily.map(([date]) => {
+        const stats = map[date];
+        return [date, stats && stats.total ? Math.round((stats.ok / stats.total) * 100) : 0];
+      });
     }
     function topValue(rows, field){
       const top = groupByField(rows, field)[0];
@@ -1113,6 +1144,7 @@
       const max = Math.max(scaleMax, 1);
       const gap = Math.max(5, Math.min(12, chartW / entries.length * .12));
       const w = (chartW - gap * (entries.length - 1)) / entries.length;
+      const bars = [];
       entries.forEach(([label,val],i) => {
         const h = Math.max(5, (val / max) * (chartH - 12));
         const x = left + i * (w + gap);
@@ -1126,12 +1158,59 @@
         ctx.fillStyle = "#7b8b99"; ctx.font = "10px Segoe UI";
         const short = label.includes("-") ? label.slice(5) : label.slice(0,10);
         ctx.fillText(short, x, canvas.height - 14);
+        bars.push({x, y, w, h, label: String(label), value: val});
       });
+      chartBarMeta.set(id, {bars, left, top, right, bottom, chartW, chartH, options, canvas});
+      bindBarHover(canvas, id);
       if(options.note && entries.length <= 3){
         ctx.fillStyle = "#9aa7b3";
         ctx.font = "12px Segoe UI";
         ctx.fillText(options.note, left, 14);
       }
+    }
+    function ensureChartTooltip(){
+      if(chartTooltipEl) return chartTooltipEl;
+      const el = document.createElement("div");
+      el.className = "chart-tooltip";
+      document.body.appendChild(el);
+      chartTooltipEl = el;
+      return el;
+    }
+    function hideChartTooltip(){
+      if(!chartTooltipEl) return;
+      chartTooltipEl.style.opacity = "0";
+    }
+    function showChartTooltip(x, y, title, value){
+      const el = ensureChartTooltip();
+      el.innerHTML = `<strong>${escHtml(title)}</strong><span>${escHtml(value)}</span>`;
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.style.opacity = "1";
+    }
+    function bindBarHover(canvas, id){
+      if(!canvas || canvas.dataset.hoverBound === "1") return;
+      canvas.dataset.hoverBound = "1";
+      const move = event => {
+        const meta = chartBarMeta.get(id);
+        if(!meta) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (event.clientX - rect.left) * scaleX;
+        const y = (event.clientY - rect.top) * scaleY;
+        const hit = meta.bars.find(bar => {
+          const withinBar = x >= bar.x && x <= bar.x + bar.w && y >= bar.y && y <= bar.y + bar.h;
+          const withinLabel = x >= bar.x && x <= bar.x + bar.w && y >= meta.canvas.height - 24;
+          return withinBar || withinLabel;
+        });
+        if(!hit){
+          hideChartTooltip();
+          return;
+        }
+        showChartTooltip(event.clientX, event.clientY, hit.label, hit.value);
+      };
+      canvas.addEventListener("mousemove", move);
+      canvas.addEventListener("mouseleave", hideChartTooltip);
     }
     function drawLine(id, entries, color){
       const canvas = document.getElementById(id);
@@ -1294,9 +1373,10 @@
       setText("internalCritical", internalCritical);
       setText("internalTopOwner", topValue(internal, "owner"));
       setSyncStateTag(sharedStateUpdatedAt ? "sincronizado" : "local", sharedStateUpdatedAt ? "green" : "");
-      const rhTrend = rhUnlocked ? groupByDate(rh) : [];
+      const rhTrend = rhUnlocked ? buildDailySeries(rh, () => 1, {maxDays: 14}) : [];
+      const machineTrend = buildDailySeries(machine, hours, {maxDays: 14});
       drawBars("rhChart", rhTrend, "#2f82b7", {minScale: rhTrend.length <= 3 ? 6 : 1, note: rhTrend.length <= 3 ? "Poucos registros no período" : ""});
-      drawBars("machineChart", groupByDate(machine, hours), "#4aa3d8", {minScale: 1});
+      drawBars("machineChart", machineTrend, "#4aa3d8", {minScale: 1});
       drawLine("stockChart", stockAccuracyTrend(stock), "#2f82b7");
       drawBars("internalChart", groupByField(internal, "classification"), "#6fb7df", {minScale: 1});
       if(rhUnlocked) renderRecordTable("rhList", "rh", rhList, [{label:"Data",key:"date"},{label:"Colaborador",key:"employee"},{label:"Setor",key:"sector"},{label:"Tipo",key:"type"},{label:"Documento",render:r=>r.docName || r.doc || "-"}]);
@@ -1843,13 +1923,19 @@
     window.addEventListener("dark-jutsu-firebase-ready", () => {
       syncInternalFromDark(true);
       loadItemCatalogFromDark();
+      attachSharedStateListener();
+      void pullSharedState();
     }, {once:true});
     rebuildItemCatalog();
     loadItemCatalogFromDark();
     renderDashSlots();
     render();
     void pullSharedState();
-    setInterval(() => pullSharedState(), 30000);
+    window.addEventListener("focus", () => { void pullSharedState(); });
+    document.addEventListener("visibilitychange", () => {
+      if(document.visibilityState === "visible") void pullSharedState();
+    });
+    setInterval(() => pullSharedState(), 10000);
     setTimeout(() => syncInternalFromDark(true), 1200);
   </script>
 </body>
