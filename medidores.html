@@ -215,6 +215,7 @@
           </div></article>
           <article class="setup-card"><h3>Dados locais</h3><div class="body">
             <div class="stack-actions">
+              <button class="btn secondary" type="button" id="loadDemoData">Carregar dados teste</button>
               <button class="btn secondary" type="button" id="resetDemoData">Limpar dados fictícios</button>
               <button class="btn danger" type="button" id="clearStockCounts">Zerar relatos de contagem</button>
             </div>
@@ -525,7 +526,7 @@
   <script>
     const STORAGE_KEY = "darkJutsuMedidores.v2";
     const DASH_SLOT_KEY = "darkJutsuMedidores.dashboardSlots.v1";
-    const SHARED_STATE_KEY = "medidores/state";
+    const SHARED_STATE_KEY = "chatGlobal/medidores/state";
     const FIREBASE_DB_URL = "https://chat-fiasul-default-rtdb.firebaseio.com";
     const today = new Date().toISOString().slice(0,10);
     const EMPTY_STATE = {rh:[], machine:[], stock:[], stockMovements:[], internal:[]};
