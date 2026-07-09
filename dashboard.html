@@ -1759,7 +1759,7 @@
             const quantidades = eventosCompra.map(ev => num(ev.quantidadeCompra) ?? num(ev.qtdSolicitada)).filter(v => v !== null);
             const valores = eventosCompra.map(ev => num(ev.valorBaixa)).filter(v => v !== null);
             return {
-                totalEventos:Math.max(0, (Number(cooperat.totalEventos || 0) || eventosCompra.length) - ignorados),
+                totalEventos:eventosCompra.length,
                 mediaQuantidade:quantidades.length ? soma(quantidades) / quantidades.length : null,
                 totalQuantidade:soma(quantidades),
                 mediaValor:valores.length ? soma(valores) / valores.length : null,
@@ -1772,8 +1772,27 @@
             const data = String(evento?.data || "");
             return codigo === "104739" && requisicao === "136595" && data === "2025-09-14";
         }
+        function eventoCooperatEhCompra(evento){
+            if(!evento || eventoCooperatIgnoradoCompra(evento)) return false;
+            const texto = normalizarTexto([
+                evento.tipo,
+                evento.movimento,
+                evento.operacao,
+                evento.origem,
+                evento.descricao,
+                evento.historico,
+                evento.status
+            ].filter(Boolean).join(" "));
+            if(/\b(saida|saidas|requisicao|requisicoes|baixa|baixado|consumo|retirada|entrega|entregue)\b/.test(texto)){
+                return false;
+            }
+            if(/\b(compra|compras|pedido|entrada|recebimento|solicitada|solicitacao)\b/.test(texto)){
+                return true;
+            }
+            return (num(evento.quantidadeCompra) ?? num(evento.qtdSolicitada) ?? num(evento.quantidade)) !== null;
+        }
         function eventosCompraCooperat(cooperat){
-            return (Array.isArray(cooperat?.eventos) ? cooperat.eventos : []).filter(ev => !eventoCooperatIgnoradoCompra(ev));
+            return (Array.isArray(cooperat?.eventos) ? cooperat.eventos : []).filter(eventoCooperatEhCompra);
         }
         function normalizarCodigoCooperatHistorico(valor){
             const texto = String(valor ?? "").trim();
@@ -1830,6 +1849,9 @@
         }
         function decisaoSolicitarAvaliador(registro){
             return ["passivel", "solicitar"].includes(String(registro?.decisao || ""));
+        }
+        function decisaoRevisaoAvaliador(registro){
+            return ["minimo_incorreto", "reposicao_incorreta"].includes(String(registro?.decisao || ""));
         }
         function colunasKanbanAvaliador(){
             return [
@@ -1990,6 +2012,30 @@
             await set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), payload);
             avaliadorPedidosConfig[chave] = payload;
         }
+        function parseNumeroPrompt(valor){
+            const texto = String(valor ?? "").trim();
+            if(!texto) return null;
+            const normalizado = texto.replace(/\./g, "").replace(",", ".");
+            const numero = Number(normalizado);
+            return Number.isFinite(numero) && numero >= 0 ? numero : null;
+        }
+        async function salvarAjusteLimiteItem(codigo, campo, valor){
+            const chave = ajusteKey(codigo);
+            const atual = bancoAtual?.ajustesItens?.[chave] || {};
+            const ajuste = {
+                ...atual,
+                [campo]: valor,
+                atualizadoEm: Date.now(),
+                atualizadoPor: auth.currentUser?.email || auth.currentUser?.uid || ""
+            };
+            if(!bancoAtual) bancoAtual = {};
+            bancoAtual.ajustesItens = { ...(bancoAtual.ajustesItens || {}), [chave]: ajuste };
+            await set(ref(db, `estoqueGlobal/ajustesItens/${chave}`), ajuste);
+            return ajuste;
+        }
+        function renderDashboardAtualLogo(){
+            requestAnimationFrame(() => renderDashboardAtual());
+        }
         function renderHistoricoMini(historico){
             const linhas = historico.slice(0, 5);
             if(!linhas.length) return `
@@ -2063,7 +2109,7 @@
             if(!cooperat) return `
                 <div class="historicoAviso">Sem historico antigo localizado para este codigo. Esta base usa as requisicoes antigas e nao calcula prazo pedido->recebimento.</div>
             `;
-            const todosEventos = Array.isArray(cooperat.eventos) ? cooperat.eventos : [];
+            const todosEventos = eventosCompraCooperat(cooperat);
             const eventos = todosEventos.slice(0, 5);
             const eventosRestantes = todosEventos.slice(5);
             const tabelaEventos = lista => `
@@ -2087,7 +2133,7 @@
                                     <td class="num">${fmt(h.qtdSolicitada)}</td>
                                     <td class="num">${fmt(h.valorBaixa)}</td>
                                     <td>${esc(h.origem || "Cooperat")}</td>
-                                    <td>${eventoCooperatIgnoradoCompra(h) ? "Saida ignorada" : "Compra"}</td>
+                                    <td>Compra</td>
                                 </tr>
                             `).join("") || `<tr><td colspan="6">Sem eventos recentes.</td></tr>`}
                         </tbody>
@@ -2285,10 +2331,13 @@
                 .sort((a,b) => compararValores(a.reposicao || 0, b.reposicao || 0, "desc"));
             const avaliados = linhasBase.filter(l => l.registro?.decisao);
             const passivos = linhasBase.filter(l => decisaoSolicitarAvaliador(l.registro));
-            const avaliadosSemEntrada = avaliados.filter(l => !timestampEntradaConfirmadaKanban(l));
+            const avaliadosComPedidoAberto = passivos
+                .filter(l => processoCompraAbertoLinha(l))
+                .filter(l => !timestampEntradaConfirmadaKanban(l));
             const solicitadosSemProcessoAberto = passivos
                 .filter(l => !processoCompraAbertoLinha(l))
                 .filter(l => !timestampEntradaConfirmadaKanban(l));
+            const revisoes = linhasBase.filter(l => decisaoRevisaoAvaliador(l.registro));
             const semAvaliadorKanban = linhasBase.filter(l => !l.registro?.decisao && pedidoAtivo(l.pedido));
             const baseKanban = cfg.kanbanGestao === "avaliador"
                 ? passivos
@@ -2310,7 +2359,6 @@
                 .map(l => ({ ...l, kanban:"entregue", semAvaliador:!l.registro?.decisao }));
             const kanbanItens = [...monitorados, ...semAvaliadorMonitorados, ...entradasRecentes];
             const limiteKanbanPorColuna = cfg.kanbanExpandido ? 9999 : 10;
-            const revisoes = solicitadosSemProcessoAberto;
             const colunas = colunasKanbanAvaliador();
             const kanbanTemMais = colunas.some(col => kanbanItens.filter(l => l.kanban === col.id).length > limiteKanbanPorColuna);
             const ordenarKanban = lista => lista.slice().sort((a,b) => {
@@ -2325,7 +2373,7 @@
                 <section class="cards">
                     <article class="card red"><span>Aguardando avaliacao</span><strong>${fila.length}</strong></article>
                     <article class="card blue"><span>No Kanban</span><strong>${kanbanItens.length}</strong></article>
-                    <article class="card green"><span>Ja avaliados</span><strong>${avaliados.length}</strong></article>
+                    <article class="card green"><span>Ja avaliados</span><strong>${avaliadosComPedidoAberto.length}</strong></article>
                     <article class="card"><span>Revisar minimo/reposicao</span><strong>${revisoes.length}</strong></article>
                 </section>
                 <div class="toolbar">
@@ -2391,7 +2439,7 @@
                     <div class="avaliadorPanel">
                         <h2>Itens avaliados</h2>
                         <div class="avaliadorList">
-                            ${avaliadosSemEntrada.slice(0, 20).map(l => `
+                            ${avaliadosComPedidoAberto.map(l => `
                                 <article class="avaliadorItem">
                                     <div class="avaliadorItemTop">
                                         <div>
@@ -2413,9 +2461,9 @@
                         </div>
                     </div>
                     <div class="avaliadorPanel">
-                        <h2>Itens avaliados sem solicitação de compra</h2>
+                        <h2>Revisar mínimo/reposição</h2>
                         <div class="avaliadorList">
-                            ${revisoes.slice(0, 20).map(l => `
+                            ${revisoes.map(l => `
                                 <article class="avaliadorItem">
                                     <div class="avaliadorItemTop">
                                         <div>
@@ -2885,6 +2933,25 @@
                     const codigo = normalizarCodigo(btn.dataset.codigo);
                     const decisao = btn.dataset.avaliadorAction;
                     if(!codigo || !decisao) return;
+                    if(decisao === "minimo_incorreto" || decisao === "reposicao_incorreta"){
+                        const campo = decisao === "minimo_incorreto" ? "minimo" : "reposicao";
+                        const rotulo = campo === "minimo" ? "mínimo" : "reposição";
+                        const valor = parseNumeroPrompt(prompt(`Informe a nova quantidade de ${rotulo}:`, ""));
+                        if(valor === null){
+                            alert("Quantidade invalida. A avaliacao nao foi encerrada.");
+                            return;
+                        }
+                        btn.disabled = true;
+                        try{
+                            await salvarAjusteLimiteItem(codigo, campo, valor);
+                            renderDashboardAtualLogo();
+                        }catch(err){
+                            alert(`Nao foi possivel salvar a correcao de ${rotulo}.`);
+                            console.warn("Falha ao salvar ajuste de limite:", err);
+                            btn.disabled = false;
+                        }
+                        return;
+                    }
                     const observacao = prompt("Observacao da avaliacao:", "") || "";
                     const registroAtual = avaliadorPedidosConfig?.[ajusteKey(codigo)] || {};
                     const payload = {
@@ -2899,7 +2966,7 @@
                     btn.disabled = true;
                     try{
                         await salvarAvaliacaoPedido(codigo, payload);
-                        renderDashboardAtual();
+                        renderDashboardAtualLogo();
                     }catch(err){
                         alert("Nao foi possivel salvar a avaliacao.");
                         console.warn("Falha ao salvar avaliacao:", err);
@@ -2925,7 +2992,7 @@
                     btn.disabled = true;
                     try{
                         await salvarAvaliacaoPedido(codigo, payload);
-                        renderDashboardAtual();
+                        renderDashboardAtualLogo();
                     }catch(err){
                         alert("Nao foi possivel atualizar o kanban.");
                         console.warn("Falha ao atualizar kanban:", err);

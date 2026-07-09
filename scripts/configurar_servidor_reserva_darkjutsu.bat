@@ -105,7 +105,7 @@ if "%LATEST_BACKUP%"=="" (
 )
 
 echo Instalando atalhos de inicializacao para este usuario...
-call "%SHARE_ROOT%\scripts\instalar_atalho_servidor_guardiao_darkjutsu.bat"
+call "%SHARE_ROOT%\scripts\instalar_atualizar_guardiao_monitor_darkjutsu.bat"
 
 echo Iniciando API Dark-Jutsu...
 call "%SHARE_ROOT%\scripts\iniciar_servidor_se_necessario_darkjutsu.bat"

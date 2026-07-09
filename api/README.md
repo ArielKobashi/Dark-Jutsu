@@ -62,6 +62,7 @@ GET /health
 GET /api/me
 GET /api/inventory?limit=100&offset=0&q=texto
 GET /api/inventory/{codigo}
+POST /api/inventory/automus-update
 GET /api/users?limit=100&offset=0
 PATCH /api/users/{id}
 POST /api/users/{id}/ban
@@ -76,6 +77,8 @@ PUT /api/dashboard/panels/{id}
 PUT /api/dashboard/evaluations/{legacyKey}
 GET /api/counting/sessions?limit=100
 POST /api/counting/sessions
+PATCH /api/counting/sessions/{sessionId}/user
+GET /api/counting/history?limit=1000
 GET /api/counting/sessions/{sessionId}/items?limit=500
 GET /api/counting/drafts?limit=100
 PUT /api/counting/drafts
@@ -204,6 +207,12 @@ Content-Type: application/json
 ### Contagens
 
 ```http
+GET /api/counting/history?limit=1000
+```
+
+Retorna `contagens` e `rascunhos` no formato compativel com os caminhos antigos do Firebase, reconstruidos a partir de `counting_sessions.raw_data` e `counting_drafts.raw_data`. Esse endpoint alimenta relatorios e historico de planilhas durante a transicao.
+
+```http
 POST /api/counting/sessions
 Content-Type: application/json
 
@@ -224,6 +233,38 @@ Content-Type: application/json
   "verificacoesVazio": {}
 }
 ```
+
+```http
+PATCH /api/counting/sessions/{sessionId}/user
+Content-Type: application/json
+
+{
+  "usuario": "novo_usuario",
+  "corrigidoPor": "admin",
+  "usuarioAnterior": "usuario_antigo"
+}
+```
+
+Atualiza o dono de uma sessao historica de contagem no SQL e registra metadados de correcao em `raw_data`.
+
+### Estoque Automus
+
+```http
+POST /api/inventory/automus-update
+Content-Type: application/json
+
+{
+  "dados": [],
+  "dadosMortos": [],
+  "ajustesItens": {},
+  "historicoSaldo": {},
+  "movimentacoesMata185": {},
+  "ultimaAtualizacao": 1783000000000,
+  "atualizadoPor": "automus"
+}
+```
+
+O endpoint substitui o inventario em uma transacao, grava `inventory_snapshots` e recarrega itens, enderecos, limites, ajustes, historico de saldo e movimentacoes MATA185.
 
 ```http
 PUT /api/counting/drafts

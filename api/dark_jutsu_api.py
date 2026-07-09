@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import os
@@ -118,12 +119,32 @@ def _hidden_codes(value: Any) -> list[str]:
     return list(dict.fromkeys(codes))
 
 
+def _firebase_like_key(value: Any, default: str = "desconhecido") -> str:
+    text = _clean_text(value)
+    if not text:
+        return default
+    return re.sub(r"[^0-9A-Za-z_-]+", "_", text.lower()).strip("_") or default
+
+
 def _decode_legacy_key(value: str) -> str:
     try:
         padded = value + "=" * (-len(value) % 4)
         return base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8") or value
     except Exception:
         return value
+
+
+def _inventory_legacy_key(item: dict[str, Any], dead: bool = False) -> str:
+    key = _clean_text(item.get("protheusKey")) or _clean_text(item.get("protheus")) or _clean_text(item.get("cooperat"))
+    if key:
+        return key
+    fallback = _clean_text(item.get("descricao")) or "unknown"
+    return ("MORTO|" if dead else "ITEM|") + fallback
+
+
+def _json_hash(payload: Any) -> str:
+    body = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=_json_default).encode("utf-8")
+    return hashlib.sha256(body).hexdigest()
 
 
 def _connect():
@@ -351,6 +372,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._dashboard()
         if parts == ["api", "counting", "sessions"]:
             return self._counting_sessions(query)
+        if parts == ["api", "counting", "history"]:
+            return self._counting_history(query)
         if len(parts) == 5 and parts[:3] == ["api", "counting", "sessions"] and parts[4] == "items":
             return self._counting_items(parts[3], query)
         if parts == ["api", "counting", "drafts"]:
@@ -380,6 +403,9 @@ class Handler(BaseHTTPRequestHandler):
         if method == "PUT" and len(parts) == 4 and parts[:3] == ["api", "dashboard", "evaluations"]:
             self._require_staff()
             return self._put_dashboard_evaluation(parts[3], payload)
+        if method == "POST" and parts == ["api", "inventory", "automus-update"]:
+            self._require_admin()
+            return self._post_inventory_automus_update(payload)
         if method == "POST" and parts == ["api", "occurrences"]:
             return self._post_occurrence(payload)
         if method == "PATCH" and len(parts) == 3 and parts[:2] == ["api", "occurrences"]:
@@ -392,6 +418,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._post_label_job(payload)
         if method == "POST" and parts == ["api", "counting", "sessions"]:
             return self._post_counting_session(payload)
+        if method == "PATCH" and len(parts) == 5 and parts[:3] == ["api", "counting", "sessions"] and parts[4] == "user":
+            self._require_admin()
+            return self._patch_counting_session_user(parts[3], payload)
         if method in {"PUT", "POST", "PATCH"} and parts == ["api", "counting", "drafts"]:
             return self._put_counting_draft(payload)
         if method == "DELETE" and len(parts) == 4 and parts[:3] == ["api", "counting", "drafts"]:
@@ -540,6 +569,255 @@ class Handler(BaseHTTPRequestHandler):
             (rows[0]["id"],),
         )
         return {"item": rows[0], "addresses": addresses, "limits": limits}
+
+    def _post_inventory_automus_update(self, payload: dict[str, Any]) -> dict[str, Any]:
+        dados = payload.get("dados") if isinstance(payload.get("dados"), list) else []
+        dados_mortos = payload.get("dadosMortos") if isinstance(payload.get("dadosMortos"), list) else []
+        if not dados:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "`dados` nao pode estar vazio.")
+        imported_at = _timestamp(payload.get("ultimaAtualizacao")) or datetime.now(timezone.utc)
+        hash_after = _json_hash(payload)
+        updated_by = _clean_text(payload.get("atualizadoPor") or payload.get("updated_by"))
+        auth = getattr(self, "auth_context", AuthContext(role="service", service=True))
+
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("select set_config('app.role', %s, true)", (auth.role,))
+                cur.execute("select set_config('app.user_id', %s, true)", (auth.user_id or "",))
+                cur.execute("delete from inventory_movements")
+                cur.execute("delete from inventory_balance_history")
+                cur.execute("delete from inventory_adjustments")
+                cur.execute("delete from inventory_item_limits")
+                cur.execute("delete from inventory_item_addresses")
+                cur.execute("delete from inventory_items")
+
+                cur.execute(
+                    """
+                    insert into inventory_snapshots (
+                      source, saved_at, hash_before, hash_after, updated_by,
+                      item_count, dead_item_count, payload, raw_metadata
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+                    returning id
+                    """,
+                    (
+                        "api:inventory/automus-update",
+                        imported_at,
+                        _clean_text(payload.get("hashAntes") or payload.get("hash_before")),
+                        hash_after,
+                        updated_by,
+                        len(dados),
+                        len(dados_mortos),
+                        json.dumps(payload, ensure_ascii=False, default=_json_default),
+                        json.dumps(
+                            {
+                                "ultimaAtualizacao": payload.get("ultimaAtualizacao"),
+                                "ultimaAtualizacaoAutomatica": payload.get("ultimaAtualizacaoAutomatica"),
+                                "mapeamentoArquivos": payload.get("mapeamentoArquivos"),
+                                "automus": payload.get("automus"),
+                            },
+                            ensure_ascii=False,
+                            default=_json_default,
+                        ),
+                    ),
+                )
+                snapshot_id = str(cur.fetchone()["id"])
+
+                item_ids: dict[str, int] = {}
+                addresses_loaded = 0
+                limits_loaded = 0
+                for item, dead in [(i, False) for i in dados if isinstance(i, dict)] + [(i, True) for i in dados_mortos if isinstance(i, dict)]:
+                    legacy_key = _inventory_legacy_key(item, dead)
+                    cur.execute(
+                        """
+                        insert into inventory_items (
+                          legacy_key, protheus_code, protheus_key, cooperat_code, description,
+                          primary_address, primary_warehouse, balance, min_qty, max_qty, reorder_qty,
+                          limit_source, min_source, max_source, reorder_source, is_dead, status,
+                          updated_at, raw_data
+                        )
+                        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                        returning id
+                        """,
+                        (
+                            legacy_key,
+                            _clean_text(item.get("protheus")),
+                            _clean_text(item.get("protheusKey")),
+                            _clean_text(item.get("cooperat")),
+                            _clean_text(item.get("descricao")),
+                            _clean_text(item.get("enderecoPrincipal")),
+                            _clean_text(item.get("armazemPrincipal")),
+                            _decimal_value(item.get("saldo")),
+                            _decimal_value(item.get("minimo")),
+                            _decimal_value(item.get("maximo")),
+                            _decimal_value(item.get("reposicao")),
+                            _clean_text(item.get("limitesOrigem")),
+                            _clean_text(item.get("minimoOrigem")),
+                            _clean_text(item.get("maximoOrigem")),
+                            _clean_text(item.get("reposicaoOrigem")),
+                            bool(item.get("morto") or dead),
+                            "dead" if bool(item.get("morto") or dead) else "active",
+                            imported_at,
+                            json.dumps(item, ensure_ascii=False, default=_json_default),
+                        ),
+                    )
+                    item_id = int(cur.fetchone()["id"])
+                    item_ids[legacy_key] = item_id
+                    for alias in (_clean_text(item.get("protheus")), _clean_text(item.get("protheusKey")), _clean_text(item.get("cooperat"))):
+                        if alias:
+                            item_ids.setdefault(alias, item_id)
+
+                    for address in item.get("enderecos") if isinstance(item.get("enderecos"), list) else []:
+                        if not isinstance(address, dict):
+                            continue
+                        cur.execute(
+                            """
+                            insert into inventory_item_addresses (
+                              item_id, item_legacy_key, address, warehouse, balance, source, raw_data
+                            )
+                            values (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                            """,
+                            (
+                                item_id,
+                                legacy_key,
+                                _clean_text(address.get("endereco")),
+                                _clean_text(address.get("armazem")),
+                                _decimal_value(address.get("saldo")),
+                                "api:inventory/automus-update/enderecos",
+                                json.dumps(address, ensure_ascii=False, default=_json_default),
+                            ),
+                        )
+                        addresses_loaded += 1
+
+                    limites = item.get("limitesCooperat")
+                    if isinstance(limites, dict):
+                        cur.execute(
+                            """
+                            insert into inventory_item_limits (
+                              item_id, item_legacy_key, source, min_qty, max_qty, reorder_qty,
+                              previous_balance, applied, imported_at, raw_data
+                            )
+                            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                            """,
+                            (
+                                item_id,
+                                legacy_key,
+                                "cooperat",
+                                _decimal_value(limites.get("minimo")),
+                                _decimal_value(limites.get("maximo")),
+                                _decimal_value(limites.get("reposicao")),
+                                _decimal_value(limites.get("saldoAnterior")),
+                                item.get("limitesOrigem") == "cooperat",
+                                imported_at,
+                                json.dumps(limites, ensure_ascii=False, default=_json_default),
+                            ),
+                        )
+                        limits_loaded += 1
+
+                adjustments_loaded = self._insert_inventory_adjustments(cur, payload, item_ids, imported_at)
+                history_loaded = self._insert_inventory_history(cur, payload, item_ids)
+                movements_loaded = self._insert_inventory_movements(cur, payload)
+
+        return {
+            "ok": True,
+            "snapshot_id": snapshot_id,
+            "hash_after": hash_after,
+            "items_loaded": len(dados) + len(dados_mortos),
+            "active_items": len(dados),
+            "dead_items": len(dados_mortos),
+            "addresses_loaded": addresses_loaded,
+            "limits_loaded": limits_loaded,
+            "adjustments_loaded": adjustments_loaded,
+            "balance_history_loaded": history_loaded,
+            "movements_loaded": movements_loaded,
+        }
+
+    def _insert_inventory_adjustments(self, cur: Any, payload: dict[str, Any], item_ids: dict[str, int], imported_at: datetime) -> int:
+        ajustes = payload.get("ajustesItens") if isinstance(payload.get("ajustesItens"), dict) else {}
+        loaded = 0
+        for legacy_key, ajuste in ajustes.items():
+            if not isinstance(ajuste, dict):
+                continue
+            item_key = _clean_text(ajuste.get("itemKey")) or _decode_legacy_key(str(legacy_key))
+            cur.execute(
+                """
+                insert into inventory_adjustments (
+                  item_id, item_legacy_key, legacy_key, min_qty, max_qty, reorder_qty,
+                  reason, updated_by_name, updated_at, raw_data
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                """,
+                (
+                    item_ids.get(item_key or ""),
+                    item_key,
+                    str(legacy_key),
+                    _decimal_value(ajuste.get("minimo")),
+                    _decimal_value(ajuste.get("maximo")),
+                    _decimal_value(ajuste.get("reposicao")),
+                    "api:inventory/automus-update/ajustesItens",
+                    _clean_text(ajuste.get("atualizadoPor")),
+                    _timestamp(ajuste.get("atualizadoEm")) or imported_at,
+                    json.dumps(ajuste, ensure_ascii=False, default=_json_default),
+                ),
+            )
+            loaded += 1
+        return loaded
+
+    def _insert_inventory_history(self, cur: Any, payload: dict[str, Any], item_ids: dict[str, int]) -> int:
+        historico = payload.get("historicoSaldo") if isinstance(payload.get("historicoSaldo"), dict) else {}
+        loaded = 0
+        for encoded_key, events in historico.items():
+            item_key = _decode_legacy_key(str(encoded_key))
+            if not isinstance(events, list):
+                continue
+            for event in events:
+                if not isinstance(event, dict):
+                    continue
+                cur.execute(
+                    """
+                    insert into inventory_balance_history (
+                      item_id, item_legacy_key, event_at, event_date_label, previous_balance,
+                      current_balance, delta, event_type, source, raw_data
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    """,
+                    (
+                        item_ids.get(item_key),
+                        item_key,
+                        _timestamp(event.get("timestamp")),
+                        _clean_text(event.get("data")),
+                        _decimal_value(event.get("saldoAnterior")),
+                        _decimal_value(event.get("saldoAtual")),
+                        _decimal_value(event.get("delta")),
+                        _clean_text(event.get("tipo")),
+                        "api:inventory/automus-update/historicoSaldo",
+                        json.dumps(event, ensure_ascii=False, default=_json_default),
+                    ),
+                )
+                loaded += 1
+        return loaded
+
+    def _insert_inventory_movements(self, cur: Any, payload: dict[str, Any]) -> int:
+        movimentacoes = payload.get("movimentacoesMata185")
+        if not isinstance(movimentacoes, dict):
+            return 0
+        cur.execute(
+            """
+            insert into inventory_movements (
+              source, source_document, movement_at, movement_type, status, raw_data
+            )
+            values (%s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                "api:inventory/automus-update/movimentacoesMata185",
+                "movimentacoesMata185",
+                _timestamp(movimentacoes.get("atualizadoEm")),
+                "snapshot",
+                "raw",
+                json.dumps(movimentacoes, ensure_ascii=False, default=_json_default),
+            ),
+        )
+        return 1
 
     def _users(self, query: dict[str, list[str]]) -> dict[str, Any]:
         limit = _limit(query, 100, 500)
@@ -859,6 +1137,73 @@ class Handler(BaseHTTPRequestHandler):
         )
         return {"sessions": rows, "limit": limit}
 
+    def _counting_history(self, query: dict[str, list[str]]) -> dict[str, Any]:
+        limit = _limit(query, 500, 5000)
+        session_rows = self._query(
+            """
+            select id, legacy_path, session_date, user_id, user_name, uid, machine,
+                   started_at, created_at, total_items, total_quantity_items,
+                   total_empty_checks, is_draft, source, raw_data
+            from counting_sessions
+            order by session_date desc nulls last, created_at desc nulls last
+            limit %s
+            """,
+            (limit,),
+        )
+        contagens: dict[str, dict[str, dict[str, Any]]] = {}
+        for row in session_rows:
+            raw_data = row.get("raw_data") if isinstance(row.get("raw_data"), dict) else {}
+            raw_data = {
+                **raw_data,
+                "_sqlSessionId": str(row.get("id")),
+                "_sqlLegacyPath": row.get("legacy_path"),
+            }
+            session_date = _clean_text(raw_data.get("data"))
+            if not session_date and row.get("session_date"):
+                session_date = row["session_date"].isoformat()
+            session_date = session_date or "sem_data"
+            user_name = _clean_text(raw_data.get("usuario") or row.get("user_name") or row.get("uid")) or "desconhecido"
+            user_key = _firebase_like_key(user_name)
+            legacy_path = _clean_text(row.get("legacy_path")) or str(row.get("id"))
+            record_key = legacy_path.rstrip("/").split("/")[-1] or str(row.get("id"))
+            contagens.setdefault(session_date, {}).setdefault(user_key, {})[record_key] = raw_data
+
+        draft_rows = self._query(
+            """
+            select id, user_id, uid, user_name, cycle, machine, updated_at,
+                   values_json, empty_checks_json, system_balances_json, session_json, raw_data
+            from counting_drafts
+            order by updated_at desc nulls last
+            limit %s
+            """,
+            (limit,),
+        )
+        rascunhos: dict[str, Any] = {}
+        for row in draft_rows:
+            raw_data = row.get("raw_data") if isinstance(row.get("raw_data"), dict) else {}
+            if not raw_data:
+                raw_data = {
+                    "uid": row.get("uid"),
+                    "usuario": row.get("user_name"),
+                    "maquina": row.get("machine"),
+                    "ciclo": row.get("cycle"),
+                    "updatedAt": row.get("updated_at"),
+                    "valores": row.get("values_json") or {},
+                    "verificacoesVazio": row.get("empty_checks_json") or {},
+                    "saldosSistema": row.get("system_balances_json") or {},
+                    "sessao": row.get("session_json") or {},
+                }
+            draft_key = _clean_text(row.get("uid")) or _firebase_like_key(row.get("user_name"), str(row.get("id")))
+            rascunhos[draft_key] = raw_data
+
+        return {
+            "contagens": contagens,
+            "rascunhos": rascunhos,
+            "sessions": session_rows,
+            "drafts": draft_rows,
+            "limit": limit,
+        }
+
     def _counting_items(self, session_id: str, query: dict[str, list[str]]) -> dict[str, Any]:
         limit = _limit(query, 500, 2000)
         rows = self._query(
@@ -874,6 +1219,57 @@ class Handler(BaseHTTPRequestHandler):
             (session_id, limit),
         )
         return {"items": rows, "limit": limit}
+
+    def _patch_counting_session_user(self, session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        new_user = _clean_text(payload.get("usuario") or payload.get("user_name"))
+        if not new_user:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "`usuario` e obrigatorio.")
+        corrected_by = _clean_text(payload.get("corrigidoPor") or payload.get("corrected_by"))
+        corrected_at = _timestamp(payload.get("corrigidoEm") or payload.get("corrected_at")) or datetime.now(timezone.utc)
+        user_rows = self._query(
+            """
+            select id, firebase_uid, nickname
+            from users
+            where lower(nickname) = lower(%s) or id = %s or firebase_uid = %s
+            order by active desc nulls last
+            limit 1
+            """,
+            (new_user, new_user, new_user),
+        )
+        user_id = user_rows[0]["id"] if user_rows else None
+        resolved_uid = user_rows[0].get("firebase_uid") or user_id if user_rows else None
+        row = self._execute_one(
+            """
+            update counting_sessions
+            set user_id = %s,
+                user_name = %s,
+                uid = coalesce(%s, uid),
+                raw_data = coalesce(raw_data, '{}'::jsonb) || %s::jsonb
+            where id = %s
+            returning id, legacy_path, session_date, user_id, user_name, uid, machine,
+                      created_at, total_items, total_empty_checks
+            """,
+            (
+                user_id,
+                new_user,
+                resolved_uid,
+                json.dumps(
+                    {
+                        "usuario": new_user,
+                        "uid": resolved_uid,
+                        "corrigidoPor": corrected_by,
+                        "corrigidoEm": int(corrected_at.timestamp() * 1000),
+                        "usuarioAnterior": payload.get("usuarioAnterior"),
+                    },
+                    ensure_ascii=False,
+                    default=_json_default,
+                ),
+                session_id,
+            ),
+        )
+        if not row:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Sessao de contagem nao encontrada.")
+        return {"ok": True, "session": row}
 
     def _counting_drafts(self, query: dict[str, list[str]]) -> dict[str, Any]:
         limit = _limit(query, 100, 500)

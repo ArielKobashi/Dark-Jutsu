@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import math
+import os
 import re
 import sys
 import time
@@ -41,9 +42,12 @@ def _http_json(
     method: str = "GET",
     payload: dict[str, Any] | None = None,
     timeout: float = 30.0,
+    headers_extra: dict[str, str] | None = None,
 ) -> dict[str, Any] | list[Any] | None:
     data = None
     headers = {"Accept": "application/json"}
+    if headers_extra:
+        headers.update(headers_extra)
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
@@ -63,6 +67,31 @@ def _http_json(
         raise RuntimeError(f"HTTP {exc.code} em {url}: {body}") from exc
     except URLError as exc:
         raise RuntimeError(f"Falha de rede em {url}: {exc}") from exc
+
+
+def _post_inventory_to_sql_api(payload: dict[str, Any], id_token: str, log: logging.Logger) -> dict[str, Any] | None:
+    base_url = os.environ.get("DARK_JUTSU_API_BASE_URL", "http://127.0.0.1:8765").rstrip("/")
+    service_token = os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()
+    bearer = service_token or id_token
+    if not bearer:
+        log.warning("AUTOMUS_SQL_IGNORADO | token ausente")
+        return None
+    result = _http_json(
+        f"{base_url}/api/inventory/automus-update",
+        method="POST",
+        payload=payload,
+        timeout=120.0,
+        headers_extra={"Authorization": f"Bearer {bearer}"},
+    )
+    if not isinstance(result, dict) or not result.get("ok"):
+        raise RuntimeError(f"Resposta invalida da API SQL: {result}")
+    log.info(
+        "AUTOMUS_SQL_UPDATE_OK | snapshot=%s | itens=%s | enderecos=%s",
+        result.get("snapshot_id"),
+        result.get("items_loaded"),
+        result.get("addresses_loaded"),
+    )
+    return result
 
 
 def _decode_jwt_payload(token: str) -> dict[str, Any]:
@@ -1053,6 +1082,19 @@ def run_automus_update(
         backup_local_path,
         "OK" if backup_remoto_ok else "NAO",
     )
+
+    sql_update_ok = False
+    try:
+        _post_inventory_to_sql_api(payload, id_token, log)
+        sql_update_ok = True
+    except Exception as exc:
+        log.warning("AUTOMUS_SQL_UPDATE_FALHOU | seguindo fluxo Firebase | motivo=%s", exc)
+
+    if os.environ.get("AUTOMUS_SQL_ONLY", "").strip().lower() in {"1", "true", "sim", "yes"}:
+        if not sql_update_ok:
+            raise RuntimeError("AUTOMUS_SQL_ONLY ativo, mas a escrita SQL falhou.")
+        log.info("AUTOMUS_SQL_ONLY_OK | Firebase nao foi atualizado.")
+        return
 
     log.info("AUTOMUS: enviando atualizacao final para estoqueGlobal.")
     _http_json(estoque_url, method="PATCH", payload=payload)

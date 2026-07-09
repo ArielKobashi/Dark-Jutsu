@@ -128,8 +128,12 @@ Status em 2026-07-01:
 - `index.html` e `dashboard.html` ja tentam SQL primeiro em varios fluxos administrativos e mantem Firebase como fallback de transicao.
 - A aprovacao de cadastro ainda depende do Firebase Auth para criar o `uid`; depois disso o SQL recebe `POST /api/signup-requests/:id/approve`.
 - Contagens agora tem escrita SQL inicial para sessoes finalizadas, rascunhos, status de maquinas e reset global.
+- Relatorio e historico de planilhas de contagem agora usam `GET /api/counting/history` primeiro, com fallback Firebase.
+- Correcao de usuario no historico de contagem agora tenta `PATCH /api/counting/sessions/{sessionId}/user` antes do fallback Firebase.
 - O editor de etiquetas salva/carrega a configuracao compartilhada em `app_settings` via `PUT /api/settings/label.config`.
 - O publicador do Automus tenta gravar o manifesto em `automus_releases` via `PUT /api/automus/releases/latest`.
+- O estoque do Automus agora tem `POST /api/inventory/automus-update`, testado com o export completo em 2026-07-09, gravando snapshot e recarregando itens/enderecos/limites/historico em SQL.
+- Os scripts `Automus/scripts/atualizacao/automus_update.py` e `scripts/atualizacao/automus_update.py` passaram a tentar escrita SQL antes do Firebase; `AUTOMUS_SQL_ONLY=1` corta o fallback quando o teste operacional for aprovado.
 
 ### Fase 4: Migração de dados
 

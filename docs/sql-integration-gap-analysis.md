@@ -30,6 +30,7 @@ Concluido:
 | Saude | `GET /health` | testado |
 | Estoque | `GET /api/inventory` | testado |
 | Estoque | `GET /api/inventory/{codigo}` | implementado |
+| Estoque | `POST /api/inventory/automus-update` | testado com export completo |
 | Usuarios | `GET /api/users` | testado |
 | Usuarios | `PATCH /api/users/{id}` | testado |
 | Usuarios | `POST /api/users/{id}/ban` | testado |
@@ -44,6 +45,8 @@ Concluido:
 | Dashboard | `PUT /api/dashboard/evaluations/{legacyKey}` | testado |
 | Contagens | `GET /api/counting/sessions` | testado |
 | Contagens | `POST /api/counting/sessions` | testado |
+| Contagens | `PATCH /api/counting/sessions/{sessionId}/user` | implementado; falta teste manual admin |
+| Contagens | `GET /api/counting/history` | testado; alimenta relatorio/historico com formato legado |
 | Contagens | `GET /api/counting/sessions/{sessionId}/items` | implementado |
 | Contagens | `GET /api/counting/drafts` | implementado |
 | Contagens | `PUT /api/counting/drafts` | testado |
@@ -86,14 +89,14 @@ O banco ja tem tabelas, mas o frontend e o Automus ainda escrevem no Firebase. P
 
 | Area atual Firebase | Escritas que faltam na API |
 | --- | --- |
-| `estoqueGlobal` | atualizar estoque pelo Automus, aplicar ajustes manuais, salvar `configContagem`, criar backup/snapshot |
+| `estoqueGlobal` | Automus update transacional pronto em `POST /api/inventory/automus-update`, com snapshot SQL; falta aplicar ajustes manuais do frontend e cortar fallback Firebase |
 | `dashboardConfig/paineis` | pronto na API inicial; falta trocar frontend |
 | `dashboardConfig/avaliadorPedidos` | pronto na API inicial; falta trocar frontend |
 | `usuarios` | admin inicial pronto: aprovar solicitacao, alterar nivel, ativar/desativar, banir e resetar status de senha tentam SQL antes do Firebase; falta login/API auth real e criacao publica |
 | `solicitacoesCadastro` | aprovar/rejeitar pronto no admin; falta criar solicitacao publica e remover duplicadas via SQL |
 | `usuariosBanidos` | banir/apagar banido pronto no admin; falta revisar fluxo final de reativacao/desbanimento apos corte Firebase |
 | `nicknames*` | substituir por constraints/consultas SQL e endpoints de validacao |
-| `contagens` | finalizacao de sessao pronta na API e frontend tenta SQL antes do Firebase; faltam leituras historicas totalmente por SQL e correcao/movimento de historico entre usuarios |
+| `contagens` | finalizacao, relatorio/historico/reaplicacao e correcao de usuario tentam SQL antes do Firebase; falta validar correcao no fluxo admin real e substituir tempo real |
 | `contagemAtual` | rascunho/progresso principal vai para SQL; falta tempo real por SSE/WebSocket para substituir `onValue` |
 | `contagemRascunhos` | salvar/remover rascunhos pronto na API e frontend tenta SQL antes do Firebase |
 | `contagemStatusMaquinas` | salvar status/progresso pronto na API e frontend tenta SQL antes do Firebase |
@@ -152,8 +155,8 @@ Arquivos principais ainda presos ao Firebase:
 Falta:
 
 - trocar leitura de `estoqueGlobal.json` por endpoint SQL/API;
-- trocar PATCH/PUT de blocos do estoque por endpoint transacional;
-- gravar backup em `inventory_snapshots`;
+- trocar PATCH/PUT de blocos do estoque por endpoint transacional: primeira versao implementada e testada em 2026-07-09;
+- gravar backup em `inventory_snapshots`: pronto no endpoint SQL;
 - publicar release em `automus_releases`;
 - consultar update por `/api/automus/releases/latest`;
 - manter compatibilidade com `latest.json`/arquivo local durante transicao.
@@ -204,9 +207,9 @@ Fluxos de escrita de menor risco ja implementados:
 Proximos fluxos grandes:
 
 1. `POST /api/counting/sessions`
-2. `POST /api/inventory/automus-update`
+2. `POST /api/inventory/automus-update`: implementado e testado; falta teste com Automus real e ativar `AUTOMUS_SQL_ONLY=1` apos validacao
 3. endpoints de criacao publica de cadastro e validacao de nickname
-4. leituras historicas de contagem 100% SQL no frontend
+4. validar correcao/movimento de historico de contagem no fluxo admin real
 
 ## Como ajudar a descobrir o restante
 

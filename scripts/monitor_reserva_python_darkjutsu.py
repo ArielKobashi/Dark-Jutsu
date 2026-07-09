@@ -31,17 +31,39 @@ NIF_MESSAGE = 0x00000001
 NIF_ICON = 0x00000002
 NIF_TIP = 0x00000004
 TPM_RIGHTBUTTON = 0x0002
+TPM_RETURNCMD = 0x0100
+IMAGE_ICON = 1
+LR_LOADFROMFILE = 0x00000010
 
 ID_OPEN = 1001
 ID_TEST = 1002
 ID_SWITCH = 1003
 ID_STOP = 1004
+ID_GUARD = 1005
 
 user32 = ctypes.windll.user32
 shell32 = ctypes.windll.shell32
 gdi32 = ctypes.windll.gdi32
 kernel32 = ctypes.windll.kernel32
 
+if not hasattr(wintypes, "HCURSOR"):
+    wintypes.HCURSOR = wintypes.HANDLE
+if not hasattr(wintypes, "HICON"):
+    wintypes.HICON = wintypes.HANDLE
+if not hasattr(wintypes, "HBRUSH"):
+    wintypes.HBRUSH = wintypes.HANDLE
+if not hasattr(wintypes, "HBITMAP"):
+    wintypes.HBITMAP = wintypes.HANDLE
+if not hasattr(wintypes, "HMODULE"):
+    wintypes.HMODULE = wintypes.HANDLE
+if not hasattr(wintypes, "HMENU"):
+    wintypes.HMENU = wintypes.HANDLE
+if not hasattr(wintypes, "LRESULT"):
+    wintypes.LRESULT = ctypes.c_longlong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_long
+if not hasattr(wintypes, "LPVOID"):
+    wintypes.LPVOID = ctypes.c_void_p
+if not hasattr(wintypes, "UINT_PTR"):
+    wintypes.UINT_PTR = ctypes.c_size_t
 
 class NOTIFYICONDATAW(ctypes.Structure):
     _fields_ = [
@@ -82,6 +104,46 @@ class POINT(ctypes.Structure):
     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
 
+kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+
+user32.RegisterClassW.argtypes = [ctypes.POINTER(WNDCLASSW)]
+user32.RegisterClassW.restype = wintypes.ATOM
+user32.CreatePopupMenu.argtypes = []
+user32.CreatePopupMenu.restype = wintypes.HMENU
+user32.AppendMenuW.argtypes = [wintypes.HMENU, wintypes.UINT, wintypes.UINT_PTR, wintypes.LPCWSTR]
+user32.AppendMenuW.restype = wintypes.BOOL
+user32.EnableMenuItem.argtypes = [wintypes.HMENU, wintypes.UINT, wintypes.UINT]
+user32.EnableMenuItem.restype = wintypes.BOOL
+user32.TrackPopupMenu.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, ctypes.c_void_p]
+user32.TrackPopupMenu.restype = ctypes.c_int
+user32.GetCursorPos.argtypes = [ctypes.POINTER(POINT)]
+user32.GetCursorPos.restype = wintypes.BOOL
+user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.SetForegroundWindow.restype = wintypes.BOOL
+user32.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+user32.LoadImageW.restype = wintypes.HANDLE
+user32.CreateWindowExW.argtypes = [
+    wintypes.DWORD,
+    wintypes.LPCWSTR,
+    wintypes.LPCWSTR,
+    wintypes.DWORD,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.HWND,
+    wintypes.HMENU,
+    wintypes.HINSTANCE,
+    wintypes.LPVOID,
+]
+user32.CreateWindowExW.restype = wintypes.HWND
+user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+user32.DefWindowProcW.restype = wintypes.LRESULT
+user32.DestroyMenu.argtypes = [wintypes.HMENU]
+user32.DestroyMenu.restype = wintypes.BOOL
+
+
 def message(text, title="Dark-Jutsu"):
     user32.MessageBoxW(None, text, title, 0x40)
 
@@ -101,8 +163,12 @@ def ask_password(action):
         from tkinter import simpledialog
 
         root = tk.Tk()
+        root.title("Dark-Jutsu")
+        root.attributes("-topmost", True)
+        root.lift()
+        root.focus_force()
         root.withdraw()
-        value = simpledialog.askstring("Dark-Jutsu", f"Senha para {action}:", show="*")
+        value = simpledialog.askstring("Dark-Jutsu", f"Senha para {action}:", show="*", parent=root)
         root.destroy()
         if value == PASSWORD:
             return True
@@ -113,12 +179,14 @@ def ask_password(action):
         return True
 
 
-def run_hidden(command):
-    subprocess.Popen(command, shell=True, creationflags=0x08000000)
+def run_hidden(args):
+    log("run_hidden: " + " ".join(args))
+    subprocess.Popen(args, creationflags=0x08000000)
 
 
-def run_visible(command):
-    subprocess.Popen(command, shell=True)
+def run_visible(args):
+    log("run_visible: " + " ".join(args))
+    subprocess.Popen(args, creationflags=0x00000010)
 
 
 def local_ips():
@@ -146,16 +214,66 @@ def health(ip):
         return False
 
 
+def local_script(name):
+    local = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
+    if os.path.exists(local):
+        return local
+    return os.path.join(SCRIPTS, name)
+
+
+def script_args(name, keep_open=False):
+    mode = "/k" if keep_open else "/c"
+    wrapper = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_" + name.replace(".bat", ".cmd"))
+    if os.path.exists(wrapper):
+        return ["cmd.exe", mode, wrapper]
+    body = f'pushd {SCRIPTS} && call {name} && popd'
+    return ["cmd.exe", mode, body]
+
+
 def make_icon(color):
     hdc = user32.GetDC(None)
     mem = gdi32.CreateCompatibleDC(hdc)
-    bmp = gdi32.CreateCompatibleBitmap(hdc, 16, 16)
+    bmp = gdi32.CreateCompatibleBitmap(hdc, 64, 64)
     old = gdi32.SelectObject(mem, bmp)
+    bg = gdi32.CreateSolidBrush(0x202020)
+    rect = wintypes.RECT(0, 0, 64, 64)
+    user32.FillRect(mem, ctypes.byref(rect), bg)
     brush = gdi32.CreateSolidBrush(color)
-    rect = wintypes.RECT(0, 0, 16, 16)
-    user32.FillRect(mem, ctypes.byref(rect), brush)
+    pen = gdi32.CreatePen(0, 5, 0xFFFFFF)
+    old_pen = gdi32.SelectObject(mem, pen)
+    old_brush = gdi32.SelectObject(mem, brush)
+    gdi32.Ellipse(mem, 6, 6, 58, 58)
+    gdi32.SelectObject(mem, old_brush)
+    gdi32.SelectObject(mem, old_pen)
+
+    font = gdi32.CreateFontW(
+        36,
+        0,
+        0,
+        0,
+        700,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        "Segoe UI",
+    )
+    old_font = gdi32.SelectObject(mem, font)
+    gdi32.SetTextColor(mem, 0xFFFFFF)
+    gdi32.SetBkMode(mem, 1)
+    text_rect = wintypes.RECT(0, 2, 64, 62)
+    user32.DrawTextW(mem, "D", 1, ctypes.byref(text_rect), 0x00000001 | 0x00000004 | 0x00000020)
+    gdi32.SelectObject(mem, old_font)
+
     gdi32.SelectObject(mem, old)
+    gdi32.DeleteObject(bg)
     gdi32.DeleteObject(brush)
+    gdi32.DeleteObject(pen)
+    gdi32.DeleteObject(font)
     gdi32.DeleteDC(mem)
     user32.ReleaseDC(None, hdc)
 
@@ -173,16 +291,29 @@ def make_icon(color):
     return icon
 
 
+def load_icon(name, fallback_color):
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", name),
+        os.path.join(SCRIPTS, "icons", name),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            icon = user32.LoadImageW(None, path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE)
+            if icon:
+                return icon
+    return make_icon(fallback_color)
+
+
 class Tray:
     def __init__(self):
         self.local_ip = ""
         self.this_active = False
         self.tip = "Dark-Jutsu: verificando..."
-        self.icon_black = make_icon(0x202020)
-        self.icon_red = make_icon(0x2D2DCD)
-        self.icon_green = make_icon(0x56A11C)
+        self.icon_black = load_icon("dark-jutsu-black.ico", 0x202020)
+        self.icon_red = load_icon("dark-jutsu-red.ico", 0x2D2DCD)
+        self.icon_green = load_icon("dark-jutsu-green.ico", 0x56A11C)
         self.icon = self.icon_black
-        self.wndproc = ctypes.WINFUNCTYPE(ctypes.c_long, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)(self.proc)
+        self.wndproc = ctypes.WINFUNCTYPE(wintypes.LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)(self.proc)
         cls = WNDCLASSW()
         cls.lpfnWndProc = ctypes.cast(self.wndproc, ctypes.c_void_p).value
         cls.hInstance = kernel32.GetModuleHandleW(None)
@@ -239,31 +370,39 @@ class Tray:
         user32.EnableMenuItem(menu, 1, 0x00000002)
         user32.AppendMenuW(menu, 0, ID_OPEN, "Abrir Dark-Jutsu")
         user32.AppendMenuW(menu, 0, ID_TEST, "Testar servidor")
+        user32.AppendMenuW(menu, 0, ID_GUARD, "Verificar/iniciar agora")
         switch_text = "Tornar este PC o reserva" if self.this_active else "Tornar este PC o Principal"
         user32.AppendMenuW(menu, 0, ID_SWITCH, switch_text)
         user32.AppendMenuW(menu, 0, ID_STOP, "Encerrar servidor local")
         pt = POINT()
         user32.GetCursorPos(ctypes.byref(pt))
         user32.SetForegroundWindow(self.hwnd)
-        user32.TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, self.hwnd, None)
+        command_id = user32.TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD, pt.x, pt.y, 0, self.hwnd, None)
         user32.DestroyMenu(menu)
+        if command_id:
+            self.command(command_id)
 
     def command(self, ident):
+        log(f"menu command: {ident}")
         if ident == ID_OPEN:
             os.startfile(APP_PATH)
         elif ident == ID_TEST:
-            run_visible(f'cmd /k "{os.path.join(SCRIPTS, "testar_servidor_darkjutsu.bat")}"')
+            if ask_password("testar servidor"):
+                run_visible(script_args("testar_servidor_darkjutsu.bat", keep_open=True))
+        elif ident == ID_GUARD:
+            if ask_password("verificar/iniciar agora"):
+                run_visible(script_args("guardiao_servidor_tick_darkjutsu.bat", keep_open=True))
         elif ident == ID_SWITCH:
             if self.this_active:
                 if ask_password("tornar reserva"):
-                    run_hidden(f'cmd /c "{os.path.join(SCRIPTS, "tornar_reserva_operacional_darkjutsu.bat")}"')
+                    run_hidden(script_args("tornar_reserva_operacional_darkjutsu.bat"))
             else:
                 if ask_password("tornar Principal"):
                     target = "assumir_servidor_darkjutsu.bat" if self.local_ip == PRIMARY_IP else "tornar_principal_operacional_darkjutsu.bat"
-                    run_hidden(f'cmd /c "{os.path.join(SCRIPTS, target)}"')
+                    run_hidden(script_args(target))
         elif ident == ID_STOP:
             if ask_password("encerrar servidor local"):
-                run_hidden(f'cmd /c "{os.path.join(SCRIPTS, "parar_api_darkjutsu.bat")}"')
+                run_hidden(script_args("parar_api_darkjutsu.bat"))
         time.sleep(1)
         self.update_status()
 

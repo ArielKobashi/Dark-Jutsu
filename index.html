@@ -5863,14 +5863,44 @@ function mesclarRegistroSalvoNoRascunhoContagem(registro, indices){
     return aplicados;
 }
 
+async function carregarHistoricoContagemSql(limit = 1000){
+    if(typeof window.sqlApi !== "function") return null;
+    const data = await window.sqlApi(`/api/counting/history?limit=${encodeURIComponent(limit)}`);
+    return {
+        contagens: data?.contagens || {},
+        rascunhos: data?.rascunhos || {}
+    };
+}
+
+async function carregarHistoricoContagemFirebase(){
+    if(!window.get || !window.ref || !window.db) return null;
+    const [snap, rascunhosSnap] = await Promise.all([
+        window.get(window.ref(window.db, "contagens")),
+        window.get(window.ref(window.db, "contagemRascunhos")).catch(() => null)
+    ]);
+    return {
+        contagens: snap.exists() ? snap.val() : {},
+        rascunhos: rascunhosSnap?.exists?.() ? rascunhosSnap.val() : {}
+    };
+}
+
+async function carregarHistoricoContagemComFallback(limit = 1000){
+    try{
+        const historicoSql = await carregarHistoricoContagemSql(limit);
+        if(historicoSql) return historicoSql;
+    }catch(sqlErr){
+        console.warn("Falha ao carregar historico de contagem no SQL; tentando Firebase:", sqlErr);
+    }
+    return carregarHistoricoContagemFirebase();
+}
+
 async function carregarContagensSalvasUsuarioAtual(){
-    if(!window.get || !window.ref || !window.db) return 0;
     const usuario = usuarioKeyContagemFirebase();
     if(!usuario) return 0;
     try{
-        const snap = await window.get(window.ref(window.db, `contagens/${dataContagemSessaoAtual()}/${usuario}`));
-        if(!snap.exists()) return 0;
-        const registros = snap.val() || {};
+        const historico = await carregarHistoricoContagemComFallback(500);
+        const registros = historico?.contagens?.[dataContagemSessaoAtual()]?.[usuario] || {};
+        if(!Object.keys(registros).length) return 0;
         const indices = indiceItensContagemPorRegistro();
         let aplicados = 0;
         Object.entries(registros || {}).forEach(([registroKey, registro]) => {
@@ -6212,10 +6242,9 @@ function reconstruirHistoricoProgressoContagem(registros){
 }
 
 async function carregarHistoricoContagemParaProgresso(){
-    if(!window.get || !window.ref || !window.db) return false;
     try{
-        const snap = await window.get(window.ref(window.db, "contagens"));
-        contagemHomeRegistros = snap.exists() ? snap.val() : {};
+        const historico = await carregarHistoricoContagemComFallback(1000);
+        contagemHomeRegistros = historico?.contagens || {};
         contagemHistoricoProgressoGrupos = reconstruirHistoricoProgressoContagem(contagemHomeRegistros);
         atualizarPopupProgressoContagemPrincipal();
         return true;
@@ -8318,15 +8347,13 @@ async function abrirRelatorioContagem(){
     document.getElementById("contagemRelatorioModal").style.display = "flex";
     document.getElementById("contagemRelatorioTabela").innerHTML = "<p class='contagemEmpty'>Carregando...</p>";
     try{
-        const [snap, rascunhosSnap] = await Promise.all([
-            window.get(window.ref(window.db, "contagens")),
-            window.get(window.ref(window.db, "contagemRascunhos")).catch(() => null)
-        ]);
+        const historico = await carregarHistoricoContagemComFallback(1000);
+        if(!historico) throw new Error("Historico de contagem indisponivel.");
         relContagens = mesclarRascunhoAtualRelatorioContagem(
             mesclarRascunhosAtuaisContagem(
                 mesclarRascunhosFirebaseRelatorioContagem(
-                    snap.exists() ? snap.val() : {},
-                    rascunhosSnap?.exists?.() ? rascunhosSnap.val() : {}
+                    historico.contagens,
+                    historico.rascunhos
                 )
             )
         );
@@ -8752,10 +8779,6 @@ async function alterarUsuarioHistoricoContagem(){
         mostrarNotificacao("Selecione a contagem e o usuário.");
         return;
     }
-    if(!window.set || !window.ref || !window.db){
-        mostrarNotificacao("Firebase ainda nao esta pronto.");
-        return;
-    }
     const antigoUsuarioKey = sessao.usuarioKey || chaveFirebaseContagem(sessao.usuario);
     const novoUsuarioKey = chaveFirebaseContagem(novoUsuario);
     const registroKey = sessao.registroKey || "registro";
@@ -8776,12 +8799,27 @@ async function alterarUsuarioHistoricoContagem(){
             corrigidoEm:Date.now(),
             usuarioAnterior:sessao.usuario || antigoUsuarioKey
         };
-        if(typeof window.push === "function"){
-            await window.push(window.ref(window.db, `contagens/${sessao.data}/${novoUsuarioKey}`), payload);
-        }else{
-            await window.set(window.ref(window.db, `contagens/${sessao.data}/${novoUsuarioKey}/${Date.now()}_corrigido`), payload);
+        const sqlSessionId = sessao.registro?._sqlSessionId;
+        let corrigiuSql = false;
+        if(sqlSessionId && typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/counting/sessions/${encodeURIComponent(sqlSessionId)}/user`, {
+                method:"PATCH",
+                body:JSON.stringify(payload)
+            });
+            corrigiuSql = true;
         }
-        await window.set(window.ref(window.db, origemPath), null);
+        if(!corrigiuSql){
+            if(!window.set || !window.ref || !window.db){
+                mostrarNotificacao("Firebase ainda nao esta pronto.");
+                return;
+            }
+            if(typeof window.push === "function"){
+                await window.push(window.ref(window.db, `contagens/${sessao.data}/${novoUsuarioKey}`), payload);
+            }else{
+                await window.set(window.ref(window.db, `contagens/${sessao.data}/${novoUsuarioKey}/${Date.now()}_corrigido`), payload);
+            }
+            await window.set(window.ref(window.db, origemPath), null);
+        }
         historicoContagemPlanilhasCarregado = false;
         await carregarHistoricoContagemPlanilhas(true);
         mostrarNotificacao("Perfil da contagem alterado.");
@@ -8799,19 +8837,13 @@ async function carregarHistoricoContagemPlanilhas(forcar = false){
         renderizarHistoricoContagemPlanilhas();
         return;
     }
-    if(!window.get || !window.ref || !window.db){
-        lista.innerHTML = "<p>Firebase ainda nao esta pronto.</p>";
-        return;
-    }
     lista.innerHTML = "<p>Carregando contagens...</p>";
     try{
-        const [snap, rascunhosSnap] = await Promise.all([
-            window.get(window.ref(window.db, "contagens")),
-            window.get(window.ref(window.db, "contagemRascunhos")).catch(() => null)
-        ]);
+        const historico = await carregarHistoricoContagemComFallback(1000);
+        if(!historico) throw new Error("Historico de contagem indisponivel.");
         relContagens = mesclarRascunhosFirebaseRelatorioContagem(
-            snap.exists() ? snap.val() : {},
-            rascunhosSnap?.exists?.() ? rascunhosSnap.val() : {}
+            historico.contagens,
+            historico.rascunhos
         );
         historicoContagemSessoes = montarSessoesHistoricoContagem(relContagens);
         historicoContagemPlanilhasCarregado = true;
