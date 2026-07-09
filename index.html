@@ -1685,19 +1685,28 @@ function codigoArmazemFiltro(valor){
     return match ? String(parseInt(match[0], 10)) : texto;
 }
 
+function formatosArmazemFiltro(valor){
+    const texto = (valor || "").toString().trim().toLowerCase();
+    if(!texto) return [];
+    const codigo = codigoArmazemFiltro(texto);
+    const formatos = [texto, codigo];
+    if(/^\d+$/.test(codigo)){
+        formatos.push(codigo.padStart(2, "0"));
+    }
+    return [...new Set(formatos.filter(Boolean))];
+}
+
 function armazensComSaldoItem(item){
     if(!item) return [];
     const armazens = [];
     if(Array.isArray(item.enderecos) && item.enderecos.length){
         item.enderecos.forEach(end => {
             if(!enderecoPossuiSaldo(end)) return;
-            const codigo = codigoArmazemFiltro(end?.armazem);
-            if(codigo) armazens.push(codigo);
+            armazens.push(...formatosArmazemFiltro(end?.armazem));
         });
     }else if((parsePlanilhaNumero(item.saldo) || 0) > 0){
         [item.armazemPrincipal, item.armazem].forEach(armazem => {
-            const codigo = codigoArmazemFiltro(armazem);
-            if(codigo) armazens.push(codigo);
+            armazens.push(...formatosArmazemFiltro(armazem));
         });
     }
     return [...new Set(armazens)];
