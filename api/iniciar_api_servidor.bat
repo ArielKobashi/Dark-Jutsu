@@ -1,8 +1,17 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 set "ROOT=%~dp0.."
 
-for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$desktop = Join-Path $env:USERPROFILE 'Desktop'; $preferred = @(Join-Path $desktop 'aplicacoes code'); $found = @((Get-ChildItem -LiteralPath $desktop -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'aplica* code' }).FullName); $candidates = @($preferred) + $found; foreach ($folder in $candidates) { $python = Join-Path $folder 'WPy64-3.13.12.0\python\python.exe'; $enc = Join-Path $folder 'WPy64-3.13.12.0\python\Lib\encodings\__init__.py'; $psy = Join-Path $folder 'WPy64-3.13.12.0\python\Lib\site-packages\psycopg\__init__.py'; if ((Test-Path -LiteralPath $python) -and (Test-Path -LiteralPath $enc) -and (Test-Path -LiteralPath $psy)) { Write-Output $python; break } }"`) do set "PYTHON_EXE=%%P"
+set "PYTHON_EXE="
+
+call :try_python "%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0\python\python.exe"
+if not defined PYTHON_EXE call :try_python "%USERPROFILE%\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe"
+
+if not defined PYTHON_EXE (
+  for /d %%D in ("%USERPROFILE%\Desktop\aplica* code") do (
+    if not defined PYTHON_EXE call :try_python "%%~fD\WPy64-3.13.12.0\python\python.exe"
+  )
+)
 
 if "%PYTHON_EXE%"=="" (
   echo Python portatil valido nao encontrado no Desktop.
@@ -16,3 +25,13 @@ if "%DARK_JUTSU_API_PORT%"=="" set "DARK_JUTSU_API_PORT=8765"
 cd /d "%ROOT%"
 echo Iniciando API SQL em http://%DARK_JUTSU_API_HOST%:%DARK_JUTSU_API_PORT%
 "%PYTHON_EXE%" api\dark_jutsu_api.py
+exit /b %errorlevel%
+
+:try_python
+if defined PYTHON_EXE exit /b 0
+set "CANDIDATE=%~1"
+if not exist "%CANDIDATE%" exit /b 0
+if not exist "%~dp1Lib\encodings\__init__.py" exit /b 0
+if not exist "%~dp1Lib\site-packages\psycopg\__init__.py" exit /b 0
+set "PYTHON_EXE=%CANDIDATE%"
+exit /b 0

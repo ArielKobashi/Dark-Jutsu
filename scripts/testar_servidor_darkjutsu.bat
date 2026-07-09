@@ -17,6 +17,12 @@ echo IP local: %LOCAL_IP%
 echo ==================================================
 echo.
 
+echo RESUMO RAPIDO
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$status=@(); foreach($item in @(@('Principal','192.168.5.44'),@('Reserva','192.168.5.38'))) { $ok=$false; try { $r=Invoke-RestMethod -Uri ('http://' + $item[1] + ':8765/health') -TimeoutSec 3; $ok=($r.ok -eq $true) } catch {}; $status += [pscustomobject]@{Nome=$item[0];IP=$item[1];Online=$ok}; if($ok){ Write-Host ('ONLINE  ' + $item[0] + '  ' + $item[1]) } else { Write-Host ('OFFLINE ' + $item[0] + '  ' + $item[1]) } }; $online=@($status | Where-Object Online); Write-Host ''; if($online.Count -eq 0){ Write-Host 'SITUACAO: nenhum servidor Dark-Jutsu respondeu agora.'; Write-Host 'ACAO: aguarde ate 1 minuto para o guardiao iniciar, ou use Verificar/Iniciar agora.' } elseif($online.Count -eq 1){ Write-Host ('SITUACAO: servidor ativo em ' + $online[0].Nome + ' (' + $online[0].IP + ').'); Write-Host 'ACAO: normal. Os outros PCs devem usar esse servidor automaticamente pelo sistema.' } else { Write-Host 'SITUACAO: ATENCAO, principal e reserva responderam ao mesmo tempo.'; Write-Host 'ACAO: use Encerrar no servidor que deve ficar como reserva, depois rode este teste de novo.' }"
+echo.
+echo DETALHES
+echo.
+
 echo [1. Acesso ao servidor de arquivos]
 if exist "%SHARE_ROOT%\app\index.html" (
     echo OK: app encontrado na rede.
@@ -56,7 +62,9 @@ echo.
 echo [5. Status PostgreSQL local]
 "%PG_BIN%\pg_isready.exe" -h 127.0.0.1 -p 5433 -U dark_jutsu -d dark_jutsu
 if errorlevel 1 (
-    echo AVISO: PostgreSQL local nao esta pronto. Use "Verificar/Iniciar agora" para o guardiao decidir se deve iniciar.
+    echo AVISO: PostgreSQL local nao esta pronto.
+    echo SIGNIFICA: este PC nao esta com o banco local ativo agora.
+    echo ACAO: se este PC deveria ser o servidor, use "Verificar/Iniciar agora" ou "Tornar este PC o principal".
 ) else (
     echo OK: PostgreSQL local pronto.
 )
@@ -83,7 +91,9 @@ echo.
 echo [8. API local 8765]
 powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-RestMethod -Uri 'http://127.0.0.1:8765/health' -TimeoutSec 5 | ConvertTo-Json -Compress } catch { exit 1 }"
 if errorlevel 1 (
-    echo AVISO: API local nao respondeu. O teste nao inicia servidor para evitar duplicidade.
+    echo AVISO: API local nao respondeu.
+    echo SIGNIFICA: este PC nao esta servindo o Dark-Jutsu pela porta 8765 neste momento.
+    echo ACAO: isso e normal se outro PC estiver como servidor. Se nenhum servidor estiver online, aguarde o guardiao ou use "Verificar/Iniciar agora".
 ) else (
     echo OK: API local respondendo.
 )
@@ -96,6 +106,7 @@ if "%LOCAL_IP%"=="" (
     powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-RestMethod -Uri 'http://%LOCAL_IP%:8765/health' -TimeoutSec 5 | ConvertTo-Json -Compress } catch { exit 1 }"
     if errorlevel 1 (
         echo AVISO: API nao respondeu pelo IP %LOCAL_IP%.
+        echo SIGNIFICA: outros computadores nao conseguem usar este PC como servidor agora.
     ) else (
         echo OK: API respondendo em http://%LOCAL_IP%:8765/health
     )
@@ -118,6 +129,11 @@ echo RESULTADO: OK
 echo Sistema: %SHARE_ROOT%\app\index.html
 echo API local: http://127.0.0.1:8765/health
 if not "%LOCAL_IP%"=="" echo API rede: http://%LOCAL_IP%:8765/health
+echo.
+echo LEITURA DO ICONE:
+echo Verde = este PC esta servindo.
+echo Vermelho = outro PC esta servindo.
+echo Preto = nenhum servidor respondeu agora.
 echo ==================================================
 pause
 exit /b 0

@@ -20,5 +20,5 @@ if exist "%POSTGRES_STARTER%" (
     call "%POSTGRES_STARTER%"
 )
 
-start "Dark-Jutsu API" /MIN cmd /c "cd /d ""%DARK_JUTSU_ROOT%"" && api\iniciar_api_servidor.bat"
+wscript.exe //B "\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts\iniciar_api_darkjutsu_service.vbs"
 exit /b 0

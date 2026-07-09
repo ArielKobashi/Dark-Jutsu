@@ -12,7 +12,7 @@ del "%LOGDIR%\.write_test" >nul 2>&1
 set "LOGFILE=%LOGDIR%\servidor_guardiao.log"
 
 echo ================================================== >> "%LOGFILE%"
-echo [%date% %time%] Solicitado: tornar esta maquina o servidor Dark-Jutsu. >> "%LOGFILE%"
+echo [%date% %time%] ACAO MANUAL: tornar esta maquina o servidor Dark-Jutsu. Usuario=%USERNAME% Maquina=%COMPUTERNAME% >> "%LOGFILE%"
 
 C:\DarkJutsu\PostgreSQL\pgsql\bin\pg_isready.exe -h 127.0.0.1 -p 5433 -U dark_jutsu -d dark_jutsu >nul 2>&1
 if errorlevel 1 (
@@ -24,5 +24,6 @@ if errorlevel 1 (
     )
 )
 
-start "Dark-Jutsu API" /MIN cmd /c "pushd ""%SHARE_ROOT%\scripts"" && call iniciar_api_darkjutsu.bat && popd"
+wscript.exe //B "%SHARE_ROOT%\scripts\iniciar_api_darkjutsu_service.vbs"
+echo [%date% %time%] API solicitada em segundo plano. >> "%LOGFILE%"
 exit /b 0

@@ -1287,7 +1287,7 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
         let entradaAtiva = null;
         const pedidoAtivo = pedidos.find(p => {
             const entrada = localizarEntradaPedido(p);
-            if(entrada && entrada.saldoAEnderecar <= 0){
+            if(entrada && (entrada.saldoAEnderecar <= 0 || saldoAtualTotalmenteEnderecado(item))){
                 return false;
             }
             const encerradoPorHistorico = !entrada && ultimaEntradaSaldoDepois(item, p.timestamp);
@@ -1295,6 +1295,10 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
             entradaAtiva = entrada;
             return true;
         });
+        const temCicloCompraConcluido = pedidos.some(p => {
+            const entrada = localizarEntradaPedido(p);
+            return p.quantidadeRecebida > 0 || (entrada && entrada.saldoAEnderecar <= 0) || (entrada && saldoAtualTotalmenteEnderecado(item));
+        }) || entradas.some(e => e.saldoAEnderecar <= 0);
         const solicitacao = [...solicitacoes].reverse().find(s => {
             if(!pedidoAtivo) return true;
             return s.quantidadeEmPedido > 0 || s.aceitoPor;
@@ -1321,7 +1325,7 @@ function montarEstadoPedidosCompra(mata110, mata111, mata112, itens = []){
                 status = "aguardando_liberacao";
                 titulo = "Aguardando liberação...";
                 detalhe = `Solicitado por: ${solicitacao.solicitante || "-"}`;
-            }else if(!pedidoAtivo && solicitacao.aceitoPor){
+            }else if(!pedidoAtivo && solicitacao.aceitoPor && !temCicloCompraConcluido){
                 status = "aguardando_pedido";
                 titulo = "Aguardando pedido de compra...";
                 detalhe = `Aceito por: ${solicitacao.aceitoPor || "-"}`;
@@ -1675,6 +1679,30 @@ function enderecoContaComoEndereco(endereco){
     return enderecoPossuiSaldo(endereco) && !isEnderecoForaEndereco(endereco.endereco);
 }
 
+function codigoArmazemFiltro(valor){
+    const texto = (valor || "").toString().trim().toLowerCase();
+    const match = texto.match(/\d+/);
+    return match ? String(parseInt(match[0], 10)) : texto;
+}
+
+function armazensComSaldoItem(item){
+    if(!item) return [];
+    const armazens = [];
+    if(Array.isArray(item.enderecos) && item.enderecos.length){
+        item.enderecos.forEach(end => {
+            if(!enderecoPossuiSaldo(end)) return;
+            const codigo = codigoArmazemFiltro(end?.armazem);
+            if(codigo) armazens.push(codigo);
+        });
+    }else if((parsePlanilhaNumero(item.saldo) || 0) > 0){
+        [item.armazemPrincipal, item.armazem].forEach(armazem => {
+            const codigo = codigoArmazemFiltro(armazem);
+            if(codigo) armazens.push(codigo);
+        });
+    }
+    return [...new Set(armazens)];
+}
+
 function contarEnderecosComSaldo(item){
     if(!item || !Array.isArray(item.enderecos)) return 0;
 
@@ -1725,16 +1753,17 @@ function saldoAtualTotalmenteEnderecado(item){
 }
 
 function getResumoSaldoForaEndereco(item){
-    const foraEndereco = getEnderecosForaEndereco(item);
+    const totalmenteEnderecado = saldoAtualTotalmenteEnderecado(item);
+    const foraEndereco = totalmenteEnderecado ? [] : getEnderecosForaEndereco(item);
     const pedido = getPedidoCompraItem(item);
-    if(pedido?.entradaEndereco?.saldoAEnderecar > 0){
+    if(pedido?.entradaEndereco?.saldoAEnderecar > 0 && !totalmenteEnderecado){
         foraEndereco.push({
             endereco: "AGUARDANDO ENDEREÇAMENTO",
             armazem: "MATA112",
             saldo: pedido.entradaEndereco.saldoAEnderecar
         });
     }
-    const considerarPedidoRecebidoForaEndereco = !pedido?.entradaEndereco && pedido?.recebidoSemEntrada > 0 && !saldoAtualTotalmenteEnderecado(item);
+    const considerarPedidoRecebidoForaEndereco = !pedido?.entradaEndereco && pedido?.recebidoSemEntrada > 0 && !totalmenteEnderecado;
     if(considerarPedidoRecebidoForaEndereco){
         foraEndereco.push({
             endereco: "RECEBIDO SEM ENTRADA",
@@ -9343,7 +9372,9 @@ magnetIcon.addEventListener("click", function(){
         magnetIcon.classList.remove("active");
         document.getElementById("app").classList.remove("magnetActive"); // ADICIONE
         capturados.clear();
+        selecionados.clear();
         salvarCapturados();
+        renderTabela();
     }
 
     atualizarBadge();
@@ -10259,16 +10290,8 @@ function aplicarTodosFiltros(){
         return t;
     };
     const escaparRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const codigoArmazemBusca = (valor) => {
-        const texto = (valor || "").toString().trim().toLowerCase();
-        const match = texto.match(/\d+/);
-        return match ? String(parseInt(match[0], 10)) : texto;
-    };
-    const armazensDoItem = (item) => [
-        item.armazemPrincipal,
-        item.armazem,
-        ...(Array.isArray(item.enderecos) ? item.enderecos.map(e => e?.armazem) : [])
-    ].map(codigoArmazemBusca).filter(Boolean);
+    const codigoArmazemBusca = codigoArmazemFiltro;
+    const armazensDoItem = armazensComSaldoItem;
     const regexArmazemPergunta = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
     const filtroArmazemPergunta = (() => {
         const m = termoOriginal.match(regexArmazemPergunta);
@@ -10363,11 +10386,7 @@ function aplicarTodosFiltros(){
             if(col === "endereco"){
                 valor = item.enderecoPrincipal || "";
             } else if(col === "armazem"){
-                valor = [
-                    item.armazemPrincipal || "",
-                    item.armazem || "",
-                    ...(Array.isArray(item.enderecos) ? item.enderecos.map(e => e?.armazem || "") : [])
-                ].join(" ");
+                valor = armazensComSaldoItem(item).join(" ");
             } else {
                 valor = item[col] || "";
             }
@@ -14195,7 +14214,8 @@ window.enviarMensagem = async function() {
         data: new Date().toLocaleTimeString(), // Apenas hora no chat fica mais limpo
         timestamp: Date.now(),
         uid: auth.currentUser?.uid || "",
-        sessionId: chatSessionState?.sessionId || ""
+        sessionId: chatSessionState?.sessionId || "",
+        clientEventId: `${auth.currentUser?.uid || "anon"}_${Date.now()}_${Math.random().toString(36).slice(2)}`
     };
     try{
         if(typeof window.sqlApi === "function"){
@@ -14203,13 +14223,27 @@ window.enviarMensagem = async function() {
                 method: "POST",
                 body: JSON.stringify(payload)
             });
+            try{
+                const novaMsgRef = push(getChatRef(salaAtual));
+                await set(novaMsgRef, payload);
+            }catch(firebaseErr){
+                console.warn("Mensagem salva no SQL, mas nao publicada no Firebase:", firebaseErr);
+            }
+            adicionarMensagemLocalChat(salaAtual, payload);
         }else{
             throw new Error("API SQL indisponivel.");
         }
     }catch(sqlErr){
         console.warn("Falha ao enviar mensagem no SQL; tentando Firebase:", sqlErr);
-        const novaMsgRef = push(getChatRef(salaAtual));
-        await set(novaMsgRef, payload);
+        try{
+            const novaMsgRef = push(getChatRef(salaAtual));
+            await set(novaMsgRef, payload);
+            adicionarMensagemLocalChat(salaAtual, payload);
+        }catch(firebaseErr){
+            console.error("Falha ao enviar mensagem no SQL e no Firebase:", firebaseErr);
+            alert("Nao foi possivel enviar a mensagem. Verifique se o servidor esta ativo e tente novamente.");
+            return;
+        }
     }
 
     input.value = "";

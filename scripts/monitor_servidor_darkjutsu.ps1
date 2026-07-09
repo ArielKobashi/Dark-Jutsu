@@ -17,6 +17,21 @@ $ShareRoot = "\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 $AppPath = Join-Path $ShareRoot "app\index.html"
 $TestScript = Join-Path $ShareRoot "scripts\testar_servidor_darkjutsu.bat"
 $GuardScript = Join-Path $ShareRoot "scripts\iniciar_servidor_se_necessario_darkjutsu.bat"
+$MakePrincipalScript = Join-Path $ShareRoot "scripts\tornar_principal_operacional_darkjutsu.bat"
+$MakeReserveScript = Join-Path $ShareRoot "scripts\tornar_reserva_operacional_darkjutsu.bat"
+$LogDir = "C:\DarkJutsu\logs"
+$LogFile = Join-Path $LogDir "monitor_servidor.log"
+$script:thisPcIsActiveServer = $false
+
+function Write-MonitorLog([string]$message) {
+  try {
+    if (-not (Test-Path -LiteralPath $LogDir)) {
+      New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+    }
+    $line = "{0:yyyy-MM-dd HH:mm:ss} | {1} | {2} | {3}" -f (Get-Date), $env:COMPUTERNAME, $env:USERNAME, $message
+    Add-Content -LiteralPath $LogFile -Value $line -Encoding UTF8
+  } catch {}
+}
 
 function Get-LocalServerIp {
   $ips = Get-NetIPAddress -AddressFamily IPv4 |
@@ -93,6 +108,15 @@ function Confirm-Password([string]$actionName) {
   return $false
 }
 
+function Show-Info([string]$message) {
+  [System.Windows.Forms.MessageBox]::Show(
+    $message,
+    "Dark-Jutsu",
+    [System.Windows.Forms.MessageBoxButtons]::OK,
+    [System.Windows.Forms.MessageBoxIcon]::Information
+  ) | Out-Null
+}
+
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 
 $statusItem = New-Object System.Windows.Forms.ToolStripMenuItem
@@ -101,11 +125,10 @@ $statusItem.Enabled = $false
 [void]$menu.Items.Add($statusItem)
 
 $openItem = New-Object System.Windows.Forms.ToolStripMenuItem
-$openItem.Text = "Abrir sistema"
+$openItem.Text = "Abrir Dark-Jutsu"
 $openItem.Add_Click({
-  if (Confirm-Password "Abrir sistema") {
-    Start-Process $AppPath
-  }
+  Write-MonitorLog "Abrir Dark-Jutsu"
+  Start-Process $AppPath
 })
 [void]$menu.Items.Add($openItem)
 
@@ -113,7 +136,8 @@ $testItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $testItem.Text = "Testar servidor"
 $testItem.Add_Click({
   if (Confirm-Password "Testar servidor") {
-    Start-Process "cmd.exe" -ArgumentList "/c call `"$TestScript`""
+    Write-MonitorLog "Teste manual solicitado"
+    Start-Process "cmd.exe" -ArgumentList "/k title Dark-Jutsu - Teste do servidor & call `"$TestScript`""
   }
 })
 [void]$menu.Items.Add($testItem)
@@ -122,6 +146,7 @@ $guardItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $guardItem.Text = "Verificar/iniciar agora"
 $guardItem.Add_Click({
   if (Confirm-Password "Verificar/iniciar agora") {
+    Write-MonitorLog "Verificar/iniciar agora solicitado"
     Start-Process "cmd.exe" -WindowStyle Hidden -ArgumentList "/c call `"$GuardScript`""
   }
 })
@@ -129,10 +154,43 @@ $guardItem.Add_Click({
 
 $assumeScript = Join-Path $ShareRoot "scripts\assumir_servidor_darkjutsu.bat"
 $assumeItem = New-Object System.Windows.Forms.ToolStripMenuItem
-$assumeItem.Text = "Tornar este PC o servidor"
+$assumeItem.Text = "Tornar este PC o Principal"
 $assumeItem.Add_Click({
-  if (Confirm-Password "Tornar este PC o servidor") {
-    Start-Process "cmd.exe" -WindowStyle Hidden -ArgumentList "/c call `"$assumeScript`""
+  $localIp = Get-LocalServerIp
+  if (-not $localIp) {
+    [System.Windows.Forms.MessageBox]::Show(
+      "Este computador nao esta configurado como principal nem reserva.",
+      "Dark-Jutsu",
+      [System.Windows.Forms.MessageBoxButtons]::OK,
+      [System.Windows.Forms.MessageBoxIcon]::Information
+    ) | Out-Null
+    return
+  }
+
+  if ($script:thisPcIsActiveServer) {
+    if (Confirm-Password "Tornar este PC o reserva") {
+      Write-MonitorLog "Tornar este PC o reserva solicitado"
+      Start-Process "cmd.exe" -WindowStyle Hidden -Wait -ArgumentList "/c call `"$MakeReserveScript`""
+      Start-Sleep -Seconds 3
+      Update-Status
+      Show-Info "Este PC parou a API local e ficou pausado por ate 10 minutos. Se a reserva estiver ligada, ela deve assumir automaticamente em ate 1 minuto."
+    }
+  } else {
+    if (Confirm-Password "Tornar este PC o Principal") {
+      Write-MonitorLog "Tornar este PC o Principal solicitado"
+      if ($localIp -eq $PrimaryIp) {
+        Start-Process "cmd.exe" -WindowStyle Hidden -Wait -ArgumentList "/c call `"$assumeScript`""
+      } else {
+        Start-Process "cmd.exe" -WindowStyle Hidden -Wait -ArgumentList "/c call `"$MakePrincipalScript`""
+      }
+      Start-Sleep -Seconds 8
+      Update-Status
+      if (Test-Health $localIp) {
+        Show-Info "Este PC assumiu como servidor ativo. A principal fixa foi pausada temporariamente para nao religar por cima."
+      } else {
+        Show-Info "O comando foi executado, mas a API deste PC ainda nao respondeu. Abra 'Testar servidor' para ver o motivo."
+      }
+    }
   }
 })
 [void]$menu.Items.Add($assumeItem)
@@ -144,6 +202,7 @@ $closeItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $closeItem.Text = "Encerrar"
 $closeItem.Add_Click({
   if (Confirm-Password "Encerrar servidor local") {
+    Write-MonitorLog "Encerrar servidor local solicitado"
     Start-Process "cmd.exe" -WindowStyle Hidden -ArgumentList "/c call `"$stopScript`""
   }
 })
@@ -160,20 +219,34 @@ function Update-Status {
   $primaryOk = Test-Health $PrimaryIp
   $reserveOk = Test-Health $ReserveIp
 
+  if (-not $localIp) {
+    $assumeItem.Text = "Este PC nao e servidor"
+    $assumeItem.Enabled = $false
+  } else {
+    $assumeItem.Enabled = $true
+  }
+
   if ($primaryOk -or $reserveOk) {
     $activeIp = if ($primaryOk) { $PrimaryIp } else { $ReserveIp }
     $activeName = if ($primaryOk) { "principal" } else { "reserva" }
+    $script:thisPcIsActiveServer = ($localIp -eq $activeIp)
 
-    if ($localIp -eq $activeIp) {
+    if ($script:thisPcIsActiveServer) {
       $notify.Icon = $iconGreen
       $text = "Dark-Jutsu: este PC esta rodando o servidor ($activeName - $activeIp)"
+      $assumeItem.Text = "Tornar este PC o reserva"
     } else {
       $notify.Icon = $iconRed
       $text = "Dark-Jutsu: servidor ativo em outro PC ($activeName - $activeIp)"
+      $assumeItem.Text = "Tornar este PC o Principal"
     }
   } else {
+    $script:thisPcIsActiveServer = $false
     $notify.Icon = $iconBlack
     $text = "Dark-Jutsu: nenhum servidor esta ligado"
+    if ($localIp) {
+      $assumeItem.Text = "Tornar este PC o Principal"
+    }
   }
 
   $notify.Text = $text.Substring(0, [Math]::Min(63, $text.Length))

@@ -42,10 +42,7 @@ if "%PRIMARY_OK%"=="0" (
 )
 
 if "%RESERVE_OK%"=="0" (
-    if not "%LOCAL_IP%"=="%RESERVE_IP%" (
-        echo [%date% %time%] Reserva ativa, mas esta maquina e a principal. Tentando reassumir. >> "%LOGFILE%"
-        call "%SHARE_ROOT%\scripts\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-    )
+    echo [%date% %time%] Servidor reserva ja esta ativo. Nao inicia outro servidor automaticamente. >> "%LOGFILE%"
     echo [%date% %time%] Servidor reserva ja esta ativo. Encerrando guardiao. >> "%LOGFILE%"
     exit /b 0
 )
