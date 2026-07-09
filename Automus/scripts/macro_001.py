@@ -1,5 +1,5 @@
 ﻿import time
-from pynput import mouse, keyboard  # type: ignore
+from pynput import mouse, keyboard  # type: ignore 12
 from controladordeatualização import ExecutionController, StopRequested, handle_custom_event, sleep_with_controls
 
 events = [
