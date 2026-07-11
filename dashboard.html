@@ -758,8 +758,241 @@
             color:#bbf7d0;
             white-space:nowrap;
         }
+        .avaliadorMesa{
+            display:grid;
+            grid-template-columns:minmax(250px,.72fr) minmax(420px,1.42fr) minmax(270px,.78fr);
+            gap:12px;
+            align-items:start;
+            margin-top:12px;
+        }
+        .triageCol,
+        .triageMain,
+        .triageRail{
+            border:1px solid rgba(148,163,184,.18);
+            border-radius:8px;
+            background:rgba(15,23,42,.48);
+            min-width:0;
+        }
+        .triageCol,
+        .triageRail{padding:10px}
+        .triageMain{
+            padding:14px;
+            animation:triageEnter .22s ease-out both;
+        }
+        @keyframes triageEnter{
+            from{opacity:.35;transform:translateY(8px)}
+            to{opacity:1;transform:translateY(0)}
+        }
+        .triageHeader{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+            margin-bottom:10px;
+        }
+        .triageHeader h2{
+            margin:0;
+            font-size:15px;
+            color:#f8fafc;
+        }
+        .triageQueue{
+            display:grid;
+            gap:7px;
+            max-height:780px;
+            overflow:auto;
+            padding-right:2px;
+        }
+        .triageQueueItem{
+            display:block;
+            text-decoration:none;
+            color:inherit;
+            border:1px solid rgba(148,163,184,.16);
+            border-left:4px solid var(--urg,#94a3b8);
+            border-radius:8px;
+            background:rgba(26,26,37,.88);
+            padding:8px;
+            min-width:0;
+            transition:transform .14s ease, border-color .14s ease, background .14s ease;
+        }
+        .triageQueueItem:hover{transform:translateX(3px);border-color:rgba(96,165,250,.46)}
+        .triageQueueItem.ativo{
+            background:rgba(30,41,59,.96);
+            border-color:rgba(96,165,250,.72);
+            box-shadow:0 0 0 1px rgba(96,165,250,.22) inset;
+        }
+        .triageQueueTop{
+            display:flex;
+            justify-content:space-between;
+            gap:8px;
+            align-items:center;
+        }
+        .triageQueueCode{font-weight:900;color:#e2e8f0;font-size:12px}
+        .triageQueueDesc{
+            color:#cbd5e1;
+            font-size:11px;
+            margin-top:4px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .triageUrgencia{
+            font-size:10px;
+            font-weight:900;
+            color:#f8fafc;
+            border-radius:999px;
+            padding:3px 6px;
+            background:rgba(15,23,42,.78);
+            border:1px solid rgba(148,163,184,.22);
+            white-space:nowrap;
+        }
+        .triageMainTop{
+            display:grid;
+            grid-template-columns:minmax(0,1fr) auto;
+            gap:14px;
+            align-items:start;
+            border-bottom:1px solid rgba(148,163,184,.14);
+            padding-bottom:12px;
+            margin-bottom:12px;
+        }
+        .triageMainCode{
+            font-size:24px;
+            font-weight:950;
+            color:#f8fafc;
+            line-height:1.05;
+        }
+        .triageMainDesc{
+            color:#cbd5e1;
+            font-size:13px;
+            margin-top:5px;
+        }
+        .triageStatusPill{
+            border-radius:999px;
+            padding:7px 10px;
+            color:#f8fafc;
+            background:rgba(127,29,29,.78);
+            border:1px solid rgba(248,113,113,.42);
+            font-size:12px;
+            font-weight:900;
+            white-space:nowrap;
+        }
+        .triageMetricGrid{
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:8px;
+            margin:12px 0;
+        }
+        .triageMetric{
+            border:1px solid rgba(148,163,184,.16);
+            border-radius:8px;
+            background:rgba(15,23,42,.42);
+            padding:9px;
+            min-width:0;
+        }
+        .triageMetric span{
+            display:block;
+            color:var(--muted);
+            font-size:10px;
+            text-transform:uppercase;
+            font-weight:900;
+        }
+        .triageMetric strong{
+            display:block;
+            margin-top:5px;
+            color:#f8fafc;
+            font-size:17px;
+        }
+        .triageTimeline{
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:10px;
+            margin-top:10px;
+        }
+        .triageHistoryBlock{
+            border:1px solid rgba(148,163,184,.16);
+            border-radius:8px;
+            background:rgba(15,23,42,.34);
+            padding:10px;
+            min-width:0;
+        }
+        .triageHistoryTitle{
+            display:flex;
+            justify-content:space-between;
+            gap:8px;
+            align-items:center;
+            color:#EDE9FE;
+            font-size:12px;
+            font-weight:900;
+            margin-bottom:8px;
+        }
+        .triageHistoryTitle span:last-child{color:var(--muted);font-size:11px}
+        .triageHistoryList{
+            display:grid;
+            gap:6px;
+            max-height:260px;
+            overflow:auto;
+        }
+        .triageHistoryEvent{
+            display:grid;
+            grid-template-columns:minmax(0,1fr) auto;
+            gap:8px;
+            border:1px solid rgba(148,163,184,.12);
+            border-radius:7px;
+            padding:7px;
+            background:rgba(26,26,37,.72);
+            font-size:11px;
+        }
+        .triageHistoryEvent strong{color:#f8fafc}
+        .triageHistoryEvent small{display:block;color:var(--muted);margin-top:2px}
+        .triageHistoryEvent .num{font-weight:900;color:#bbf7d0}
+        .triageActions{
+            display:flex;
+            flex-wrap:wrap;
+            gap:8px;
+            margin-top:13px;
+        }
+        .triageActions button{
+            width:auto;
+            min-height:36px;
+            border-radius:7px;
+            padding:8px 11px;
+            font-size:12px;
+        }
+        .triageRailStage{
+            border-left:3px solid var(--col,#94a3b8);
+            padding-left:8px;
+            margin-bottom:12px;
+        }
+        .triageRailStage h3{
+            display:flex;
+            justify-content:space-between;
+            gap:8px;
+            margin:0 0 7px;
+            color:#f8fafc;
+            font-size:12px;
+        }
+        .triageRailCards{display:grid;gap:6px}
+        .triageRailCard{
+            display:block;
+            text-decoration:none;
+            color:inherit;
+            border:1px solid rgba(148,163,184,.14);
+            border-radius:7px;
+            background:rgba(26,26,37,.82);
+            padding:7px;
+            font-size:11px;
+        }
+        .triageRailCard strong{display:block;color:#e2e8f0;font-size:12px}
+        .triageRailCard span{
+            display:block;
+            color:var(--muted);
+            margin-top:3px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
         @media (max-width:900px){
-            .avaliadorLayout{grid-template-columns:1fr}
+            .avaliadorLayout,
+            .avaliadorMesa{grid-template-columns:1fr}
         }
         @media (max-width:800px){
             .topbar{display:block;padding:17px 14px 12px}
@@ -907,7 +1140,8 @@
             dataMovimentacao: params.get("dataMovimentacao") || "",
             maquinaMovimentacao: (params.get("maquinaMovimentacao") || params.get("maquina") || "").trim().toUpperCase(),
             embed: boolParam("embed", "embutido"),
-            painel: params.get("painel") || ""
+            painel: params.get("painel") || "",
+            avaliadorItem: normalizarCodigo(params.get("avaliadorItem") || "")
         };
         if(cfg.embed) document.body.classList.add("embed");
         const regexArmazemBusca = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
@@ -2214,6 +2448,166 @@
                 </article>
             `;
         }
+        function deficitMinimo(linha){
+            const saldo = num(linha?.item?.saldo) ?? 0;
+            const min = num(linha?.item?.minimo) ?? 0;
+            return Math.max(0, min - saldo);
+        }
+        function corUrgenciaAvaliador(linha){
+            const deficit = deficitMinimo(linha);
+            const min = num(linha?.item?.minimo) || 0;
+            if(deficit <= 0) return "#22c55e";
+            if(min > 0 && deficit >= min * .75) return "#ef4444";
+            if(min > 0 && deficit >= min * .35) return "#f59e0b";
+            return "#60a5fa";
+        }
+        function rotuloUrgenciaAvaliador(linha){
+            const deficit = deficitMinimo(linha);
+            if(deficit <= 0) return "ok";
+            const min = num(linha?.item?.minimo) || 0;
+            if(min > 0 && deficit >= min * .75) return "critico";
+            if(min > 0 && deficit >= min * .35) return "alto";
+            return "baixo";
+        }
+        function eventosComprasProtheus(linha){
+            return (Array.isArray(linha?.historico) ? linha.historico : []).map(h => ({
+                origem:"Protheus",
+                id:h.pedido || "-",
+                data:h.dataPedido || "-",
+                detalhe:h.status || "Pedido MATA111",
+                quantidade:Math.max(Number(h.quantidadePedida || 0), Number(h.quantidadeRecebida || 0)) || null,
+                timestamp:Number(h.timestampPedido || 0)
+            }));
+        }
+        function eventosComprasCooperatLegado(linha){
+            return eventosCompraCooperat(linha?.historicoCooperat).map(h => ({
+                origem:"Cooperat legado",
+                id:h.requisicao || "-",
+                data:h.dataBr || h.data || "-",
+                detalhe:"Compra antiga",
+                quantidade:num(h.quantidadeCompra) ?? num(h.qtdSolicitada),
+                timestamp:h.data ? Date.parse(`${h.data}T00:00:00`) || 0 : 0
+            }));
+        }
+        function eventosComprasUnificados(linha){
+            return [...eventosComprasProtheus(linha), ...eventosComprasCooperatLegado(linha)]
+                .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
+        }
+        function renderEventoCompra(evento){
+            return `
+                <div class="triageHistoryEvent">
+                    <div>
+                        <strong>${esc(evento.id || "-")}</strong>
+                        <small>${esc(evento.data || "-")} · ${esc(evento.detalhe || evento.origem || "-")}</small>
+                    </div>
+                    <div class="num">${evento.quantidade === null || evento.quantidade === undefined ? "-" : esc(fmt(evento.quantidade))}</div>
+                </div>
+            `;
+        }
+        function renderHistoricoComprasMesa(linha){
+            const protheus = eventosComprasProtheus(linha);
+            const cooperat = eventosComprasCooperatLegado(linha);
+            const total = protheus.length + cooperat.length;
+            return `
+                <div class="triageHistoryBlock">
+                    <div class="triageHistoryTitle"><span>Compras Protheus</span><span>${esc(fmt(protheus.length))}</span></div>
+                    <div class="triageHistoryList">
+                        ${protheus.slice(0, 8).map(renderEventoCompra).join("") || `<div class="kanbanEmpty">Sem compras Protheus localizadas.</div>`}
+                    </div>
+                </div>
+                <div class="triageHistoryBlock">
+                    <div class="triageHistoryTitle"><span>Cooperat legado</span><span>${esc(fmt(cooperat.length))}</span></div>
+                    <div class="triageHistoryList">
+                        ${cooperat.slice(0, 8).map(renderEventoCompra).join("") || `<div class="kanbanEmpty">Sem compras Cooperat antigas.</div>`}
+                    </div>
+                </div>
+                <div class="historicoAviso" style="grid-column:1/-1">Historico de compras unificado: ${esc(fmt(total))} registro(s). Protheus e Cooperat ficam separados visualmente porque Cooperat e uma base legada e nao recebera novas compras.</div>
+            `;
+        }
+        function renderFilaAvaliadorCard(linha, ativo){
+            const codigo = key(linha.item);
+            return `
+                <a class="triageQueueItem ${ativo ? "ativo" : ""}" style="--urg:${esc(corUrgenciaAvaliador(linha))}" href="${esc(urlComFiltros({ avaliadorItem:codigo }))}">
+                    <div class="triageQueueTop">
+                        <span class="triageQueueCode">${esc(linha.item.protheus || linha.item.cooperat || "-")}</span>
+                        <span class="triageUrgencia">${esc(rotuloUrgenciaAvaliador(linha))}</span>
+                    </div>
+                    <div class="triageQueueDesc">${esc(linha.item.descricao || "-")}</div>
+                    <div class="avaliadorTags">
+                        <span class="avaliadorTag">Saldo ${esc(fmt(linha.item.saldo))}</span>
+                        <span class="avaliadorTag">Min. ${esc(fmt(linha.item.minimo))}</span>
+                    </div>
+                </a>
+            `;
+        }
+        function renderMesaItemAtivo(linha){
+            if(!linha) return `<section class="triageMain"><div class="kanbanEmpty">Nenhum item para avaliar.</div></section>`;
+            const { item, pedido, status, reposicao, stats, statsCooperat, historicoSaldo } = linha;
+            const codigo = key(item);
+            const compras = eventosComprasUnificados(linha);
+            const saidas = (Array.isArray(historicoSaldo) ? historicoSaldo : []).filter(h => Number(h?.delta || 0) < 0);
+            return `
+                <section class="triageMain">
+                    <div class="triageMainTop">
+                        <div>
+                            <div class="triageMainCode">${esc(item.protheus || item.cooperat || "-")}</div>
+                            <div class="triageMainDesc">${esc(item.descricao || "-")}</div>
+                        </div>
+                        <span class="triageStatusPill">${esc(statusRotulo(status))}</span>
+                    </div>
+                    <div class="triageMetricGrid">
+                        <div class="triageMetric"><span>Saldo</span><strong>${esc(fmt(item.saldo))}</strong></div>
+                        <div class="triageMetric"><span>Minimo</span><strong>${esc(fmt(item.minimo))}</strong></div>
+                        <div class="triageMetric"><span>Reposicao</span><strong>${esc(fmt(reposicao))}</strong></div>
+                        <div class="triageMetric"><span>Deficit</span><strong>${esc(fmt(deficitMinimo(linha)))}</strong></div>
+                    </div>
+                    <div class="avaliadorTags">
+                        <span class="avaliadorTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
+                        <span class="avaliadorTag">Compras unificadas ${esc(fmt(compras.length))}</span>
+                        <span class="avaliadorTag">Protheus ${esc(fmt(stats.totalPedidos || 0))}</span>
+                        <span class="avaliadorTag">Cooperat legado ${esc(fmt(statsCooperat.totalEventos || 0))}</span>
+                        <span class="avaliadorTag" title="${esc(tituloEnderecosItem(item))}">Endereco ${esc(item.enderecoPrincipal || "-")}</span>
+                    </div>
+                    <div class="triageActions avaliadorActions">
+                        <button class="okBtn" type="button" data-avaliador-action="passivel" data-codigo="${esc(codigo)}">Solicitar</button>
+                        <button class="warnBtn" type="button" data-avaliador-action="minimo_incorreto" data-codigo="${esc(codigo)}">Corrigir minimo</button>
+                        <button class="warnBtn" type="button" data-avaliador-action="reposicao_incorreta" data-codigo="${esc(codigo)}">Corrigir reposicao</button>
+                        <button class="stopBtn" type="button" data-avaliador-action="nao_solicitar" data-codigo="${esc(codigo)}">Nao solicitar</button>
+                    </div>
+                    <div class="triageTimeline">
+                        ${renderHistoricoComprasMesa(linha)}
+                    </div>
+                    <details class="avaliadorDetails">
+                        <summary><span>Historico de saidas</span><span class="avaliadorSummaryMeta">${esc(fmt(saidas.length))} saida(s)</span></summary>
+                        <div class="avaliadorDetailsBody">${renderHistoricoSaidasMini(historicoSaldo)}</div>
+                    </details>
+                </section>
+            `;
+        }
+        function renderEsteiraAvaliador(colunas, kanbanItens, ordenarKanban, limiteKanbanPorColuna){
+            return `
+                <aside class="triageRail">
+                    <div class="triageHeader"><h2>Esteira</h2><span class="chip">${esc(fmt(kanbanItens.length))}</span></div>
+                    ${colunas.map(col => {
+                        const cards = ordenarKanban(kanbanItens.filter(l => l.kanban === col.id));
+                        const visiveis = cards.slice(0, Math.min(6, limiteKanbanPorColuna));
+                        return `
+                            <div class="triageRailStage" style="--col:${esc(col.cor)}">
+                                <h3><span>${esc(col.titulo)}</span><span>${esc(fmt(cards.length))}</span></h3>
+                                <div class="triageRailCards">
+                                    ${visiveis.map(l => `
+                                        <a class="triageRailCard" href="${esc(urlComFiltros({ avaliadorItem:key(l.item) }))}">
+                                            <strong>${esc(l.item.protheus || l.item.cooperat || "-")}</strong>
+                                            <span>${esc(l.item.descricao || "-")}</span>
+                                        </a>
+                                    `).join("") || `<div class="kanbanEmpty">Sem itens.</div>`}
+                                </div>
+                            </div>
+                        `;
+                    }).join("")}
+                </aside>
+            `;
+        }
         function renderKanbanCard(linha){
             const { item, registro, pedido, stats, statsCooperat, historicoCooperat, semAvaliador } = linha;
             const codigo = key(item);
@@ -2373,6 +2767,16 @@
                 if(cfg.kanbanOrdem === "recente") return tb - ta;
                 return ta - tb;
             });
+            const candidatosMesa = [...fila, ...solicitadosSemProcessoAberto, ...avaliadosComPedidoAberto, ...kanbanItens];
+            const vistosMesa = new Set();
+            const itensMesa = candidatosMesa.filter(l => {
+                const codigo = key(l.item);
+                if(!codigo || vistosMesa.has(codigo)) return false;
+                vistosMesa.add(codigo);
+                return true;
+            });
+            const itemAtivo = itensMesa.find(l => key(l.item) === cfg.avaliadorItem) || fila[0] || itensMesa[0] || null;
+            const itemAtivoCodigo = itemAtivo ? key(itemAtivo.item) : "";
 
             document.getElementById("subtitulo").textContent = `${fila.length} item(ns) aguardando avaliacao no armazem ${cfg.armazens.join(",") || "04"}`;
             root.innerHTML = `
@@ -2394,7 +2798,7 @@
                 <div class="kanbanFiltroBar">
                     <div>
                         <h2 class="sectionTitle kanbanTitle">Kanban de pedidos em andamento - armazem ${esc(cfg.armazens.join(",") || "04")}</h2>
-                        <span class="chip">Exibindo ${cfg.kanbanExpandido ? "todos os registros" : `ate ${limiteKanbanPorColuna} por coluna`}</span>
+                        <span class="chip">Mesa de avaliacao: fila, item ativo e esteira de pedidos</span>
                     </div>
                     <div class="filter">
                         <label for="fKanbanOrdem">Ordem</label>
@@ -2420,75 +2824,31 @@
                         </select>
                     </div>
                 </div>
-                <section class="kanbanGrid ${cfg.kanbanExpandido ? "expanded" : ""}">
-                    ${colunas.map(col => {
-                        const cards = ordenarKanban(kanbanItens.filter(l => l.kanban === col.id));
-                        const visiveis = cards.slice(0, limiteKanbanPorColuna);
-                        return `
-                            <div class="kanbanCol" style="--col:${esc(col.cor)}">
-                                <h3>${esc(col.titulo)} <span>${cards.length}</span></h3>
-                                <div class="kanbanCards">
-                                    ${visiveis.map(renderKanbanCard).join("") || `<div class="kanbanEmpty">Sem itens.</div>`}
-                                </div>
-                            </div>
-                        `;
-                    }).join("")}
-                </section>
                 ${!cfg.kanbanExpandido && kanbanTemMais ? `<a class="kanbanMore" href="${esc(urlComFiltros({ kanbanExpandido:"1" }))}">Ver mais registros do Kanban</a>` : ""}
-                <section class="avaliadorLayout">
-                    <div class="avaliadorPanel">
-                        <h2>Fila de avaliacao</h2>
-                        <div class="avaliadorList">
-                            ${fila.slice(0, cfg.limite).map(renderAvaliadorItem).join("") || `<section class="empty">Nenhum item abaixo do minimo sem avaliacao.</section>`}
+                <section class="avaliadorMesa">
+                    <aside class="triageCol">
+                        <div class="triageHeader">
+                            <h2>Fila de avaliacao</h2>
+                            <span class="chip">${esc(fmt(fila.length))}</span>
                         </div>
-                    </div>
-                    <div class="avaliadorPanel">
-                        <h2>Itens avaliados</h2>
-                        <div class="avaliadorList">
-                            ${avaliadosComPedidoAberto.map(l => `
-                                <article class="avaliadorItem">
-                                    <div class="avaliadorItemTop">
-                                        <div>
-                                            <div class="avaliadorCodigo">${esc(l.item.protheus || l.item.cooperat || "-")}</div>
-                                            <div class="avaliadorDescricao">${esc(l.item.descricao || "-")}</div>
-                                        </div>
-                                        <span class="avaliadorDecision">${esc(rotuloDecisaoAvaliador(l.registro))}</span>
-                                    </div>
-                                    <div class="avaliadorTags">
-                                        <span class="avaliadorTag">Saldo ${esc(fmt(l.item.saldo))}</span>
-                                        <span class="avaliadorTag">Min. ${esc(fmt(l.item.minimo))}</span>
-                                        <span class="avaliadorTag">Reposicao ${esc(fmt(l.reposicao))}</span>
-                                        ${rotuloDiasDesde(l.registro?.avaliadoEm, "Avaliado") ? `<span class="avaliadorTag">${esc(rotuloDiasDesde(l.registro?.avaliadoEm, "Avaliado"))}</span>` : ""}
-                                        ${processoCompraAbertoLinha(l) ? `<span class="avaliadorTag">${esc(rotuloProcessoCompraLinha(l))}</span>` : ""}
-                                    </div>
-                                    ${l.registro?.observacao ? `<div class="kanbanMeta"><span>Obs.: ${esc(l.registro.observacao)}</span></div>` : ""}
-                                </article>
-                            `).join("") || `<section class="empty">Nenhum item avaliado.</section>`}
+                        <div class="triageQueue">
+                            ${fila.slice(0, cfg.limite).map(l => renderFilaAvaliadorCard(l, key(l.item) === itemAtivoCodigo)).join("") || `<section class="empty">Nenhum item abaixo do minimo sem avaliacao.</section>`}
                         </div>
-                    </div>
-                    <div class="avaliadorPanel">
-                        <h2>Avaliados sem pedido aberto</h2>
-                        <div class="avaliadorList">
-                            ${solicitadosSemProcessoAberto.map(l => `
-                                <article class="avaliadorItem">
-                                    <div class="avaliadorItemTop">
-                                        <div>
-                                            <div class="avaliadorCodigo">${esc(l.item.protheus || l.item.cooperat || "-")}</div>
-                                            <div class="avaliadorDescricao">${esc(l.item.descricao || "-")}</div>
-                                        </div>
-                                        <span class="avaliadorDecision">${esc(rotuloDecisaoAvaliador(l.registro))}</span>
-                                    </div>
-                                    <div class="avaliadorTags">
-                                        <span class="avaliadorTag">Saldo ${esc(fmt(l.item.saldo))}</span>
-                                        <span class="avaliadorTag">Min. ${esc(fmt(l.item.minimo))}</span>
-                                        <span class="avaliadorTag">Reposicao ${esc(fmt(l.reposicao))}</span>
-                                        ${rotuloDiasDesde(l.registro?.avaliadoEm, "Sem solicitacao") ? `<span class="avaliadorTag">${esc(rotuloDiasDesde(l.registro?.avaliadoEm, "Sem solicitacao"))}</span>` : ""}
-                                    </div>
-                                    ${l.registro?.observacao ? `<div class="kanbanMeta"><span>Obs.: ${esc(l.registro.observacao)}</span></div>` : ""}
-                                </article>
-                            `).join("") || `<section class="empty">Sem itens avaliados positivamente sem pedido aberto.</section>`}
-                        </div>
-                    </div>
+                        <details class="avaliadorDetails" ${solicitadosSemProcessoAberto.length ? "open" : ""}>
+                            <summary><span>Avaliados sem pedido aberto</span><span class="avaliadorSummaryMeta">${esc(fmt(solicitadosSemProcessoAberto.length))}</span></summary>
+                            <div class="avaliadorDetailsBody triageQueue">
+                                ${solicitadosSemProcessoAberto.map(l => renderFilaAvaliadorCard(l, key(l.item) === itemAtivoCodigo)).join("") || `<section class="empty">Sem itens avaliados positivamente sem pedido aberto.</section>`}
+                            </div>
+                        </details>
+                        <details class="avaliadorDetails">
+                            <summary><span>Itens avaliados com pedido</span><span class="avaliadorSummaryMeta">${esc(fmt(avaliadosComPedidoAberto.length))}</span></summary>
+                            <div class="avaliadorDetailsBody triageQueue">
+                                ${avaliadosComPedidoAberto.map(l => renderFilaAvaliadorCard(l, key(l.item) === itemAtivoCodigo)).join("") || `<section class="empty">Nenhum item avaliado com pedido aberto.</section>`}
+                            </div>
+                        </details>
+                    </aside>
+                    ${renderMesaItemAtivo(itemAtivo)}
+                    ${renderEsteiraAvaliador(colunas, kanbanItens, ordenarKanban, limiteKanbanPorColuna)}
                 </section>
             `;
             bindFiltros();
