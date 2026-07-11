@@ -11426,8 +11426,11 @@ window.sqlApi = async function(path, options = {}){
     if(authHeader) headers.Authorization = authHeader;
     let lastError = null;
     for(const base of SQL_API_FALLBACK_BASES){
+        const controller = typeof AbortController !== "undefined" && !options.signal ? new AbortController() : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 4500)) : null;
         try{
-            const response = await fetch(`${base}${path}`, { ...options, headers });
+            const { timeoutMs, ...fetchOptions } = options;
+            const response = await fetch(`${base}${path}`, { ...fetchOptions, headers, signal: options.signal || controller?.signal });
             const data = await response.json().catch(() => ({}));
             if(!response.ok || data?.ok === false){
                 throw new Error(data?.error || `Falha HTTP ${response.status}`);
@@ -11435,6 +11438,8 @@ window.sqlApi = async function(path, options = {}){
             return data;
         } catch(error){
             lastError = error;
+        } finally {
+            if(timeout) clearTimeout(timeout);
         }
     }
     throw lastError || new Error("API SQL indisponivel.");
@@ -12848,7 +12853,12 @@ async function salvarOcorrencia(event){
     }
 
     const btn = document.getElementById("ocorrenciaSalvarBtn");
-    if(btn) btn.disabled = true;
+    const textoOriginalBtn = btn?.textContent || "Salvar ocorrencia";
+    if(btn){
+        btn.disabled = true;
+        btn.textContent = "Salvando...";
+    }
+    let ocorrenciaOtimista = null;
     try{
         const agora = new Date();
         const criadoEm = Date.now();
@@ -12883,23 +12893,41 @@ async function salvarOcorrencia(event){
                 }
             }
         };
+        ocorrenciaOtimista = { ...ocorrencia, _storagePath:`${OCORRENCIAS_PRIMARY_PATH}/${id}` };
+        ocorrenciasPorFonte.primary = [
+            ocorrenciaOtimista,
+            ...ocorrenciasPorFonte.primary.filter(item => item.id !== id)
+        ];
+        atualizarCacheOcorrencias();
+        mostrarNotificacao("Salvando ocorrencia...");
+
         const storagePath = await salvarOcorrenciaFirebase(id, ocorrencia);
-        ocorrencia._storagePath = `${storagePath}/${id}`;
+        ocorrenciaOtimista._storagePath = `${storagePath}/${id}`;
+        ocorrenciasPorFonte.primary = ocorrenciasPorFonte.primary.filter(item => item.id !== id);
+        ocorrenciasPorFonte.fallback = ocorrenciasPorFonte.fallback.filter(item => item.id !== id);
         ocorrenciasPorFonte[storagePath === OCORRENCIAS_PRIMARY_PATH ? "primary" : "fallback"] = [
-            ocorrencia,
+            ocorrenciaOtimista,
             ...ocorrenciasPorFonte[storagePath === OCORRENCIAS_PRIMARY_PATH ? "primary" : "fallback"].filter(item => item.id !== id)
         ];
         atualizarCacheOcorrencias();
         limparFormularioOcorrencia();
         mostrarNotificacao("Ocorrencia registrada.");
     }catch(err){
+        if(ocorrenciaOtimista?.id){
+            ocorrenciasPorFonte.primary = ocorrenciasPorFonte.primary.filter(item => item.id !== ocorrenciaOtimista.id);
+            ocorrenciasPorFonte.fallback = ocorrenciasPorFonte.fallback.filter(item => item.id !== ocorrenciaOtimista.id);
+            atualizarCacheOcorrencias();
+        }
         console.error("Erro ao salvar ocorrencia:", err);
         const detalhe = err?.code === "PERMISSION_DENIED" || err?.code === "permission-denied"
             ? "Permissao negada pelo Firebase. Publique as regras atualizadas."
             : (err?.message || "Erro desconhecido.");
         alert("Nao foi possivel salvar a ocorrencia. " + detalhe);
     }finally{
-        if(btn) btn.disabled = false;
+        if(btn){
+            btn.disabled = false;
+            btn.textContent = textoOriginalBtn;
+        }
     }
 }
 
@@ -13814,6 +13842,11 @@ function renderChat(){
         let div = document.createElement("div");
         div.className = "mensagem";
         div.style.textAlign = souEu ? "right" : "left";
+        const statusEnvio = msg._pending
+            ? `<small style="font-size:8px;opacity:.55;margin-left:4px;">enviando...</small>`
+            : msg._failed
+                ? `<small style="font-size:8px;color:#FCA5A5;margin-left:4px;">falhou</small>`
+                : "";
 
         div.innerHTML = `
         <div style="
@@ -13829,6 +13862,7 @@ function renderChat(){
             margin:2px 0;
         ">
             <b style="color:${cor};">${formatarNick(msg.nome)}:</b> ${escapeHtml(msg.texto)}
+            ${statusEnvio}
             <span style="
                 font-size:8px;
                 opacity:0.6;
@@ -14258,6 +14292,16 @@ window.enviarMensagem = async function() {
         sessionId: chatSessionState?.sessionId || "",
         clientEventId: `${auth.currentUser?.uid || "anon"}_${Date.now()}_${Math.random().toString(36).slice(2)}`
     };
+    input.value = "";
+    adicionarMensagemLocalChat(salaAtual, { ...payload, _pending:true });
+    persistirLeituraSala(salaAtual, Date.now());
+
+    const atualizarEstadoLocal = patch => {
+        const lista = Array.isArray(roomMessages[salaAtual]) ? roomMessages[salaAtual] : [];
+        roomMessages[salaAtual] = lista.map(msg => msg?.clientEventId === payload.clientEventId ? { ...msg, ...patch } : msg);
+        atualizarVistaChatAtivo(salaAtual, false);
+    };
+
     try{
         if(typeof window.sqlApi === "function"){
             await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(salaAtual)}/messages`, {
@@ -14270,7 +14314,7 @@ window.enviarMensagem = async function() {
             }catch(firebaseErr){
                 console.warn("Mensagem salva no SQL, mas nao publicada no Firebase:", firebaseErr);
             }
-            adicionarMensagemLocalChat(salaAtual, payload);
+            atualizarEstadoLocal({ _pending:false, _failed:false });
         }else{
             throw new Error("API SQL indisponivel.");
         }
@@ -14279,16 +14323,14 @@ window.enviarMensagem = async function() {
         try{
             const novaMsgRef = push(getChatRef(salaAtual));
             await set(novaMsgRef, payload);
-            adicionarMensagemLocalChat(salaAtual, payload);
+            atualizarEstadoLocal({ _pending:false, _failed:false });
         }catch(firebaseErr){
             console.error("Falha ao enviar mensagem no SQL e no Firebase:", firebaseErr);
+            atualizarEstadoLocal({ _pending:false, _failed:true });
             alert("Nao foi possivel enviar a mensagem. Verifique se o servidor esta ativo e tente novamente.");
             return;
         }
     }
-
-    input.value = "";
-    persistirLeituraSala(salaAtual, Date.now());
 };
 
 
