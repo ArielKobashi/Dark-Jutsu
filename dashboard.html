@@ -2033,6 +2033,15 @@
             });
             return ajuste;
         }
+        function limparAvaliacaoRevisaoItem(codigo){
+            const chave = ajusteKey(codigo);
+            const registro = avaliadorPedidosConfig?.[chave];
+            if(!decisaoRevisaoAvaliador(registro)) return;
+            delete avaliadorPedidosConfig[chave];
+            set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), null).catch(err => {
+                console.warn("Falha ao limpar avaliacao de revisao:", err);
+            });
+        }
         function renderDashboardAtualLogo(){
             requestAnimationFrame(() => renderDashboardAtual());
         }
@@ -2941,6 +2950,7 @@
                         btn.disabled = true;
                         try{
                             await salvarAjusteLimiteItem(codigo, campo, valor);
+                            limparAvaliacaoRevisaoItem(codigo);
                             renderDashboardAtualLogo();
                         }catch(err){
                             alert(`Nao foi possivel salvar a correcao de ${rotulo}.`);
