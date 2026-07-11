@@ -229,6 +229,15 @@ def _extract_firebase_config() -> tuple[str, str]:
     return api_match.group(1), db_match.group(1).rstrip("/")
 
 
+def _usuario_pode_usar_automus(usuario: object) -> bool:
+    if not isinstance(usuario, dict):
+        return False
+    if usuario.get("ativo") is False:
+        return False
+    nivel = str(usuario.get("nivel") or "").strip().lower()
+    return nivel in {"admin", "adm", "mod", "moderador"}
+
+
 def _auth_admin_dark_jutsu(login: str, senha: str) -> dict:
     nick = (login or "").strip().lower()
     if not nick or not senha:
@@ -245,12 +254,13 @@ def _auth_admin_dark_jutsu(login: str, senha: str) -> dict:
     uid = str(auth["localId"])
     token = str(auth["idToken"])
     usuario = _http_json(f"{db_url}/usuarios/{uid}.json?auth={token}", method="GET")
-    if not isinstance(usuario, dict) or usuario.get("nivel") != "admin":
-        raise RuntimeError("Acesso bloqueado: este login não tem permissão ADM.")
+    if not _usuario_pode_usar_automus(usuario):
+        raise RuntimeError("Acesso bloqueado: este login não tem permissão admin/mod.")
     return {
         "uid": uid,
         "email": email,
         "nickname": usuario.get("nickname") or nick,
+        "nivel": str(usuario.get("nivel") or "").strip().lower(),
         "idToken": token,
         "refreshToken": str(auth.get("refreshToken") or ""),
     }
@@ -278,7 +288,7 @@ def _machine_lock_hash() -> str:
 
 def _apply_machine_lock(config: dict) -> dict:
     # Modo portátil: a pasta do Automus pode ser copiada para outro PC.
-    # A proteção real fica no login ADM obrigatório antes de qualquer atualização.
+    # A proteção real fica no login admin/mod obrigatório antes de qualquer atualização.
     security = config.get("security")
     if not isinstance(security, dict):
         security = {}
@@ -553,7 +563,7 @@ class _ControlWindow:
         ).pack(pady=(0, 18))
         login_var = tk.StringVar()
         senha_var = tk.StringVar()
-        login_status = tk.StringVar(value="Entre com um login ADM.")
+        login_status = tk.StringVar(value="Entre com um login admin/mod.")
         login_entry = tk.Entry(login_card, textvariable=login_var, bg="#020617", fg=palette["text"], insertbackground=palette["text"], relief="flat", font=("Segoe UI", 11))
         login_entry.pack(fill="x", padx=42, ipady=8, pady=(0, 10))
         login_entry.insert(0, "")
@@ -698,15 +708,26 @@ class _ControlWindow:
                 root.after(AUTO_HIDE_AFTER_LOGIN_MS, on_close)
 
         def do_login(event=None):
-            login_status.set("Validando permissão ADM...")
-            try:
-                admin = self._state.login_admin(login_var.get(), senha_var.get())
-                enter_main(admin)
-            except Exception as exc:
+            login_status.set("Validando permissão admin/mod...")
+            login_btn.configure(state="disabled")
+
+            def login_failed(exc):
                 login_status.set(str(exc))
+                login_btn.configure(state="normal")
+                senha_entry.focus_set()
+
+            def worker():
+                try:
+                    admin = self._state.login_admin(login_var.get(), senha_var.get())
+                    root.after(0, lambda: enter_main(admin))
+                except Exception as exc:
+                    root.after(0, lambda exc=exc: login_failed(exc))
+
+            threading.Thread(target=worker, name="automus-login", daemon=True).start()
             return "break"
 
-        make_button(login_card, "Entrar", do_login, bg=palette["accent"], width=28, height=1).pack(fill="x", padx=42, ipady=5)
+        login_btn = make_button(login_card, "Entrar", do_login, bg=palette["accent"], width=28, height=1)
+        login_btn.pack(fill="x", padx=42, ipady=5)
         tk.Label(login_card, textvariable=login_status, bg=palette["panel"], fg=palette["muted"], font=("Segoe UI", 9), wraplength=330).pack(pady=(14, 0))
         senha_entry.bind("<Return>", do_login)
         login_entry.focus_set()
@@ -1501,7 +1522,7 @@ class _SharedState:
                         modo_atualizacao=modo_atualizacao,
                     )
                     if not started:
-                        self._send(409, {"ok": False, "error": "Automus ocupado ou sem login ADM."})
+                        self._send(409, {"ok": False, "error": "Automus ocupado ou sem login admin/mod."})
                         return
                     self._send(200, {"ok": True, "message": "executar_tudo iniciado", "modoAtualizacao": modo_atualizacao})
                     return
@@ -1522,22 +1543,23 @@ class _SharedState:
 
     def ensure_local_request_admin(self, payload: dict) -> tuple[bool, str]:
         if self.authenticated_admin is not None:
-            return True, "ADM já autenticado."
+            return True, "Usuario ja autenticado."
         token = str((payload or {}).get("idToken") or "").strip()
         uid = str((payload or {}).get("uid") or "").strip()
         email = str((payload or {}).get("email") or "").strip()
         nickname = str((payload or {}).get("nickname") or "").strip()
         if not token or not uid:
-            return False, "Login ADM necessário no sistema para acionar o Automus."
+            return False, "Login admin/mod necessario no sistema para acionar o Automus."
         try:
             _, db_url = _extract_firebase_config()
             usuario = _http_json(f"{db_url}/usuarios/{uid}.json?auth={token}", method="GET")
-            if not isinstance(usuario, dict) or str(usuario.get("nivel") or "").lower() != "admin":
-                return False, "Apenas ADM pode acionar o Automus por aqui."
+            if not _usuario_pode_usar_automus(usuario):
+                return False, "Apenas admin/mod pode acionar o Automus por aqui."
             admin = {
                 "uid": uid,
                 "email": email,
                 "nickname": usuario.get("nickname") or nickname or email or uid,
+                "nivel": str(usuario.get("nivel") or "").strip().lower(),
                 "idToken": token,
                 "refreshToken": str((payload or {}).get("refreshToken") or "").strip(),
             }
@@ -1545,10 +1567,10 @@ class _SharedState:
                 self.authenticated_admin = admin
             self._save_admin_session(admin)
             self._ensure_user_schedule(admin)
-            emit_status(f"Interface liberada por comando local para ADM: {admin.get('nickname')}.")
-            return True, "ADM autenticado."
+            emit_status(f"Interface liberada por comando local para admin/mod: {admin.get('nickname')}.")
+            return True, "Usuario autorizado."
         except Exception as exc:
-            return False, f"Falha ao validar ADM local: {exc}"
+            return False, f"Falha ao validar admin/mod local: {exc}"
 
     def login_admin(self, login: str, senha: str) -> dict:
         admin = _auth_admin_dark_jutsu(login, senha)
@@ -1556,7 +1578,7 @@ class _SharedState:
             self.authenticated_admin = admin
         self._save_admin_session(admin)
         self._ensure_user_schedule(admin)
-        emit_status(f"Interface liberada para ADM: {admin.get('nickname')}.")
+        emit_status(f"Interface liberada para admin/mod: {admin.get('nickname')}.")
         return admin
 
     def _save_admin_session(self, admin: dict):
@@ -1564,6 +1586,7 @@ class _SharedState:
             "uid": admin.get("uid") or "",
             "email": admin.get("email") or "",
             "nickname": admin.get("nickname") or "",
+            "nivel": admin.get("nivel") or "",
             "idToken": admin.get("idToken") or "",
             "refreshToken": admin.get("refreshToken") or "",
             "savedAt": datetime.now().isoformat(timespec="seconds"),
@@ -1585,6 +1608,7 @@ class _SharedState:
             "uid": str(session.get("uid") or "").strip(),
             "email": str(session.get("email") or "").strip(),
             "nickname": str(session.get("nickname") or "").strip(),
+            "nivel": str(session.get("nivel") or "").strip().lower(),
             "idToken": str(session.get("idToken") or "").strip(),
             "refreshToken": str(session.get("refreshToken") or "").strip(),
         }
@@ -1603,10 +1627,11 @@ class _SharedState:
                 return None
             _api_key, db_url = _extract_firebase_config()
             usuario = _http_json(f"{db_url}/usuarios/{admin['uid']}.json?auth={admin['idToken']}", method="GET")
-            if not isinstance(usuario, dict) or str(usuario.get("nivel") or "").lower() != "admin":
+            if not _usuario_pode_usar_automus(usuario):
                 self._clear_admin_session()
                 return None
             admin["nickname"] = str(usuario.get("nickname") or admin["nickname"] or admin["email"] or admin["uid"])
+            admin["nivel"] = str(usuario.get("nivel") or admin.get("nivel") or "").strip().lower()
             self.config["adminSession"] = {
                 **admin,
                 "savedAt": datetime.now().isoformat(timespec="seconds"),
@@ -1753,7 +1778,7 @@ class _SharedState:
             admin = self.authenticated_admin or {}
             token = str(admin.get("idToken") or "").strip()
             if not token:
-                raise RuntimeError("Login ADM necessario para consultar update no Firebase.")
+                raise RuntimeError("Login admin/mod necessario para consultar update no Firebase.")
             _, db_url = _extract_firebase_config()
             manifest = _http_json(f"{db_url}/{firebase_path}.json?auth={token}", method="GET")
             if not isinstance(manifest, dict):
@@ -2185,7 +2210,7 @@ class _SharedState:
         with self.lock:
             if self.authenticated_admin is None:
                 self._show_window_now()
-                emit_status("Login ADM necessário. A atualização não será iniciada sem usuário de sessão.", level="WARNING")
+                emit_status("Login admin/mod necessario. A atualização não será iniciada sem usuário de sessão.", level="WARNING")
                 return False
             if self.automation_running:
                 self._show_window_now()
