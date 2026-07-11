@@ -17,7 +17,7 @@ scripts\testar_restore_backup_postgres_darkjutsu.bat
 Ultimo ensaio executado pelo Codex em 2026-07-11:
 
 - API `/health`: OK.
-- Auditoria Firebase restante: `719` ocorrencias.
+- Auditoria Firebase restante runtime: `226` ocorrencias.
 - `py_compile`: OK.
 - Integridade raw-vs-SQL: `0` findings em `users`, `dashboard`, `counting`, `occurrences`, `chat`, `automus`, `cooperat` e `inventory`.
 
