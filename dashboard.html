@@ -1778,18 +1778,18 @@
                 evento.tipo,
                 evento.movimento,
                 evento.operacao,
-                evento.origem,
-                evento.descricao,
                 evento.historico,
                 evento.status
             ].filter(Boolean).join(" "));
-            if(/\b(saida|saidas|requisicao|requisicoes|baixa|baixado|consumo|retirada|entrega|entregue)\b/.test(texto)){
+            if(/\b(saida|saidas|consumo|retirada|devolucao|devolucoes|baixado)\b/.test(texto)){
                 return false;
             }
             if(/\b(compra|compras|pedido|entrada|recebimento|solicitada|solicitacao)\b/.test(texto)){
                 return true;
             }
-            return (num(evento.quantidadeCompra) ?? num(evento.qtdSolicitada) ?? num(evento.quantidade)) !== null;
+            const quantidadeCompra = num(evento.quantidadeCompra);
+            const qtdSolicitada = num(evento.qtdSolicitada);
+            return quantidadeCompra !== null || qtdSolicitada !== null;
         }
         function eventosCompraCooperat(cooperat){
             return (Array.isArray(cooperat?.eventos) ? cooperat.eventos : []).filter(eventoCooperatEhCompra);
@@ -1999,18 +1999,16 @@
         }
         async function salvarAvaliacaoPedido(codigo, payload){
             const chave = ajusteKey(codigo);
-            try{
-                await sqlApi(`/api/dashboard/evaluations/${encodeURIComponent(chave)}`, {
+            avaliadorPedidosConfig[chave] = payload;
+            set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), payload).catch(err => {
+                console.warn("Falha ao salvar avaliacao no Firebase:", err);
+            });
+            sqlApi(`/api/dashboard/evaluations/${encodeURIComponent(chave)}`, {
                     method: "PUT",
                     body: JSON.stringify(payload)
+                }).catch(sqlError => {
+                    console.warn("Falha ao salvar avaliacao no SQL:", sqlError);
                 });
-                avaliadorPedidosConfig[chave] = payload;
-                return;
-            }catch(sqlError){
-                console.warn("Falha ao salvar avaliacao no SQL; tentando Firebase:", sqlError);
-            }
-            await set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), payload);
-            avaliadorPedidosConfig[chave] = payload;
         }
         function parseNumeroPrompt(valor){
             const texto = String(valor ?? "").trim();
@@ -2030,7 +2028,9 @@
             };
             if(!bancoAtual) bancoAtual = {};
             bancoAtual.ajustesItens = { ...(bancoAtual.ajustesItens || {}), [chave]: ajuste };
-            await set(ref(db, `estoqueGlobal/ajustesItens/${chave}`), ajuste);
+            set(ref(db, `estoqueGlobal/ajustesItens/${chave}`), ajuste).catch(err => {
+                console.warn("Falha ao salvar ajuste de limite no Firebase:", err);
+            });
             return ajuste;
         }
         function renderDashboardAtualLogo(){
@@ -2122,7 +2122,6 @@
                                 <th class="num">Qtd. solicitada</th>
                                 <th class="num">Valor unit.</th>
                                 <th>Origem</th>
-                                <th>Tipo</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2133,15 +2132,14 @@
                                     <td class="num">${fmt(h.qtdSolicitada)}</td>
                                     <td class="num">${fmt(h.valorBaixa)}</td>
                                     <td>${esc(h.origem || "Cooperat")}</td>
-                                    <td>Compra</td>
                                 </tr>
-                            `).join("") || `<tr><td colspan="6">Sem eventos recentes.</td></tr>`}
+                            `).join("") || `<tr><td colspan="5">Sem compras recentes.</td></tr>`}
                         </tbody>
                     </table>
                 </div>
             `;
             return `
-                <div class="historicoAviso">Base antiga Cooperat: quantidade considerada = Qtd.Solicitada; valor baixa tratado como valor unitario. Nao ha data de recebimento separada.</div>
+                <div class="historicoAviso">Base antiga Cooperat: exibindo somente compras. Quantidade considerada = Qtd.Solicitada; valor baixa tratado como valor unitario. Nao ha data de recebimento separada.</div>
                 ${tabelaEventos(eventos)}
                 ${eventosRestantes.length ? `
                     <details class="avaliadorDetails cooperatMore">
@@ -2320,16 +2318,16 @@
                     }
                     return true;
                 });
+            const totalComprasCooperatEscopo = linhasBase.reduce((total, linha) => total + (linha.statsCooperat?.totalEventos || 0), 0);
             const linhas = linhasBase.filter(linha => {
                 if(cfg.status && cfg.status !== "fora" && cfg.status !== "todos" && !passaStatus(linha.status)) return false;
                 return true;
             });
             const abaixoMinimo = linhas.filter(l => l.status === "abaixo");
             const fila = abaixoMinimo
-                .filter(l => !l.registro?.decisao)
+                .filter(l => !l.registro?.decisao || decisaoRevisaoAvaliador(l.registro))
                 .filter(l => !processoCompraAbertoLinha(l))
                 .sort((a,b) => compararValores(a.reposicao || 0, b.reposicao || 0, "desc"));
-            const avaliados = linhasBase.filter(l => l.registro?.decisao);
             const passivos = linhasBase.filter(l => decisaoSolicitarAvaliador(l.registro));
             const avaliadosComPedidoAberto = passivos
                 .filter(l => processoCompraAbertoLinha(l))
@@ -2337,7 +2335,6 @@
             const solicitadosSemProcessoAberto = passivos
                 .filter(l => !processoCompraAbertoLinha(l))
                 .filter(l => !timestampEntradaConfirmadaKanban(l));
-            const revisoes = linhasBase.filter(l => decisaoRevisaoAvaliador(l.registro));
             const semAvaliadorKanban = linhasBase.filter(l => !l.registro?.decisao && pedidoAtivo(l.pedido));
             const baseKanban = cfg.kanbanGestao === "avaliador"
                 ? passivos
@@ -2374,7 +2371,7 @@
                     <article class="card red"><span>Aguardando avaliacao</span><strong>${fila.length}</strong></article>
                     <article class="card blue"><span>No Kanban</span><strong>${kanbanItens.length}</strong></article>
                     <article class="card green"><span>Ja avaliados</span><strong>${avaliadosComPedidoAberto.length}</strong></article>
-                    <article class="card"><span>Revisar minimo/reposicao</span><strong>${revisoes.length}</strong></article>
+                    <article class="card"><span>Sem pedido aberto</span><strong>${solicitadosSemProcessoAberto.length}</strong></article>
                 </section>
                 <div class="toolbar">
                     <span class="chip">ambiente=avaliador</span>
@@ -2382,7 +2379,7 @@
                     <span class="chip">abaixo do minimo: ${abaixoMinimo.length}</span>
                     <span class="chip">kanban: ${cfg.kanbanGestao === "avaliador" ? "com avaliador" : cfg.kanbanGestao === "sem_avaliador" ? "sem avaliador" : "todos"}</span>
                     <span class="chip">historico novo MATA111/MATA112</span>
-                    <span class="chip">historico antigo Cooperat: ${esc(fmt(historicoCooperat?.totalEventos || 0))} compras</span>
+                    <span class="chip">historico antigo Cooperat: ${esc(fmt(totalComprasCooperatEscopo))} compras</span>
                 </div>
                 ${renderFiltros([], dados.length)}
                 <div class="kanbanFiltroBar">
@@ -2461,9 +2458,9 @@
                         </div>
                     </div>
                     <div class="avaliadorPanel">
-                        <h2>Revisar mínimo/reposição</h2>
+                        <h2>Avaliados sem pedido aberto</h2>
                         <div class="avaliadorList">
-                            ${revisoes.map(l => `
+                            ${solicitadosSemProcessoAberto.map(l => `
                                 <article class="avaliadorItem">
                                     <div class="avaliadorItemTop">
                                         <div>
@@ -2480,7 +2477,7 @@
                                     </div>
                                     ${l.registro?.observacao ? `<div class="kanbanMeta"><span>Obs.: ${esc(l.registro.observacao)}</span></div>` : ""}
                                 </article>
-                            `).join("") || `<section class="empty">Sem itens avaliados sem solicitacao de compra.</section>`}
+                            `).join("") || `<section class="empty">Sem itens avaliados positivamente sem pedido aberto.</section>`}
                         </div>
                     </div>
                 </section>
