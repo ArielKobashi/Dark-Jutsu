@@ -75,7 +75,7 @@ if exist "%SHARE_SCRIPTS%\guardiao_servidor_tick_darkjutsu.bat" (
 
 echo.
 echo [2. Arquivos obrigatorios]
-set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py"
+set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py atualizar_darkjutsu_do_github.bat corrigir_python_tkinter_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.ps1"
 if "%MONITOR_KIND%"=="PYTHON" (
   set "REQUIRED=%REQUIRED% monitor_reserva_python_darkjutsu.py iniciar_monitor_reserva_python_darkjutsu.bat diagnosticar_monitor_reserva_python_darkjutsu.bat"
 ) else (
@@ -119,6 +119,12 @@ if "%MONITOR_KIND%"=="PYTHON" (
       call :fail "Python copiado mas python.exe nao apareceu."
       goto finish
     )
+  )
+  call "%SHARE_SCRIPTS%\corrigir_python_tkinter_darkjutsu.bat" >> "%INSTALL_LOG%" 2>&1
+  if errorlevel 1 (
+    call :warn "Tkinter nao foi corrigido. O painel vai cair para fallback HTML."
+  ) else (
+    call :ok "Tkinter do Python portatil corrigido."
   )
 ) else (
   call :ok "Principal nao precisa instalar Python para o monitor."
@@ -167,7 +173,9 @@ echo [8. Guardiao local]
 (
   echo Set shell = CreateObject("WScript.Shell"^)
   echo Do
+  echo   shell.Run "cmd /c ""%SHARE_SCRIPTS%\verificar_atualizar_instalacao_local_darkjutsu.bat""", 0, True
   echo   shell.Run "cmd /c ""%SHARE_SCRIPTS%\guardiao_servidor_tick_darkjutsu.bat""", 0, True
+  echo   shell.Run "cmd /c ""%SHARE_SCRIPTS%\atualizar_darkjutsu_do_github.bat""", 0, False
   echo   WScript.Sleep 60000
   echo Loop
 ) > "%LOCAL_SCRIPTS%\guardiao_loop_darkjutsu.vbs"

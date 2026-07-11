@@ -130,14 +130,13 @@ Status em 2026-07-01:
 - Contagens agora tem escrita SQL inicial para sessoes finalizadas, rascunhos, status de maquinas e reset global.
 - Relatorio e historico de planilhas de contagem agora usam `GET /api/counting/history` primeiro, com fallback Firebase.
 - Correcao de usuario no historico de contagem agora tenta `PATCH /api/counting/sessions/{sessionId}/user` antes do fallback Firebase.
-- `dashboard.html` agora tenta `GET /api/dashboard/snapshot` antes do Firebase para carregar estoque, configuracoes, avaliacoes, contagens e etiquetas.
-- Ajustes manuais de limite no dashboard agora tentam `PUT /api/inventory/{codigo}/adjustment` antes do fallback Firebase.
+- `dashboard.html` agora usa `GET /api/dashboard/snapshot` e endpoints SQL para carregar estoque, configuracoes, avaliacoes, contagens, etiquetas e salvar painel/avaliador/ajustes quando a API esta ativa.
 - Ocorrencias em `index.html` agora tentam polling por `GET /api/occurrences` antes dos listeners Firebase.
 - Mensagens de chat em `index.html` agora tentam polling por `GET /api/chat/rooms/{roomId}/messages` e read-state por `GET/PUT /api/chat/read-state`; `typing` e senha de sala ainda ficam como pendencia de tempo real/segredo.
-- O editor de etiquetas salva/carrega a configuracao compartilhada em `app_settings` via `PUT /api/settings/label.config`.
+- O editor de etiquetas salva/carrega a configuracao compartilhada em `app_settings` via `PUT /api/settings/label.config` e nao mantem listener RTDB nessa tela.
 - O publicador do Automus tenta gravar o manifesto em `automus_releases` via `PUT /api/automus/releases/latest`.
 - O estoque do Automus agora tem `POST /api/inventory/automus-update`, testado com o export completo em 2026-07-09, gravando snapshot e recarregando itens/enderecos/limites/historico em SQL.
-- Os scripts `Automus/scripts/atualizacao/automus_update.py` e `scripts/atualizacao/automus_update.py` passaram a tentar escrita SQL antes do Firebase; `AUTOMUS_SQL_ONLY=1` corta o fallback quando o teste operacional for aprovado.
+- `Automus/scripts/atualizacao/automus_update.py`, `Automus/scripts/build_automus_exe.py` e `Automus/scripts/controladordeatualizacao.py` aceitam `AUTOMUS_SQL_ONLY=1` com `DARK_JUTSU_API_TOKEN`, pulando dependencia obrigatoria de Firebase no caminho SQL-only.
 
 ### Fase 4: Migração de dados
 
@@ -1060,11 +1059,11 @@ Pendencias restantes antes de desligar Firebase Database:
   - `scripts/auditar_firebase_restante.py`
   - saida: `_migration_runs/firebase_audit_latest/firebase_audit.md`
   - primeira execucao: `719` ocorrencias, incluindo imports, fallbacks e acessos RTDB ainda vivos.
-  - auditor runtime refinado em 2026-07-11: `226` ocorrencias restantes.
+  - auditor runtime refinado em 2026-07-11: `222` ocorrencias restantes.
 - Criado ensaio:
   - `scripts/ensaio_sql_only_darkjutsu.bat`
   - verifica API, roda auditoria, compila API e executa integridade rapida por dominio.
-  - execucao em 2026-07-11: passou com integridade `0` findings em todos os dominios testados; auditoria runtime apontou `226` ocorrencias Firebase restantes.
+  - execucao em 2026-07-11: passou com integridade `0` findings em todos os dominios testados; auditoria runtime apontou `222` ocorrencias Firebase restantes.
 
 ## Avanco 2026-07-11 - reducao de dependencias RTDB runtime
 
@@ -1074,6 +1073,7 @@ Pendencias restantes antes de desligar Firebase Database:
 - Checagem de nickname no formulario usa `GET /api/nicknames/{nickname}/status`.
 - Reset global da contagem e presenca/progresso de maquinas passaram para polling SQL-first quando a API esta ativa.
 - Progresso da tela principal de contagem passou para polling SQL-first via historico SQL.
+- Geracao de etiquetas/ranking nao grava mais em `etiquetasGeradas`, `rankingEtiquetas` nem fallback `_etiquetas` quando o SQL esta disponivel; `POST /api/labels/jobs` passa a ser o caminho obrigatorio.
 - Novos endpoints:
   - `GET /api/users/{id}`
   - `GET /api/signup-requests/{id}`
