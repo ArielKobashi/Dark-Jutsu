@@ -17,9 +17,11 @@ scripts\testar_restore_backup_postgres_darkjutsu.bat
 Ultimo ensaio executado pelo Codex em 2026-07-11:
 
 - API `/health`: OK.
-- Auditoria Firebase restante runtime: `226` ocorrencias.
+- Auditoria Firebase restante runtime: `205` ocorrencias estaticas, incluindo fluxos legados/compatibilidade ainda presentes no codigo.
 - `py_compile`: OK.
 - Integridade raw-vs-SQL: `0` findings em `users`, `dashboard`, `counting`, `occurrences`, `chat`, `automus`, `cooperat` e `inventory`.
+- `dashboard.html` e `label-editor.html` nao usam mais Firebase Database quando a API SQL esta disponivel.
+- Automus aceita `AUTOMUS_SQL_ONLY=1` com `DARK_JUTSU_API_TOKEN`, pulando autenticacao/leitura/escrita Firebase no caminho de atualizacao SQL-only.
 
 1. Inicie PostgreSQL e API.
 2. Rode `scripts\ensaio_sql_only_darkjutsu.bat`.
@@ -52,12 +54,11 @@ _migration_runs\firebase_audit_latest\firebase_audit.json
 
 Use o Markdown para atacar os destinos restantes por prioridade:
 
-1. `chatRooms/*/typing`
-2. `contagemAtual`
-3. `contagemStatusMaquinas`
-4. `contagens`
-5. `usuarios`, `solicitacoesCadastro`, `usuariosBanidos`, `nicknames*`
-6. fallbacks de `estoqueGlobal` e `dashboardConfig`
+1. `typing`/presenca transitoria do chat.
+2. `contagemAtual`, `contagemStatusMaquinas` e progresso vivo.
+3. `contagens` e funcoes administrativas legadas.
+4. `usuarios`, `solicitacoesCadastro`, `usuariosBanidos`, `nicknames*` em blocos de compatibilidade.
+5. fluxos legados do Automus fora de `AUTOMUS_SQL_ONLY=1`.
 
 ## Backup e restore
 
