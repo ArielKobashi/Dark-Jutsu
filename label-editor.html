@@ -962,6 +962,7 @@
     </script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
         import { getAuth, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -977,6 +978,8 @@
 
         const app = initializeApp(firebaseConfig, "labelEditorApp");
         const auth = getAuth(app);
+        const db = getDatabase(app);
+        const configRef = ref(db, window.etiquetaEditorFirebaseConfigPath || "estoqueGlobal/configuracoesEtiquetas");
         const DEFAULT_SQL_API_BASE = (
             location.protocol.startsWith("http") && location.hostname
                 ? `${location.protocol}//${location.hostname}:8765`
@@ -1033,11 +1036,10 @@
         async function carregarNomeUsuario(user){
             if(!user) return "";
             try{
-                const data = await sqlApi("/api/me");
-                const usuario = data?.user || {};
-                return usuario.nickname || usuario.nome || (user.email || "").split("@")[0] || user.uid;
+                const snap = await get(ref(db, "usuarios/" + user.uid));
+                const dados = snap.exists() ? snap.val() : null;
+                return dados?.nickname || dados?.nome || (user.email || "").split("@")[0] || user.uid;
             }catch(e){
-                console.warn("Nao foi possivel carregar usuario do SQL no editor de etiquetas:", e);
                 return (user.email || "").split("@")[0] || user.uid;
             }
         }
@@ -1053,7 +1055,12 @@
                 });
                 return;
             }catch(sqlErr){
-                console.warn("Nao foi possivel salvar layout compartilhado no SQL:", sqlErr);
+                console.warn("Nao foi possivel salvar layout compartilhado no SQL; tentando Firebase:", sqlErr);
+            }
+            try{
+                await set(configRef, config);
+            }catch(e){
+                console.warn("Nao foi possivel salvar layout compartilhado das etiquetas:", e);
             }
         }
 
@@ -1071,10 +1078,24 @@
                     window.aplicarEtiquetaEditorConfigCompartilhada(data.setting.value);
                     return;
                 }
-                await salvarConfigCompartilhada();
             }catch(sqlErr){
-                console.warn("Nao foi possivel carregar layout compartilhado do SQL:", sqlErr);
+                console.warn("Nao foi possivel carregar layout compartilhado do SQL; tentando Firebase:", sqlErr);
             }
+            try{
+                const snap = await get(configRef);
+                if(snap.exists() && typeof window.aplicarEtiquetaEditorConfigCompartilhada === "function"){
+                    window.aplicarEtiquetaEditorConfigCompartilhada(snap.val());
+                }else{
+                    await salvarConfigCompartilhada();
+                }
+            }catch(e){
+                console.warn("Nao foi possivel carregar layout compartilhado das etiquetas:", e);
+            }
+            onValue(configRef, snapshot => {
+                if(snapshot.exists() && typeof window.aplicarEtiquetaEditorConfigCompartilhada === "function"){
+                    window.aplicarEtiquetaEditorConfigCompartilhada(snapshot.val());
+                }
+            });
         });
     </script>
 </body>

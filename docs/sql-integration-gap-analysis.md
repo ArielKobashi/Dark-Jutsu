@@ -19,10 +19,6 @@ Atualizacao 2026-07-11:
   - `scripts/ensaio_sql_only_darkjutsu.bat`
   - `scripts/testar_restore_backup_postgres_darkjutsu.bat`
 - Criado runbook de corte: `docs/sql-cutover-runbook.md`.
-- `dashboard.html` agora depende de `GET /api/dashboard/snapshot` e dos endpoints SQL de painel/avaliacao/ajuste quando a API esta ativa; os fallbacks RTDB desses fluxos foram cortados.
-- `label-editor.html` agora usa `/api/me` e `app_settings/label.config`; o listener RTDB de configuracao compartilhada foi removido.
-- `index.html` deixou de cair para RTDB em validacao de sessao SQL, parte dos fluxos admin, ocorrencias, chat SQL e rascunho/presenca de contagem quando a API esta disponivel.
-- Automus ganhou modo operacional `AUTOMUS_SQL_ONLY=1` com `DARK_JUTSU_API_TOKEN`: atualizacao, controlador e build pulam dependencias obrigatorias de Firebase no caminho SQL-only.
 
 ## Estado atual
 
@@ -65,7 +61,7 @@ Concluido:
 | Banidos | `GET /api/banned-users` | implementado |
 | Banidos | `DELETE /api/banned-users/{id}` | testado |
 | Dashboard | `GET /api/dashboard` | implementado |
-| Dashboard | `GET /api/dashboard/snapshot` | implementado e testado; `dashboard.html` usa SQL como caminho obrigatorio quando a API esta ativa |
+| Dashboard | `GET /api/dashboard/snapshot` | implementado e testado; `dashboard.html` tenta SQL antes do Firebase |
 | Dashboard | `PUT /api/dashboard/panels/{id}` | testado |
 | Dashboard | `PUT /api/dashboard/evaluations/{legacyKey}` | testado |
 | Dashboard | `DELETE /api/dashboard/evaluations/{legacyKey}` | implementado |
@@ -121,9 +117,9 @@ O banco ja tem tabelas, mas o frontend e o Automus ainda escrevem no Firebase. P
 
 | Area atual Firebase | Escritas que faltam na API |
 | --- | --- |
-| `estoqueGlobal` | Automus update transacional pronto em `POST /api/inventory/automus-update`; ajustes manuais do dashboard usam SQL; falta validar fluxo real do Automus com `AUTOMUS_SQL_ONLY=1` |
-| `dashboardConfig/paineis` | frontend do dashboard usa SQL quando a API esta ativa |
-| `dashboardConfig/avaliadorPedidos` | frontend do dashboard usa SQL para salvar/remover quando a API esta ativa |
+| `estoqueGlobal` | Automus update transacional pronto em `POST /api/inventory/automus-update`; ajustes manuais do dashboard agora tentam SQL; falta cortar fallback Firebase e validar fluxo real |
+| `dashboardConfig/paineis` | frontend do dashboard tenta SQL antes do Firebase |
+| `dashboardConfig/avaliadorPedidos` | frontend do dashboard tenta SQL antes do Firebase para salvar/remover |
 | `usuarios` | admin inicial pronto e lista administrativa SQL-first; aprovar solicitacao, alterar nivel, ativar/desativar, banir e resetar status de senha tentam SQL antes do Firebase; ainda falta substituir Firebase Auth se o objetivo for desligar tambem Authentication |
 | `solicitacoesCadastro` | lista admin SQL-first; aprovar/rejeitar pronto no admin; endpoint publico SQL existe, mas o fluxo final ainda precisa decidir como criar credenciais sem Firebase Auth |
 | `usuariosBanidos` | banir/apagar banido pronto no admin; falta revisar fluxo final de reativacao/desbanimento apos corte Firebase |
@@ -142,7 +138,7 @@ O banco ja tem tabelas, mas o frontend e o Automus ainda escrevem no Firebase. P
 | `chatReadState` | leitura e escrita SQL-first; fallback Firebase mantido |
 | `chatRooms/*/typing` | substituir por dado transitorio via WebSocket/SSE/TTL |
 | `chatRooms/*/senha` | implementado em SQL com hash e verificacao server-side; fallback Firebase ainda existe para contingencia |
-| `estoqueGlobal/configuracoesEtiquetas` | `label-editor.html` salva/carrega `label.config` no SQL; listener/fallback RTDB removido dessa tela |
+| `estoqueGlobal/configuracoesEtiquetas` | `label-editor.html` salva/carrega `label.config` no SQL primeiro; fallback Firebase mantido |
 | `automus/releases/latest` | publicar manifest via API/SQL pronto; script de preparo tenta SQL automaticamente quando a API esta ativa |
 
 ### 3. Troca do frontend para API
@@ -186,7 +182,7 @@ Arquivos principais ainda presos ao Firebase:
 
 Falta:
 
-- trocar leitura de `estoqueGlobal.json` por endpoint SQL/API no fluxo legado; em `AUTOMUS_SQL_ONLY=1` a leitura Firebase ja e pulada;
+- trocar leitura de `estoqueGlobal.json` por endpoint SQL/API;
 - trocar PATCH/PUT de blocos do estoque por endpoint transacional: primeira versao implementada e testada em 2026-07-09;
 - gravar backup em `inventory_snapshots`: pronto no endpoint SQL;
 - publicar release em `automus_releases`;

@@ -1089,6 +1089,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -1104,6 +1105,7 @@
 
         const params = new URLSearchParams(location.search);
         const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
         const auth = getAuth(app);
         const root = document.getElementById("app");
         const btnAtualizar = document.getElementById("btnAtualizar");
@@ -1246,8 +1248,17 @@
                 });
                 return true;
             }catch(sqlError){
+                console.warn("Falha ao salvar painel no SQL; tentando Firebase:", sqlError);
+            }
+            try{
+                await set(ref(db, `dashboardConfig/paineis/${id}`), {
+                    limite: payload.limite,
+                    codigosOcultos: payload.codigosOcultos
+                });
+                return true;
+            }catch(e){
                 alert("Nao foi possivel salvar a configuracao compartilhada do dashboard.");
-                console.warn("Falha ao salvar painel do dashboard no SQL:", sqlError);
+                console.warn("Falha ao salvar painel do dashboard:", e);
                 return false;
             }
         }
@@ -2326,8 +2337,14 @@
                 });
                 return true;
             }catch(sqlError){
-                console.warn("Falha ao salvar avaliacao no SQL:", sqlError);
-                throw sqlError;
+                console.warn("Falha ao salvar avaliacao no SQL; tentando Firebase:", sqlError);
+            }
+            try{
+                await set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), payload);
+                return true;
+            }catch(err){
+                console.warn("Falha ao salvar avaliacao no Firebase:", err);
+                return false;
             }
         }
         function parseNumeroPrompt(valor){
@@ -2354,8 +2371,10 @@
                     body: JSON.stringify({ ...ajuste, legacy_key:chave, itemKey:codigo })
                 });
             }catch(sqlError){
-                console.warn("Falha ao salvar ajuste de limite no SQL:", sqlError);
-                throw sqlError;
+                console.warn("Falha ao salvar ajuste de limite no SQL; tentando Firebase:", sqlError);
+                set(ref(db, `estoqueGlobal/ajustesItens/${chave}`), ajuste).catch(err => {
+                    console.warn("Falha ao salvar ajuste de limite no Firebase:", err);
+                });
             }
             return ajuste;
         }
@@ -2366,7 +2385,10 @@
             delete avaliadorPedidosConfig[chave];
             sqlApi(`/api/dashboard/evaluations/${encodeURIComponent(chave)}`, { method:"DELETE" })
                 .catch(sqlError => {
-                    console.warn("Falha ao limpar avaliacao no SQL:", sqlError);
+                    console.warn("Falha ao limpar avaliacao no SQL; tentando Firebase:", sqlError);
+                    set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), null).catch(err => {
+                        console.warn("Falha ao limpar avaliacao de revisao:", err);
+                    });
                 });
         }
         function renderDashboardAtualLogo(){
@@ -3632,8 +3654,7 @@
                 try{
                     snapshotSql = await carregarDashboardSnapshotSql();
                 }catch(sqlError){
-                    console.warn("Falha ao carregar dashboard no SQL:", sqlError);
-                    throw sqlError;
+                    console.warn("Falha ao carregar dashboard no SQL; tentando Firebase:", sqlError);
                 }
                 if(snapshotSql){
                     const [mapaMinimo, mata110, mata111, mata112] = await Promise.all([
@@ -3656,7 +3677,35 @@
                     });
                     return;
                 }
-                throw new Error("Snapshot SQL do dashboard indisponivel.");
+                const [snap, mapaMinimo, mata110, mata111, mata112, contagensSnap, etiquetasSnap, rankingEtiquetasSnap, dashboardConfigSnap, avaliadorPedidosSnap, historicoCooperatSnap] = await Promise.all([
+                    get(ref(db, "estoqueGlobal")),
+                    carregarEstoqueMinimo(),
+                    carregarMata110(),
+                    carregarMata111(),
+                    carregarMata112(),
+                    get(ref(db, "contagens")).catch(() => null),
+                    get(ref(db, "etiquetasGeradas")).catch(() => null),
+                    get(ref(db, "rankingEtiquetas")).catch(() => null),
+                    get(ref(db, "dashboardConfig/paineis")).catch(() => null),
+                    get(ref(db, "dashboardConfig/avaliadorPedidos")).catch(() => null),
+                    deveCarregarHistoricoCooperat ? get(ref(db, "historicoComprasCooperat")).catch(() => null) : Promise.resolve(null)
+                ]);
+                dashboardPanelConfig = dashboardConfigSnap?.val?.() || {};
+                avaliadorPedidosConfig = avaliadorPedidosSnap?.val?.() || {};
+                const historicoCooperatFirebase = historicoCooperatSnap?.val?.() || null;
+                const historicoCooperatLocal = deveCarregarHistoricoCooperat
+                    ? await carregarHistoricoCooperatLocal()
+                    : null;
+                const historicoCooperat = deveCarregarHistoricoCooperat
+                    ? (historicoCooperatLocal?.codigos ? historicoCooperatLocal : historicoCooperatFirebase?.codigos ? historicoCooperatFirebase : null)
+                    : null;
+                renderDashboard(snap.val() || {}, mapaMinimo, mata111, mata112, {
+                    mata110,
+                    contagens: contagensSnap?.val?.() || {},
+                    etiquetasGeradas: etiquetasSnap?.val?.() || {},
+                    rankingEtiquetas: rankingEtiquetasSnap?.val?.() || {},
+                    historicoCooperat
+                });
             }catch(err){
                 document.getElementById("subtitulo").textContent = "Erro ao carregar dados";
                 renderErro(err.message || String(err));

@@ -2356,46 +2356,21 @@ window.recusar = async function(id){
 
 window.alterarNivel = async function(uid, nivel){
     if(!uid) return;
-    if(typeof window.sqlApi === "function"){
-        try{
+    try{
+        if(typeof window.sqlApi === "function"){
             await window.sqlApi(`/api/users/${encodeURIComponent(uid)}`, {
                 method: "PATCH",
                 body: JSON.stringify({ nivel })
             });
-            return;
-        }catch(sqlErr){
-            console.warn("Falha ao alterar nivel no SQL:", sqlErr);
-            mostrarNotificacao("Nao foi possivel alterar nivel no SQL.");
-            return;
         }
+    }catch(sqlErr){
+        console.warn("Falha ao alterar nivel no SQL; tentando Firebase:", sqlErr);
     }
     await set(ref(db, "usuarios/" + uid + "/nivel"), nivel);
 };
 
 window.toggleAtivo = async function(uid, isAtivo){
     if(!uid) return;
-    if(typeof window.sqlApi === "function"){
-        try{
-            if(isAtivo){
-                await window.sqlApi(`/api/users/${encodeURIComponent(uid)}/ban`, {
-                    method: "POST",
-                    body: JSON.stringify({ banidoEm: Date.now() })
-                });
-            }else{
-                await window.sqlApi(`/api/users/${encodeURIComponent(uid)}`, {
-                    method: "PATCH",
-                    body: JSON.stringify({ ativo: true })
-                });
-            }
-            iniciarListaUsuarios();
-            iniciarListaBanidos();
-            return;
-        }catch(sqlErr){
-            console.warn("Falha ao alterar status do usuario no SQL:", sqlErr);
-            mostrarNotificacao("Nao foi possivel alterar usuario no SQL.");
-            return;
-        }
-    }
     if(isAtivo){
         // Banir: remove da base de dados
         let dados = null;
@@ -2455,19 +2430,15 @@ window.toggleAtivo = async function(uid, isAtivo){
 
 window.resetSenha = async function(uid){
     if(!uid) return;
-    if(typeof window.sqlApi === "function"){
-        try{
+    try{
+        if(typeof window.sqlApi === "function"){
             await window.sqlApi(`/api/users/${encodeURIComponent(uid)}/reset-password`, {
                 method: "POST",
                 body: JSON.stringify({})
             });
-            mostrarNotificacao("Reset de senha marcado no SQL.");
-            return;
-        }catch(sqlErr){
-            console.warn("Falha ao marcar reset de senha no SQL:", sqlErr);
-            mostrarNotificacao("Nao foi possivel marcar reset no SQL.");
-            return;
         }
+    }catch(sqlErr){
+        console.warn("Falha ao marcar reset de senha no SQL; tentando Firebase:", sqlErr);
     }
     await set(ref(db, "usuarios/" + uid + "/senha"), "");
     await set(ref(db, "usuarios/" + uid + "/senhaReset"), true);
@@ -2574,18 +2545,14 @@ function iniciarListaBanidos(){
 
 window.apagarBanido = async function(uid){
     if(!uid) return;
-    if(typeof window.sqlApi === "function"){
-        try{
+    try{
+        if(typeof window.sqlApi === "function"){
             await window.sqlApi(`/api/banned-users/${encodeURIComponent(uid)}`, {
                 method: "DELETE"
             });
-            iniciarListaBanidos();
-            return;
-        }catch(sqlErr){
-            console.warn("Falha ao apagar banido no SQL:", sqlErr);
-            mostrarNotificacao("Nao foi possivel apagar banido no SQL.");
-            return;
         }
+    }catch(sqlErr){
+        console.warn("Falha ao apagar banido no SQL; tentando Firebase:", sqlErr);
     }
     await set(ref(db, "usuariosBanidos/" + uid), null);
 }
@@ -2598,22 +2565,18 @@ window.apagarBanidosSelecionados = async function(){
     for(const c of checks){
         const uid = c.getAttribute("data-uid");
         if(uid){
-            if(typeof window.sqlApi === "function"){
-                try{
+            try{
+                if(typeof window.sqlApi === "function"){
                     await window.sqlApi(`/api/banned-users/${encodeURIComponent(uid)}`, {
                         method: "DELETE"
                     });
-                    continue;
-                }catch(sqlErr){
-                    console.warn("Falha ao apagar banido selecionado no SQL:", sqlErr);
-                    mostrarNotificacao("Nao foi possivel apagar todos os banidos no SQL.");
-                    return;
                 }
+            }catch(sqlErr){
+                console.warn("Falha ao apagar banido selecionado no SQL; tentando Firebase:", sqlErr);
             }
             await set(ref(db, "usuariosBanidos/" + uid), null);
         }
     }
-    if(typeof window.sqlApi === "function") iniciarListaBanidos();
 }
 
 const banidosSelectAll = document.getElementById("banidosSelectAll");
@@ -3825,10 +3788,33 @@ async function registrarGeracaoEtiquetas(totalGeradas, codigosPorTamanho, naoEnc
             return true;
         }
     }catch(sqlErr){
-        console.warn("Falha ao registrar etiquetas no SQL:", sqlErr);
-        throw sqlErr;
+        console.warn("Falha ao registrar etiquetas no SQL; tentando Firebase:", sqlErr);
     }
-    throw new Error("API SQL indisponivel para registrar etiquetas.");
+    if(!window.db || !window.ref || !window.push) throw new Error("Firebase ainda nao esta pronto para registrar etiquetas.");
+    let salvouEmContagens = false;
+    try{
+        await window.push(window.ref(window.db, `etiquetasGeradas/${data}/${usuarioKey}`), payload);
+    }catch(err){
+        console.warn("Caminho etiquetasGeradas bloqueado; salvando ranking de etiquetas dentro de contagens.", err);
+        await window.push(window.ref(window.db, `contagens/${data}/${usuarioKey}/_etiquetas`), payload);
+        salvouEmContagens = true;
+    }
+    if(window.runTransaction && !salvouEmContagens){
+        try{
+            await window.runTransaction(window.ref(window.db, `rankingEtiquetas/${usuarioKey}`), atual => {
+                const base = atual && typeof atual === "object" ? atual : {};
+                return {
+                    usuario:nick,
+                    totalEtiquetas:Number(base.totalEtiquetas || 0) + Number(totalGeradas || 0),
+                    eventos:Number(base.eventos || 0) + 1,
+                    atualizadoEm:Date.now()
+                };
+            });
+        }catch(err){
+            console.warn("Ranking agregado de etiquetas indisponivel; o evento principal foi salvo.", err);
+        }
+    }
+    return true;
 }
 
 document.querySelectorAll("input[name='etiquetaTamanho']").forEach(input=>{
@@ -5429,8 +5415,7 @@ async function checarResetGlobalContagem(){
             if(data?.setting?.value) aplicarResetGlobalContagem(data.setting.value, false);
             return;
         }catch(sqlErr){
-            console.warn("Falha ao checar reset global no SQL:", sqlErr);
-            return;
+            console.warn("Falha ao checar reset global no SQL; tentando Firebase:", sqlErr);
         }
     }
     if(!window.get || !window.ref || !window.db) return;
@@ -5771,8 +5756,7 @@ async function salvarStatusMaquinasContagemFirebase(payload = null, aberta = tru
             });
             return true;
         }catch(sqlErr){
-            console.warn("Falha ao salvar status das maquinas no SQL:", sqlErr);
-            return false;
+            console.warn("Falha ao salvar status das maquinas no SQL; tentando Firebase:", sqlErr);
         }
     }
     if(!window.set || !window.ref || !window.db) return false;
@@ -5811,12 +5795,7 @@ async function salvarRascunhoContagemFirebaseAgora(){
             contagemRascunhoFirebaseAvisoErro = false;
             return true;
         }catch(sqlErr){
-            console.warn("Falha ao salvar rascunho da contagem no SQL:", sqlErr);
-            if(!contagemRascunhoFirebaseAvisoErro){
-                contagemRascunhoFirebaseAvisoErro = true;
-                mostrarNotificacao("Rascunho salvo localmente, mas o SQL/API nao aceitou o backup.");
-            }
-            return false;
+            console.warn("Falha ao salvar rascunho da contagem no SQL; tentando Firebase:", sqlErr);
         }
     }
     if(!window.set || !window.ref || !window.db) return false;
@@ -5862,8 +5841,7 @@ async function salvarPresencaContagemFirebase(aberta = true){
             });
             return true;
         }catch(sqlErr){
-            console.warn("Falha ao salvar presenca da contagem no SQL:", sqlErr);
-            return false;
+            console.warn("Falha ao salvar presenca da contagem no SQL; tentando Firebase:", sqlErr);
         }
     }
     if(!window.set || !window.ref || !window.db) return false;
@@ -5905,10 +5883,8 @@ async function limparRascunhoContagemFirebase(){
     if(typeof window.sqlApi === "function" && uid){
         try{
             await window.sqlApi(`/api/counting/drafts/${encodeURIComponent(uid)}`, { method: "DELETE" });
-            return;
         }catch(sqlErr){
-            console.warn("Falha ao limpar rascunho da contagem no SQL:", sqlErr);
-            return;
+            console.warn("Falha ao limpar rascunho da contagem no SQL; tentando Firebase:", sqlErr);
         }
     }
     if(!paths.length || !window.set || !window.ref || !window.db) return;
@@ -12229,7 +12205,6 @@ function nickCrachaKey(nick, cracha){
 }
 
 async function ajustarNickSolicCount(nick, delta){
-    if(typeof window.sqlApi === "function") return;
     const key = nickOnlyKey(nick);
     const node = ref(db, "nicknamesSolic/" + key);
     try{
@@ -12253,7 +12228,6 @@ async function ajustarNickSolicCount(nick, delta){
 window.ajustarNickSolicCount = ajustarNickSolicCount;
 
 async function marcarSolicCracha(nick, cracha, solicitId){
-    if(typeof window.sqlApi === "function") return;
     const key = nickCrachaKey(nick, cracha);
     try{
         await set(ref(db, "nicknamesSolicCracha/" + key), {
@@ -12268,7 +12242,6 @@ async function marcarSolicCracha(nick, cracha, solicitId){
 }
 
 async function desmarcarSolicCracha(nick, cracha){
-    if(typeof window.sqlApi === "function") return;
     const key = nickCrachaKey(nick, cracha);
     try{
         await set(ref(db, "nicknamesSolicCracha/" + key), null);
@@ -12278,7 +12251,6 @@ async function desmarcarSolicCracha(nick, cracha){
 }
 
 async function rebuildNicknamesSimple(){
-    if(typeof window.sqlApi === "function") return;
     try{
         const nivelSnap = await get(ref(db, "usuarios/" + auth.currentUser.uid + "/nivel"));
         if(!nivelSnap.exists() || nivelSnap.val() !== "admin") return;
@@ -12330,7 +12302,6 @@ async function rebuildNicknamesSimple(){
 }
 
 async function rebuildNicknamesAuth(){
-    if(typeof window.sqlApi === "function") return;
     try{
         const nivelSnap = await get(ref(db, "usuarios/" + auth.currentUser.uid + "/nivel"));
         if(!nivelSnap.exists() || nivelSnap.val() !== "admin") return;
@@ -12391,7 +12362,6 @@ async function rebuildNicknamesAuth(){
 }
 
 async function rebuildNicknamesSolic(){
-    if(typeof window.sqlApi === "function") return;
     try{
         const nivelSnap = await get(ref(db, "usuarios/" + auth.currentUser.uid + "/nivel"));
         if(!nivelSnap.exists() || nivelSnap.val() !== "admin") return;
@@ -12466,7 +12436,6 @@ async function rebuildNicknamesSolic(){
 }
 
 async function ajustarNickCount(nick, delta){
-    if(typeof window.sqlApi === "function") return;
     const key = nickOnlyKey(nick);
     const node = ref(db, "nicknamesSimple/" + key);
     try{
@@ -12547,24 +12516,16 @@ onAuthStateChanged(auth, async (user) => {
 
         let dadosUsuario = null;
         let usuarioFonteSql = false;
-        if(typeof window.sqlApi === "function"){
-            try{
-                dadosUsuario = await carregarUsuarioSql(user.uid);
-                usuarioFonteSql = !!dadosUsuario;
-            }catch(sqlErr){
-                console.warn("Falha ao validar usuario no SQL:", sqlErr);
-                throw sqlErr;
-            }
+        try{
+            dadosUsuario = await carregarUsuarioSql(user.uid);
+            usuarioFonteSql = !!dadosUsuario;
+        }catch(sqlErr){
+            console.warn("Falha ao validar usuario no SQL; tentando Firebase:", sqlErr);
         }
 
-        const snapshot = dadosUsuario || typeof window.sqlApi === "function" ? null : await get(ref(db, "usuarios/" + user.uid));
+        const snapshot = dadosUsuario ? null : await get(ref(db, "usuarios/" + user.uid));
 
-        if (!dadosUsuario && (!snapshot || !snapshot.exists())) {
-            if(typeof window.sqlApi === "function"){
-                mostrarPending(user.email ? user.email.split("@")[0] : "");
-                await signOut(auth);
-                return;
-            }
+        if (!dadosUsuario && !snapshot.exists()) {
             try{
                 const banSnap = await get(ref(db, "usuariosBanidos/" + user.uid));
                 if(banSnap.exists()){
@@ -12966,8 +12927,7 @@ async function carregarSenhaAvaliadorOcorrencias(){
                 return ocorrenciasAvaliadorSenha;
             }
         }catch(sqlErr){
-            console.warn("Falha ao carregar senha do avaliador no SQL:", sqlErr);
-            return ocorrenciasAvaliadorSenha;
+            console.warn("Falha ao carregar senha do avaliador no SQL; tentando Firebase:", sqlErr);
         }
     }
     try{
@@ -13058,7 +13018,7 @@ function iniciarCamposOcorrencia(){
                 salvarCamposOcorrenciaLocal(camposOcorrenciaConfigAtual());
             }
         }).catch(sqlErr => {
-            console.warn("Falha ao carregar campos de ocorrencia no SQL:", sqlErr);
+            console.warn("Falha ao carregar campos de ocorrencia no SQL; tentando Firebase:", sqlErr);
         });
         return;
     }
@@ -13463,8 +13423,7 @@ async function salvarOcorrenciaFirebase(id, ocorrencia){
             return OCORRENCIAS_PRIMARY_PATH;
         }
     }catch(sqlErr){
-        console.warn("Falha ao salvar ocorrencia no SQL:", sqlErr);
-        throw sqlErr;
+        console.warn("Falha ao salvar ocorrencia no SQL; tentando Firebase:", sqlErr);
     }
     try{
         await set(ref(db, `${OCORRENCIAS_PRIMARY_PATH}/${id}`), ocorrencia);
@@ -13492,8 +13451,10 @@ async function atualizarOcorrenciaStorage(id, storagePath, patch){
             return "sql";
         }
     }catch(sqlErr){
-        console.warn("Falha ao atualizar ocorrencia no SQL:", sqlErr);
-        throw sqlErr;
+        console.warn("Falha ao atualizar ocorrencia no SQL; tentando Firebase:", sqlErr);
+        if(String(storagePath || "").startsWith("sql:")){
+            throw sqlErr;
+        }
     }
     await update(ref(db, storagePath), patch);
     return "firebase";
@@ -14310,8 +14271,7 @@ async function persistirLeituraSala(roomId, timestamp = Date.now()){
             return;
         }
     }catch(sqlErr){
-        console.warn("Falha ao persistir leitura no SQL:", sqlErr);
-        return;
+        console.warn("Falha ao persistir leitura no SQL; tentando Firebase:", sqlErr);
     }
     try{
         await set(ref(db, `chatReadState/${uid}/${roomId}`), nextTs);
@@ -14332,8 +14292,7 @@ async function carregarLeituraSalaRemota(){
             return;
         }
     }catch(sqlErr){
-        console.warn("Falha ao carregar leitura do chat no SQL:", sqlErr);
-        return;
+        console.warn("Falha ao carregar leitura do chat no SQL; tentando Firebase:", sqlErr);
     }
     try{
         const snap = await get(ref(db, `chatReadState/${uid}`));
@@ -14551,11 +14510,12 @@ function iniciarMonitoramentoSalas(){
                     carregarMensagensChatSql(true).then(nextOk => {
                         if(!nextOk){
                             pararMonitoramentoChatSql();
+                            iniciarMonitoramentoSalasFirebase();
                         }
                     });
                 }, 5000);
             }else{
-                console.warn("Chat SQL indisponivel; monitoramento Firebase nao sera iniciado em modo SQL.");
+                iniciarMonitoramentoSalasFirebase();
             }
         });
         return;
@@ -14658,8 +14618,7 @@ async function verificarSenhaSala(roomId){
             const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/password-status`);
             return data?.has_password ? "__SQL_PASSWORD__" : "";
         }catch(sqlErr){
-            console.warn("Falha ao consultar senha da sala no SQL:", sqlErr);
-            return "";
+            console.warn("Falha ao consultar senha da sala no SQL; tentando Firebase:", sqlErr);
         }
     }
     const snap = await get(ref(db, "chatRooms/" + roomId + "/senha"));
@@ -14953,9 +14912,8 @@ async function definirSenhaSala(roomId){
             await set(ref(db, "chatRooms/" + roomId + "/senha"), senha);
         }
     }catch(sqlErr){
-        console.warn("Falha ao salvar senha no SQL:", sqlErr);
-        mostrarNotificacao("Nao foi possivel salvar senha no SQL.");
-        return;
+        console.warn("Falha ao salvar senha no SQL; tentando Firebase:", sqlErr);
+        await set(ref(db, "chatRooms/" + roomId + "/senha"), senha);
     }
     mostrarNotificacao("Senha atualizada.");
 }
@@ -14978,9 +14936,7 @@ async function limparMensagensSala(){
             return;
         }
     }catch(sqlErr){
-        console.warn("Falha ao limpar mensagens no SQL:", sqlErr);
-        mostrarNotificacao("Nao foi possivel limpar mensagens no SQL.");
-        return;
+        console.warn("Falha ao limpar mensagens no SQL; tentando Firebase:", sqlErr);
     }
     await set(getChatRef(salaAtual), null);
 }
@@ -15030,10 +14986,17 @@ window.enviarMensagem = async function() {
             throw new Error("API SQL indisponivel.");
         }
     }catch(sqlErr){
-        console.warn("Falha ao enviar mensagem no SQL:", sqlErr);
-        atualizarEstadoLocal({ _pending:false, _failed:true });
-        alert("Nao foi possivel enviar a mensagem. Verifique se o servidor esta ativo e tente novamente.");
-        return;
+        console.warn("Falha ao enviar mensagem no SQL; tentando Firebase:", sqlErr);
+        try{
+            const novaMsgRef = push(getChatRef(salaAtual));
+            await set(novaMsgRef, payload);
+            atualizarEstadoLocal({ _pending:false, _failed:false });
+        }catch(firebaseErr){
+            console.error("Falha ao enviar mensagem no SQL e no Firebase:", firebaseErr);
+            atualizarEstadoLocal({ _pending:false, _failed:true });
+            alert("Nao foi possivel enviar a mensagem. Verifique se o servidor esta ativo e tente novamente.");
+            return;
+        }
     }
 };
 

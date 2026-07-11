@@ -11,13 +11,9 @@ set "LOGDIR=C:\DarkJutsu\logs"
 set "LOGFILE=%LOGDIR%\atualizacao_github.log"
 set "LOCKDIR=%SHARE_ROOT%\atualizacao-github.lock"
 set "VERSION_FILE=%SHARE_ROOT%\versao_github_atual.txt"
-set "EVENT_LOGGER=%SHARE_ROOT%\scripts\registrar_evento_servidor_darkjutsu.bat"
 set "NEW_COMMIT="
 set "OLD_COMMIT="
-set "REMOTE_COMMIT="
 set "FORCE_UPDATE=0"
-set "LOCAL_API_WAS_ON=0"
-set "LOCAL_IP="
 
 if /I "%~1"=="--force" set "FORCE_UPDATE=1"
 
@@ -26,13 +22,6 @@ if not exist "%WORK_ROOT%" mkdir "%WORK_ROOT%" 2>nul
 
 call :log "=================================================="
 call :log "Inicio atualizacao GitHub. Usuario=%USERNAME% Maquina=%COMPUTERNAME%"
-
-ipconfig | findstr /C:"192.168.5.44" >nul 2>&1
-if %errorlevel%==0 set "LOCAL_IP=192.168.5.44"
-if "%LOCAL_IP%"=="" (
-  ipconfig | findstr /C:"192.168.5.38" >nul 2>&1
-  if !errorlevel!==0 set "LOCAL_IP=192.168.5.38"
-)
 
 if not exist "%SHARE_ROOT%\app" (
   call :log "FALHOU: servidor de arquivos nao acessivel: %SHARE_ROOT%"
@@ -47,31 +36,9 @@ if errorlevel 1 (
 
 where git.exe >nul 2>&1
 if errorlevel 1 (
-  if "%LOCAL_IP%"=="192.168.5.38" (
-    call :log "AVISO: git.exe nao encontrado na reserva. Principal pode continuar responsavel por atualizar."
-    call :event_once AVISO ATUALIZACAO "Git nao encontrado na reserva; principal deve puxar atualizacoes do GitHub. Se quiser reserva atualizando tambem, instale/copiar PortableGit."
-    call :unlock
-    exit /b 0
-  )
-  call :log "FALHOU: git.exe nao encontrado nesta maquina principal."
-  call :event_once ERRO ATUALIZACAO "Git nao encontrado no principal; servidor nao consegue puxar atualizacoes do GitHub."
+  call :log "FALHOU: git.exe nao encontrado nesta maquina."
   call :unlock
   exit /b 1
-)
-del "%SHARE_ROOT%\atualizacao-github-sem-git-%COMPUTERNAME%.txt" >nul 2>&1
-
-for /f "tokens=1" %%C in ('git ls-remote "%REPO_URL%" "refs/heads/%BRANCH%" 2^>nul') do set "REMOTE_COMMIT=%%C"
-if not defined REMOTE_COMMIT (
-  call :log "FALHOU: nao consegui consultar GitHub rapidamente."
-  call :event ERRO ATUALIZACAO "Nao consegui consultar GitHub. Verifique internet, DNS, proxy ou permissao do Git."
-  call :unlock
-  exit /b 1
-)
-if exist "%VERSION_FILE%" set /p OLD_COMMIT=<"%VERSION_FILE%"
-if /I "%REMOTE_COMMIT%"=="%OLD_COMMIT%" (
-  call :log "Sem mudanca no GitHub. Versao atual: %REMOTE_COMMIT%"
-  call :unlock
-  exit /b 0
 )
 
 if not exist "%REPO_DIR%\.git" (
@@ -80,7 +47,6 @@ if not exist "%REPO_DIR%\.git" (
   git clone --branch "%BRANCH%" "%REPO_URL%" "%REPO_DIR%" >> "%LOGFILE%" 2>&1
   if errorlevel 1 (
     call :log "FALHOU: git clone nao concluiu."
-    call :event ERRO ATUALIZACAO "Falha no git clone do GitHub."
     call :unlock
     exit /b 1
   )
@@ -90,20 +56,19 @@ if not exist "%REPO_DIR%\.git" (
   git -C "%REPO_DIR%" fetch origin "%BRANCH%" >> "%LOGFILE%" 2>&1
   if errorlevel 1 (
     call :log "FALHOU: git fetch nao concluiu."
-    call :event ERRO ATUALIZACAO "Falha no git fetch do GitHub."
     call :unlock
     exit /b 1
   )
   git -C "%REPO_DIR%" reset --hard "origin/%BRANCH%" >> "%LOGFILE%" 2>&1
   if errorlevel 1 (
     call :log "FALHOU: git reset nao concluiu."
-    call :event ERRO ATUALIZACAO "Falha ao aplicar versao baixada do GitHub no clone local."
     call :unlock
     exit /b 1
   )
 )
 
 for /f %%C in ('git -C "%REPO_DIR%" rev-parse HEAD') do set "NEW_COMMIT=%%C"
+if exist "%VERSION_FILE%" set /p OLD_COMMIT=<"%VERSION_FILE%"
 
 if /I "%NEW_COMMIT%"=="%OLD_COMMIT%" (
   call :log "Sem mudanca. Versao ja aplicada: %NEW_COMMIT%"
@@ -119,35 +84,20 @@ if "%OLD_COMMIT%"=="" if not "%FORCE_UPDATE%"=="1" (
 )
 
 call :log "Nova versao detectada: %NEW_COMMIT%"
-call :health_local
-if "%errorlevel%"=="0" set "LOCAL_API_WAS_ON=1"
 call :publish
 set "RC=%errorlevel%"
 if not "%RC%"=="0" (
   call :log "FALHOU: publicacao retornou codigo %RC%."
-  call :event ERRO ATUALIZACAO "Falha ao publicar atualizacao no fileserver. Codigo=%RC%."
   call :unlock
   exit /b %RC%
 )
 
 >"%VERSION_FILE%" echo %NEW_COMMIT%
 call :log "Versao publicada no servidor de arquivos: %NEW_COMMIT%"
-call :event OK ATUALIZACAO "Servidor atualizado pelo GitHub. Commit=%NEW_COMMIT%."
 
 if exist "%SHARE_SCRIPTS%\instalar_atualizar_guardiao_monitor_darkjutsu.bat" (
   call :log "Reinstalando guardiao/monitor nesta maquina para pegar scripts novos."
   call "%SHARE_SCRIPTS%\instalar_atualizar_guardiao_monitor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-)
-if "%LOCAL_API_WAS_ON%"=="1" (
-  call :log "API local estava ativa; reiniciando para carregar versao nova."
-  call "%SHARE_SCRIPTS%\parar_api_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-  call "%SHARE_SCRIPTS%\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-  if errorlevel 1 (
-    call :log "ERRO: API nao reiniciou corretamente apos atualizacao."
-    call :event ERRO ATUALIZACAO "API local nao reiniciou corretamente apos atualizacao GitHub."
-  ) else (
-    call :event OK ATUALIZACAO "API local reiniciada apos atualizacao GitHub."
-  )
 )
 
 call :unlock
@@ -185,19 +135,3 @@ exit /b 0
 echo [%date% %time%] %~1
 >>"%LOGFILE%" echo [%date% %time%] %~1
 exit /b 0
-
-:event
-if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "%~1" "%~2" "%~3"
-exit /b 0
-
-:event_once
-set "MARKER=%SHARE_ROOT%\atualizacao-github-sem-git-%COMPUTERNAME%.txt"
-if not exist "%MARKER%" (
-  >"%MARKER%" echo %date% %time% %~1 %~2 %~3
-  call :event "%~1" "%~2" "%~3"
-)
-exit /b 0
-
-:health_local
-curl -fsS --max-time 2 "http://127.0.0.1:8765/health" >nul 2>&1
-exit /b %errorlevel%

@@ -17,12 +17,6 @@ ICON = BUILD / "automus.ico"
 FIREBASE_CONFIG = SCRIPTS / "firebase_config.json"
 AUTOMUS_CONFIG = SCRIPTS / "atualizacao" / "automus_config.json"
 LEGACY_AUTOMUS_CONFIG = ROOT.parent / "scripts" / "atualizacao" / "automus_config.json"
-
-
-def automus_sql_only_enabled() -> bool:
-    return os.environ.get("AUTOMUS_SQL_ONLY", "").strip().lower() in {"1", "true", "sim", "yes"}
-
-
 def python_console_executable() -> str:
     exe = Path(sys.executable)
     if exe.name.lower() == "pythonw.exe":
@@ -74,11 +68,6 @@ def prepare_stage():
     shutil.copytree(SCRIPTS, STAGE_SCRIPTS, ignore=ignore)
 
     firebase_stage = STAGE_SCRIPTS / "firebase_config.json"
-    if automus_sql_only_enabled():
-        if firebase_stage.exists():
-            firebase_stage.unlink()
-        print("AUTOMUS_SQL_ONLY ativo: build sem firebase_config.json.")
-        return
     if FIREBASE_CONFIG.exists():
         shutil.copy2(FIREBASE_CONFIG, firebase_stage)
         return
@@ -106,9 +95,6 @@ def prepare_stage():
 
 
 def prepare_encrypted_automus_config():
-    if automus_sql_only_enabled():
-        print("AUTOMUS_SQL_ONLY ativo: credenciais Firebase criptografadas nao serao empacotadas.")
-        return
     source_config = AUTOMUS_CONFIG if AUTOMUS_CONFIG.exists() else LEGACY_AUTOMUS_CONFIG
     if not source_config.exists():
         print("Aviso: automus_config.json nao encontrado; o exe dependera do login da sessao.")

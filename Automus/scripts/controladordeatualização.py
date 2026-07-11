@@ -239,17 +239,6 @@ def _usuario_pode_usar_automus(usuario: object) -> bool:
 
 
 def _auth_admin_dark_jutsu(login: str, senha: str) -> dict:
-    if _automus_sql_only_enabled() and os.environ.get("DARK_JUTSU_API_TOKEN", "").strip():
-        nick = (login or "").strip() or "automus-sql-service"
-        return {
-            "uid": "automus-sql-service",
-            "email": nick if "@" in nick else f"{nick}@sql.local",
-            "nickname": nick,
-            "nivel": "admin",
-            "idToken": os.environ.get("DARK_JUTSU_API_TOKEN", "").strip(),
-            "refreshToken": "",
-            "serviceToken": True,
-        }
     nick = (login or "").strip().lower()
     if not nick or not senha:
         raise RuntimeError("Informe login e senha.")
@@ -275,10 +264,6 @@ def _auth_admin_dark_jutsu(login: str, senha: str) -> dict:
         "idToken": token,
         "refreshToken": str(auth.get("refreshToken") or ""),
     }
-
-
-def _automus_sql_only_enabled() -> bool:
-    return os.environ.get("AUTOMUS_SQL_ONLY", "").strip().lower() in {"1", "true", "sim", "yes"}
 
 
 def _machine_fingerprint() -> str:
@@ -1559,21 +1544,6 @@ class _SharedState:
     def ensure_local_request_admin(self, payload: dict) -> tuple[bool, str]:
         if self.authenticated_admin is not None:
             return True, "Usuario ja autenticado."
-        if _automus_sql_only_enabled() and os.environ.get("DARK_JUTSU_API_TOKEN", "").strip():
-            admin = {
-                "uid": "automus-sql-service",
-                "email": "automus-sql-service@sql.local",
-                "nickname": "automus-sql-service",
-                "nivel": "admin",
-                "idToken": os.environ.get("DARK_JUTSU_API_TOKEN", "").strip(),
-                "refreshToken": "",
-                "serviceToken": True,
-            }
-            with self.lock:
-                self.authenticated_admin = admin
-            self._ensure_user_schedule(admin)
-            emit_status("Interface liberada por token de servico SQL-only.")
-            return True, "Usuario autorizado por token SQL-only."
         token = str((payload or {}).get("idToken") or "").strip()
         uid = str((payload or {}).get("uid") or "").strip()
         email = str((payload or {}).get("email") or "").strip()
@@ -1631,16 +1601,6 @@ class _SharedState:
         _save_controller_config(self.config)
 
     def _load_saved_admin_session(self) -> Optional[dict]:
-        if _automus_sql_only_enabled() and os.environ.get("DARK_JUTSU_API_TOKEN", "").strip():
-            return {
-                "uid": "automus-sql-service",
-                "email": "automus-sql-service@sql.local",
-                "nickname": "automus-sql-service",
-                "nivel": "admin",
-                "idToken": os.environ.get("DARK_JUTSU_API_TOKEN", "").strip(),
-                "refreshToken": "",
-                "serviceToken": True,
-            }
         session = self.config.get("adminSession") if isinstance(self.config, dict) else None
         if not isinstance(session, dict):
             return None

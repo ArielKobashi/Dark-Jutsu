@@ -45,12 +45,9 @@ set "PY_HOME=%PYTHON_EXE:\pythonw.exe=%"
 set "PY_HOME=%PY_HOME:\python.exe=%"
 set "PYTHONHOME=%PY_HOME%"
 set "PYTHONPATH=%PY_HOME%\Lib;%PY_HOME%\Lib\site-packages"
-set "TCL_LIBRARY=%PY_HOME%\tcl\tcl8.6"
-set "TK_LIBRARY=%PY_HOME%\tcl\tk8.6"
 
 >>"%LAUNCH_LOG%" echo [%date% %time%] Python=%PYTHON_EXE%
 >>"%LAUNCH_LOG%" echo [%date% %time%] PythonHome=%PYTHONHOME%
->>"%LAUNCH_LOG%" echo [%date% %time%] Tcl=%TCL_LIBRARY%
 echo [%date% %time%] Iniciando processo do painel... >> "%LAUNCH_LOG%"
 start "Dark-Jutsu Painel" /min cmd /c ""%PYTHON_EXE%" "%SCRIPT%" 1>>"%LAUNCH_LOG%" 2>>&1"
 >>"%LAUNCH_LOG%" echo [%date% %time%] Comando enviado ao Windows.
