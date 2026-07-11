@@ -2187,6 +2187,25 @@ window.aprovar = async function(id){
     card.classList.add("aprovadoPulse");
 
     try{
+        if(typeof window.sqlApi === "function"){
+            const reqData = await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}`);
+            const dadosSql = reqData?.signup_request || {};
+            const nivel = document.getElementById("nivel_"+id).value;
+            const uidSql = dadosSql.uid || dadosSql.requested_uid || "";
+            if(uidSql){
+                await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}/approve`, {
+                    method: "POST",
+                    body: JSON.stringify({ uid: uidSql, nivel })
+                });
+                if(card){
+                    card.classList.add("slideOutRight");
+                    setTimeout(()=> card.remove(), 350);
+                }
+                iniciarListaUsuarios();
+                mostrarNotificacao("Cadastro aprovado");
+                return;
+            }
+        }
         const snap = await get(ref(db, "solicitacoesCadastro/"+id));
         const dados = snap.val();
         if(!dados) return;
@@ -2283,6 +2302,15 @@ window.recusar = async function(id){
 
     let dados = null;
     try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: "recusado", decididoEm: Date.now() })
+            });
+            item.classList.add("slideOutRight");
+            setTimeout(()=> item.remove(), 350);
+            return;
+        }
         const snap = await get(ref(db, "solicitacoesCadastro/"+id));
         dados = snap.val();
     }catch(e){
@@ -2417,6 +2445,59 @@ window.resetSenha = async function(uid){
 };
 
 function iniciarListaBanidos(){
+    if(typeof window.sqlApi === "function"){
+        const carregarBanidosSql = async () => {
+            const lista = document.getElementById("listaBanidos");
+            if(!lista) return;
+            try{
+                const data = await window.sqlApi("/api/banned-users?limit=500");
+                lista.innerHTML = "";
+                const selectAll = document.getElementById("banidosSelectAll");
+                if(selectAll) selectAll.checked = false;
+                (data?.banned_users || []).forEach(b => {
+                    const uid = b.user_id || b.uid;
+                    const nick = b.nickname || "-";
+                    const cracha = b.cracha || b.badge || "-";
+                    const email = b.emailLogin || "-";
+                    const senha = b.senha || "[redacted]";
+                    const dataBan = b.banidoEm ? new Date(b.banidoEm).toLocaleString() : "-";
+                    let div = document.createElement("div");
+                    div.className = "usuarioItem";
+                    div.innerHTML = `
+                    <div class="fbUserRow">
+                        <label class="banidoCheck">
+                            <input type="checkbox" class="banidoCheckbox" data-uid="${uid}">
+                        </label>
+                        <div class="fbLeft">
+                            <div class="fbAvatarCol">
+                                <div class="fbAvatar small">${formatarNick(nick).slice(0,1)}</div>
+                            </div>
+                            <div class="fbInfo">
+                                <div class="fbName">${formatarNick(nick)}</div>
+                                <div class="fbMeta">CrachÃ¡: ${cracha}</div>
+                                <div class="fbMeta">Email: ${email}</div>
+                                <div class="fbMeta">Senha: ${senha}</div>
+                                <div class="fbMeta">Banido em: ${dataBan}</div>
+                            </div>
+                        </div>
+                        <div class="nivelBadge nivel-admin">BANIDO</div>
+                    </div>
+                    <div class="fbUserActions">
+                        <button class="fbBtn fbReject" onclick="apagarBanido('${uid}')">Apagar</button>
+                    </div>
+                    `;
+                    lista.appendChild(div);
+                });
+                if(!window.banidosSqlTimer) window.banidosSqlTimer = setInterval(carregarBanidosSql, 15000);
+                return true;
+            }catch(sqlErr){
+                console.warn("Falha ao listar banidos no SQL; usando Firebase:", sqlErr);
+                return false;
+            }
+        };
+        carregarBanidosSql();
+        return;
+    }
     const banidosRef = ref(db, "usuariosBanidos");
     onValue(banidosRef, snap=>{
         const lista = document.getElementById("listaBanidos");
@@ -2508,6 +2589,68 @@ if(banidosSelectAll){
     });
 }
 function iniciarListaUsuarios(){
+    if(typeof window.sqlApi === "function"){
+        const carregarUsuariosSql = async () => {
+            const lista = document.getElementById("listaUsuarios");
+            if(!lista) return;
+            try{
+                const data = await window.sqlApi("/api/users?limit=500");
+                lista.innerHTML = "";
+                (data?.users || []).forEach(u => {
+                    const uid = u.id || u.uid || u.firebase_uid;
+                    const nivelRaw = (u.nivel || u.role || "op").toString().toLowerCase();
+                    const nivelLabel = nivelRaw.toUpperCase();
+                    const ativo = u.ativo !== false && u.active !== false;
+                    const statusClass = !ativo ? "status-off" : "status-on";
+                    const statusText = !ativo ? "Bloqueado" : "Ativo";
+
+                    let div = document.createElement("div");
+                    div.className="usuarioItem";
+
+                    div.innerHTML = `
+                    <div class="fbUserRow">
+                        <div class="fbLeft">
+                            <div class="fbAvatarCol">
+                                <div class="fbAvatar small">${formatarNick(u.nickname || "").slice(0,1)}</div>
+                                <button class="fbBtn fbInfoBtn" onclick="verUsuario('${uid}')">Info</button>
+                            </div>
+                            <div class="fbInfo">
+                                <div class="fbName">${formatarNick(u.nickname || "")}</div>
+                                <div class="fbMeta ${statusClass}">${statusText}</div>
+                                <div class="fbMeta">CrachÃ¡: ${u.cracha || u.badge || "-"}</div>
+                                <div class="fbMeta">Setor: ${u.setor || u.sector || "-"}</div>
+                            </div>
+                        </div>
+                        <div class="nivelBadge nivel-${nivelRaw}">${nivelLabel}</div>
+                    </div>
+                    <div class="fbUserActions">
+                        <label class="nivelLabel">
+                            NÃ­vel
+                            <select class="nivelSelect" onchange="alterarNivel('${uid}', this.value)">
+                                <option value="op" ${nivelRaw==="op" ? "selected":""}>OP</option>
+                                <option value="mod" ${nivelRaw==="mod" ? "selected":""}>MOD</option>
+                                <option value="admin" ${nivelRaw==="admin" ? "selected":""}>ADM</option>
+                            </select>
+                        </label>
+                        <div class="fbActions">
+                            <button class="fbBtn ${!ativo ? "fbRestore" : "fbReject"}" onclick="toggleAtivo('${uid}', ${!ativo ? "false" : "true"})">
+                                ${!ativo ? "Reativar" : "Banir"}
+                            </button>
+                            <button class="fbBtn fbApprove" onclick="resetSenha('${uid}')">Resetar senha</button>
+                        </div>
+                    </div>
+                    `;
+
+                    lista.appendChild(div);
+                });
+                if(!window.usuariosSqlTimer) window.usuariosSqlTimer = setInterval(carregarUsuariosSql, 15000);
+            }catch(sqlErr){
+                console.warn("Falha ao listar usuarios no SQL; Firebase nao iniciado neste ciclo:", sqlErr);
+            }
+        };
+        carregarUsuariosSql();
+        return;
+    }
 
     const usuariosRef = ref(db,"usuarios");
 
@@ -5289,6 +5432,12 @@ async function checarResetGlobalContagem(){
 }
 
 function iniciarListenerResetGlobalContagem(){
+    if(contagemResetGlobalBloqueado || contagemResetGlobalUnsub) return;
+    if(typeof window.sqlApi === "function"){
+        checarResetGlobalContagem();
+        contagemResetGlobalUnsub = setInterval(checarResetGlobalContagem, 15000);
+        return;
+    }
     if(contagemResetGlobalBloqueado || contagemResetGlobalUnsub || !window.onValue || !window.ref || !window.db) return;
     try{
         contagemResetGlobalUnsub = window.onValue(window.ref(window.db, "contagemControle/resetGlobal"), snap => {
@@ -5298,6 +5447,8 @@ function iniciarListenerResetGlobalContagem(){
                 contagemResetGlobalBloqueado = true;
                 if(typeof contagemResetGlobalUnsub === "function"){
                     try{ contagemResetGlobalUnsub(); }catch(e){}
+                }else if(contagemResetGlobalUnsub){
+                    clearInterval(contagemResetGlobalUnsub);
                 }
                 contagemResetGlobalUnsub = null;
                 return;
@@ -6000,11 +6151,45 @@ function marcarContagemAberta(aberta){
 function pararListenerPresencaContagem(){
     if(typeof contagemPresencaUnsub === "function"){
         try{ contagemPresencaUnsub(); }catch(e){}
+    }else if(contagemPresencaUnsub){
+        clearInterval(contagemPresencaUnsub);
     }
     contagemPresencaUnsub = null;
 }
 
 async function carregarPresencaContagemFirebaseAgora(){
+    if(typeof window.sqlApi === "function"){
+        try{
+            const data = await window.sqlApi("/api/counting/machine-status?limit=1000");
+            const porCiclo = {};
+            (data?.machine_status || []).forEach(row => {
+                const ciclo = row.cycle || chaveCicloContagemAtual();
+                const grupoSafe = row.machine_key || chaveFirebaseContagem(row.group_name || row.machine || "geral");
+                const usuarioKey = row.user_key || chaveFirebaseContagem(row.user_name || row.user_id || "desconhecido");
+                if(!porCiclo[ciclo]) porCiclo[ciclo] = {};
+                if(!porCiclo[ciclo][grupoSafe]) porCiclo[ciclo][grupoSafe] = {};
+                porCiclo[ciclo][grupoSafe][usuarioKey] = {
+                    aberta: row.open !== false,
+                    etapa: row.stage || "contagem",
+                    usuario: row.user_name || "",
+                    uid: row.user_id || "",
+                    grupo: row.group_name || row.machine || "",
+                    maquina: row.group_name || row.machine || "",
+                    maquinaLabel: row.machine_label || labelGrupoContagem(row.group_name || row.machine || ""),
+                    contados: Number(row.counted || 0),
+                    total: Number(row.total || 0),
+                    concluida: !!row.completed,
+                    itemKey: row.item_key || "",
+                    indice: Number(row.item_index || 0),
+                    updatedAt: row.updated_at ? Date.parse(row.updated_at) : Date.now()
+                };
+            });
+            contagemStatusMaquinas = mesclarStatusMaquinasContagem(porCiclo);
+            return true;
+        }catch(sqlErr){
+            console.warn("Falha ao carregar presenca/progresso da contagem no SQL; tentando Firebase:", sqlErr);
+        }
+    }
     if(!window.get || !window.ref || !window.db) return false;
     try{
         const snap = await window.get(window.ref(window.db, "contagemStatusMaquinas"));
@@ -6036,7 +6221,20 @@ function mesclarStatusMaquinasContagem(statusPorCiclo){
 }
 
 function iniciarListenerPresencaContagem(){
-    if(contagemPresencaUnsub || !window.onValue || !window.ref || !window.db) return;
+    if(contagemPresencaUnsub) return;
+    if(typeof window.sqlApi === "function"){
+        const atualizar = () => {
+            carregarPresencaContagemFirebaseAgora().then(ok => {
+                if(ok && document.getElementById("contagemScreen")?.style.display !== "none"){
+                    renderizarMaquinasContagem();
+                }
+            });
+        };
+        atualizar();
+        contagemPresencaUnsub = setInterval(atualizar, 5000);
+        return;
+    }
+    if(!window.onValue || !window.ref || !window.db) return;
     const ciclo = chaveCicloContagemAtual();
     try{
         contagemPresencaUnsub = window.onValue(window.ref(window.db, `contagemStatusMaquinas/${ciclo}`), snap => {
@@ -6348,7 +6546,28 @@ function atualizarPopupProgressoContagemPrincipal(){
 function iniciarPopupProgressoContagemPrincipal(){
     if(contagemModoFocoAtivo || contagemHomeLeituraBloqueada) return;
     atualizarPopupProgressoContagemPrincipal();
-    if(contagemHomeUnsub || !window.onValue || !window.ref || !window.db) return;
+    if(contagemHomeUnsub) return;
+    if(typeof window.sqlApi === "function"){
+        const atualizar = async () => {
+            try{
+                const historico = await carregarHistoricoContagemSql(1000);
+                contagemHomeRegistros = historico?.contagens || {};
+                if(contagemItens.length){
+                    contagemHistoricoProgressoGrupos = reconstruirHistoricoProgressoContagem(contagemHomeRegistros);
+                    if(document.getElementById("contagemScreen")?.style.display !== "none"){
+                        renderizarMaquinasContagem();
+                    }
+                }
+                atualizarPopupProgressoContagemPrincipal();
+            }catch(sqlErr){
+                console.warn("Falha ao atualizar progresso de contagem no SQL:", sqlErr);
+            }
+        };
+        atualizar();
+        contagemHomeUnsub = setInterval(atualizar, 15000);
+        return;
+    }
+    if(!window.onValue || !window.ref || !window.db) return;
     try{
         contagemHomeUnsub = window.onValue(window.ref(window.db, "contagens"), snap => {
             contagemHomeRegistros = snap.exists() ? snap.val() : {};
@@ -6380,6 +6599,8 @@ window.iniciarPopupProgressoContagemPrincipal = iniciarPopupProgressoContagemPri
 function pausarPopupProgressoContagemPrincipal(){
     if(typeof contagemHomeUnsub === "function"){
         try{ contagemHomeUnsub(); }catch(e){}
+    }else if(contagemHomeUnsub){
+        clearInterval(contagemHomeUnsub);
     }
     contagemHomeUnsub = null;
 }
@@ -9432,11 +9653,7 @@ function atualizarContadorCaptura(){
 
 function enviarMensagemSistema(texto, roomId, extra = {}){
 
-    if(typeof window.getChatRef !== "function") return;
-    if(typeof window.push !== "function") return;
     const targetRoom = roomId || window.salaAtual;
-    const chatRef = window.getChatRef(targetRoom);
-    if(!chatRef) return;
     const clientEventId = extra.clientEventId || `evt_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     const mensagem = {
         nome: "Sistema",
@@ -9450,7 +9667,19 @@ function enviarMensagemSistema(texto, roomId, extra = {}){
         timestamp: Date.now()
     };
 
-    window.push(chatRef, mensagem);
+    if(typeof window.sqlApi === "function"){
+        window.sqlApi(`/api/chat/rooms/${encodeURIComponent(targetRoom)}/messages`, {
+            method: "POST",
+            body: JSON.stringify(mensagem)
+        }).then(() => carregarMensagensChatSql(true)).catch(err => {
+            console.warn("Falha ao enviar evento de sistema no SQL; tentando Firebase:", err);
+            if(typeof window.getChatRef === "function" && typeof window.push === "function"){
+                window.push(window.getChatRef(targetRoom), mensagem);
+            }
+        });
+    }else if(typeof window.getChatRef === "function" && typeof window.push === "function"){
+        window.push(window.getChatRef(targetRoom), mensagem);
+    }
     return mensagem;
 }
 
@@ -10855,6 +11084,23 @@ function capitalizarPrimeira(str){
 
 window.verSolicitacao = async function(id){
     try{
+        if(typeof window.sqlApi === "function"){
+            const data = await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}`);
+            const dados = data?.signup_request;
+            if(!dados) return;
+            const box = document.getElementById("cadastroInfoContent");
+            const dataCriacao = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
+            box.innerHTML = `
+            <div><b>Nickname:</b> ${dados.nickname || "-"}</div>
+            <div><b>CrachÃ¡:</b> ${dados.cracha || dados.badge || "-"}</div>
+            <div><b>Setor:</b> ${dados.setor || dados.sector || "-"}</div>
+            <div><b>Status:</b> ${dados.status || "-"}</div>
+            <div><b>UID:</b> ${dados.uid || dados.requested_uid || "-"}</div>
+            <div><b>Enviado em:</b> ${dataCriacao}</div>
+            `;
+            document.getElementById("cadastroInfoModal").style.display = "flex";
+            return;
+        }
         const snap = await get(ref(db, "solicitacoesCadastro/"+id));
         const dados = snap.val();
         if(!dados) return;
@@ -10875,6 +11121,23 @@ window.verSolicitacao = async function(id){
 
 window.verUsuario = async function(uid){
     try{
+        if(typeof window.sqlApi === "function"){
+            const data = await window.sqlApi(`/api/users/${encodeURIComponent(uid)}`);
+            const dados = data?.user;
+            if(!dados) return;
+            const box = document.getElementById("cadastroInfoContent");
+            const criado = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
+            box.innerHTML = `
+            <div><b>Nickname:</b> ${dados.nickname || "-"}</div>
+            <div><b>CrachÃ¡:</b> ${dados.cracha || dados.badge || "-"}</div>
+            <div><b>Setor:</b> ${dados.setor || dados.sector || "-"}</div>
+            <div><b>NÃ­vel:</b> ${(dados.nivel || dados.role || "-").toString().toUpperCase()}</div>
+            <div><b>Status:</b> ${dados.ativo === false || dados.active === false ? "Bloqueado" : "Ativo"}</div>
+            <div><b>Criado em:</b> ${criado}</div>
+            `;
+            document.getElementById("cadastroInfoModal").style.display = "flex";
+            return;
+        }
         const snap = await get(ref(db, "usuarios/"+uid));
         const dados = snap.val();
         if(!dados) return;
@@ -10992,6 +11255,11 @@ async function verificarNickDisponivel(){
         return;
     }
     try{
+        if(typeof window.sqlApi === "function"){
+            const data = await window.sqlApi(`/api/nicknames/${encodeURIComponent(nick)}/status?badge=${encodeURIComponent(crachaEl.value.trim())}`);
+            setNickStatus(data?.used || data?.banned || data?.pending ? "bad" : "ok");
+            return;
+        }
         const key = nickOnlyKey(nick);
         let usado = false;
         const userSnap = await get(ref(db, "nicknamesSimple/" + key));
@@ -11411,6 +11679,22 @@ const SQL_API_FALLBACK_BASES = [
     "http://192.168.5.38:8765"
 ].filter((base, index, bases) => base && bases.indexOf(base) === index);
 const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
+const DARK_JUTSU_SQL_ONLY = ["1","true","sim","yes"].includes(
+    (
+        new URLSearchParams(location.search).get("sqlOnly") ||
+        localStorage.getItem("darkJutsuSqlOnly") ||
+        String(window.DARK_JUTSU_SQL_ONLY || "")
+    ).toLowerCase()
+);
+window.darkJutsuSqlOnly = DARK_JUTSU_SQL_ONLY;
+
+function assertFirebaseDbAllowed(operation = "Firebase Database"){
+    if(!DARK_JUTSU_SQL_ONLY) return;
+    const message = `SQL-only ativo: ${operation} bloqueado.`;
+    console.warn(message);
+    throw new Error(message);
+}
+window.assertFirebaseDbAllowed = assertFirebaseDbAllowed;
 
 async function resolveSqlAuthHeader(){
     if(SQL_API_TOKEN) return `Bearer ${SQL_API_TOKEN}`;
@@ -11445,18 +11729,44 @@ window.sqlApi = async function(path, options = {}){
     throw lastError || new Error("API SQL indisponivel.");
 };
 
+async function carregarUsuarioSql(uid){
+    if(!uid || typeof window.sqlApi !== "function") return null;
+    const data = await window.sqlApi("/api/me");
+    const user = data?.user || null;
+    if(!user) return null;
+    return (user.id === uid || user.firebase_uid === uid || user.uid === uid) ? user : null;
+}
+
 // auth secundario para criar usuarios sem trocar a sessao do admin
 const adminApp = initializeApp(firebaseConfig, "adminApp");
 const adminAuth = getAuth(adminApp);
 window.adminAuth = adminAuth;
 
 window.ref = ref;
-window.push = push;
-window.onValue = onValue;
-window.get = get;
-window.set = set;
-window.update = update;
-window.runTransaction = runTransaction;
+window.push = (...args) => {
+    assertFirebaseDbAllowed("push RTDB");
+    return push(...args);
+};
+window.onValue = (...args) => {
+    assertFirebaseDbAllowed("listener RTDB");
+    return onValue(...args);
+};
+window.get = (...args) => {
+    assertFirebaseDbAllowed("leitura RTDB");
+    return get(...args);
+};
+window.set = (...args) => {
+    assertFirebaseDbAllowed("escrita RTDB");
+    return set(...args);
+};
+window.update = (...args) => {
+    assertFirebaseDbAllowed("update RTDB");
+    return update(...args);
+};
+window.runTransaction = (...args) => {
+    assertFirebaseDbAllowed("transacao RTDB");
+    return runTransaction(...args);
+};
 window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
 window.updatePassword = updatePassword;
 
@@ -11494,6 +11804,67 @@ if(typeof window.iniciarPopupProgressoContagemPrincipal === "function"){
 }
 
 function iniciarSolicitacoesAdmin(){
+    if(typeof window.sqlApi === "function"){
+        const carregarSolicitacoesSql = async () => {
+            const lista = document.getElementById("listaSolicitacoes");
+            const badge = document.getElementById("badgeSolicitacoes");
+            const adminBadge = document.getElementById("adminBadge");
+            if(!lista) return;
+            try{
+                const data = await window.sqlApi("/api/signup-requests?limit=500");
+                lista.innerHTML = "";
+                let total = 0;
+                (data?.signup_requests || []).forEach(s => {
+                    if((s.status || "pendente") !== "pendente") return;
+                    total++;
+                    const id = s.id;
+                    let div = document.createElement("div");
+                    div.className = "solicitacaoItem";
+                    div.innerHTML = `
+                    <div class="fbLeft">
+                        <div class="fbAvatarCol">
+                            <div class="fbAvatar">${formatarNick(s.nickname || "").slice(0,1)}</div>
+                            <button class="fbBtn fbInfoBtn" onclick="verSolicitacao('${id}')">Info</button>
+                        </div>
+                        <div class="fbInfo">
+                            <div class="fbName">${formatarNick(s.nickname || "")}</div>
+                            <div class="fbMeta">Aguardando aprovaÃ§Ã£o</div>
+                            <div class="fbMeta">CrachÃ¡: ${s.cracha || s.badge || "-"}</div>
+                            <div class="fbMeta">Setor: ${s.setor || s.sector || "-"}</div>
+                        </div>
+                    </div>
+
+                    <div class="fbRight">
+                        <label class="nivelLabel">
+                            NÃ­vel
+                            <select id="nivel_${id}" class="nivelSelect">
+                                <option value="op">OP</option>
+                                <option value="mod">MOD</option>
+                                <option value="admin">ADM</option>
+                            </select>
+                        </label>
+
+                        <div class="fbActions">
+                            <button class="btnAceitarMini fbBtn fbApprove" onclick="aprovar('${id}')">Aceitar</button>
+                            <button class="btnRecusarMini fbBtn fbReject" onclick="recusar('${id}')">Recusar</button>
+                        </div>
+                    </div>
+                    `;
+                    lista.appendChild(div);
+                });
+                if(badge) badge.innerText = total;
+                if(adminBadge){
+                    adminBadge.innerText = total;
+                    adminBadge.style.display = total > 0 ? "block" : "none";
+                }
+                if(!window.solicitacoesSqlTimer) window.solicitacoesSqlTimer = setInterval(carregarSolicitacoesSql, 15000);
+            }catch(sqlErr){
+                console.warn("Falha ao listar solicitacoes no SQL; Firebase nao iniciado neste ciclo:", sqlErr);
+            }
+        };
+        carregarSolicitacoesSql();
+        return;
+    }
 
     const solicitacoesRef = ref(db, "solicitacoesCadastro");
 
@@ -11581,6 +11952,13 @@ window.login = async function(){
 
     } catch(error){
         try{
+            if(typeof window.sqlApi === "function"){
+                const status = await window.sqlApi(`/api/nicknames/${encodeURIComponent(nick)}/status`);
+                if(status?.pending){
+                    mostrarPending(nick);
+                    return;
+                }
+            }
             const snap = await get(ref(db, "solicitacoesCadastro"));
             let pendente = false;
             if(snap.exists()){
@@ -11640,6 +12018,41 @@ window.cadastrar = async function(){
 
     try{
         // cadastro não cria usuário no Auth; apenas solicita aprovação
+        if(typeof window.sqlApi === "function"){
+            const status = await window.sqlApi(`/api/nicknames/${encodeURIComponent(nick)}/status?badge=${encodeURIComponent(cracha)}`);
+            if(status?.used || status?.banned || status?.pending){
+                mostrarNotificacao(status?.pending ? "Ja existe uma solicitacao pendente para este nickname/cracha." : "Nickname ja esta em uso.");
+                mostrarPending(nick);
+                if(btn) btn.disabled = false;
+                return;
+            }
+            const cred = await createUserWithEmailAndPassword(auth, nick + "@sistema.com", senha);
+            const uid = cred.user.uid;
+            await window.sqlApi("/api/signup-requests", {
+                method: "POST",
+                body: JSON.stringify({
+                    uid,
+                    nickname: nick,
+                    cracha,
+                    setor,
+                    status: "pendente",
+                    criadoEm: Date.now()
+                })
+            });
+            await signOut(auth);
+            mostrarNotificacao("Cadastro enviado para aprovacao.");
+            document.getElementById("authNickname").value = "";
+            document.getElementById("authSenha").value = "";
+            document.getElementById("cadastroNickname").value = "";
+            document.getElementById("cadastroSenha").value = "";
+            document.getElementById("cadastroCracha").value = "";
+            document.querySelectorAll("input[name='setor']").forEach(r=> r.checked = false);
+            fecharCadastro();
+            if(btn) btn.disabled = false;
+            setTimeout(()=> document.getElementById("authNickname").focus(), 50);
+            mostrarPending(nick);
+            return;
+        }
         let nickEmUso = false;
         try{
             const key = nickOnlyKey(nick);
@@ -12065,7 +12478,11 @@ onAuthStateChanged(auth, async (user) => {
     if (!user) {
         pararMonitoramentoChat();
         if(contagemResetGlobalUnsub){
-            try{ contagemResetGlobalUnsub(); }catch(e){}
+            if(typeof contagemResetGlobalUnsub === "function"){
+                try{ contagemResetGlobalUnsub(); }catch(e){}
+            }else{
+                clearInterval(contagemResetGlobalUnsub);
+            }
             contagemResetGlobalUnsub = null;
         }
         window.meuNickname = null;
@@ -12097,9 +12514,18 @@ onAuthStateChanged(auth, async (user) => {
 
     try {
 
-        const snapshot = await get(ref(db, "usuarios/" + user.uid));
+        let dadosUsuario = null;
+        let usuarioFonteSql = false;
+        try{
+            dadosUsuario = await carregarUsuarioSql(user.uid);
+            usuarioFonteSql = !!dadosUsuario;
+        }catch(sqlErr){
+            console.warn("Falha ao validar usuario no SQL; tentando Firebase:", sqlErr);
+        }
 
-        if (!snapshot.exists()) {
+        const snapshot = dadosUsuario ? null : await get(ref(db, "usuarios/" + user.uid));
+
+        if (!dadosUsuario && !snapshot.exists()) {
             try{
                 const banSnap = await get(ref(db, "usuariosBanidos/" + user.uid));
                 if(banSnap.exists()){
@@ -12112,13 +12538,12 @@ onAuthStateChanged(auth, async (user) => {
             await signOut(auth);
             return;
         }
-        if (!snapshot.val().ativo) {
+        if (!dadosUsuario) dadosUsuario = snapshot.val();
+        if (dadosUsuario.ativo === false || dadosUsuario.active === false) {
             alert("Usuário bloqueado");
             await signOut(auth);
             return;
         }
-
-        const dadosUsuario = snapshot.val();
 
         if(dadosUsuario && (dadosUsuario.senha === "" || dadosUsuario.senhaReset === true)) {
             let novaSenha = "";
@@ -12135,12 +12560,19 @@ onAuthStateChanged(auth, async (user) => {
                 break;
             }
             try{
-                if(window.ultimaSenhaLogin){
+                if(window.ultimaSenhaLogin && !usuarioFonteSql){
                 await set(ref(db, "usuarios/" + user.uid + "/senhaAntiga"), window.ultimaSenhaLogin);
             }
             await window.updatePassword(auth.currentUser, novaSenha);
-                await set(ref(db, "usuarios/" + user.uid + "/senha"), "definida");
-                await set(ref(db, "usuarios/" + user.uid + "/senhaReset"), false);
+                if(usuarioFonteSql && typeof window.sqlApi === "function"){
+                    await window.sqlApi(`/api/users/${encodeURIComponent(user.uid)}`, {
+                        method: "PATCH",
+                        body: JSON.stringify({ password_status: "definida", senhaReset:false })
+                    });
+                }else{
+                    await set(ref(db, "usuarios/" + user.uid + "/senha"), "definida");
+                    await set(ref(db, "usuarios/" + user.uid + "/senhaReset"), false);
+                }
             }catch(e){
                 alert("Não foi possível atualizar a senha. Tente novamente.");
                 await signOut(auth);
@@ -12149,8 +12581,8 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         window.meuNickname = dadosUsuario.nickname;
-        window.meuCracha = dadosUsuario.cracha || "";
-        window.meuSetor = dadosUsuario.setor || "";
+        window.meuCracha = dadosUsuario.cracha || dadosUsuario.badge || "";
+        window.meuSetor = dadosUsuario.setor || dadosUsuario.sector || "";
         limparBuscaPrincipalSeForUsuario();
         setTimeout(limparBuscaPrincipalSeForUsuario, 250);
         setTimeout(limparBuscaPrincipalSeForUsuario, 1200);
@@ -12172,7 +12604,7 @@ onAuthStateChanged(auth, async (user) => {
             renderChat();
         },50);
 
-        const nivelUsuario = (dadosUsuario.nivel || "op").toString().toLowerCase();
+        const nivelUsuario = (dadosUsuario.nivel || dadosUsuario.role || "op").toString().toLowerCase();
         window.nivelUsuario = nivelUsuario;
         iniciarListenerResetGlobalContagem();
         atualizarBotaoResetGlobalContagem();
@@ -12331,6 +12763,7 @@ let ocorrenciasCache = [];
 let ocorrenciasUnsub = null;
 let ocorrenciasFallbackUnsub = null;
 let ocorrenciasCamposUnsub = null;
+let ocorrenciasSqlTimer = null;
 let ocorrenciasPorFonte = {
     primary: [],
     fallback: []
@@ -12483,6 +12916,20 @@ async function carregarSenhaAvaliadorOcorrencias(){
     const local = carregarSenhaAvaliadorLocal();
     if(local) ocorrenciasAvaliadorSenha = local;
     if(!auth.currentUser) return ocorrenciasAvaliadorSenha;
+    if(typeof window.sqlApi === "function"){
+        try{
+            const data = await window.sqlApi("/api/settings/occurrences.evaluator_password");
+            const val = data?.setting?.value;
+            const senha = typeof val === "string" ? val : (val?.senha || val?.password || "");
+            if(senha){
+                ocorrenciasAvaliadorSenha = String(senha);
+                salvarSenhaAvaliadorLocal(ocorrenciasAvaliadorSenha);
+                return ocorrenciasAvaliadorSenha;
+            }
+        }catch(sqlErr){
+            console.warn("Falha ao carregar senha do avaliador no SQL; tentando Firebase:", sqlErr);
+        }
+    }
     try{
         const snap = await get(ref(db, OCORRENCIAS_AVALIADOR_SENHA_PATH));
         const val = snap.val();
@@ -12516,15 +12963,26 @@ async function alterarSenhaAvaliadorOcorrencias(){
     ocorrenciasAvaliadorSenha = senha;
     salvarSenhaAvaliadorLocal(senha);
     try{
-        await set(ref(db, OCORRENCIAS_AVALIADOR_SENHA_PATH), {
-            senha,
-            atualizadoEm: Date.now(),
-            atualizadoPor: auth.currentUser?.uid || ""
-        });
-        setStatusSenhaAvaliador("Senha redefinida no Firebase.", true);
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi("/api/settings/occurrences.evaluator_password", {
+                method: "PUT",
+                body: JSON.stringify({
+                    value: { senha, atualizadoEm: Date.now(), atualizadoPor: auth.currentUser?.uid || "" },
+                    atualizadoPorUid: auth.currentUser?.uid || ""
+                })
+            });
+            setStatusSenhaAvaliador("Senha redefinida no SQL.", true);
+        }else{
+            await set(ref(db, OCORRENCIAS_AVALIADOR_SENHA_PATH), {
+                senha,
+                atualizadoEm: Date.now(),
+                atualizadoPor: auth.currentUser?.uid || ""
+            });
+            setStatusSenhaAvaliador("Senha redefinida no Firebase.", true);
+        }
     }catch(err){
         if(!isFirebasePermissionDenied(err)) console.warn("Falha ao salvar senha do avaliador:", err);
-        setStatusSenhaAvaliador("Senha salva neste navegador; publique regras para sincronizar.", true);
+        setStatusSenhaAvaliador("Senha salva neste navegador; servidor indisponivel.", true);
     }
     if(input) input.value = "";
     mostrarNotificacao("Senha do avaliador redefinida.");
@@ -12552,6 +13010,18 @@ function iniciarCamposOcorrencia(){
     if(local) aplicarCamposOcorrencia(local, "local");
     else aplicarCamposOcorrencia(CAMPOS_OCORRENCIA_PADRAO, "padrao");
     if(!auth.currentUser || ocorrenciasCamposUnsub) return;
+    if(typeof window.sqlApi === "function"){
+        window.sqlApi("/api/settings/occurrences.fields").then(data => {
+            const config = data?.setting?.value;
+            if(config && typeof config === "object"){
+                aplicarCamposOcorrencia(config, "sql");
+                salvarCamposOcorrenciaLocal(camposOcorrenciaConfigAtual());
+            }
+        }).catch(sqlErr => {
+            console.warn("Falha ao carregar campos de ocorrencia no SQL; tentando Firebase:", sqlErr);
+        });
+        return;
+    }
     ocorrenciasCamposUnsub = onValue(ref(db, CAMPOS_OCORRENCIA_CONFIG_PATH), snapshot => {
         if(snapshot.exists()){
             aplicarCamposOcorrencia(snapshot.val(), "firebase");
@@ -12569,7 +13039,8 @@ function setOcorrenciasStorageModo(modo){
     const el = document.getElementById("ocorrenciasStorageAviso");
     if(!el) return;
     const textos = {
-        carregando: "Conectando ao Firebase...",
+        carregando: "Carregando ocorrencias...",
+        sql: "Usando SQL/API",
         primary: "Usando /ocorrencias",
         fallback: "Usando caminho compativel",
         erro: "Sem acesso as ocorrencias"
@@ -12740,7 +13211,7 @@ function renderizarEditorCamposOcorrencia(){
     const info = CAMPOS_OCORRENCIA_INFO[campo] || CAMPOS_OCORRENCIA_INFO.tipos;
     const obrigatorios = new Set((info.obrigatorios || []).map(v => v.toLowerCase()));
     const podeEditar = podeGerenciarCamposOcorrencia();
-    const fonteLabel = ocorrenciasCamposFonte === "firebase" ? "Firebase" : (ocorrenciasCamposFonte === "local" ? "local" : "padrao");
+    const fonteLabel = ocorrenciasCamposFonte === "sql" ? "SQL" : (ocorrenciasCamposFonte === "firebase" ? "Firebase" : (ocorrenciasCamposFonte === "local" ? "local" : "padrao"));
     atualizarStatusCamposOcorrencia(
         podeEditar ? `Editando ${info.label} - fonte ${fonteLabel}.` : `Somente admin/mod altera campos - fonte ${fonteLabel}.`,
         podeEditar ? ocorrenciasCamposFonte : "bloqueado"
@@ -12768,9 +13239,18 @@ async function persistirCamposOcorrencia(){
     const config = camposOcorrenciaConfigAtual();
     salvarCamposOcorrenciaLocal(config);
     try{
-        await set(ref(db, CAMPOS_OCORRENCIA_CONFIG_PATH), config);
-        ocorrenciasCamposFonte = "firebase";
-        atualizarStatusCamposOcorrencia("Opcoes salvas no Firebase.", "firebase");
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi("/api/settings/occurrences.fields", {
+                method: "PUT",
+                body: JSON.stringify({ value: config, atualizadoPorUid: auth.currentUser?.uid || "" })
+            });
+            ocorrenciasCamposFonte = "sql";
+            atualizarStatusCamposOcorrencia("Opcoes salvas no SQL.", "sql");
+        }else{
+            await set(ref(db, CAMPOS_OCORRENCIA_CONFIG_PATH), config);
+            ocorrenciasCamposFonte = "firebase";
+            atualizarStatusCamposOcorrencia("Opcoes salvas no Firebase.", "firebase");
+        }
     }catch(err){
         if(!isFirebasePermissionDenied(err)) console.warn("Falha ao salvar campos de ocorrencia no Firebase:", err);
         ocorrenciasCamposFonte = "local";
@@ -12939,6 +13419,7 @@ async function salvarOcorrenciaFirebase(id, ocorrencia){
                 body: JSON.stringify(ocorrencia)
             });
             setOcorrenciasStorageModo("sql");
+            carregarOcorrenciasSql(true);
             return OCORRENCIAS_PRIMARY_PATH;
         }
     }catch(sqlErr){
@@ -12966,10 +13447,14 @@ async function atualizarOcorrenciaStorage(id, storagePath, patch){
                 method: "PATCH",
                 body: JSON.stringify(patch)
             });
+            carregarOcorrenciasSql(true);
             return "sql";
         }
     }catch(sqlErr){
         console.warn("Falha ao atualizar ocorrencia no SQL; tentando Firebase:", sqlErr);
+        if(String(storagePath || "").startsWith("sql:")){
+            throw sqlErr;
+        }
     }
     await update(ref(db, storagePath), patch);
     return "firebase";
@@ -13145,6 +13630,59 @@ function exportarOcorrenciasXlsx(){
 function iniciarOcorrencias(){
     configurarOcorrenciasUI();
     if(!auth.currentUser) return;
+    if(typeof window.sqlApi === "function"){
+        carregarOcorrenciasSql(true).then(ok => {
+            if(ok) iniciarOcorrenciasSqlPolling();
+            else iniciarOcorrenciasFirebaseFallback();
+        });
+        return;
+    }
+    iniciarOcorrenciasFirebaseFallback();
+}
+
+async function carregarOcorrenciasSql(silencioso = false){
+    try{
+        const data = await window.sqlApi("/api/occurrences?limit=500");
+        const lista = (data?.occurrences || []).map(item => {
+            const raw = item?.raw_data && typeof item.raw_data === "object" ? item.raw_data : {};
+            const id = raw.id || item.id;
+            return {
+                ...raw,
+                id,
+                _storagePath:`sql:${id}`,
+                _sql:true
+            };
+        });
+        ocorrenciasPorFonte = { primary: lista, fallback: [] };
+        setOcorrenciasStorageModo("sql");
+        atualizarCacheOcorrencias();
+        return true;
+    }catch(err){
+        if(!silencioso) console.warn("Falha ao carregar ocorrencias no SQL:", err);
+        return false;
+    }
+}
+
+function iniciarOcorrenciasSqlPolling(){
+    if(ocorrenciasSqlTimer) return;
+    ocorrenciasSqlTimer = setInterval(() => {
+        carregarOcorrenciasSql(true).then(ok => {
+            if(!ok){
+                pararOcorrenciasSqlPolling();
+                iniciarOcorrenciasFirebaseFallback();
+            }
+        });
+    }, 15000);
+}
+
+function pararOcorrenciasSqlPolling(){
+    if(ocorrenciasSqlTimer){
+        clearInterval(ocorrenciasSqlTimer);
+    }
+    ocorrenciasSqlTimer = null;
+}
+
+function iniciarOcorrenciasFirebaseFallback(){
     if(!ocorrenciasUnsub){
         ocorrenciasUnsub = onValue(ref(db, OCORRENCIAS_PRIMARY_PATH), snapshot => {
             setOcorrenciasStorageModo("primary");
@@ -13170,6 +13708,7 @@ function iniciarOcorrencias(){
 }
 
 function pararOcorrencias(){
+    pararOcorrenciasSqlPolling();
     if(ocorrenciasUnsub){
         try{ ocorrenciasUnsub(); }catch(e){}
     }
@@ -13596,6 +14135,7 @@ const chatTitleBase = document.title;
 let chatSessionState = null;
 let chatRoomUnsubs = {};
 let chatTypingRoomUnsub = null;
+let chatSqlTimer = null;
 let typingUsers = {};
 typingIdleTimer = null;
 lastTypingSent = 0;
@@ -13742,6 +14282,18 @@ window.persistirLeituraSala = persistirLeituraSala;
 async function carregarLeituraSalaRemota(){
     const uid = getCurrentChatUid();
     if(!uid) return;
+    try{
+        if(typeof window.sqlApi === "function"){
+            const data = await window.sqlApi(`/api/chat/read-state/${encodeURIComponent(uid)}`);
+            const remoto = data?.read_state || {};
+            const local = getReadStateForUid(uid);
+            readStateCache[uid] = { ...local, ...remoto };
+            saveReadStateForUid(uid);
+            return;
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao carregar leitura do chat no SQL; tentando Firebase:", sqlErr);
+    }
     try{
         const snap = await get(ref(db, `chatReadState/${uid}`));
         if(snap.exists()){
@@ -13894,8 +14446,41 @@ function atualizarVistaChatAtivo(roomId = salaAtual, marcarComoVista = false){
 }
 window.atualizarVistaChatAtivo = atualizarVistaChatAtivo;
 
-function iniciarMonitoramentoSalas(){
-    if(window.contagemModoFocoAtivo) return;
+async function carregarMensagensChatSql(silencioso = false){
+    if(typeof window.sqlApi !== "function") return false;
+    try{
+        const resultados = await Promise.all(salasChat.map(async room => {
+            const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(room.id)}/messages?limit=200`);
+            const lista = (data?.messages || []).map(row => {
+                const raw = row?.raw_data && typeof row.raw_data === "object" ? row.raw_data : {};
+                return {
+                    ...raw,
+                    _key: row.legacy_key || row.id,
+                    nome: raw.nome || row.name || "",
+                    texto: raw.texto || row.text || "",
+                    data: raw.data || row.time_label || "",
+                    timestamp: raw.timestamp || (row.created_at ? Date.parse(row.created_at) : 0),
+                    tipo: raw.tipo || row.message_type || "",
+                    evento: raw.evento || row.event || "",
+                    sessionId: raw.sessionId || row.session_id || "",
+                    uid: raw.uid || row.user_id || ""
+                };
+            });
+            return [room.id, dedupeMensagensChat(lista)];
+        }));
+        resultados.forEach(([roomId, lista]) => {
+            roomMessages[roomId] = lista;
+        });
+        recalcularUnreadCounts();
+        atualizarVistaChatAtivo(salaAtual, false);
+        return true;
+    }catch(err){
+        if(!silencioso) console.warn("Falha ao carregar mensagens do chat no SQL:", err);
+        return false;
+    }
+}
+
+function iniciarMonitoramentoSalasFirebase(){
     salasChat.forEach(room=>{
         if(chatRoomUnsubs[room.id]) return;
         chatRoomUnsubs[room.id] = onValue(getChatRef(room.id), snapshot => {
@@ -13915,6 +14500,36 @@ function iniciarMonitoramentoSalas(){
     });
 }
 
+function iniciarMonitoramentoSalas(){
+    if(window.contagemModoFocoAtivo) return;
+    if(chatSqlTimer || Object.keys(chatRoomUnsubs || {}).length) return;
+    if(typeof window.sqlApi === "function"){
+        carregarMensagensChatSql(true).then(ok => {
+            if(ok){
+                chatSqlTimer = setInterval(() => {
+                    carregarMensagensChatSql(true).then(nextOk => {
+                        if(!nextOk){
+                            pararMonitoramentoChatSql();
+                            iniciarMonitoramentoSalasFirebase();
+                        }
+                    });
+                }, 5000);
+            }else{
+                iniciarMonitoramentoSalasFirebase();
+            }
+        });
+        return;
+    }
+    iniciarMonitoramentoSalasFirebase();
+}
+
+function pararMonitoramentoChatSql(){
+    if(chatSqlTimer){
+        clearInterval(chatSqlTimer);
+    }
+    chatSqlTimer = null;
+}
+
 function iniciarMonitoramentoTyping(roomId){
     if(window.contagemModoFocoAtivo) return;
     if(chatTypingRoomUnsub){
@@ -13922,6 +14537,11 @@ function iniciarMonitoramentoTyping(roomId){
         chatTypingRoomUnsub = null;
     }
     if(!roomId) return;
+    if(window.darkJutsuSqlOnly){
+        typingUsers = {};
+        atualizarDigitandoUI();
+        return;
+    }
     chatTypingRoomUnsub = onValue(getTypingRef(roomId), snapshot => {
         typingUsers = snapshot.val() || {};
         atualizarDigitandoUI();
@@ -13930,6 +14550,7 @@ function iniciarMonitoramentoTyping(roomId){
 
 function pausarMonitoramentoChatModoFoco(){
     try{ setDigitando(salaAtual, false); }catch(e){}
+    pararMonitoramentoChatSql();
     Object.values(chatRoomUnsubs || {}).forEach(unsub=>{
         if(typeof unsub === "function") unsub();
     });
@@ -13950,6 +14571,7 @@ window.pausarMonitoramentoChatModoFoco = pausarMonitoramentoChatModoFoco;
 window.retomarMonitoramentoChatModoFoco = retomarMonitoramentoChatModoFoco;
 
 function pararMonitoramentoChat(){
+    pararMonitoramentoChatSql();
     Object.values(chatRoomUnsubs || {}).forEach(unsub=>{
         if(typeof unsub === "function") unsub();
     });
@@ -13991,6 +14613,14 @@ function setSalaAtiva(roomId){
 }
 
 async function verificarSenhaSala(roomId){
+    if(typeof window.sqlApi === "function"){
+        try{
+            const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/password-status`);
+            return data?.has_password ? "__SQL_PASSWORD__" : "";
+        }catch(sqlErr){
+            console.warn("Falha ao consultar senha da sala no SQL; tentando Firebase:", sqlErr);
+        }
+    }
     const snap = await get(ref(db, "chatRooms/" + roomId + "/senha"));
     return snap.exists() ? String(snap.val()) : "";
 }
@@ -14053,7 +14683,20 @@ window.confirmarEntradaSalaPrivada = async function(){
     const input = document.getElementById("chatPrivatePassword");
     const erro = document.getElementById("chatPrivateGateError");
     const senha = (input?.value || "").trim();
-    if(String(senha) !== String(privateRoomGateState.senhaDb)){
+    let senhaValida = String(senha) === String(privateRoomGateState.senhaDb);
+    if(privateRoomGateState.senhaDb === "__SQL_PASSWORD__" && typeof window.sqlApi === "function"){
+        try{
+            const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(privateRoomGateState.roomId)}/verify-password`, {
+                method: "POST",
+                body: JSON.stringify({ password: senha })
+            });
+            senhaValida = !!data?.valid;
+        }catch(sqlErr){
+            console.warn("Falha ao validar senha da sala no SQL:", sqlErr);
+            senhaValida = false;
+        }
+    }
+    if(!senhaValida){
         if(erro) erro.textContent = "Senha incorreta.";
         if(input){
             input.select();
@@ -14164,6 +14807,11 @@ function getTypingRef(roomId){
 
 function setDigitando(roomId, ativo){
     if(!auth?.currentUser || !roomId) return;
+    if(window.darkJutsuSqlOnly){
+        typingUsers = {};
+        atualizarDigitandoUI();
+        return;
+    }
     const uid = auth.currentUser.uid;
     const node = ref(db, "chatRooms/" + roomId + "/typing/" + uid);
     if(!ativo){
@@ -14254,7 +14902,19 @@ async function definirSenhaSala(roomId){
         mostrarNotificacao("A senha deve ter 6 dígitos.");
         return;
     }
-    await set(ref(db, "chatRooms/" + roomId + "/senha"), senha);
+    try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/password`, {
+                method: "PUT",
+                body: JSON.stringify({ password: senha })
+            });
+        }else{
+            await set(ref(db, "chatRooms/" + roomId + "/senha"), senha);
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao salvar senha no SQL; tentando Firebase:", sqlErr);
+        await set(ref(db, "chatRooms/" + roomId + "/senha"), senha);
+    }
     mostrarNotificacao("Senha atualizada.");
 }
 window.definirSenhaSala = definirSenhaSala;
@@ -14266,6 +14926,18 @@ async function limparMensagensSala(){
     }
     const ok = confirm("Apagar todas as mensagens desta sala?");
     if(!ok) return;
+    try{
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(salaAtual)}/messages`, {
+                method: "DELETE"
+            });
+            roomMessages[salaAtual] = [];
+            atualizarVistaChatAtivo(salaAtual, false);
+            return;
+        }
+    }catch(sqlErr){
+        console.warn("Falha ao limpar mensagens no SQL; tentando Firebase:", sqlErr);
+    }
     await set(getChatRef(salaAtual), null);
 }
 window.limparMensagensSala = limparMensagensSala;
@@ -14308,13 +14980,8 @@ window.enviarMensagem = async function() {
                 method: "POST",
                 body: JSON.stringify(payload)
             });
-            try{
-                const novaMsgRef = push(getChatRef(salaAtual));
-                await set(novaMsgRef, payload);
-            }catch(firebaseErr){
-                console.warn("Mensagem salva no SQL, mas nao publicada no Firebase:", firebaseErr);
-            }
             atualizarEstadoLocal({ _pending:false, _failed:false });
+            carregarMensagensChatSql(true);
         }else{
             throw new Error("API SQL indisponivel.");
         }

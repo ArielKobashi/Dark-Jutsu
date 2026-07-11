@@ -18,6 +18,8 @@ SCRIPTS = os.path.join(SHARE_ROOT, "scripts")
 PASSWORD = "654321"
 LOG_DIR = r"C:\DarkJutsu\logs"
 LOG_FILE = os.path.join(LOG_DIR, "monitor_python.log")
+MUTEX_NAME = "Global\\DarkJutsuMonitorReservaPython"
+ERROR_ALREADY_EXISTS = 183
 
 WM_USER = 0x0400
 WM_TRAY = WM_USER + 20
@@ -157,6 +159,25 @@ def log(text):
         pass
 
 
+_mutex_handle = None
+
+
+def acquire_single_instance():
+    global _mutex_handle
+    try:
+        kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
+        kernel32.CreateMutexW.restype = wintypes.HANDLE
+        kernel32.GetLastError.argtypes = []
+        kernel32.GetLastError.restype = wintypes.DWORD
+        _mutex_handle = kernel32.CreateMutexW(None, True, MUTEX_NAME)
+        if _mutex_handle and kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+            log("monitor ja estava aberto; encerrando instancia duplicada")
+            return False
+    except Exception as exc:
+        log(f"AVISO: nao consegui criar mutex do monitor: {type(exc).__name__}: {exc}")
+    return True
+
+
 def ask_password(action):
     try:
         import tkinter as tk
@@ -180,13 +201,21 @@ def ask_password(action):
 
 
 def run_hidden(args):
-    log("run_hidden: " + " ".join(args))
-    subprocess.Popen(args, creationflags=0x08000000)
+    try:
+        log("run_hidden: " + " ".join(args))
+        subprocess.Popen(args, creationflags=0x08000000)
+    except Exception as exc:
+        log(f"ERRO run_hidden: {type(exc).__name__}: {exc}")
+        message(f"Nao consegui abrir o comando:\n{type(exc).__name__}: {exc}", "Dark-Jutsu")
 
 
 def run_visible(args):
-    log("run_visible: " + " ".join(args))
-    subprocess.Popen(args, creationflags=0x00000010)
+    try:
+        log("run_visible: " + " ".join(args))
+        subprocess.Popen(args, creationflags=0x00000010)
+    except Exception as exc:
+        log(f"ERRO run_visible: {type(exc).__name__}: {exc}")
+        message(f"Nao consegui abrir o comando:\n{type(exc).__name__}: {exc}", "Dark-Jutsu")
 
 
 def local_ips():
@@ -208,7 +237,7 @@ def local_ips():
 
 def health(ip):
     try:
-        with urllib.request.urlopen(f"http://{ip}:{PORT}/health", timeout=2) as resp:
+        with urllib.request.urlopen(f"http://{ip}:{PORT}/health", timeout=1) as resp:
             return b'"ok":true' in resp.read().replace(b" ", b"").lower()
     except Exception:
         return False
@@ -228,6 +257,11 @@ def script_args(name, keep_open=False):
         return ["cmd.exe", mode, wrapper]
     body = f'pushd {SCRIPTS} && call {name} && popd'
     return ["cmd.exe", mode, body]
+
+
+def panel_args():
+    panel = local_script("abrir_painel_servidor_darkjutsu.bat")
+    return ["cmd.exe", "/c", f'call "{panel}"']
 
 
 def make_icon(color):
@@ -364,7 +398,6 @@ class Tray:
         self.update_icon()
 
     def popup_menu(self):
-        self.update_status()
         menu = user32.CreatePopupMenu()
         user32.AppendMenuW(menu, 0, 1, self.tip)
         user32.EnableMenuItem(menu, 1, 0x00000002)
@@ -388,7 +421,7 @@ class Tray:
             os.startfile(APP_PATH)
         elif ident == ID_TEST:
             if ask_password("testar servidor"):
-                run_visible(script_args("testar_servidor_darkjutsu.bat", keep_open=True))
+                run_hidden(panel_args())
         elif ident == ID_GUARD:
             if ask_password("verificar/iniciar agora"):
                 run_visible(script_args("guardiao_servidor_tick_darkjutsu.bat", keep_open=True))
@@ -403,8 +436,7 @@ class Tray:
         elif ident == ID_STOP:
             if ask_password("encerrar servidor local"):
                 run_hidden(script_args("parar_api_darkjutsu.bat"))
-        time.sleep(1)
-        self.update_status()
+        threading.Thread(target=self.update_status, daemon=True).start()
 
     def proc(self, hwnd, msg, wparam, lparam):
         if msg == WM_TRAY and lparam == WM_RBUTTONUP:
@@ -429,6 +461,8 @@ class Tray:
 if __name__ == "__main__":
     try:
         log("iniciando monitor python")
+        if not acquire_single_instance():
+            sys.exit(0)
         Tray().run()
     except Exception as exc:
         log(f"ERRO: {type(exc).__name__}: {exc}")

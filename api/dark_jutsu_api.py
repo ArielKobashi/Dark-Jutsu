@@ -147,6 +147,22 @@ def _json_hash(payload: Any) -> str:
     return hashlib.sha256(body).hexdigest()
 
 
+def _chat_password_hash(room_id: str, password: Any) -> str | None:
+    text = _clean_text(password)
+    if not text:
+        return None
+    salt = hashlib.sha256(f"dark-jutsu:{room_id}".encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.pbkdf2_hmac("sha256", text.encode("utf-8"), salt.encode("utf-8"), 200_000).hex()
+    return f"pbkdf2_sha256$200000${salt}${digest}"
+
+
+def _verify_chat_password(room_id: str, password: Any, stored_hash: Any) -> bool:
+    expected = _clean_text(stored_hash)
+    if not expected:
+        return False
+    return expected == _chat_password_hash(room_id, password)
+
+
 def _connect():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
@@ -289,6 +305,12 @@ class Handler(BaseHTTPRequestHandler):
     def _authenticate(self) -> AuthContext:
         if self.path.startswith("/health"):
             return AuthContext(authenticated=True, role="service", service=True)
+        parsed = urlparse(self.path)
+        parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
+        if self.command == "POST" and parts == ["api", "signup-requests"]:
+            return AuthContext(authenticated=True, role="anon")
+        if self.command == "GET" and len(parts) == 4 and parts[:2] == ["api", "nicknames"] and parts[3] == "status":
+            return AuthContext(authenticated=True, role="anon")
         bearer = self.headers.get("Authorization", "")
         token = self.headers.get("X-API-Token", "")
         if API_TOKEN and (bearer == f"Bearer {API_TOKEN}" or token == API_TOKEN):
@@ -355,6 +377,9 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.NOT_FOUND, "Endpoint nao encontrado.")
         if parts == ["api", "me"]:
             return self._me()
+        if parts == ["api", "ops", "status"]:
+            self._require_staff()
+            return self._ops_status()
         if parts == ["api", "inventory"]:
             return self._inventory(query)
         if len(parts) == 3 and parts[:2] == ["api", "inventory"]:
@@ -362,14 +387,24 @@ class Handler(BaseHTTPRequestHandler):
         if parts == ["api", "users"]:
             self._require_staff()
             return self._users(query)
+        if len(parts) == 3 and parts[:2] == ["api", "users"]:
+            self._require_staff()
+            return self._user(parts[2])
         if parts == ["api", "signup-requests"]:
             self._require_staff()
             return self._signup_requests(query)
+        if len(parts) == 3 and parts[:2] == ["api", "signup-requests"]:
+            self._require_staff()
+            return self._signup_request(parts[2])
+        if len(parts) == 4 and parts[:2] == ["api", "nicknames"] and parts[3] == "status":
+            return self._nickname_status(parts[2], query)
         if parts == ["api", "banned-users"]:
             self._require_staff()
             return self._banned_users(query)
         if parts == ["api", "dashboard"]:
             return self._dashboard()
+        if parts == ["api", "dashboard", "snapshot"]:
+            return self._dashboard_snapshot(query)
         if parts == ["api", "counting", "sessions"]:
             return self._counting_sessions(query)
         if parts == ["api", "counting", "history"]:
@@ -390,8 +425,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._occurrences(query)
         if parts == ["api", "chat", "rooms"]:
             return self._chat_rooms()
+        if len(parts) == 5 and parts[:3] == ["api", "chat", "rooms"] and parts[4] == "password-status":
+            return self._chat_room_password_status(parts[3])
         if len(parts) == 5 and parts[:3] == ["api", "chat", "rooms"] and parts[4] == "messages":
             return self._chat_messages(parts[3], query)
+        if len(parts) == 4 and parts[:3] == ["api", "chat", "read-state"]:
+            return self._chat_read_state(parts[3])
         if len(parts) == 4 and parts[:3] == ["api", "automus", "releases"]:
             return self._automus_release(parts[3])
         raise ApiError(HTTPStatus.NOT_FOUND, "Endpoint nao encontrado.")
@@ -403,15 +442,29 @@ class Handler(BaseHTTPRequestHandler):
         if method == "PUT" and len(parts) == 4 and parts[:3] == ["api", "dashboard", "evaluations"]:
             self._require_staff()
             return self._put_dashboard_evaluation(parts[3], payload)
+        if method == "DELETE" and len(parts) == 4 and parts[:3] == ["api", "dashboard", "evaluations"]:
+            self._require_staff()
+            return self._delete_dashboard_evaluation(parts[3])
         if method == "POST" and parts == ["api", "inventory", "automus-update"]:
             self._require_admin()
             return self._post_inventory_automus_update(payload)
+        if method in {"PUT", "PATCH"} and len(parts) == 4 and parts[:2] == ["api", "inventory"] and parts[3] == "adjustment":
+            self._require_staff()
+            return self._put_inventory_adjustment(parts[2], payload)
         if method == "POST" and parts == ["api", "occurrences"]:
             return self._post_occurrence(payload)
         if method == "PATCH" and len(parts) == 3 and parts[:2] == ["api", "occurrences"]:
             return self._patch_occurrence(parts[2], payload)
         if method == "POST" and len(parts) == 5 and parts[:3] == ["api", "chat", "rooms"] and parts[4] == "messages":
             return self._post_chat_message(parts[3], payload)
+        if method == "DELETE" and len(parts) == 5 and parts[:3] == ["api", "chat", "rooms"] and parts[4] == "messages":
+            self._require_admin()
+            return self._delete_chat_messages(parts[3])
+        if method in {"PUT", "PATCH"} and len(parts) == 5 and parts[:3] == ["api", "chat", "rooms"] and parts[4] == "password":
+            self._require_admin()
+            return self._put_chat_room_password(parts[3], payload)
+        if method == "POST" and len(parts) == 5 and parts[:3] == ["api", "chat", "rooms"] and parts[4] == "verify-password":
+            return self._verify_chat_room_password(parts[3], payload)
         if method in {"PUT", "PATCH"} and parts == ["api", "chat", "read-state"]:
             return self._put_chat_read_state(payload)
         if method == "POST" and parts == ["api", "labels", "jobs"]:
@@ -451,6 +504,8 @@ class Handler(BaseHTTPRequestHandler):
         if method == "PATCH" and len(parts) == 3 and parts[:2] == ["api", "signup-requests"]:
             self._require_staff()
             return self._patch_signup_request(parts[2], payload)
+        if method == "POST" and parts == ["api", "signup-requests"]:
+            return self._post_signup_request(payload)
         if method == "POST" and len(parts) == 4 and parts[:2] == ["api", "signup-requests"] and parts[3] == "approve":
             self._require_staff()
             return self._approve_signup_request(parts[2], payload)
@@ -502,8 +557,84 @@ class Handler(BaseHTTPRequestHandler):
         rows = self._query("select now() as database_time")
         return {"ok": True, "database_time": rows[0]["database_time"], "database_url": "configured"}
 
+    def _ops_status(self) -> dict[str, Any]:
+        counts: dict[str, int] = {}
+        for table in (
+            "users",
+            "signup_requests",
+            "banned_users",
+            "inventory_items",
+            "inventory_snapshots",
+            "counting_sessions",
+            "counting_drafts",
+            "counting_machine_status",
+            "label_print_jobs",
+            "occurrences",
+            "chat_rooms",
+            "chat_messages",
+            "chat_read_states",
+            "dashboard_panels",
+            "purchase_evaluations",
+            "app_settings",
+            "automus_releases",
+        ):
+            rows = self._query_as_service(f"select count(*)::int as count from {table}")
+            counts[table] = int(rows[0]["count"]) if rows else 0
+        snapshot_rows = self._query_as_service(
+            """
+            select source, saved_at, item_count, dead_item_count
+            from inventory_snapshots
+            order by saved_at desc nulls last, id desc
+            limit 1
+            """
+        )
+        settings_rows = self._query_as_service(
+            """
+            select key, updated_at
+            from app_settings
+            where key in (
+              'occurrences.fields',
+              'occurrences.evaluator_password',
+              'inventory.countingConfig',
+              'label.config',
+              'counting.resetGlobal'
+            )
+            order by key
+            """
+        )
+        db_rows = self._query_as_service("select now() as database_time, current_database() as database_name")
+        return {
+            "ok": True,
+            "database": db_rows[0] if db_rows else {},
+            "api": {
+                "host": API_HOST,
+                "port": API_PORT,
+                "require_auth": REQUIRE_AUTH,
+                "allowed_origins": ALLOWED_ORIGINS,
+                "service_token_configured": bool(API_TOKEN),
+                "firebase_project_id": FIREBASE_PROJECT_ID,
+            },
+            "counts": counts,
+            "latest_inventory_snapshot": snapshot_rows[0] if snapshot_rows else None,
+            "settings": settings_rows,
+        }
+
     def _me(self) -> dict[str, Any]:
         auth = getattr(self, "auth_context", AuthContext())
+        user = None
+        if auth.user_id:
+            rows = self._query(
+                """
+                select id, firebase_uid, nickname, nickname_key, badge, sector, role,
+                       active, password_status, created_at, updated_at
+                from users
+                where id = %s
+                limit 1
+                """,
+                (auth.user_id,),
+            )
+            if rows:
+                user = self._legacy_user(rows[0])
         return {
             "authenticated": auth.authenticated,
             "service": auth.service,
@@ -511,6 +642,7 @@ class Handler(BaseHTTPRequestHandler):
             "role": auth.role,
             "firebase_uid": auth.claims.get("sub") or auth.claims.get("user_id"),
             "email": auth.claims.get("email"),
+            "user": user,
         }
 
     def _inventory(self, query: dict[str, list[str]]) -> dict[str, Any]:
@@ -569,6 +701,94 @@ class Handler(BaseHTTPRequestHandler):
             (rows[0]["id"],),
         )
         return {"item": rows[0], "addresses": addresses, "limits": limits}
+
+    def _inventory_legacy_snapshot(self) -> dict[str, Any]:
+        rows = self._query(
+            """
+            select payload
+            from inventory_snapshots
+            order by saved_at desc
+            limit 1
+            """
+        )
+        payload = rows[0].get("payload") if rows and isinstance(rows[0].get("payload"), dict) else {}
+        if not payload:
+            items = self._query("select raw_data from inventory_items where not is_dead order by description nulls last")
+            dead_items = self._query("select raw_data from inventory_items where is_dead order by description nulls last")
+            payload = {
+                "dados": [row.get("raw_data") or {} for row in items],
+                "dadosMortos": [row.get("raw_data") or {} for row in dead_items],
+            }
+        ajustes = self._query(
+            """
+            select legacy_key, item_legacy_key, min_qty, max_qty, reorder_qty, updated_by_name, updated_at, raw_data
+            from inventory_adjustments
+            order by updated_at desc nulls last, id desc
+            """
+        )
+        ajustes_map: dict[str, Any] = {}
+        for row in ajustes:
+            legacy_key = _clean_text(row.get("legacy_key") or row.get("item_legacy_key"))
+            if not legacy_key or legacy_key in ajustes_map:
+                continue
+            raw = row.get("raw_data") if isinstance(row.get("raw_data"), dict) else {}
+            ajustes_map[legacy_key] = {
+                **raw,
+                "itemKey": raw.get("itemKey") or row.get("item_legacy_key"),
+                "minimo": raw.get("minimo", row.get("min_qty")),
+                "maximo": raw.get("maximo", row.get("max_qty")),
+                "reposicao": raw.get("reposicao", row.get("reorder_qty")),
+                "atualizadoPor": raw.get("atualizadoPor") or row.get("updated_by_name"),
+                "atualizadoEm": raw.get("atualizadoEm") or row.get("updated_at"),
+            }
+        if ajustes_map:
+            payload = {**payload, "ajustesItens": ajustes_map}
+        return payload
+
+    def _put_inventory_adjustment(self, code: str, payload: dict[str, Any]) -> dict[str, Any]:
+        item_key = _clean_text(payload.get("itemKey") or payload.get("item_key") or code)
+        legacy_key = _clean_text(payload.get("legacy_key") or payload.get("chave") or payload.get("key")) or item_key
+        updated_at = _timestamp(payload.get("atualizadoEm") or payload.get("updated_at")) or datetime.now(timezone.utc)
+        updated_by = _clean_text(payload.get("atualizadoPor") or payload.get("updated_by"))
+        raw_data = {
+            **payload,
+            "itemKey": item_key,
+            "atualizadoEm": int(updated_at.timestamp() * 1000),
+            "atualizadoPor": updated_by,
+        }
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("set local app.role = 'service'")
+                cur.execute("delete from inventory_adjustments where legacy_key = %s", (legacy_key,))
+                cur.execute(
+                    """
+                    insert into inventory_adjustments (
+                      item_id, item_legacy_key, legacy_key, min_qty, max_qty, reorder_qty,
+                      reason, updated_by_name, updated_at, raw_data
+                    )
+                    values (
+                      (select id from inventory_items where protheus_code = %s or cooperat_code = %s or legacy_key = %s order by is_dead asc limit 1),
+                      %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb
+                    )
+                    returning id, item_legacy_key, legacy_key, min_qty, max_qty, reorder_qty, updated_by_name, updated_at, raw_data
+                    """,
+                    (
+                        item_key,
+                        item_key,
+                        item_key,
+                        item_key,
+                        legacy_key,
+                        _decimal_value(payload.get("minimo") or payload.get("min_qty")),
+                        _decimal_value(payload.get("maximo") or payload.get("max_qty")),
+                        _decimal_value(payload.get("reposicao") or payload.get("reorder_qty")),
+                        _clean_text(payload.get("motivo") or payload.get("reason")) or "dashboard",
+                        updated_by,
+                        updated_at,
+                        json.dumps(raw_data, ensure_ascii=False, default=_json_default),
+                    ),
+                )
+                row = dict(cur.fetchone())
+        return {"ok": True, "adjustment": row}
 
     def _post_inventory_automus_update(self, payload: dict[str, Any]) -> dict[str, Any]:
         dados = payload.get("dados") if isinstance(payload.get("dados"), list) else []
@@ -832,7 +1052,7 @@ class Handler(BaseHTTPRequestHandler):
             """,
             (limit, offset),
         )
-        return {"users": rows, "limit": limit, "offset": offset}
+        return {"users": [self._legacy_user(row) for row in rows], "limit": limit, "offset": offset}
 
     def _signup_requests(self, query: dict[str, list[str]]) -> dict[str, Any]:
         limit = _limit(query, 100, 500)
@@ -846,7 +1066,22 @@ class Handler(BaseHTTPRequestHandler):
             """,
             (limit,),
         )
-        return {"signup_requests": rows, "limit": limit}
+        return {"signup_requests": [self._legacy_signup_request(row) for row in rows], "limit": limit}
+
+    def _signup_request(self, request_id: str) -> dict[str, Any]:
+        rows = self._query(
+            """
+            select id, requested_uid, nickname, nickname_key, badge, sector,
+                   status, duplicated, created_at, decided_at, decided_by
+            from signup_requests
+            where id = %s
+            limit 1
+            """,
+            (request_id,),
+        )
+        if not rows:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Solicitacao nao encontrada.")
+        return {"signup_request": self._legacy_signup_request(rows[0])}
 
     def _banned_users(self, query: dict[str, list[str]]) -> dict[str, Any]:
         limit = _limit(query, 100, 500)
@@ -859,7 +1094,162 @@ class Handler(BaseHTTPRequestHandler):
             """,
             (limit,),
         )
-        return {"banned_users": rows, "limit": limit}
+        return {"banned_users": [self._legacy_banned_user(row) for row in rows], "limit": limit}
+
+    def _legacy_user(self, row: dict[str, Any]) -> dict[str, Any]:
+        created_at = row.get("created_at")
+        return {
+            **row,
+            "uid": row.get("id"),
+            "nickname": row.get("nickname") or "",
+            "cracha": row.get("badge") or "",
+            "setor": row.get("sector") or "",
+            "nivel": row.get("role") or "op",
+            "ativo": bool(row.get("active")),
+            "senha": row.get("password_status") or "",
+            "senhaReset": row.get("password_status") == "reset_required",
+            "criadoEm": int(created_at.timestamp() * 1000) if isinstance(created_at, datetime) else 0,
+        }
+
+    def _user(self, user_id: str) -> dict[str, Any]:
+        rows = self._query(
+            """
+            select id, firebase_uid, nickname, nickname_key, badge, sector, role,
+                   active, password_status, created_at, updated_at
+            from users
+            where id = %s or firebase_uid = %s
+            limit 1
+            """,
+            (user_id, user_id),
+        )
+        if not rows:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Usuario nao encontrado.")
+        return {"user": self._legacy_user(rows[0])}
+
+    def _legacy_signup_request(self, row: dict[str, Any]) -> dict[str, Any]:
+        created_at = row.get("created_at")
+        decided_at = row.get("decided_at")
+        return {
+            **row,
+            "uid": row.get("requested_uid") or "",
+            "nickname": row.get("nickname") or "",
+            "cracha": row.get("badge") or "",
+            "setor": row.get("sector") or "",
+            "status": row.get("status") or "pendente",
+            "duplicado": bool(row.get("duplicated")),
+            "criadoEm": int(created_at.timestamp() * 1000) if isinstance(created_at, datetime) else 0,
+            "decididoEm": int(decided_at.timestamp() * 1000) if isinstance(decided_at, datetime) else 0,
+        }
+
+    def _legacy_banned_user(self, row: dict[str, Any]) -> dict[str, Any]:
+        banned_at = row.get("banned_at")
+        nickname = row.get("nickname") or ""
+        return {
+            **row,
+            "uid": row.get("user_id"),
+            "nickname": nickname,
+            "cracha": row.get("badge") or "",
+            "setor": row.get("sector") or "",
+            "emailLogin": f"{nickname}@sistema.com" if nickname else "",
+            "senha": "[redacted]",
+            "banidoEm": int(banned_at.timestamp() * 1000) if isinstance(banned_at, datetime) else 0,
+        }
+
+    def _nickname_status(self, nickname: str, query: dict[str, list[str]]) -> dict[str, Any]:
+        nick = _clean_text(nickname)
+        if not nick:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Nickname obrigatorio.")
+        badge = _clean_text(query.get("badge", [""])[0])
+        user_rows = self._query_as_service(
+            """
+            select count(*)::int as count
+            from users
+            where nickname_key = lower(trim(%s)) and active
+            """,
+            (nick,),
+        )
+        pending_rows = self._query_as_service(
+            """
+            select id
+            from signup_requests
+            where nickname_key = lower(trim(%s))
+              and status = 'pendente'
+              and (%s::text is null or badge = %s)
+            order by created_at desc nulls last
+            limit 1
+            """,
+            (nick, badge, badge),
+        )
+        banned_rows = self._query_as_service(
+            """
+            select count(*)::int as count
+            from banned_users
+            where lower(trim(nickname)) = lower(trim(%s))
+            """,
+            (nick,),
+        )
+        return {
+            "nickname": nick,
+            "used": bool(user_rows and user_rows[0]["count"] > 0),
+            "banned": bool(banned_rows and banned_rows[0]["count"] > 0),
+            "pending": bool(pending_rows),
+            "pending_request_id": pending_rows[0]["id"] if pending_rows else "",
+        }
+
+    def _post_signup_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        nickname = _clean_text(payload.get("nickname"))
+        badge = _clean_text(payload.get("badge") or payload.get("cracha"))
+        sector = _clean_text(payload.get("sector") or payload.get("setor"))
+        password = _clean_text(payload.get("password") or payload.get("senha"))
+        if not nickname or not badge or not sector:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Nickname, cracha e setor sao obrigatorios.")
+        if not re.match(r"^[A-Za-z0-9_.-]{3,20}$", nickname):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Nickname invalido.")
+        status = self._nickname_status(nickname, {"badge": [badge]})
+        if status["pending"] and status["pending_request_id"]:
+            return {"ok": True, "duplicate": True, "signup_request": {"id": status["pending_request_id"], "status": "pendente"}}
+        request_id = _clean_text(payload.get("id")) or f"sql_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{_firebase_like_key(nickname)}"
+        duplicated = bool(status["used"] or status["banned"])
+        created_at = _timestamp(payload.get("created_at") or payload.get("criadoEm")) or datetime.now(timezone.utc)
+        raw_data = {
+            "uid": _clean_text(payload.get("uid")) or "",
+            "nickname": nickname,
+            "cracha": badge,
+            "setor": sector,
+            "status": "pendente",
+            "duplicado": duplicated,
+            "criadoEm": int(created_at.timestamp() * 1000),
+            "senha": "[redacted]" if password else "",
+            "source": "api:signup-requests",
+        }
+        row = self._query_as_service(
+            """
+            insert into signup_requests (
+              id, requested_uid, nickname, password_plain_legacy, badge, sector,
+              status, duplicated, created_at, raw_data
+            )
+            values (%s, %s, %s, null, %s, %s, 'pendente', %s, %s, %s::jsonb)
+            on conflict (id) do update set
+              nickname = excluded.nickname,
+              badge = excluded.badge,
+              sector = excluded.sector,
+              duplicated = excluded.duplicated,
+              raw_data = excluded.raw_data
+            returning id, requested_uid, nickname, nickname_key, badge, sector,
+                      status, duplicated, created_at, decided_at, decided_by
+            """,
+            (
+                request_id,
+                _clean_text(payload.get("uid")),
+                nickname,
+                badge,
+                sector,
+                duplicated,
+                created_at,
+                json.dumps(raw_data, ensure_ascii=False),
+            ),
+        )
+        return {"ok": True, "signup_request": self._legacy_signup_request(row[0])}
 
     def _patch_user(self, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         existing = self._query("select raw_data from users where id = %s", (user_id,))
@@ -1040,6 +1430,71 @@ class Handler(BaseHTTPRequestHandler):
         evaluations = self._query("select * from purchase_evaluations order by updated_at desc nulls last, id desc limit 500")
         return {"panels": panels, "purchase_evaluations": evaluations}
 
+    def _dashboard_snapshot(self, query: dict[str, list[str]]) -> dict[str, Any]:
+        inventory = self._inventory_legacy_snapshot()
+        panels = self._query("select id, row_limit, hidden_codes, raw_data from dashboard_panels order by id")
+        evaluations = self._query("select legacy_key, raw_data from purchase_evaluations order by updated_at desc nulls last, id desc limit 2000")
+        panel_config: dict[str, Any] = {}
+        for row in panels:
+            raw = row.get("raw_data") if isinstance(row.get("raw_data"), dict) else {}
+            panel_config[str(row["id"])] = {
+                **raw,
+                "limite": raw.get("limite", row.get("row_limit")),
+                "codigosOcultos": raw.get("codigosOcultos", ",".join(row.get("hidden_codes") or [])),
+            }
+        evaluation_config: dict[str, Any] = {}
+        for row in evaluations:
+            raw = row.get("raw_data") if isinstance(row.get("raw_data"), dict) else {}
+            evaluation_config[str(row["legacy_key"])] = raw
+
+        counting = self._counting_history({"limit": query.get("counting_limit", query.get("limit", ["1000"]))})
+        label_rows = self._query(
+            """
+            select legacy_path, user_name, job_date, created_at, total_labels,
+                   total_codes_submitted, raw_data
+            from label_print_jobs
+            order by created_at desc nulls last
+            limit %s
+            """,
+            (_limit(query, 500, 5000),),
+        )
+        etiquetas: dict[str, dict[str, dict[str, Any]]] = {}
+        ranking: dict[str, Any] = {}
+        for row in label_rows:
+            raw = row.get("raw_data") if isinstance(row.get("raw_data"), dict) else {}
+            data_key = _clean_text(raw.get("data"))
+            if not data_key and row.get("job_date"):
+                data_key = row["job_date"].isoformat()
+            data_key = data_key or "sem_data"
+            user_name = _clean_text(raw.get("usuario") or row.get("user_name")) or "desconhecido"
+            user_key = _firebase_like_key(user_name)
+            legacy_path = _clean_text(row.get("legacy_path")) or f"api:labels/{data_key}/{user_key}/{int((row.get('created_at') or datetime.now(timezone.utc)).timestamp() * 1000)}"
+            record_key = legacy_path.rstrip("/").split("/")[-1]
+            payload = {
+                **raw,
+                "usuario": user_name,
+                "data": data_key,
+                "timestamp": raw.get("timestamp") or int((row.get("created_at") or datetime.now(timezone.utc)).timestamp() * 1000),
+                "totalEtiquetas": raw.get("totalEtiquetas", row.get("total_labels")),
+                "totalCodigosInformados": raw.get("totalCodigosInformados", row.get("total_codes_submitted")),
+            }
+            etiquetas.setdefault(data_key, {}).setdefault(user_key, {})[record_key] = payload
+            current = ranking.setdefault(user_key, {"usuario": user_name, "eventos": 0, "totalEtiquetas": 0})
+            current["eventos"] += 1
+            current["totalEtiquetas"] += _int_value(payload.get("totalEtiquetas"), 0)
+
+        return {
+            "inventory": inventory,
+            "dashboardConfig": {
+                "paineis": panel_config,
+                "avaliadorPedidos": evaluation_config,
+            },
+            "contagens": counting.get("contagens", {}),
+            "contagemRascunhos": counting.get("rascunhos", {}),
+            "etiquetasGeradas": etiquetas,
+            "rankingEtiquetas": ranking,
+        }
+
     def _put_dashboard_panel(self, panel_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         row_limit = _int_value(payload.get("limite", payload.get("row_limit")), 8)
         hidden_codes = _hidden_codes(payload.get("codigosOcultos", payload.get("hidden_codes")))
@@ -1115,6 +1570,13 @@ class Handler(BaseHTTPRequestHandler):
             ),
         )
         return {"ok": True, "evaluation": row}
+
+    def _delete_dashboard_evaluation(self, legacy_key: str) -> dict[str, Any]:
+        row = self._execute_one(
+            "delete from purchase_evaluations where legacy_key = %s returning legacy_key",
+            (legacy_key,),
+        )
+        return {"ok": True, "deleted": bool(row), "legacy_key": legacy_key}
 
     def _existing_user_id(self, value: str | None) -> str | None:
         if not value:
@@ -1817,15 +2279,30 @@ class Handler(BaseHTTPRequestHandler):
             )
 
     def _chat_rooms(self) -> dict[str, Any]:
-        rows = self._query("select id, label, public, updated_at from chat_rooms order by public desc, id")
+        rows = self._query(
+            """
+            select id, label, public, password_hash is not null as has_password, updated_at
+            from chat_rooms
+            order by public desc, id
+            """
+        )
         return {"rooms": rows}
+
+    def _chat_room_password_status(self, room_id: str) -> dict[str, Any]:
+        rows = self._query(
+            "select id, public, password_hash is not null as has_password from chat_rooms where id = %s",
+            (room_id,),
+        )
+        if not rows:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Sala de chat nao encontrada.")
+        return {"room_id": room_id, "public": rows[0]["public"], "has_password": rows[0]["has_password"]}
 
     def _chat_messages(self, room_id: str, query: dict[str, list[str]]) -> dict[str, Any]:
         limit = _limit(query, 100, 500)
         rows = self._query(
             """
             select id, legacy_key, room_id, user_id, name, text, time_label,
-                   created_at, message_type, event, session_id
+                   created_at, message_type, event, session_id, raw_data
             from chat_messages
             where room_id = %s
             order by created_at desc nulls last, id desc
@@ -1834,6 +2311,21 @@ class Handler(BaseHTTPRequestHandler):
             (room_id, limit),
         )
         return {"messages": rows, "limit": limit}
+
+    def _chat_read_state(self, user_id: str) -> dict[str, Any]:
+        rows = self._query(
+            """
+            select room_id, last_seen_at
+            from chat_read_states
+            where user_id = %s
+            """,
+            (user_id,),
+        )
+        states = {
+            row["room_id"]: int(row["last_seen_at"].timestamp() * 1000) if row.get("last_seen_at") else 0
+            for row in rows
+        }
+        return {"user_id": user_id, "read_state": states}
 
     def _post_chat_message(self, room_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         if not self._query("select 1 from chat_rooms where id = %s", (room_id,)):
@@ -1867,6 +2359,47 @@ class Handler(BaseHTTPRequestHandler):
             ),
         )
         return {"ok": True, "message": row}
+
+    def _put_chat_room_password(self, room_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        password = _clean_text(payload.get("password") or payload.get("senha"))
+        if room_id == "publica":
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Sala publica nao usa senha.")
+        if not password or not re.match(r"^\d{6}$", password):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "A senha deve ter 6 digitos.")
+        row = self._execute_one(
+            """
+            update chat_rooms
+            set password_hash = %s,
+                raw_data = jsonb_set(raw_data - 'senha' - 'password', '{passwordStatus}', '"defined"', true)
+            where id = %s
+            returning id, password_hash is not null as has_password, updated_at
+            """,
+            (_chat_password_hash(room_id, password), room_id),
+        )
+        if not row:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Sala de chat nao encontrada.")
+        return {"ok": True, "room": row}
+
+    def _verify_chat_room_password(self, room_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        password = payload.get("password", payload.get("senha"))
+        rows = self._query(
+            "select id, public, password_hash from chat_rooms where id = %s",
+            (room_id,),
+        )
+        if not rows:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Sala de chat nao encontrada.")
+        room = rows[0]
+        valid = bool(room.get("public")) or _verify_chat_password(room_id, password, room.get("password_hash"))
+        return {"ok": True, "room_id": room_id, "valid": valid, "has_password": bool(room.get("password_hash"))}
+
+    def _delete_chat_messages(self, room_id: str) -> dict[str, Any]:
+        if not self._query("select 1 from chat_rooms where id = %s", (room_id,)):
+            raise ApiError(HTTPStatus.NOT_FOUND, "Sala de chat nao encontrada.")
+        rows = self._query_as_service(
+            "delete from chat_messages where room_id = %s returning id",
+            (room_id,),
+        )
+        return {"ok": True, "room_id": room_id, "deleted": len(rows)}
 
     def _put_chat_read_state(self, payload: dict[str, Any]) -> dict[str, Any]:
         user_id = _clean_text(payload.get("user_id") or payload.get("uid"))

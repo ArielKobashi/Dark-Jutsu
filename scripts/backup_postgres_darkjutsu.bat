@@ -2,6 +2,7 @@
 setlocal EnableExtensions
 
 set "PG_BIN=C:\DarkJutsu\PostgreSQL\pgsql\bin"
+if not exist "%PG_BIN%\pg_dump.exe" set "PG_BIN=%USERPROFILE%\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql\bin"
 set "PGHOST=127.0.0.1"
 set "PGPORT=5433"
 set "PGUSER=dark_jutsu"

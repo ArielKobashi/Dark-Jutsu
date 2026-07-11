@@ -60,21 +60,29 @@ Com `DARK_JUTSU_REQUIRE_AUTH=1`, chamadas sem token Firebase/servico recebem `40
 ```text
 GET /health
 GET /api/me
+GET /api/ops/status
+GET /api/nicknames/{nickname}/status?badge=123
 GET /api/inventory?limit=100&offset=0&q=texto
 GET /api/inventory/{codigo}
 POST /api/inventory/automus-update
 GET /api/users?limit=100&offset=0
+GET /api/users/{id}
 PATCH /api/users/{id}
 POST /api/users/{id}/ban
 POST /api/users/{id}/reset-password
 GET /api/signup-requests?limit=100
+GET /api/signup-requests/{id}
+POST /api/signup-requests
 PATCH /api/signup-requests/{id}
 POST /api/signup-requests/{id}/approve
 GET /api/banned-users?limit=100
 DELETE /api/banned-users/{id}
 GET /api/dashboard
+GET /api/dashboard/snapshot?limit=1000
 PUT /api/dashboard/panels/{id}
 PUT /api/dashboard/evaluations/{legacyKey}
+DELETE /api/dashboard/evaluations/{legacyKey}
+PUT /api/inventory/{codigo}/adjustment
 GET /api/counting/sessions?limit=100
 POST /api/counting/sessions
 PATCH /api/counting/sessions/{sessionId}/user
@@ -95,8 +103,13 @@ GET /api/occurrences?limit=100
 POST /api/occurrences
 PATCH /api/occurrences/{id}
 GET /api/chat/rooms
+GET /api/chat/rooms/{roomId}/password-status
 GET /api/chat/rooms/{roomId}/messages?limit=100
 POST /api/chat/rooms/{roomId}/messages
+DELETE /api/chat/rooms/{roomId}/messages
+PUT /api/chat/rooms/{roomId}/password
+POST /api/chat/rooms/{roomId}/verify-password
+GET /api/chat/read-state/{uid}
 PUT /api/chat/read-state
 GET /api/automus/releases/{channel}
 PUT /api/automus/releases/{channel}
@@ -136,6 +149,28 @@ Content-Type: application/json
   "avaliadoPor": "usuario"
 }
 ```
+
+```http
+GET /api/dashboard/snapshot?limit=1000
+```
+
+Retorna um pacote compativel com o `dashboard.html`: estoque em formato legado, `dashboardConfig/paineis`, `dashboardConfig/avaliadorPedidos`, contagens, etiquetas e ranking calculado a partir do SQL.
+
+```http
+PUT /api/inventory/0311000402/adjustment
+Content-Type: application/json
+
+{
+  "legacy_key": "MDMxMTAwMDQwMg",
+  "itemKey": "0311000402",
+  "minimo": 2,
+  "maximo": 8,
+  "reposicao": 6,
+  "atualizadoPor": "usuario"
+}
+```
+
+Grava ajuste manual de limite em `inventory_adjustments`; o snapshot do dashboard mescla esses ajustes sobre o ultimo snapshot de estoque.
 
 ### Ocorrencias
 
@@ -386,6 +421,12 @@ Content-Type: application/json
 ```http
 DELETE /api/banned-users/uid
 ```
+
+```http
+GET /api/chat/read-state/uid
+```
+
+Retorna `{ room_id: timestamp_ms }` para restaurar contadores de mensagens nao lidas sem ler `chatReadState` no Firebase.
 
 ```http
 PUT /api/chat/read-state

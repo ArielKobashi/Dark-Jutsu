@@ -2330,15 +2330,22 @@
         async function salvarAvaliacaoPedido(codigo, payload){
             const chave = ajusteKey(codigo);
             avaliadorPedidosConfig[chave] = payload;
-            set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), payload).catch(err => {
-                console.warn("Falha ao salvar avaliacao no Firebase:", err);
-            });
-            sqlApi(`/api/dashboard/evaluations/${encodeURIComponent(chave)}`, {
+            try{
+                await sqlApi(`/api/dashboard/evaluations/${encodeURIComponent(chave)}`, {
                     method: "PUT",
                     body: JSON.stringify(payload)
-                }).catch(sqlError => {
-                    console.warn("Falha ao salvar avaliacao no SQL:", sqlError);
                 });
+                return true;
+            }catch(sqlError){
+                console.warn("Falha ao salvar avaliacao no SQL; tentando Firebase:", sqlError);
+            }
+            try{
+                await set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), payload);
+                return true;
+            }catch(err){
+                console.warn("Falha ao salvar avaliacao no Firebase:", err);
+                return false;
+            }
         }
         function parseNumeroPrompt(valor){
             const texto = String(valor ?? "").trim();
@@ -2358,9 +2365,17 @@
             };
             if(!bancoAtual) bancoAtual = {};
             bancoAtual.ajustesItens = { ...(bancoAtual.ajustesItens || {}), [chave]: ajuste };
-            set(ref(db, `estoqueGlobal/ajustesItens/${chave}`), ajuste).catch(err => {
-                console.warn("Falha ao salvar ajuste de limite no Firebase:", err);
-            });
+            try{
+                await sqlApi(`/api/inventory/${encodeURIComponent(codigo)}/adjustment`, {
+                    method: "PUT",
+                    body: JSON.stringify({ ...ajuste, legacy_key:chave, itemKey:codigo })
+                });
+            }catch(sqlError){
+                console.warn("Falha ao salvar ajuste de limite no SQL; tentando Firebase:", sqlError);
+                set(ref(db, `estoqueGlobal/ajustesItens/${chave}`), ajuste).catch(err => {
+                    console.warn("Falha ao salvar ajuste de limite no Firebase:", err);
+                });
+            }
             return ajuste;
         }
         function limparAvaliacaoRevisaoItem(codigo){
@@ -2368,9 +2383,13 @@
             const registro = avaliadorPedidosConfig?.[chave];
             if(!decisaoRevisaoAvaliador(registro)) return;
             delete avaliadorPedidosConfig[chave];
-            set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), null).catch(err => {
-                console.warn("Falha ao limpar avaliacao de revisao:", err);
-            });
+            sqlApi(`/api/dashboard/evaluations/${encodeURIComponent(chave)}`, { method:"DELETE" })
+                .catch(sqlError => {
+                    console.warn("Falha ao limpar avaliacao no SQL; tentando Firebase:", sqlError);
+                    set(ref(db, `dashboardConfig/avaliadorPedidos/${chave}`), null).catch(err => {
+                        console.warn("Falha ao limpar avaliacao de revisao:", err);
+                    });
+                });
         }
         function renderDashboardAtualLogo(){
             requestAnimationFrame(() => renderDashboardAtual());
@@ -3373,6 +3392,17 @@
         function renderErro(msg){
             root.innerHTML = `<section class="erro"><h2>Nao foi possivel carregar</h2><p>${esc(msg)}</p></section>`;
         }
+        async function carregarDashboardSnapshotSql(){
+            const data = await sqlApi("/api/dashboard/snapshot?limit=1000&counting_limit=1000");
+            return {
+                banco: data?.inventory || {},
+                dashboardPanelConfig: data?.dashboardConfig?.paineis || {},
+                avaliadorPedidosConfig: data?.dashboardConfig?.avaliadorPedidos || {},
+                contagens: data?.contagens || {},
+                etiquetasGeradas: data?.etiquetasGeradas || {},
+                rankingEtiquetas: data?.rankingEtiquetas || {}
+            };
+        }
         function renderDashboardAtual(foco){
             if(bancoAtual) renderDashboard(bancoAtual, estoqueMinimoCache || new Map(), mata111Cache || [], mata112Cache || [], extrasAtual);
             if(foco?.id){
@@ -3620,6 +3650,33 @@
             renderLoading();
             try{
                 const deveCarregarHistoricoCooperat = cfg.ambiente === "avaliador";
+                let snapshotSql = null;
+                try{
+                    snapshotSql = await carregarDashboardSnapshotSql();
+                }catch(sqlError){
+                    console.warn("Falha ao carregar dashboard no SQL; tentando Firebase:", sqlError);
+                }
+                if(snapshotSql){
+                    const [mapaMinimo, mata110, mata111, mata112] = await Promise.all([
+                        carregarEstoqueMinimo(),
+                        carregarMata110(),
+                        carregarMata111(),
+                        carregarMata112()
+                    ]);
+                    dashboardPanelConfig = snapshotSql.dashboardPanelConfig || {};
+                    avaliadorPedidosConfig = snapshotSql.avaliadorPedidosConfig || {};
+                    const historicoCooperat = deveCarregarHistoricoCooperat
+                        ? await carregarHistoricoCooperatLocal()
+                        : null;
+                    renderDashboard(snapshotSql.banco || {}, mapaMinimo, mata111, mata112, {
+                        mata110,
+                        contagens: snapshotSql.contagens || {},
+                        etiquetasGeradas: snapshotSql.etiquetasGeradas || {},
+                        rankingEtiquetas: snapshotSql.rankingEtiquetas || {},
+                        historicoCooperat
+                    });
+                    return;
+                }
                 const [snap, mapaMinimo, mata110, mata111, mata112, contagensSnap, etiquetasSnap, rankingEtiquetasSnap, dashboardConfigSnap, avaliadorPedidosSnap, historicoCooperatSnap] = await Promise.all([
                     get(ref(db, "estoqueGlobal")),
                     carregarEstoqueMinimo(),

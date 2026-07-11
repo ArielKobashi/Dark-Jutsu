@@ -2,6 +2,24 @@
 
 Data: 2026-07-01
 
+Atualizacao 2026-07-11:
+
+- `/api/me` agora retorna tambem o cadastro SQL do usuario autenticado, permitindo validacao de sessao SQL-first no frontend.
+- `index.html` valida usuario por SQL antes de consultar `usuarios/{uid}` no Firebase.
+- Listas administrativas de solicitacoes, usuarios e banidos usam polling SQL-first.
+- Chat privado deixou de expor senha pura no frontend quando a API esta ativa: `password-status`, `verify-password` e `PUT password` usam hash no PostgreSQL.
+- Admin consegue limpar mensagens da sala por `DELETE /api/chat/rooms/{roomId}/messages`.
+- Configuracoes de ocorrencias (`occurrences.fields` e `occurrences.evaluator_password`) passaram para SQL-first via `app_settings`.
+- Checagem publica de nickname entrou em `GET /api/nicknames/{nickname}/status`.
+- Integridade raw-vs-SQL rerodada em 2026-07-11 para `users`, `dashboard`, `counting`, `occurrences`, `chat`, `automus`, `inventory` e `cooperat`: `0` findings em todos.
+- Criado endpoint operacional `GET /api/ops/status`.
+- Criado modo SQL-only inicial no frontend para bloquear wrappers RTDB globais.
+- Criado auditor de dependencias Firebase restantes: `scripts/auditar_firebase_restante.py`; primeira execucao encontrou `719` ocorrencias, incluindo imports, fallbacks e chamadas diretas.
+- Criados scripts de ensaio e restore:
+  - `scripts/ensaio_sql_only_darkjutsu.bat`
+  - `scripts/testar_restore_backup_postgres_darkjutsu.bat`
+- Criado runbook de corte: `docs/sql-cutover-runbook.md`.
+
 ## Estado atual
 
 Concluido:
@@ -36,13 +54,18 @@ Concluido:
 | Usuarios | `POST /api/users/{id}/ban` | testado |
 | Usuarios | `POST /api/users/{id}/reset-password` | testado |
 | Cadastro | `GET /api/signup-requests` | testado |
+| Cadastro | `POST /api/signup-requests` | implementado; publico, sem senha pura no SQL |
 | Cadastro | `PATCH /api/signup-requests/{id}` | testado |
 | Cadastro | `POST /api/signup-requests/{id}/approve` | testado |
+| Nicknames | `GET /api/nicknames/{nickname}/status` | implementado e testado |
 | Banidos | `GET /api/banned-users` | implementado |
 | Banidos | `DELETE /api/banned-users/{id}` | testado |
 | Dashboard | `GET /api/dashboard` | implementado |
+| Dashboard | `GET /api/dashboard/snapshot` | implementado e testado; `dashboard.html` tenta SQL antes do Firebase |
 | Dashboard | `PUT /api/dashboard/panels/{id}` | testado |
 | Dashboard | `PUT /api/dashboard/evaluations/{legacyKey}` | testado |
+| Dashboard | `DELETE /api/dashboard/evaluations/{legacyKey}` | implementado |
+| Estoque | `PUT /api/inventory/{codigo}/adjustment` | implementado; usado pelo dashboard para ajustes manuais |
 | Contagens | `GET /api/counting/sessions` | testado |
 | Contagens | `POST /api/counting/sessions` | testado |
 | Contagens | `PATCH /api/counting/sessions/{sessionId}/user` | implementado; falta teste manual admin |
@@ -63,8 +86,13 @@ Concluido:
 | Ocorrencias | `POST /api/occurrences` | testado |
 | Ocorrencias | `PATCH /api/occurrences/{id}` | testado |
 | Chat | `GET /api/chat/rooms` | testado |
+| Chat | `GET /api/chat/rooms/{roomId}/password-status` | implementado e testado |
 | Chat | `GET /api/chat/rooms/{roomId}/messages` | implementado |
 | Chat | `POST /api/chat/rooms/{roomId}/messages` | testado |
+| Chat | `DELETE /api/chat/rooms/{roomId}/messages` | implementado; exige admin |
+| Chat | `PUT /api/chat/rooms/{roomId}/password` | implementado; grava hash |
+| Chat | `POST /api/chat/rooms/{roomId}/verify-password` | implementado e testado |
+| Chat | `GET /api/chat/read-state/{uid}` | implementado e testado |
 | Chat | `PUT /api/chat/read-state` | testado |
 | Automus | `GET /api/automus/releases/{channel}` | testado |
 | Automus | `PUT /api/automus/releases/{channel}` | testado |
@@ -89,13 +117,13 @@ O banco ja tem tabelas, mas o frontend e o Automus ainda escrevem no Firebase. P
 
 | Area atual Firebase | Escritas que faltam na API |
 | --- | --- |
-| `estoqueGlobal` | Automus update transacional pronto em `POST /api/inventory/automus-update`, com snapshot SQL; falta aplicar ajustes manuais do frontend e cortar fallback Firebase |
-| `dashboardConfig/paineis` | pronto na API inicial; falta trocar frontend |
-| `dashboardConfig/avaliadorPedidos` | pronto na API inicial; falta trocar frontend |
-| `usuarios` | admin inicial pronto: aprovar solicitacao, alterar nivel, ativar/desativar, banir e resetar status de senha tentam SQL antes do Firebase; falta login/API auth real e criacao publica |
-| `solicitacoesCadastro` | aprovar/rejeitar pronto no admin; falta criar solicitacao publica e remover duplicadas via SQL |
+| `estoqueGlobal` | Automus update transacional pronto em `POST /api/inventory/automus-update`; ajustes manuais do dashboard agora tentam SQL; falta cortar fallback Firebase e validar fluxo real |
+| `dashboardConfig/paineis` | frontend do dashboard tenta SQL antes do Firebase |
+| `dashboardConfig/avaliadorPedidos` | frontend do dashboard tenta SQL antes do Firebase para salvar/remover |
+| `usuarios` | admin inicial pronto e lista administrativa SQL-first; aprovar solicitacao, alterar nivel, ativar/desativar, banir e resetar status de senha tentam SQL antes do Firebase; ainda falta substituir Firebase Auth se o objetivo for desligar tambem Authentication |
+| `solicitacoesCadastro` | lista admin SQL-first; aprovar/rejeitar pronto no admin; endpoint publico SQL existe, mas o fluxo final ainda precisa decidir como criar credenciais sem Firebase Auth |
 | `usuariosBanidos` | banir/apagar banido pronto no admin; falta revisar fluxo final de reativacao/desbanimento apos corte Firebase |
-| `nicknames*` | substituir por constraints/consultas SQL e endpoints de validacao |
+| `nicknames*` | endpoint publico de status implementado; falta trocar todos os indices auxiliares Firebase por consultas SQL |
 | `contagens` | finalizacao, relatorio/historico/reaplicacao e correcao de usuario tentam SQL antes do Firebase; falta validar correcao no fluxo admin real e substituir tempo real |
 | `contagemAtual` | rascunho/progresso principal vai para SQL; falta tempo real por SSE/WebSocket para substituir `onValue` |
 | `contagemRascunhos` | salvar/remover rascunhos pronto na API e frontend tenta SQL antes do Firebase |
@@ -103,13 +131,13 @@ O banco ja tem tabelas, mas o frontend e o Automus ainda escrevem no Firebase. P
 | `contagemControle/resetGlobal` | endpoint SQL implementado e frontend tenta SQL; teste destrutivo final deve ser feito em janela combinada |
 | `etiquetasGeradas` | pronto na API inicial; frontend tenta SQL antes do fallback Firebase |
 | `rankingEtiquetas` | substituir por query/view SQL; evento base ja vai para `label_print_jobs` |
-| `ocorrencias` | pronto na API inicial para criar/atualizar/tratar com historico; falta validar autenticacao final |
-| `dashboardConfig/ocorrenciasCampos` | salvar listas de campos |
-| `dashboardConfig/ocorrenciasAvaliadorSenha` | trocar por hash/segredo controlado na API |
-| `chatRooms/*/messages` | pronto na API inicial; frontend tenta SQL antes do fallback Firebase |
-| `chatReadState` | pronto na API inicial; frontend tenta SQL antes do fallback Firebase |
+| `ocorrencias` | pronto na API inicial para criar/atualizar/tratar com historico; frontend agora tenta polling SQL antes dos listeners Firebase; falta validar autenticacao final |
+| `dashboardConfig/ocorrenciasCampos` | SQL-first via `app_settings/occurrences.fields` |
+| `dashboardConfig/ocorrenciasAvaliadorSenha` | SQL-first via `app_settings/occurrences.evaluator_password`; proximo endurecimento e hash/segredo server-side |
+| `chatRooms/*/messages` | frontend agora tenta polling SQL antes do listener Firebase e envio SQL nao publica mais no Firebase quando bem-sucedido |
+| `chatReadState` | leitura e escrita SQL-first; fallback Firebase mantido |
 | `chatRooms/*/typing` | substituir por dado transitorio via WebSocket/SSE/TTL |
-| `chatRooms/*/senha` | criar/alterar senha com hash, nunca texto puro |
+| `chatRooms/*/senha` | implementado em SQL com hash e verificacao server-side; fallback Firebase ainda existe para contingencia |
 | `estoqueGlobal/configuracoesEtiquetas` | `label-editor.html` salva/carrega `label.config` no SQL primeiro; fallback Firebase mantido |
 | `automus/releases/latest` | publicar manifest via API/SQL pronto; script de preparo tenta SQL automaticamente quando a API esta ativa |
 
@@ -118,7 +146,7 @@ O banco ja tem tabelas, mas o frontend e o Automus ainda escrevem no Firebase. P
 Arquivos com chamadas Firebase ainda ativas:
 
 - `index.html`
-- `dashboard.html`
+- `dashboard.html` ainda tem fallback Firebase, mas a leitura principal agora tenta `GET /api/dashboard/snapshot`.
 - `label-editor.html`
 
 Falta criar uma camada JS de dados, por exemplo `api-client.js`, e substituir por etapas:
@@ -174,7 +202,7 @@ Opcoes para concluir:
 
 Recomendacao inicial:
 
-- polling para dashboard, ocorrencias e usuarios;
+- polling para dashboard, ocorrencias e mensagens de chat iniciado; ainda falta usuarios, contagem viva e demais listeners;
 - WebSocket/SSE depois para chat e contagem viva;
 - nao persistir `typing` como dado historico definitivo.
 

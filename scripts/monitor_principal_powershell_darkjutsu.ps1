@@ -16,6 +16,7 @@ $Port = 8765
 $ShareRoot = "\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 $AppPath = Join-Path $ShareRoot "app\index.html"
 $TestScript = Join-Path $ShareRoot "scripts\testar_servidor_darkjutsu.bat"
+$PanelScript = Join-Path $ShareRoot "scripts\abrir_painel_servidor_darkjutsu.bat"
 $GuardScript = Join-Path $ShareRoot "scripts\guardiao_servidor_tick_darkjutsu.bat"
 $MakePrincipalScript = Join-Path $ShareRoot "scripts\tornar_principal_operacional_darkjutsu.bat"
 $MakeReserveScript = Join-Path $ShareRoot "scripts\tornar_reserva_operacional_darkjutsu.bat"
@@ -137,7 +138,7 @@ $testItem.Text = "Testar servidor"
 $testItem.Add_Click({
   if (Confirm-Password "Testar servidor") {
     Write-MonitorLog "Teste manual solicitado"
-    Start-Process "cmd.exe" -ArgumentList "/k title Dark-Jutsu - Teste do servidor & call `"$TestScript`""
+    Start-Process "cmd.exe" -WindowStyle Hidden -ArgumentList "/c call `"$PanelScript`""
   }
 })
 [void]$menu.Items.Add($testItem)

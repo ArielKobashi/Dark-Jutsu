@@ -70,7 +70,7 @@ if "%RESERVE_OK%"=="0" (
         echo [%date% %time%] Reserva ativa e principal livre; principal vai reassumir agora. >> "%LOGFILE%"
         call :event INFO FAILBACK "Reserva respondeu e principal esta livre; principal vai reassumir."
         call "%SHARE_ROOT%\scripts\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-        set "RC=%errorlevel%"
+        set "RC=!errorlevel!"
         if not "!RC!"=="0" call :event ERRO FAILBACK "Principal tentou reassumir, mas falhou. Codigo=!RC!."
         exit /b !RC!
     ) else (
@@ -88,7 +88,7 @@ if "%LOCAL_IP%"=="%PRIMARY_IP%" (
     echo [%date% %time%] Nenhum servidor ativo; principal vai iniciar imediatamente. >> "%LOGFILE%"
     call :event INFO ASSUMIR "Nenhum servidor respondeu; principal vai iniciar imediatamente."
     call "%SHARE_ROOT%\scripts\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-    set "RC=%errorlevel%"
+    set "RC=!errorlevel!"
     if not "!RC!"=="0" call :event ERRO ASSUMIR "Principal falhou ao iniciar. Codigo=!RC!."
     exit /b !RC!
 )
@@ -98,7 +98,7 @@ if "%LOCAL_IP%"=="%RESERVE_IP%" (
     echo [%date% %time%] Preto ha %BLACKOUT_MINUTES% ciclo(s); reserva vai assumir agora para manter o sistema online. >> "%LOGFILE%"
     call :event INFO ASSUMIR "Nenhum servidor respondeu; reserva vai assumir agora. Ciclos pretos=%BLACKOUT_MINUTES%."
     call "%SHARE_ROOT%\scripts\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-    set "RC=%errorlevel%"
+    set "RC=!errorlevel!"
     if not "!RC!"=="0" call :event ERRO ASSUMIR "Reserva falhou ao iniciar. Codigo=!RC!."
     exit /b !RC!
 )

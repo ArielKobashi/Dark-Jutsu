@@ -130,6 +130,10 @@ Status em 2026-07-01:
 - Contagens agora tem escrita SQL inicial para sessoes finalizadas, rascunhos, status de maquinas e reset global.
 - Relatorio e historico de planilhas de contagem agora usam `GET /api/counting/history` primeiro, com fallback Firebase.
 - Correcao de usuario no historico de contagem agora tenta `PATCH /api/counting/sessions/{sessionId}/user` antes do fallback Firebase.
+- `dashboard.html` agora tenta `GET /api/dashboard/snapshot` antes do Firebase para carregar estoque, configuracoes, avaliacoes, contagens e etiquetas.
+- Ajustes manuais de limite no dashboard agora tentam `PUT /api/inventory/{codigo}/adjustment` antes do fallback Firebase.
+- Ocorrencias em `index.html` agora tentam polling por `GET /api/occurrences` antes dos listeners Firebase.
+- Mensagens de chat em `index.html` agora tentam polling por `GET /api/chat/rooms/{roomId}/messages` e read-state por `GET/PUT /api/chat/read-state`; `typing` e senha de sala ainda ficam como pendencia de tempo real/segredo.
 - O editor de etiquetas salva/carrega a configuracao compartilhada em `app_settings` via `PUT /api/settings/label.config`.
 - O publicador do Automus tenta gravar o manifesto em `automus_releases` via `PUT /api/automus/releases/latest`.
 - O estoque do Automus agora tem `POST /api/inventory/automus-update`, testado com o export completo em 2026-07-09, gravando snapshot e recarregando itens/enderecos/limites/historico em SQL.
@@ -1014,6 +1018,70 @@ Resultado da primeira API SQL local:
 - Atalho de status: `api/status_api.bat`
 - Atalho de parada: `api/parar_api.bat`
 - URL local: `http://127.0.0.1:8765`
+
+## Avanco 2026-07-11 - corte parcial RTDB em usuarios, chat e ocorrencias
+
+- API:
+  - `/api/me` retorna dados SQL do usuario autenticado.
+  - `GET /api/nicknames/{nickname}/status` valida nickname/badge em SQL para substituir indices `nicknames*`.
+  - `POST /api/signup-requests` cria solicitacao pendente sem persistir senha pura no SQL.
+  - `GET /api/chat/rooms/{roomId}/password-status`, `POST /api/chat/rooms/{roomId}/verify-password` e `PUT /api/chat/rooms/{roomId}/password` tratam senha de sala por hash no PostgreSQL.
+  - `DELETE /api/chat/rooms/{roomId}/messages` permite limpeza admin da sala no SQL.
+- Frontend:
+  - `index.html` valida sessao em SQL antes de ler `usuarios/{uid}`.
+  - Listas admin de solicitacoes, usuarios e banidos usam polling SQL-first.
+  - Chat privado usa verificacao de senha server-side quando API esta ativa.
+  - Limpeza de mensagens de chat usa SQL-first.
+  - Configuracoes de ocorrencias usam `app_settings` SQL-first para `occurrences.fields` e `occurrences.evaluator_password`.
+- Validacao:
+  - API recompilada com `py_compile`.
+  - Endpoints novos testados em instancia temporaria `8766`.
+  - API principal reiniciada em `8765` e `/health` respondeu OK.
+  - Integridade raw-vs-SQL rerodada para `users`, `dashboard`, `counting`, `occurrences`, `chat`, `automus`, `inventory` e `cooperat`: `0` findings.
+
+Pendencias restantes antes de desligar Firebase Database:
+
+- cadastro/login ainda dependem de Firebase Auth para criacao/autenticacao de credenciais; decidir se Firebase Auth sera mantido temporariamente ou substituido por auth SQL propria.
+- `typing` do chat ainda usa `chatRooms/*/typing`; mover para WebSocket/SSE/TTL.
+- contagem viva ainda tem listeners Firebase em pontos de tempo real; completar polling/SSE.
+- remover fallbacks Firebase depois de uma janela de validacao operacional real.
+- rodar export/delta final do Firebase, aplicar migrador idempotente e repetir integridade antes do corte.
+
+## Avanco 2026-07-11 - preparacao operacional de corte
+
+- Criado `GET /api/ops/status` para diagnostico operacional com contagens de tabelas, snapshot mais recente, configuracoes principais e flags da API.
+- Criado modo SQL-only inicial no frontend:
+  - `?sqlOnly=1`;
+  - `localStorage.darkJutsuSqlOnly=1`;
+  - `window.DARK_JUTSU_SQL_ONLY=true`.
+- Em SQL-only, wrappers globais de RTDB (`window.get`, `window.set`, `window.update`, `window.push`, `window.onValue`, `window.runTransaction`) bloqueiam uso de Firebase Database.
+- `typing` do chat nao tenta mais usar RTDB quando SQL-only esta ativo; fica sem indicador remoto ate implementacao SSE/WebSocket/TTL.
+- Criado auditor:
+  - `scripts/auditar_firebase_restante.py`
+  - saida: `_migration_runs/firebase_audit_latest/firebase_audit.md`
+  - primeira execucao: `719` ocorrencias, incluindo imports, fallbacks e acessos RTDB ainda vivos.
+  - auditor runtime refinado em 2026-07-11: `226` ocorrencias restantes.
+- Criado ensaio:
+  - `scripts/ensaio_sql_only_darkjutsu.bat`
+  - verifica API, roda auditoria, compila API e executa integridade rapida por dominio.
+  - execucao em 2026-07-11: passou com integridade `0` findings em todos os dominios testados; auditoria runtime apontou `226` ocorrencias Firebase restantes.
+
+## Avanco 2026-07-11 - reducao de dependencias RTDB runtime
+
+- Cadastro novo passa a criar a conta no Firebase Auth no proprio fluxo do usuario e abre a solicitacao no SQL com `uid`.
+- Aprovacao admin SQL-first agora usa o `uid` da solicitacao SQL e nao precisa transportar senha pendente pelo Realtime Database.
+- Recusa, detalhes de solicitacao e detalhes de usuario passaram a consultar SQL primeiro.
+- Checagem de nickname no formulario usa `GET /api/nicknames/{nickname}/status`.
+- Reset global da contagem e presenca/progresso de maquinas passaram para polling SQL-first quando a API esta ativa.
+- Progresso da tela principal de contagem passou para polling SQL-first via historico SQL.
+- Novos endpoints:
+  - `GET /api/users/{id}`
+  - `GET /api/signup-requests/{id}`
+- Criado teste de restore nao destrutivo:
+  - `scripts/testar_restore_backup_postgres_darkjutsu.bat`
+  - restaura o backup mais recente em `dark_jutsu_restore_test`, consulta `users` e remove o banco temporario.
+- Criado runbook:
+  - `docs/sql-cutover-runbook.md`
 - Endpoints iniciais testados: `/health`, `/api/inventory`, `/api/chat/rooms`, `/api/automus/releases/latest`
 - Endpoints de leitura ampliados: usuarios, solicitacoes, banidos, contagens, etiquetas e configuracoes
 - Primeiras escritas SQL implementadas e testadas: `PUT /api/dashboard/panels/{id}` e `PUT /api/dashboard/evaluations/{legacyKey}`

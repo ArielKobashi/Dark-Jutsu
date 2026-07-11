@@ -1,376 +1,517 @@
-Dark-Jutsu - catalogo de regras do servidor, reserva, monitor e sincronizacao
-Revisao: 2026-07-09
+Dark-Jutsu - regras e descricao dos servidores, APIs, guardiao e monitor
+Revisao: 2026-07-11
 
-1. Identidade das maquinas
+1. Objetivo
 
-1.1. Servidor principal inicial
-- IP fixo esperado: 192.168.5.44
-- Nome visto nos logs: ALMOX-PC03
-- Funcao desejada: ser o servidor preferencial quando estiver disponivel.
+O Dark-Jutsu usa dois PCs fixos como servidores locais em modo ativo/passivo:
 
-1.2. Servidor reserva inicial
-- IP fixo esperado: 192.168.5.38
-- Funcao desejada: assumir quando a principal ficar indisponivel por tempo suficiente.
+- Principal: deve ser o servidor preferencial sempre que estiver disponivel.
+- Reserva: assume automaticamente quando nenhum servidor responde.
 
-1.3. Portas
-- API Dark-Jutsu: 8765
-- PostgreSQL local: 5433
-
-1.4. Caminhos principais
-- Projeto local: %USERPROFILE%\Desktop\Dark-Jutsu
-- PostgreSQL portable: C:\DarkJutsu\PostgreSQL\pgsql
-- Dados PostgreSQL: C:\DarkJutsu\postgres-data
-- Logs locais: C:\DarkJutsu\logs
-- Compartilhamento: \\fileserver\Almoxarifado\0800\servidor\dark-jutsu
-- App publicado: \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\app\index.html
-- Scripts publicados: \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts
-- Backups: \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\backups
+O servidor ativo e definido pela API respondendo em /health na porta 8765.
+PostgreSQL sozinho na porta 5433 nao significa que o sistema esta ativo.
 
 
-2. Regra de estado visual
+2. Identidade das maquinas
 
-2.1. Icone verde
-- Significa: este PC esta respondendo na API 8765 e e o servidor ativo.
-- Acao esperada do menu: "Tornar este PC o reserva".
-- Efeito esperado: parar a API local para que outro servidor assuma.
+2.1. Principal
+- IP fixo: 192.168.5.44
+- Nome observado: ALMOX-PC03
+- Papel: servidor preferencial.
+- Monitor instalado por regra de IP: PowerShell.
+- Arquivos do monitor:
+  - scripts\monitor_principal_powershell_darkjutsu.ps1
+  - scripts\iniciar_monitor_principal_powershell_oculto.vbs
 
-2.2. Icone vermelho
-- Significa: outro PC esta respondendo na API 8765.
-- Acao esperada do menu: "Tornar este PC o Principal".
-- Efeito esperado: tentar tornar este PC o servidor ativo.
+2.2. Reserva
+- IP fixo: 192.168.5.38
+- Papel: servidor reserva.
+- Monitor instalado por regra de IP: Python local.
+- Arquivos do monitor:
+  - scripts\monitor_reserva_python_darkjutsu.py
+  - scripts\iniciar_monitor_reserva_python_darkjutsu.bat
+  - scripts\diagnosticar_monitor_reserva_python_darkjutsu.bat
 
-2.3. Icone preto
-- Significa: nenhum servidor respondeu na API 8765.
-- Acao esperada do menu: "Tornar este PC o Principal".
-- Efeito esperado: tentar iniciar PostgreSQL local e API local.
-
-2.4. Senha dos botoes
-- Botoes administrativos pedem senha: 654321.
-- "Abrir Dark-Jutsu" nao deve pedir senha.
-
-
-3. Regra automatica do guardiao
-
-3.1. Frequencia desejada
-- Guardiao deve rodar a cada 1 minuto.
-- Entrada preferencial: \\fileserver\...\scripts\iniciar_guardiao_servidor_oculto.vbs
-- Esse VBS chama: \\fileserver\...\scripts\guardiao_servidor_tick_darkjutsu.bat
-
-3.2. Quando a principal responde
-- Se 192.168.5.44 /health responde ok:true:
-  - principal permanece ativa;
-  - reserva deve parar a API local se ela estiver ligada;
-  - contadores de estado preto devem ser limpos.
-
-3.3. Quando a reserva responde
-- Se 192.168.5.38 /health responde ok:true e a principal nao responde:
-  - reserva continua ativa;
-  - se a principal voltar e nao estiver pausada, a principal deve reassumir;
-  - apos principal reassumir, reserva deve parar localmente na rodada seguinte.
-
-3.4. Quando nenhum servidor responde, visto pela principal
-- A principal deve tentar iniciar imediatamente.
-- Fluxo esperado:
-  - verificar PostgreSQL local com pg_isready;
-  - iniciar PostgreSQL se necessario;
-  - iniciar API em 0.0.0.0:8765.
-
-3.5. Quando nenhum servidor responde, visto pela reserva
-- 0 a 3 minutos preto:
-  - reserva aguarda;
-  - nao assume imediatamente.
-- Apos 3 minutos preto:
-  - reserva tenta acionar a principal inicial remotamente.
-  - tentativa remota prevista: schtasks /Run /S 192.168.5.44 /TN "Dark-Jutsu Guardiao Servidor"
-- Apos 5 minutos preto:
-  - se principal ainda nao respondeu, reserva assume.
-
-3.6. Observacao critica
-- A versao atualmente publicada do guardiao no compartilhamento ainda usa PowerShell em varias partes:
-  - detectar IP com Get-NetIPAddress;
-  - testar /health com Invoke-RestMethod;
-  - controlar contador de tempo preto com Get-Date;
-  - controlar pausa da principal.
-- Isso e incompatibilidade forte com o ambiente atual, pois PowerShell tem retornado "Acesso negado".
-- Regra correta: scripts de guardiao, teste, backup e restore devem evitar PowerShell onde possivel.
+2.3. Outros PCs
+- Nao devem instalar monitor/guardiao de servidor.
+- Se o instalador unico for rodado em outro IP, ele deve parar e nao instalar nada.
 
 
-4. Regra de assumir servidor
+3. Portas e endpoints
 
-4.1. Script
-- \\fileserver\...\scripts\assumir_servidor_darkjutsu.bat
-
-4.2. Logica
-- Verifica PostgreSQL local com:
-  C:\DarkJutsu\PostgreSQL\pgsql\bin\pg_isready.exe -h 127.0.0.1 -p 5433
-- Se PostgreSQL nao estiver pronto, chama iniciar_postgres_darkjutsu.bat.
-- Se PostgreSQL ficar pronto, inicia a API via:
-  iniciar_api_darkjutsu_service.vbs
-
-4.3. Pontos bons
-- Nao depende da porta 5433 estar "limpa"; aceita PostgreSQL ja pronto.
-- API e iniciada em segundo plano.
-
-4.4. Risco
-- iniciar_api_darkjutsu_service.vbs chama api\iniciar_api_servidor.bat local.
-- Se a copia local do app estiver desatualizada, a API pode subir versao antiga.
-- Recomendacao: pacote local deve ser atualizado antes ou durante configuracao.
-
-
-5. Regra da API
-
-5.1. Script local
-- %USERPROFILE%\Desktop\Dark-Jutsu\api\iniciar_api_servidor.bat
-
-5.2. Script publicado
-- \\fileserver\...\scripts\iniciar_api_darkjutsu.bat
-- \\fileserver\...\scripts\iniciar_api_darkjutsu_service.vbs
-
-5.3. Comportamento esperado
-- Host: 0.0.0.0
+3.1. API Dark-Jutsu
 - Porta: 8765
+- Host esperado para servidor ativo: 0.0.0.0
+- Health check local:
+  http://127.0.0.1:8765/health
+- Health check pela rede:
+  http://IP_DO_SERVIDOR:8765/health
+
+3.2. PostgreSQL
+- Porta: 5433
+- Host local: 127.0.0.1
 - DATABASE_URL padrao:
   postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu
 
-5.4. Problema ja observado
-- Python portable pode falhar com:
-  "Failed to import encodings module"
-- Causa: ambiente PYTHONHOME/PYTHONPATH ausente em algumas formas de chamada.
-- O iniciar_api_servidor.bat local foi ajustado para procurar Python via CMD puro, sem PowerShell.
-
-
-6. Regra do PostgreSQL
-
-6.1. Script
-- iniciar_postgres_darkjutsu.bat
-
-6.2. Comportamento esperado
-- Se porta 5433 ja esta LISTENING, considera PostgreSQL ativo e sai com sucesso.
-- Se nao esta ativo, chama pg_ctl start.
-- Log principal: C:\DarkJutsu\logs\postgres_startup.log
-- Log runtime: C:\DarkJutsu\logs\postgres_runtime.log
-
-6.3. Risco
-- O script ainda usa PowerShell apenas para sleep de 5 segundos.
-- Isso pode ser substituido por:
-  timeout /t 5 /nobreak >nul
-
-
-7. Regra de parar API
-
-7.1. Script
-- parar_api_darkjutsu.bat
-
-7.2. Comportamento esperado
-- Localiza processo ouvindo na porta 8765 via netstat.
-- Mata o PID com taskkill /F.
-- Nao para PostgreSQL.
-
-7.3. Observacao
-- "Encerrar servidor local" atualmente para a API, nao o PostgreSQL.
-- Isto e coerente com o desenho: servidor ativo e definido pela API 8765.
-
-
-8. Regra de backup e restore
-
-8.1. Backup
-- Script: backup_postgres_darkjutsu.bat
-- A maquina gera backup se a API local responder em http://127.0.0.1:8765/health.
-- Backup vai para:
-  \\fileserver\...\backups\darkjutsu_backup_yyyyMMdd_HHmmss.backup
-- Mantem os ultimos 72 backups.
-
-8.2. Restore
-- Script: restaurar_backup_reserva_darkjutsu.bat
-- Se API local esta ativa na 8765, restore e ignorado.
-- Se API local esta inativa, restaura backup mais recente.
-- Controla ultimo backup restaurado em:
-  C:\DarkJutsu\logs\ultimo_backup_restaurado.txt
-
-8.3. Risco critico
-- Backup e restore ainda dependem de PowerShell para:
-  - gerar timestamp;
-  - testar API local;
-  - localizar backup mais recente;
-  - limpar backups antigos.
-- Com PowerShell bloqueado, sincronizacao pode falhar silenciosamente.
-
-8.4. Risco de arquitetura
-- Isto nao e replicacao simultanea real.
-- E modelo ativo/passivo por backup e restore a cada 5 minutos.
-- Perda possivel: alteracoes feitas depois do ultimo backup valido podem nao estar no outro PC.
-
-
-9. Regra do monitor
-
-9.1. Monitor antigo PowerShell
-- monitor_principal_powershell_darkjutsu.ps1
-- iniciar_monitor_principal_powershell_oculto.vbs
-- Problema: PowerShell esta bloqueado com "Acesso negado".
-- Resultado: este monitor nao e confiavel neste ambiente.
-
-9.2. Monitor novo Python
-- monitor_reserva_python_darkjutsu.py
-- iniciar_monitor_reserva_python_darkjutsu.bat
-- diagnosticar_monitor_reserva_python_darkjutsu.bat
-
-9.3. Regras do monitor Python
-- Nao usa PowerShell.
-- Testa API via urllib.
-- Detecta IP local via socket e ipconfig.
-- Menu:
-  - Abrir Dark-Jutsu
-  - Testar servidor
-  - Tornar este PC o reserva, se este PC estiver ativo
-  - Tornar este PC o Principal, se este PC nao estiver ativo
-  - Encerrar servidor local
-
-9.4. Risco observado
-- Versao publicada no compartilhamento pode estar diferente da local.
-- O .bat publicado ainda pode estar sem PYTHONHOME/PYTHONPATH.
-- Deve-se publicar juntos:
-  monitor_reserva_python_darkjutsu.py
-  iniciar_monitor_reserva_python_darkjutsu.bat
-  diagnosticar_monitor_reserva_python_darkjutsu.bat
-
-
-10. Regra do chat
-
-10.1. API SQL
-- Endpoints:
-  GET /api/chat/rooms
-  GET /api/chat/rooms/{roomId}/messages
-  POST /api/chat/rooms/{roomId}/messages
-  PUT /api/chat/read-state
-
-10.2. Frontend
-- O envio foi ajustado para:
-  - tentar salvar no SQL;
-  - tentar publicar tambem no Firebase;
-  - adicionar localmente a mensagem para aparecer na hora;
-  - avisar se SQL e Firebase falharem.
-
-10.3. Risco
-- Se nenhuma API estiver ativa, SQL falha.
-- Se Firebase tambem estiver bloqueado, o usuario ve alerta.
-- Se o index.html publicado no compartilhamento estiver desatualizado, a correcao nao chega aos usuarios.
-
-
-11. Comandos padronizados
-
-11.1. Pasta nova
-- \\fileserver\...\scripts\servidor
-
-11.2. Entradas
-- instalar-tudo.bat
-- instalar-monitor.bat
-- reiniciar-guardiao.bat
-- testar-servidor.bat
-- verificar-iniciar.bat
-- tornar-principal.bat
-- tornar-reserva.bat
-- parar-servidor-local.bat
-
-11.3. Problema
-- Os comandos padronizados chamam scripts antigos.
-- Se scripts antigos ainda usam PowerShell, o comando padronizado tambem falha.
-
-
-12. Inconsistencias encontradas
-
-12.1. CRITICO - PowerShell bloqueado
-- O ambiente mostrou repetidamente "Acesso negado" ao rodar PowerShell.
-- Mesmo assim scripts importantes ainda dependem dele:
-  - guardiao publicado;
-  - testar-servidor;
-  - backup;
-  - restore;
-  - instaladores de atalho;
-  - monitor antigo.
-- Acao recomendada: migrar scripts operacionais para CMD puro ou Python.
-
-12.2. CRITICO - guardiao local ausente
-- Na pasta local C:\Users\Davi.souza\Desktop\Dark-Jutsu\scripts nao aparece:
-  guardiao_servidor_tick_darkjutsu.bat
-- Mas o VBS local chama a versao publicada na rede.
-- Se a rede estiver certa, funciona; se precisar editar local, falta arquivo base.
-- Acao recomendada: recriar localmente a versao oficial e publicar.
-
-12.3. ALTO - guardiao publicado ainda usa PowerShell
-- Mesmo apos tentativa de criar versao CMD puro, o arquivo publicado ainda contem PowerShell.
-- Acao recomendada: substituir a versao publicada por uma versao CMD/Python puro.
-
-12.4. ALTO - pausa da principal depende de PowerShell
-- tornar_reserva_operacional_darkjutsu.bat e tornar_principal_operacional_darkjutsu.bat criam principal-pausado-ate.txt usando PowerShell.
-- Se PowerShell falha, o arquivo de pausa nao e criado, mas o log diz que criou.
-- Acao recomendada: trocar por contador simples ou arquivo sentinela sem data.
-
-12.5. ALTO - monitor PowerShell obsoleto ainda instalado em alguns caminhos
-- Instaladores ainda apontam para iniciar_monitor_principal_powershell_oculto.vbs, que chama PowerShell.
-- Acao recomendada: instaladores devem apontar para iniciar_monitor_reserva_python_darkjutsu.bat.
-
-12.6. MEDIO - comandos com acentos quebrados
-- Alguns caminhos aparecem como "aplica????????es code" em BAT.
-- Isso pode quebrar em ambientes com codepage diferente.
-- Acao recomendada: preferir busca wildcard "aplica* code" ou caminho sem acento.
-
-12.7. MEDIO - backup/restore nao sao replicacao em tempo real
-- O sistema fica "quase atualizado", mas nao simultaneo.
-- Acao recomendada: manter expectativa como ativo/passivo por backup, nao HA real.
-
-12.8. MEDIO - schtasks remoto pode falhar
-- A reserva tenta acionar principal por schtasks /S 192.168.5.44.
-- Isso exige permissao remota, firewall e politica do Windows.
-- Se falhar, a regra ainda assume reserva apos 5 minutos.
-
-
-13. Logica desejada final, simplificada
-
-13.1. Fonte de verdade
-- Servidor ativo e quem responde /health na porta 8765.
-- PostgreSQL sozinho na 5433 nao significa sistema ativo.
-
-13.2. Principal
-- Se principal esta viva, todos usam principal.
-- Reserva nao deve ficar com API ativa.
-
-13.3. Reserva
-- Se principal caiu e reserva ficou vendo preto:
-  - aguarda 3 minutos;
-  - tenta chamar principal;
-  - se em mais 2 minutos nao voltou, assume.
-
-13.4. Retorno da principal
-- Quando principal voltar, ela reassume.
-- Reserva para API local na proxima rodada.
-
-13.5. Usuario
-- Abre app pelo index.html do compartilhamento.
-- Monitor mostra estado:
-  - verde: este PC ativo;
-  - vermelho: outro PC ativo;
-  - preto: nenhum ativo.
-
-
-14. Proximos ajustes recomendados
-
-14.1. Prioridade 1
-- Criar e publicar guardiao_servidor_tick_darkjutsu.bat sem PowerShell.
-- Atualizar iniciar_guardiao_servidor_oculto.vbs para chamar esse arquivo.
-- Testar no principal e na reserva.
-
-14.2. Prioridade 2
-- Trocar instalador do monitor para iniciar monitor Python.
-- Parar de usar monitor_principal_powershell_darkjutsu.ps1 como padrao.
-
-14.3. Prioridade 3
-- Reescrever testar_servidor_darkjutsu.bat sem PowerShell.
-
-14.4. Prioridade 4
-- Reescrever backup/restore sem PowerShell.
-
-14.5. Prioridade 5
-- Publicar index.html atualizado e garantir que todos abrem somente:
+3.3. App
+- Caminho oficial para usuarios:
   \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\app\index.html
 
+
+4. Caminhos oficiais
+
+4.1. Compartilhamento
+- Raiz:
+  \\fileserver\Almoxarifado\0800\servidor\dark-jutsu
+- Scripts:
+  \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts
+- App:
+  \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\app
+- Backups:
+  \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\backups
+- Log compartilhado:
+  \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\logs\servidor_eventos_darkjutsu.txt
+
+4.2. Caminhos locais da maquina
+- PostgreSQL portable:
+  C:\DarkJutsu\PostgreSQL\pgsql
+- Dados PostgreSQL:
+  C:\DarkJutsu\postgres-data
+- Logs locais:
+  C:\DarkJutsu\logs
+- Copia estavel da API para todos os usuarios:
+  C:\DarkJutsu\Dark-Jutsu\api
+
+4.3. Caminhos locais por usuario
+- Monitor Python da reserva:
+  %LOCALAPPDATA%\DarkJutsu\monitor
+- Python portable da reserva:
+  %USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0
+- Projeto local antigo/possivel:
+  %USERPROFILE%\Desktop\Dark-Jutsu
+
+
+5. Instalador unico
+
+5.1. Comando oficial
+
+Rodar uma vez em cada usuario do Windows que precisa ter o icone e o guardiao:
+
+cmd /c "pushd \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts && call instalar_atualizar_guardiao_monitor_darkjutsu.bat && popd"
+
+5.2. Decisao por IP
+
+O instalador detecta o IP local:
+
+- Se encontrar 192.168.5.44:
+  - papel = PRINCIPAL;
+  - monitor = POWERSHELL;
+  - inicia monitor_principal_powershell_darkjutsu.ps1.
+
+- Se encontrar 192.168.5.38:
+  - papel = RESERVA;
+  - monitor = PYTHON;
+  - copia monitor Python para %LOCALAPPDATA%\DarkJutsu\monitor;
+  - garante Python portable no usuario, copiando da rede se faltar;
+  - inicia monitor_reserva_python_darkjutsu.py.
+
+- Se nao encontrar nenhum dos dois IPs:
+  - nao instala;
+  - registra falha;
+  - evita instalar versao errada em outro PC.
+
+5.3. O que o instalador faz
+
+- Verifica acesso ao servidor de arquivos.
+- Verifica arquivos obrigatorios.
+- Cria pasta local do monitor.
+- No reserva, garante Python portable.
+- Garante copia estavel da API em C:\DarkJutsu\Dark-Jutsu\api.
+- Cria guardiao local em loop escondido.
+- Configura inicializacao automatica com fallback.
+- Reinicia o guardiao.
+- Reinicia o monitor correto para o IP da maquina.
+- Executa checks finais.
+- Exibe RESULTADO: OK ou RESULTADO: FALHOU.
+
+5.4. Log do instalador
+
+- Log local:
+  C:\DarkJutsu\logs\instalador_guardiao_monitor.log
+
+
+6. Guardiao automatico
+
+6.1. Arquivos
+
+- Script principal:
+  scripts\guardiao_servidor_tick_darkjutsu.bat
+- Inicializador oculto:
+  scripts\iniciar_guardiao_servidor_oculto.vbs
+- Alias de compatibilidade:
+  scripts\guardiao_continuo_tick_darkjutsu.bat
+  scripts\guardiao_continuo_tick_darkjutsu_hidden.vbs
+
+6.2. Frequencia
+
+- O instalador cria um loop local em:
+  %LOCALAPPDATA%\DarkJutsu\monitor\guardiao_loop_darkjutsu.vbs
+- Esse loop chama o guardiao a cada 60 segundos.
+- Portanto, uma queda deve ser tratada em ate aproximadamente 1 minuto.
+
+6.3. Regra quando a principal responde
+
+Se http://192.168.5.44:8765/health responde ok:true:
+
+- principal e considerada ativa;
+- reserva deve parar a API local se estiver ligada;
+- contadores de estado preto sao limpos;
+- nenhuma assuncao e feita.
+
+6.4. Regra quando a reserva responde
+
+Se http://192.168.5.38:8765/health responde ok:true e a principal nao responde:
+
+- reserva continua ativa;
+- principal, quando voltar, deve reassumir;
+- depois da principal responder, a reserva para a API local na rodada seguinte.
+
+6.5. Regra quando nenhum servidor responde
+
+Se principal e reserva estao OFF:
+
+- visto pela principal:
+  - principal tenta assumir imediatamente.
+
+- visto pela reserva:
+  - reserva tenta assumir imediatamente no proximo tick;
+  - nao espera mais 3 ou 5 minutos.
+
+6.6. Comando manual para rodar um tick do guardiao
+
+cmd /c "pushd \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts && call guardiao_servidor_tick_darkjutsu.bat && popd"
+
+
+7. Assumir servidor
+
+7.1. Script
+
+- scripts\assumir_servidor_darkjutsu.bat
+
+7.2. Fluxo
+
+- Detecta IP local.
+- Registra tentativa no log compartilhado.
+- Testa API local em 127.0.0.1:8765.
+- Se API ja responde, termina OK.
+- Testa PostgreSQL com pg_isready.
+- Se PostgreSQL nao responde, chama iniciar_postgres_darkjutsu.bat.
+- Se PostgreSQL continuar falhando, registra ERRO e termina com falha.
+- Solicita inicio da API por iniciar_api_darkjutsu_service.vbs.
+- Aguarda ate 30 segundos testando /health.
+- So retorna OK se a API responder.
+- Se a API nao responder, registra ERRO.
+
+7.3. Importante
+
+Antes, assumir servidor apenas solicitava API em segundo plano.
+Agora ele valida se a API realmente subiu.
+
+
+8. API
+
+8.1. Arquivos
+
+- API Python:
+  api\dark_jutsu_api.py
+- Iniciador local da API:
+  api\iniciar_api_servidor.bat
+- Inicializador oculto/servico:
+  scripts\iniciar_api_darkjutsu_service.vbs
+
+8.2. Raiz usada para iniciar
+
+O iniciar_api_darkjutsu_service.vbs procura nesta ordem:
+
+1. %USERPROFILE%\Desktop\Dark-Jutsu
+2. C:\DarkJutsu\Dark-Jutsu
+
+Se nao encontrar api\iniciar_api_servidor.bat em nenhum dos dois, registra erro.
+
+8.3. Motivo da copia em C:\DarkJutsu\Dark-Jutsu
+
+Usuarios diferentes da mesma maquina podem nao ter Desktop\Dark-Jutsu.
+Por isso o instalador cria uma copia estavel da API em C:\DarkJutsu\Dark-Jutsu\api.
+
+8.4. Variaveis padrao
+
+- DARK_JUTSU_API_HOST=0.0.0.0
+- DARK_JUTSU_API_PORT=8765
+- DATABASE_URL=postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu
+
+
+9. PostgreSQL
+
+9.1. Script
+
+- scripts\iniciar_postgres_darkjutsu.bat
+
+9.2. Comportamento
+
+- Se a porta 5433 ja esta LISTENING, considera PostgreSQL ativo.
+- Se nao estiver ativo, chama pg_ctl start.
+- Usa PGDATA:
+  C:\DarkJutsu\postgres-data
+
+9.3. Logs
+
+- C:\DarkJutsu\logs\postgres_startup.log
+- C:\DarkJutsu\logs\postgres_runtime.log
+
+
+10. Monitor visual
+
+10.1. Cores
+
+- Verde:
+  - este PC e o servidor ativo;
+  - API local responde na porta 8765.
+
+- Vermelho:
+  - outro PC e o servidor ativo;
+  - este PC nao deve servir API.
+
+- Preto:
+  - nenhum servidor respondeu.
+
+10.2. Menu esperado
+
+- Abrir Dark-Jutsu:
+  - nao pede senha;
+  - abre o index.html do compartilhamento.
+
+- Testar servidor:
+  - pede senha 654321;
+  - abre CMD visivel.
+
+- Verificar/iniciar agora:
+  - pede senha 654321;
+  - roda guardiao_servidor_tick_darkjutsu.bat;
+  - no monitor Python da reserva, abre CMD visivel com retorno.
+
+- Tornar este PC o Principal:
+  - aparece quando este PC nao esta ativo;
+  - pede senha 654321;
+  - tenta assumir servidor.
+
+- Tornar este PC o reserva:
+  - aparece quando este PC esta ativo;
+  - pede senha 654321;
+  - para API local.
+
+- Encerrar servidor local:
+  - pede senha 654321;
+  - para API local.
+
+10.3. Diferenca proposital entre principal e reserva
+
+- Principal usa PowerShell porque ali esta funcionando.
+- Reserva usa Python porque PowerShell apresentou "Acesso negado" no ambiente do Jean.
+- Essa diferenca e proposital e controlada por IP.
+
+
+11. Logs
+
+11.1. Log compartilhado unico
+
+- Arquivo:
+  \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\logs\servidor_eventos_darkjutsu.txt
+
+- Formato:
+  yyyy-MM-dd HH:mm:ss | MAQUINA | USUARIO | NIVEL | COMPONENTE | MENSAGEM
+
+- Componentes esperados:
+  - GUARDIAO
+  - ASSUMIR
+  - POSTGRES
+  - API
+  - API_REDE
+  - FAILBACK
+  - TESTE
+
+- Niveis esperados:
+  - INFO
+  - OK
+  - AVISO
+  - ERRO
+
+11.2. Limpeza de 72 horas
+
+- Script:
+  scripts\limpar_log_72h_darkjutsu.py
+- Chamado por:
+  scripts\registrar_evento_servidor_darkjutsu.bat
+- Mantem apenas registros das ultimas 72 horas quando Python esta disponivel.
+
+11.3. Logs locais importantes
+
+- Guardiao local:
+  C:\DarkJutsu\logs\servidor_guardiao.log
+- API:
+  C:\DarkJutsu\logs\api_runtime.log
+- Instalador:
+  C:\DarkJutsu\logs\instalador_guardiao_monitor.log
+- PostgreSQL:
+  C:\DarkJutsu\logs\postgres_startup.log
+  C:\DarkJutsu\logs\postgres_runtime.log
+
+
+12. Backup e restore
+
+12.1. Backup
+
+- Script:
+  scripts\backup_postgres_darkjutsu.bat
+- Destino:
+  \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\backups
+
+12.2. Restore
+
+- Script:
+  scripts\restaurar_backup_reserva_darkjutsu.bat
+- Controle local:
+  C:\DarkJutsu\logs\ultimo_backup_restaurado.txt
+
+12.3. Modelo atual
+
+- Nao e replicacao simultanea real.
+- E modelo ativo/passivo com backup/restore.
+- Alteracoes feitas depois do ultimo backup valido podem nao estar no outro PC.
+
+
+13. Comandos de operacao
+
+13.1. Instalar ou atualizar no usuario atual
+
+cmd /c "pushd \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts && call instalar_atualizar_guardiao_monitor_darkjutsu.bat && popd"
+
+13.2. Rodar guardiao agora
+
+cmd /c "pushd \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts && call guardiao_servidor_tick_darkjutsu.bat && popd"
+
+13.3. Ver log compartilhado
+
+type "\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\logs\servidor_eventos_darkjutsu.txt"
+
+13.4. Ver logs locais principais
+
+type C:\DarkJutsu\logs\servidor_guardiao.log
+type C:\DarkJutsu\logs\api_runtime.log
+type C:\DarkJutsu\logs\instalador_guardiao_monitor.log
+
+
+14. Scripts oficiais atuais
+
+14.1. Instalacao e automacao
+
+- scripts\instalar_atualizar_guardiao_monitor_darkjutsu.bat
+- scripts\guardiao_servidor_tick_darkjutsu.bat
+- scripts\iniciar_guardiao_servidor_oculto.vbs
+
+14.2. Assuncao e parada
+
+- scripts\assumir_servidor_darkjutsu.bat
+- scripts\parar_api_darkjutsu.bat
+- scripts\tornar_principal_operacional_darkjutsu.bat
+- scripts\tornar_reserva_operacional_darkjutsu.bat
+
+14.3. Monitores
+
+- scripts\monitor_principal_powershell_darkjutsu.ps1
+- scripts\iniciar_monitor_principal_powershell_oculto.vbs
+- scripts\monitor_reserva_python_darkjutsu.py
+- scripts\iniciar_monitor_reserva_python_darkjutsu.bat
+- scripts\diagnosticar_monitor_reserva_python_darkjutsu.bat
+
+14.4. API
+
+- scripts\iniciar_api_darkjutsu_service.vbs
+- api\iniciar_api_servidor.bat
+- api\dark_jutsu_api.py
+
+14.5. Logs compartilhados
+
+- scripts\registrar_evento_servidor_darkjutsu.bat
+- scripts\limpar_log_72h_darkjutsu.py
+
+14.6. Aliases de compatibilidade
+
+Alguns nomes antigos podem existir apenas como redirecionadores pequenos para nao quebrar inicializacoes antigas:
+
+- scripts\monitor_servidor_darkjutsu.ps1
+- scripts\monitor_servidor_darkjutsu_hidden.vbs
+- scripts\monitor_servidor_darkjutsu_py.bat
+- scripts\monitor_servidor_darkjutsu_py_debug.bat
+- scripts\guardiao_continuo_tick_darkjutsu.bat
+- scripts\guardiao_continuo_tick_darkjutsu_hidden.vbs
+
+
+15. Riscos conhecidos
+
+15.1. Firewall ou TI
+
+Outros PCs so acessam a API se a porta 8765 estiver liberada na rede privada.
+Se o firewall bloquear, /health nao responde pela rede.
+
+15.2. Permissao de usuario
+
+Alguns usuarios bloqueiam:
+
+- Registro HKCU Run;
+- pasta Inicializar;
+- tarefa agendada;
+- PowerShell.
+
+O instalador tenta fallbacks, mas se todos forem bloqueados a inicializacao automatica pode falhar.
+
+15.3. PowerShell
+
+PowerShell e usado no monitor principal porque funciona no principal.
+No reserva, a regra oficial e Python.
+
+15.4. Backup nao e replicacao real
+
+O sistema nao tem replicacao PostgreSQL nativa.
+E importante manter backups frequentes e entender que pode haver perda entre o ultimo backup e a queda.
+
+15.5. Usuario novo
+
+Usuario novo precisa rodar o instalador unico pelo menos uma vez para ter icone/guardiao no login.
+No reserva, o instalador copia Python portable se faltar.
+
+
+16. Fluxo esperado em queda
+
+16.1. Principal desligou
+
+1. Reserva fica preta.
+2. Guardiao da reserva roda em ate 60 segundos.
+3. Guardiao ve principal OFF e reserva OFF.
+4. Reserva chama assumir_servidor_darkjutsu.bat.
+5. PostgreSQL local e iniciado se necessario.
+6. API local e iniciada.
+7. /health e testado por ate 30 segundos.
+8. Icone da reserva fica verde.
+9. Log compartilhado registra cada etapa.
+
+16.2. Principal voltou
+
+1. Guardiao da principal roda.
+2. Principal ve reserva ativa e principal livre.
+3. Principal reassume.
+4. Reserva ve principal ativa na rodada seguinte.
+5. Reserva para API local.
+6. Icones ficam:
+   - principal verde;
+   - reserva vermelho.
 
