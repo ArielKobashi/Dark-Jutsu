@@ -7,10 +7,10 @@
     <style>
         :root{
             color-scheme:dark;
-            --bg:#0D0D12;
-            --panel:#15151D;
-            --panel2:#1A1A25;
-            --line:#2A2A35;
+            --bg:#182033;
+            --panel:#20283A;
+            --panel2:#263044;
+            --line:#3B465C;
             --text:#E6E6E6;
             --muted:#9CA3AF;
             --soft:#cbd5e1;
@@ -26,15 +26,15 @@
             margin:0;
             min-height:100vh;
             background:
-                radial-gradient(circle at 22% 16%, rgba(122,60,255,.28), transparent 36%),
-                radial-gradient(circle at 88% 12%, rgba(0,217,255,.12), transparent 30%),
-                #0D0D12;
+                radial-gradient(circle at 22% 16%, rgba(96,165,250,.18), transparent 36%),
+                radial-gradient(circle at 88% 12%, rgba(20,184,166,.12), transparent 30%),
+                #182033;
             color:var(--text);
             font-family:Segoe UI, Arial, sans-serif;
         }
         body.embed{
             min-height:100vh;
-            background:#0D0D12;
+            background:#182033;
             overflow:hidden;
         }
         body.embed header{display:none}
@@ -597,6 +597,9 @@
             padding:7px 8px;
             font-size:11px;
         }
+        .historicoSaidasMini table{min-width:460px}
+        .historicoSaidasMini th,
+        .historicoSaidasMini td{padding:5px 6px}
         .kanbanGrid{
             display:grid;
             grid-template-columns:repeat(5,minmax(0,1fr));
@@ -770,7 +773,7 @@
         .triageRail{
             border:1px solid rgba(148,163,184,.18);
             border-radius:8px;
-            background:rgba(15,23,42,.48);
+            background:rgba(37,48,69,.78);
             min-width:0;
         }
         .triageCol,
@@ -795,6 +798,12 @@
             font-size:15px;
             color:#f8fafc;
         }
+        .triageHeaderMain{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            min-width:0;
+        }
         .triageQueue{
             display:grid;
             gap:7px;
@@ -809,14 +818,14 @@
             border:1px solid rgba(148,163,184,.16);
             border-left:4px solid var(--urg,#94a3b8);
             border-radius:8px;
-            background:rgba(26,26,37,.88);
+            background:rgba(44,56,78,.88);
             padding:8px;
             min-width:0;
             transition:transform .14s ease, border-color .14s ease, background .14s ease;
         }
         .triageQueueItem:hover{transform:translateX(3px);border-color:rgba(96,165,250,.46)}
         .triageQueueItem.ativo{
-            background:rgba(30,41,59,.96);
+            background:rgba(53,68,94,.96);
             border-color:rgba(96,165,250,.72);
             box-shadow:0 0 0 1px rgba(96,165,250,.22) inset;
         }
@@ -884,7 +893,7 @@
         .triageMetric{
             border:1px solid rgba(148,163,184,.16);
             border-radius:8px;
-            background:rgba(15,23,42,.42);
+            background:rgba(31,43,63,.62);
             padding:9px;
             min-width:0;
         }
@@ -910,7 +919,7 @@
         .triageHistoryBlock{
             border:1px solid rgba(148,163,184,.16);
             border-radius:8px;
-            background:rgba(15,23,42,.34);
+            background:rgba(31,43,63,.56);
             padding:10px;
             min-width:0;
         }
@@ -930,6 +939,7 @@
             gap:6px;
             max-height:260px;
             overflow:auto;
+            padding-right:2px;
         }
         .triageHistoryEvent{
             display:grid;
@@ -938,7 +948,7 @@
             border:1px solid rgba(148,163,184,.12);
             border-radius:7px;
             padding:7px;
-            background:rgba(26,26,37,.72);
+            background:rgba(44,56,78,.72);
             font-size:11px;
         }
         .triageHistoryEvent strong{color:#f8fafc}
@@ -956,6 +966,57 @@
             border-radius:7px;
             padding:8px 11px;
             font-size:12px;
+        }
+        .triageQueueFilters{
+            display:flex;
+            gap:5px;
+            flex-wrap:wrap;
+            justify-content:flex-end;
+        }
+        .triageQueueFilter{
+            border:1px solid rgba(148,163,184,.24);
+            border-radius:999px;
+            padding:4px 7px;
+            color:#e2e8f0;
+            background:rgba(31,43,63,.72);
+            font-size:10px;
+            font-weight:900;
+            text-decoration:none;
+        }
+        .triageQueueFilter.ativo{
+            border-color:var(--urg,#60a5fa);
+            box-shadow:0 0 0 1px color-mix(in srgb, var(--urg,#60a5fa) 40%, transparent) inset;
+        }
+        .triageSideList{
+            display:grid;
+            gap:7px;
+            max-height:360px;
+            overflow:auto;
+        }
+        .triageSideList + .triageHeader{margin-top:14px}
+        .triageSideCard{
+            display:block;
+            text-decoration:none;
+            color:inherit;
+            border:1px solid rgba(148,163,184,.16);
+            border-radius:8px;
+            background:rgba(44,56,78,.82);
+            padding:8px;
+            min-width:0;
+        }
+        .triageSideCard.ativo{
+            border-color:rgba(96,165,250,.72);
+            box-shadow:0 0 0 1px rgba(96,165,250,.22) inset;
+        }
+        .triageSideCard strong{display:block;color:#e2e8f0;font-size:12px}
+        .triageSideCard span{
+            display:block;
+            color:var(--muted);
+            margin-top:3px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            font-size:11px;
         }
         .triageRailStage{
             border-left:3px solid var(--col,#94a3b8);
@@ -1141,7 +1202,8 @@
             maquinaMovimentacao: (params.get("maquinaMovimentacao") || params.get("maquina") || "").trim().toUpperCase(),
             embed: boolParam("embed", "embutido"),
             painel: params.get("painel") || "",
-            avaliadorItem: normalizarCodigo(params.get("avaliadorItem") || "")
+            avaliadorItem: normalizarCodigo(params.get("avaliadorItem") || ""),
+            filaCor: parametroPermitido((params.get("filaCor") || "todas").toLowerCase(), ["todas","critico","alto","baixo","ok"], "todas")
         };
         if(cfg.embed) document.body.classList.add("embed");
         const regexArmazemBusca = /(?:do|da|dos|das|de)?\s*(?:armaz[eé]m|almox|deposito|dep[oó]sito)\s*(?:desejado|n[ºo.]*)?\s*[:=-]?\s*([a-z0-9]+)/i;
@@ -2101,6 +2163,33 @@
             if(!valor) return null;
             return Math.max(0, Math.round((Date.now() - valor) / 86400000));
         }
+        function compararDiasDesc(a, b){
+            const da = a === null || a === undefined ? -1 : Number(a);
+            const db = b === null || b === undefined ? -1 : Number(b);
+            return db - da;
+        }
+        function timestampAbaixoMinimo(linha){
+            const minimo = num(linha?.item?.minimo);
+            const saldoAtual = num(linha?.item?.saldo);
+            if(minimo === null || saldoAtual === null || saldoAtual >= minimo) return null;
+            const historico = (Array.isArray(linha?.historicoSaldo) ? linha.historicoSaldo : [])
+                .slice()
+                .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
+            let saldo = saldoAtual;
+            for(const evento of historico){
+                const ts = Number(evento?.timestamp || 0);
+                if(!ts) continue;
+                const saldoAnterior = num(evento?.saldoAnterior);
+                const delta = Number(evento?.delta || 0);
+                const anterior = saldoAnterior !== null ? saldoAnterior : saldo - delta;
+                if(anterior >= minimo && saldo < minimo) return ts;
+                saldo = anterior;
+            }
+            return Number(historico[historico.length - 1]?.timestamp || 0) || null;
+        }
+        function diasAbaixoMinimo(linha){
+            return diasDesdeTimestamp(timestampAbaixoMinimo(linha));
+        }
         function rotuloDiasDesde(ts, prefixo){
             const dias = diasDesdeTimestamp(ts);
             if(dias === null) return "";
@@ -2231,6 +2320,9 @@
             if(status === "solicitacao_aprovada") return registro.atualizadoEm || registro.avaliadoEm || pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp;
             return registro.avaliadoEm || pedido?.solicitacao?.timestamp || pedido?.pedido?.timestamp || pedido?.ultimoPedido?.timestamp;
         }
+        function diasDesdeSolicitacaoLinha(linha){
+            return diasDesdeTimestamp(timestampSolicitacaoKanban(linha) || timestampProcessoKanban(linha));
+        }
         async function salvarAvaliacaoPedido(codigo, payload){
             const chave = ajusteKey(codigo);
             avaliadorPedidosConfig[chave] = payload;
@@ -2324,7 +2416,7 @@
                 <div class="historicoMini"><table><tbody><tr><td>Sem historico de saida localizado para este item.</td></tr></tbody></table></div>
             `;
             return `
-                <div class="historicoMini expandido">
+                <div class="historicoMini historicoSaidasMini expandido">
                     <table>
                         <thead>
                             <tr>
@@ -2382,7 +2474,7 @@
                 </div>
             `;
             return `
-                <div class="historicoAviso">Base antiga Cooperat: exibindo somente compras. Quantidade considerada = Qtd.Solicitada; valor baixa tratado como valor unitario. Nao ha data de recebimento separada.</div>
+                <div class="historicoAviso">Base antiga: exibindo somente compras. Quantidade considerada = Qtd.Solicitada; valor baixa tratado como valor unitario. Nao ha data de recebimento separada.</div>
                 ${tabelaEventos(eventos)}
                 ${eventosRestantes.length ? `
                     <details class="avaliadorDetails cooperatMore">
@@ -2426,7 +2518,7 @@
                         <div class="avaliadorDetailsBody">${renderHistoricoMini(historico)}</div>
                     </details>
                     <details class="avaliadorDetails">
-                        <summary><span>Historico Cooperat</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdCooperat))} compra(s)</span></summary>
+                        <summary><span>Historico antigo</span><span class="avaliadorSummaryMeta">${esc(fmt(qtdCooperat))} compra(s)</span></summary>
                         <div class="avaliadorDetailsBody">${renderHistoricoCooperatMini(historicoCooperat)}</div>
                     </details>
                     <details class="avaliadorDetails">
@@ -2481,10 +2573,10 @@
         }
         function eventosComprasCooperatLegado(linha){
             return eventosCompraCooperat(linha?.historicoCooperat).map(h => ({
-                origem:"Cooperat legado",
+                origem:"Historico antigo",
                 id:h.requisicao || "-",
                 data:h.dataBr || h.data || "-",
-                detalhe:"Compra antiga",
+                detalhe:"Registro antigo",
                 quantidade:num(h.quantidadeCompra) ?? num(h.qtdSolicitada),
                 timestamp:h.data ? Date.parse(`${h.data}T00:00:00`) || 0 : 0
             }));
@@ -2492,6 +2584,17 @@
         function eventosComprasUnificados(linha){
             return [...eventosComprasProtheus(linha), ...eventosComprasCooperatLegado(linha)]
                 .sort((a,b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
+        }
+        let historicoComprasMesaStore = {};
+        function idHistoricoComprasMesa(prefixo, codigo){
+            return `${prefixo}_${ajusteKey(codigo || "item")}`;
+        }
+        function prepararHistoricoComprasMesa(id, eventos){
+            historicoComprasMesaStore[id] = Array.isArray(eventos) ? eventos : [];
+        }
+        function renderHistoricoComprasChunk(id, inicio = 0, tamanho = 20){
+            const eventos = historicoComprasMesaStore[id] || [];
+            return eventos.slice(inicio, inicio + tamanho).map(renderEventoCompra).join("");
         }
         function renderEventoCompra(evento){
             return `
@@ -2508,20 +2611,25 @@
             const protheus = eventosComprasProtheus(linha);
             const cooperat = eventosComprasCooperatLegado(linha);
             const total = protheus.length + cooperat.length;
+            const codigo = key(linha?.item);
+            const idProtheus = idHistoricoComprasMesa("protheus", codigo);
+            const idAntigo = idHistoricoComprasMesa("antigo", codigo);
+            prepararHistoricoComprasMesa(idProtheus, protheus);
+            prepararHistoricoComprasMesa(idAntigo, cooperat);
             return `
                 <div class="triageHistoryBlock">
                     <div class="triageHistoryTitle"><span>Compras Protheus</span><span>${esc(fmt(protheus.length))}</span></div>
-                    <div class="triageHistoryList">
-                        ${protheus.slice(0, 8).map(renderEventoCompra).join("") || `<div class="kanbanEmpty">Sem compras Protheus localizadas.</div>`}
+                    <div class="triageHistoryList" data-history-list="${esc(idProtheus)}" data-offset="20" data-total="${esc(protheus.length)}">
+                        ${renderHistoricoComprasChunk(idProtheus, 0, 20) || `<div class="kanbanEmpty">Sem compras Protheus localizadas.</div>`}
                     </div>
                 </div>
                 <div class="triageHistoryBlock">
-                    <div class="triageHistoryTitle"><span>Cooperat legado</span><span>${esc(fmt(cooperat.length))}</span></div>
-                    <div class="triageHistoryList">
-                        ${cooperat.slice(0, 8).map(renderEventoCompra).join("") || `<div class="kanbanEmpty">Sem compras Cooperat antigas.</div>`}
+                    <div class="triageHistoryTitle"><span>Compras antigas</span><span>${esc(fmt(cooperat.length))}</span></div>
+                    <div class="triageHistoryList" data-history-list="${esc(idAntigo)}" data-offset="20" data-total="${esc(cooperat.length)}">
+                        ${renderHistoricoComprasChunk(idAntigo, 0, 20) || `<div class="kanbanEmpty">Sem compras antigas localizadas.</div>`}
                     </div>
                 </div>
-                <div class="historicoAviso" style="grid-column:1/-1">Historico de compras unificado: ${esc(fmt(total))} registro(s). Protheus e Cooperat ficam separados visualmente porque Cooperat e uma base legada e nao recebera novas compras.</div>
+                <div class="historicoAviso" style="grid-column:1/-1">Historico de compras unificado: ${esc(fmt(total))} registro(s). Protheus e base antiga ficam separados visualmente porque novas compras passam pelo Protheus.</div>
             `;
         }
         function renderFilaAvaliadorCard(linha, ativo){
@@ -2538,6 +2646,32 @@
                         <span class="avaliadorTag">Min. ${esc(fmt(linha.item.minimo))}</span>
                     </div>
                 </a>
+            `;
+        }
+        function renderListaLateralAvaliador(titulo, lista, tipo, itemAtivoCodigo){
+            return `
+                <div class="triageHeader">
+                    <h2>${esc(titulo)}</h2>
+                    <span class="chip">${esc(fmt(lista.length))}</span>
+                </div>
+                <div class="triageSideList">
+                    ${lista.map(linha => {
+                        const codigo = key(linha.item);
+                        const dias = tipo === "sem_pedido" ? diasAbaixoMinimo(linha) : diasDesdeSolicitacaoLinha(linha);
+                        const rotuloDias = dias === null
+                            ? "sem data"
+                            : tipo === "sem_pedido"
+                                ? `${fmt(dias)} dia${dias === 1 ? "" : "s"} abaixo do minimo`
+                                : `${fmt(dias)} dia${dias === 1 ? "" : "s"} desde a solicitacao`;
+                        return `
+                            <a class="triageSideCard ${codigo === itemAtivoCodigo ? "ativo" : ""}" href="${esc(urlComFiltros({ avaliadorItem:codigo }))}">
+                                <strong>${esc(linha.item.protheus || linha.item.cooperat || "-")}</strong>
+                                <span>${esc(rotuloDias)}</span>
+                                <span>${esc(linha.item.descricao || "-")}</span>
+                            </a>
+                        `;
+                    }).join("") || `<section class="empty">Sem itens nesta lista.</section>`}
+                </div>
             `;
         }
         function renderMesaItemAtivo(linha){
@@ -2565,7 +2699,7 @@
                         <span class="avaliadorTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
                         <span class="avaliadorTag">Compras unificadas ${esc(fmt(compras.length))}</span>
                         <span class="avaliadorTag">Protheus ${esc(fmt(stats.totalPedidos || 0))}</span>
-                        <span class="avaliadorTag">Cooperat legado ${esc(fmt(statsCooperat.totalEventos || 0))}</span>
+                        <span class="avaliadorTag">Antigas ${esc(fmt(statsCooperat.totalEventos || 0))}</span>
                         <span class="avaliadorTag" title="${esc(tituloEnderecosItem(item))}">Endereco ${esc(item.enderecoPrincipal || "-")}</span>
                     </div>
                     <div class="triageActions avaliadorActions">
@@ -2672,7 +2806,7 @@
                                 <span><strong>Reposição:</strong> ${esc(fmt(reposicao(item)))}</span>
                                 <span><strong>Prazo médio:</strong> ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`}</span>
                                 <span><strong>Último pedido:</strong> ${stats.diasDesdePedido === null ? "-" : `${esc(fmt(stats.diasDesdePedido))} dias`}</span>
-                                <span><strong>Cooperat:</strong> ${esc(fmt(comprasCooperat))} compra(s), última ${esc(ultimaCooperat)}</span>
+                                <span><strong>Base antiga:</strong> ${esc(fmt(comprasCooperat))} compra(s), ultima ${esc(ultimaCooperat)}</span>
                                 <span><strong>Avaliado:</strong> ${registro?.avaliadoEm ? esc(new Date(registro.avaliadoEm).toLocaleDateString("pt-BR")) : "-"}</span>
                                 ${registro?.observacao ? `<span>Obs.: ${esc(registro.observacao)}</span>` : ""}
                             </div>
@@ -2727,10 +2861,20 @@
                 return true;
             });
             const abaixoMinimo = linhas.filter(l => l.status === "abaixo");
-            const fila = abaixoMinimo
+            const filaTotal = abaixoMinimo
                 .filter(l => !l.registro?.decisao || decisaoRevisaoAvaliador(l.registro))
                 .filter(l => !processoCompraAbertoLinha(l))
-                .sort((a,b) => compararValores(a.reposicao || 0, b.reposicao || 0, "desc"));
+                .sort((a,b) => {
+                    const peso = { critico:3, alto:2, baixo:1, ok:0 };
+                    const prioridade = (peso[rotuloUrgenciaAvaliador(b)] || 0) - (peso[rotuloUrgenciaAvaliador(a)] || 0);
+                    if(prioridade) return prioridade;
+                    const deficit = deficitMinimo(b) - deficitMinimo(a);
+                    if(deficit) return deficit;
+                    return compararValores(a.reposicao || 0, b.reposicao || 0, "desc");
+                });
+            const fila = cfg.filaCor === "todas"
+                ? filaTotal
+                : filaTotal.filter(l => rotuloUrgenciaAvaliador(l) === cfg.filaCor);
             const passivos = linhasBase.filter(l => decisaoSolicitarAvaliador(l.registro));
             const avaliadosComPedidoAberto = passivos
                 .filter(l => processoCompraAbertoLinha(l))
@@ -2738,6 +2882,12 @@
             const solicitadosSemProcessoAberto = passivos
                 .filter(l => !processoCompraAbertoLinha(l))
                 .filter(l => !timestampEntradaConfirmadaKanban(l));
+            const solicitadosSemProcessoOrdenados = solicitadosSemProcessoAberto
+                .slice()
+                .sort((a,b) => compararDiasDesc(diasAbaixoMinimo(a), diasAbaixoMinimo(b)) || compararValores(a.item?.protheus || a.item?.cooperat || "", b.item?.protheus || b.item?.cooperat || "", "asc"));
+            const avaliadosComPedidoOrdenados = avaliadosComPedidoAberto
+                .slice()
+                .sort((a,b) => compararDiasDesc(diasDesdeSolicitacaoLinha(a), diasDesdeSolicitacaoLinha(b)) || compararValores(a.item?.protheus || a.item?.cooperat || "", b.item?.protheus || b.item?.cooperat || "", "asc"));
             const semAvaliadorKanban = linhasBase.filter(l => !l.registro?.decisao && pedidoAtivo(l.pedido));
             const baseKanban = cfg.kanbanGestao === "avaliador"
                 ? passivos
@@ -2778,10 +2928,11 @@
             const itemAtivo = itensMesa.find(l => key(l.item) === cfg.avaliadorItem) || fila[0] || itensMesa[0] || null;
             const itemAtivoCodigo = itemAtivo ? key(itemAtivo.item) : "";
 
-            document.getElementById("subtitulo").textContent = `${fila.length} item(ns) aguardando avaliacao no armazem ${cfg.armazens.join(",") || "04"}`;
+            historicoComprasMesaStore = {};
+            document.getElementById("subtitulo").textContent = `${filaTotal.length} item(ns) aguardando avaliacao no armazem ${cfg.armazens.join(",") || "04"}`;
             root.innerHTML = `
                 <section class="cards">
-                    <article class="card red"><span>Aguardando avaliacao</span><strong>${fila.length}</strong></article>
+                    <article class="card red"><span>Aguardando avaliacao</span><strong>${filaTotal.length}</strong></article>
                     <article class="card blue"><span>No Kanban</span><strong>${kanbanItens.length}</strong></article>
                     <article class="card green"><span>Ja avaliados</span><strong>${avaliadosComPedidoAberto.length}</strong></article>
                     <article class="card"><span>Sem pedido aberto</span><strong>${solicitadosSemProcessoAberto.length}</strong></article>
@@ -2792,13 +2943,13 @@
                     <span class="chip">abaixo do minimo: ${abaixoMinimo.length}</span>
                     <span class="chip">kanban: ${cfg.kanbanGestao === "avaliador" ? "com avaliador" : cfg.kanbanGestao === "sem_avaliador" ? "sem avaliador" : "todos"}</span>
                     <span class="chip">historico novo MATA111/MATA112</span>
-                    <span class="chip">historico antigo Cooperat: ${esc(fmt(totalComprasCooperatEscopo))} compras</span>
+                    <span class="chip">historico antigo: ${esc(fmt(totalComprasCooperatEscopo))} compras</span>
                 </div>
                 ${renderFiltros([], dados.length)}
                 <div class="kanbanFiltroBar">
                     <div>
                         <h2 class="sectionTitle kanbanTitle">Kanban de pedidos em andamento - armazem ${esc(cfg.armazens.join(",") || "04")}</h2>
-                        <span class="chip">Mesa de avaliacao: fila, item ativo e esteira de pedidos</span>
+                        <span class="chip">Pedidos acompanhados por etapa</span>
                     </div>
                     <div class="filter">
                         <label for="fKanbanOrdem">Ordem</label>
@@ -2824,31 +2975,46 @@
                         </select>
                     </div>
                 </div>
+                <section class="kanbanGrid ${cfg.kanbanExpandido ? "expanded" : ""}">
+                    ${colunas.map(col => {
+                        const cards = ordenarKanban(kanbanItens.filter(l => l.kanban === col.id));
+                        const visiveis = cards.slice(0, limiteKanbanPorColuna);
+                        return `
+                            <div class="kanbanCol" style="--col:${esc(col.cor)}">
+                                <h3><span>${esc(col.titulo)}</span><span>${esc(fmt(cards.length))}</span></h3>
+                                <div class="kanbanCards">
+                                    ${visiveis.map(renderKanbanCard).join("") || `<div class="kanbanEmpty">Sem itens.</div>`}
+                                </div>
+                            </div>
+                        `;
+                    }).join("")}
+                </section>
                 ${!cfg.kanbanExpandido && kanbanTemMais ? `<a class="kanbanMore" href="${esc(urlComFiltros({ kanbanExpandido:"1" }))}">Ver mais registros do Kanban</a>` : ""}
                 <section class="avaliadorMesa">
                     <aside class="triageCol">
                         <div class="triageHeader">
-                            <h2>Fila de avaliacao</h2>
-                            <span class="chip">${esc(fmt(fila.length))}</span>
+                            <div class="triageHeaderMain">
+                                <h2>Fila de avaliacao</h2>
+                                <span class="chip">${esc(fmt(fila.length))}</span>
+                            </div>
+                            <div class="triageQueueFilters">
+                                ${[
+                                    ["todas", "Todas", "#60a5fa"],
+                                    ["critico", "Critico", "#ef4444"],
+                                    ["alto", "Alto", "#f59e0b"],
+                                    ["baixo", "Baixo", "#60a5fa"]
+                                ].map(([id, rotulo, cor]) => `<a class="triageQueueFilter ${cfg.filaCor === id ? "ativo" : ""}" style="--urg:${esc(cor)}" href="${esc(urlComFiltros({ filaCor:id, avaliadorItem:"" }))}">${esc(rotulo)}</a>`).join("")}
+                            </div>
                         </div>
                         <div class="triageQueue">
                             ${fila.slice(0, cfg.limite).map(l => renderFilaAvaliadorCard(l, key(l.item) === itemAtivoCodigo)).join("") || `<section class="empty">Nenhum item abaixo do minimo sem avaliacao.</section>`}
                         </div>
-                        <details class="avaliadorDetails" ${solicitadosSemProcessoAberto.length ? "open" : ""}>
-                            <summary><span>Avaliados sem pedido aberto</span><span class="avaliadorSummaryMeta">${esc(fmt(solicitadosSemProcessoAberto.length))}</span></summary>
-                            <div class="avaliadorDetailsBody triageQueue">
-                                ${solicitadosSemProcessoAberto.map(l => renderFilaAvaliadorCard(l, key(l.item) === itemAtivoCodigo)).join("") || `<section class="empty">Sem itens avaliados positivamente sem pedido aberto.</section>`}
-                            </div>
-                        </details>
-                        <details class="avaliadorDetails">
-                            <summary><span>Itens avaliados com pedido</span><span class="avaliadorSummaryMeta">${esc(fmt(avaliadosComPedidoAberto.length))}</span></summary>
-                            <div class="avaliadorDetailsBody triageQueue">
-                                ${avaliadosComPedidoAberto.map(l => renderFilaAvaliadorCard(l, key(l.item) === itemAtivoCodigo)).join("") || `<section class="empty">Nenhum item avaliado com pedido aberto.</section>`}
-                            </div>
-                        </details>
                     </aside>
                     ${renderMesaItemAtivo(itemAtivo)}
-                    ${renderEsteiraAvaliador(colunas, kanbanItens, ordenarKanban, limiteKanbanPorColuna)}
+                    <aside class="triageRail">
+                        ${renderListaLateralAvaliador("Avaliados sem pedido aberto", solicitadosSemProcessoOrdenados, "sem_pedido", itemAtivoCodigo)}
+                        ${renderListaLateralAvaliador("Itens avaliados com pedido", avaliadosComPedidoOrdenados, "com_pedido", itemAtivoCodigo)}
+                    </aside>
                 </section>
             `;
             bindFiltros();
@@ -3207,6 +3373,25 @@
                 });
             }
         }
+        function bindHistoricoComprasLazy(){
+            root.querySelectorAll(".triageHistoryList[data-history-list]").forEach(lista => {
+                if(lista.dataset.bound === "1") return;
+                lista.dataset.bound = "1";
+                const carregarMais = () => {
+                    const total = Number(lista.dataset.total || 0);
+                    let offset = Number(lista.dataset.offset || 0);
+                    if(!total || offset >= total) return;
+                    if(lista.scrollTop + lista.clientHeight < lista.scrollHeight - 18) return;
+                    const id = lista.dataset.historyList;
+                    const html = renderHistoricoComprasChunk(id, offset, 20);
+                    if(!html) return;
+                    lista.insertAdjacentHTML("beforeend", html);
+                    offset += 20;
+                    lista.dataset.offset = String(offset);
+                };
+                lista.addEventListener("scroll", carregarMais);
+            });
+        }
         function bindFiltros(){
             root.querySelectorAll("[data-filter]").forEach(el => {
                 const aplicarFiltro = () => {
@@ -3367,6 +3552,7 @@
                     }
                 });
             });
+            bindHistoricoComprasLazy();
         }
         async function carregar(){
             if(!auth.currentUser){
