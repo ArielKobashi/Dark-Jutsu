@@ -11711,8 +11711,10 @@ const DARK_JUTSU_SQL_ONLY = ["1","true","sim","yes"].includes(
     ).toLowerCase()
 );
 window.darkJutsuSqlOnly = DARK_JUTSU_SQL_ONLY;
+window.darkJutsuAllowFirebaseAuthFallback = false;
 
 function assertFirebaseDbAllowed(operation = "Firebase Database"){
+    if(window.darkJutsuAllowFirebaseAuthFallback) return;
     if(!DARK_JUTSU_SQL_ONLY) return;
     const message = `SQL-only ativo: ${operation} bloqueado.`;
     console.warn(message);
@@ -12043,6 +12045,7 @@ window.cadastrar = async function(){
     try{
         // cadastro não cria usuário no Auth; apenas solicita aprovação
         if(typeof window.sqlApi === "function"){
+            try{
             const status = await window.sqlApi(`/api/nicknames/${encodeURIComponent(nick)}/status?badge=${encodeURIComponent(cracha)}`);
             if(status?.used || status?.banned || status?.pending){
                 mostrarNotificacao(status?.pending ? "Ja existe uma solicitacao pendente para este nickname/cracha." : "Nickname ja esta em uso.");
@@ -12076,6 +12079,10 @@ window.cadastrar = async function(){
             setTimeout(()=> document.getElementById("authNickname").focus(), 50);
             mostrarPending(nick);
             return;
+            }catch(sqlCadastroErr){
+                console.warn("Falha no cadastro SQL; tentando fluxo Firebase legado:", sqlCadastroErr);
+                window.darkJutsuAllowFirebaseAuthFallback = true;
+            }
         }
         let nickEmUso = false;
         try{
@@ -12552,19 +12559,27 @@ onAuthStateChanged(auth, async (user) => {
                 dadosUsuario = await carregarUsuarioSql(user.uid);
                 usuarioFonteSql = !!dadosUsuario;
             }catch(sqlErr){
-                console.warn("Falha ao validar usuario no SQL:", sqlErr);
-                throw sqlErr;
+                console.warn("Falha ao validar usuario no SQL; tentando Firebase:", sqlErr);
             }
         }
 
-        const snapshot = dadosUsuario || typeof window.sqlApi === "function" ? null : await get(ref(db, "usuarios/" + user.uid));
+        if(!dadosUsuario && DARK_JUTSU_SQL_ONLY){
+            console.warn("SQL-only nao encontrou/validou usuario; liberando fallback Firebase para nao bloquear login existente.");
+            window.darkJutsuAllowFirebaseAuthFallback = true;
+            try{ localStorage.removeItem("darkJutsuSqlOnly"); }catch(e){}
+        }
+
+        let snapshot = null;
+        try{
+            snapshot = dadosUsuario ? null : await get(ref(db, "usuarios/" + user.uid));
+        }catch(firebaseUserErr){
+            if(!dadosUsuario){
+                console.warn("Falha ao carregar usuario no Firebase apos SQL falhar:", firebaseUserErr);
+                throw firebaseUserErr;
+            }
+        }
 
         if (!dadosUsuario && (!snapshot || !snapshot.exists())) {
-            if(typeof window.sqlApi === "function"){
-                mostrarPending(user.email ? user.email.split("@")[0] : "");
-                await signOut(auth);
-                return;
-            }
             try{
                 const banSnap = await get(ref(db, "usuariosBanidos/" + user.uid));
                 if(banSnap.exists()){
