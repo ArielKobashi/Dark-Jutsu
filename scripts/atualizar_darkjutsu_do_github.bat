@@ -10,6 +10,7 @@ set "REPO_DIR=%WORK_ROOT%\Dark-Jutsu"
 set "LOGDIR=C:\DarkJutsu\logs"
 set "LOGFILE=%LOGDIR%\atualizacao_github.log"
 set "LOCKDIR=%SHARE_ROOT%\atualizacao-github.lock"
+set "LOCK_MAX_AGE_MINUTES=20"
 set "VERSION_FILE=%SHARE_ROOT%\versao_github_atual.txt"
 set "EVENT_LOGGER=%SHARE_ROOT%\scripts\registrar_evento_servidor_darkjutsu.bat"
 set "NEW_COMMIT="
@@ -39,11 +40,8 @@ if not exist "%SHARE_ROOT%\app" (
   exit /b 1
 )
 
-mkdir "%LOCKDIR%" >nul 2>&1
-if errorlevel 1 (
-  call :log "Outro atualizador ja esta rodando. Saindo."
-  exit /b 0
-)
+call :acquire_lock
+if errorlevel 1 exit /b 0
 
 where git.exe >nul 2>&1
 if errorlevel 1 (
@@ -178,7 +176,24 @@ if %errorlevel% GEQ 8 exit /b %errorlevel%
 exit /b 0
 
 :unlock
-rmdir "%LOCKDIR%" >nul 2>&1
+rmdir /S /Q "%LOCKDIR%" >nul 2>&1
+exit /b 0
+
+:acquire_lock
+if exist "%LOCKDIR%" (
+  for %%L in ("%LOCKDIR%") do set "LOCK_WRITE=%%~tL"
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$p=$env:LOCKDIR; $max=[int]$env:LOCK_MAX_AGE_MINUTES; if(Test-Path -LiteralPath $p){ $age=(New-TimeSpan -Start (Get-Item -LiteralPath $p).LastWriteTime -End (Get-Date)).TotalMinutes; if($age -ge $max){ exit 0 } }; exit 1" >nul 2>&1
+  if not errorlevel 1 (
+    call :log "Lock antigo detectado em %LOCKDIR% LastWrite=%LOCK_WRITE%. Removendo para destravar atualizacao."
+    rmdir /S /Q "%LOCKDIR%" >nul 2>&1
+  )
+)
+mkdir "%LOCKDIR%" >nul 2>&1
+if errorlevel 1 (
+  call :log "Outro atualizador ja esta rodando. Saindo."
+  exit /b 1
+)
+>"%LOCKDIR%\owner.txt" echo %date% %time% usuario=%USERNAME% maquina=%COMPUTERNAME% pid=%PROCESSID%
 exit /b 0
 
 :log

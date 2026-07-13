@@ -11632,7 +11632,11 @@ window.sqlApi = async function(path, options = {}){
             const response = await fetch(`${base}${path}`, { ...fetchOptions, headers, signal: options.signal || controller?.signal });
             const data = await response.json().catch(() => ({}));
             if(!response.ok || data?.ok === false){
-                throw new Error(data?.error || `Falha HTTP ${response.status}`);
+                const error = new Error(data?.error || `Falha HTTP ${response.status}`);
+                error.status = response.status;
+                error.base = base;
+                error.sqlResponse = true;
+                throw error;
             }
             if(sqlApiPreferredBase !== base){
                 sqlApiPreferredBase = base;
@@ -11641,6 +11645,9 @@ window.sqlApi = async function(path, options = {}){
             return data;
         } catch(error){
             lastError = error;
+            if(error?.sqlResponse || error?.status){
+                throw error;
+            }
             if(sqlApiPreferredBase === base){
                 sqlApiPreferredBase = "";
                 try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
