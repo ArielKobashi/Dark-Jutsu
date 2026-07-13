@@ -2518,6 +2518,15 @@ function iniciarListaUsuarios(){
                 if(!window.usuariosSqlTimer) window.usuariosSqlTimer = setInterval(carregarUsuariosSql, 15000);
             }catch(sqlErr){
                 console.warn("Falha ao listar usuarios no SQL; Firebase nao iniciado neste ciclo:", sqlErr);
+                const mensagem = /401|403|autentic|permiss|revogada|expirada/i.test(String(sqlErr?.message || sqlErr || ""))
+                    ? "Sessao sem permissao para listar usuarios. Saia e entre novamente com um usuario ADM."
+                    : "Nao foi possivel carregar usuarios agora. Verifique a API SQL e tente atualizar a pagina.";
+                lista.innerHTML = `
+                    <div class="fbMeta status-off" style="padding:12px">
+                        ${mensagem}<br>
+                        <small>${escapeHtml(String(sqlErr?.message || sqlErr || ""))}</small>
+                    </div>
+                `;
             }
         };
         carregarUsuariosSql();
