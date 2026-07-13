@@ -182,14 +182,38 @@ def download_update(info: UpdateInfo) -> Path:
     return exe_path
 
 
+def _is_network_path(path: Path) -> bool:
+    text = str(path)
+    if text.startswith("\\\\"):
+        return True
+    drive = path.drive
+    if not drive:
+        return False
+    try:
+        import ctypes
+
+        root = drive + "\\"
+        return ctypes.windll.kernel32.GetDriveTypeW(root) == 4
+    except Exception:
+        return False
+
+
+def _local_install_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    return Path(base) / "Automus" / "app"
+
+
 def install_downloaded_update(new_exe: Path) -> None:
     if not getattr(sys, "frozen", False):
         raise RuntimeError("A troca automatica do executavel so funciona no Automus.exe instalado.")
 
     current_exe = Path(sys.executable).resolve()
+    network_install = _is_network_path(current_exe)
+    install_dir = _local_install_dir() if network_install else current_exe.parent
+    target_exe = install_dir / "Automus.exe"
     helper = new_exe.parent / "instalar_automus_update.bat"
     pid = os.getpid()
-    current_dir = current_exe.parent
+    current_dir = target_exe.parent
     new_dir = new_exe.parent
     helper.write_text(
         "@echo off\r\n"
@@ -197,13 +221,16 @@ def install_downloaded_update(new_exe: Path) -> None:
         "title Atualizando Automus\r\n"
         f'set "NEW_EXE={new_exe}"\r\n'
         f'set "NEW_DIR={new_dir}"\r\n'
-        f'set "CURRENT_EXE={current_exe}"\r\n'
+        f'set "CURRENT_EXE={target_exe}"\r\n'
         f'set "CURRENT_DIR={current_dir}"\r\n'
+        f'set "SOURCE_EXE={current_exe}"\r\n'
         f'set "PID={pid}"\r\n'
         'set "AUTOMUS_RUNTIME_TEMP=%APPDATA%\\Automus\\complemento\\RuntimeTemp"\r\n'
         "echo Atualizando Automus. Aguarde...\r\n"
         "echo Novo EXE: %NEW_EXE%\r\n"
-        "echo EXE atual: %CURRENT_EXE%\r\n"
+        "echo Origem atual: %SOURCE_EXE%\r\n"
+        "echo Instalando em: %CURRENT_EXE%\r\n"
+        'if not exist "%CURRENT_DIR%" mkdir "%CURRENT_DIR%" >nul 2>nul\r\n'
         ":wait_process\r\n"
         "echo Aguardando Automus atual encerrar...\r\n"
         'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul\r\n'

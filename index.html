@@ -11586,14 +11586,18 @@ const SQL_API_BASE = (
     window.DARK_JUTSU_API_BASE_URL ||
     DEFAULT_SQL_API_BASE
 ).replace(/\/+$/, "");
+const SQL_API_HOST_IS_LOCAL = ["127.0.0.1", "localhost"].includes(location.hostname);
 const SQL_API_FALLBACK_BASES = [
     SQL_API_BASE,
-    "http://127.0.0.1:8765",
-    "http://localhost:8765",
+    ...(SQL_API_HOST_IS_LOCAL ? ["http://127.0.0.1:8765", "http://localhost:8765"] : []),
     "http://192.168.5.44:8765",
     "http://192.168.5.38:8765"
 ].filter((base, index, bases) => base && bases.indexOf(base) === index);
 let sqlApiPreferredBase = localStorage.getItem("darkJutsuApiPreferredBase") || "";
+if(!SQL_API_HOST_IS_LOCAL && /^http:\/\/(127\.0\.0\.1|localhost):8765/i.test(sqlApiPreferredBase)){
+    sqlApiPreferredBase = "";
+    try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
+}
 const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
 const DARK_JUTSU_SQL_ONLY = ["1","true","sim","yes"].includes(
     (
@@ -14272,11 +14276,11 @@ function setSalaAtiva(roomId){
 async function verificarSenhaSala(roomId){
     if(typeof window.sqlApi === "function"){
         try{
-            const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/password-status`);
+            const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/password-status`, { timeoutMs: 900 });
             return data?.has_password ? "__SQL_PASSWORD__" : "";
         }catch(sqlErr){
             console.warn("Falha ao consultar senha da sala no SQL:", sqlErr);
-            return "";
+            return "__SQL_PASSWORD__";
         }
     }
     return "";
@@ -14377,12 +14381,12 @@ async function trocarSala(roomId){
     const setorUsuario = (window.meuSetor || "").toString().trim();
     const liberadaAlmox = roomId === "sala2" && setorUsuario === "Almoxarifado";
     if(!room.publico && !liberadaAlmox){
-        const senhaDb = await verificarSenhaSala(roomId);
-        if(!senhaDb){
-            mostrarNotificacao("Sala sem senha definida. Procure o admin.");
-            return;
-        }
-        abrirGateSalaPrivada(roomId, salaAtual, senhaDb);
+        abrirGateSalaPrivada(roomId, salaAtual, "__SQL_PASSWORD__");
+        verificarSenhaSala(roomId).then(senhaDb => {
+            if(privateRoomGateState && privateRoomGateState.roomId === roomId && senhaDb){
+                privateRoomGateState.senhaDb = senhaDb;
+            }
+        });
         return;
     }
     const salaOrigem = salaAtual;

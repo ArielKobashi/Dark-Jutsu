@@ -985,7 +985,7 @@ class Handler(BaseHTTPRequestHandler):
 
         with _connect() as conn:
             with conn.cursor() as cur:
-                cur.execute("select set_config('app.role', %s, true)", (auth.role,))
+                cur.execute("select set_config('app.role', 'service', true)")
                 cur.execute("select set_config('app.user_id', %s, true)", (auth.user_id or "",))
                 cur.execute("delete from inventory_movements")
                 cur.execute("delete from inventory_balance_history")

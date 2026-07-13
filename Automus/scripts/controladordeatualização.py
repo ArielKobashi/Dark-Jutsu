@@ -190,18 +190,48 @@ def _usuario_pode_usar_automus(usuario: object) -> bool:
 
 
 def _auth_admin_dark_jutsu(login: str, senha: str) -> dict:
-    token = os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()
-    if not token:
-        raise RuntimeError("DARK_JUTSU_API_TOKEN obrigatorio para o controlador SQL-only.")
-    nick = (login or "").strip() or "automus-sql-service"
+    login = (login or "").strip()
+    senha = senha or ""
+    if not login or not senha:
+        raise RuntimeError("Login e senha obrigatorios.")
+
+    base_url = os.environ.get("DARK_JUTSU_API_BASE_URL", "http://127.0.0.1:8765").rstrip("/")
+    payload = json.dumps({"login": login, "senha": senha}).encode("utf-8")
+    req = Request(
+        f"{base_url}/api/auth/login",
+        data=payload,
+        method="POST",
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode("utf-8-sig"))
+    except HTTPError as exc:
+        try:
+            body = json.loads(exc.read().decode("utf-8-sig"))
+            message = body.get("error") or body.get("message") or str(exc)
+        except Exception:
+            message = str(exc)
+        raise RuntimeError(message) from exc
+    except URLError as exc:
+        raise RuntimeError(f"Nao consegui conectar ao Dark-Jutsu em {base_url}.") from exc
+
+    usuario = data.get("user") if isinstance(data, dict) else None
+    if not _usuario_pode_usar_automus(usuario):
+        raise RuntimeError("Apenas admin/mod do Dark-Jutsu pode usar o Automus.")
+
     return {
-        "uid": "automus-sql-service",
-        "email": nick if "@" in nick else f"{nick}@sql.local",
-        "nickname": nick,
-        "nivel": "admin",
-        "idToken": token,
+        "uid": usuario.get("uid") or usuario.get("id") or login,
+        "email": usuario.get("email") or f"{usuario.get('nickname') or login}@sistema.local",
+        "nickname": usuario.get("nickname") or login,
+        "nivel": usuario.get("nivel") or usuario.get("role") or "",
+        "idToken": data.get("token") or "",
         "refreshToken": "",
-        "serviceToken": True,
+        "expiresAt": data.get("expires_at") or "",
+        "serviceToken": False,
     }
 
 

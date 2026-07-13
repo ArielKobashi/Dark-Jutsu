@@ -1,11 +1,11 @@
 {
   "app": "Automus",
-  "version": "1.1.2",
-  "releasedAt": "2026-07-10",
+  "version": "1.1.4",
+  "releasedAt": "2026-07-13",
   "updateManifestUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus\\latest.json",
   "updateBaseUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "publishDir": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "notes": [
-    "Asdg"
+    "Corrige atualizacao do Automus executado pela rede e sincroniza login com o Dark-Jutsu."
   ]
 }
