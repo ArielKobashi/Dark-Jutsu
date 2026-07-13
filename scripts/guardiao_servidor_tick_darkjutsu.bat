@@ -11,8 +11,18 @@ set "OLD_PAUSE_FILE=%SHARE_ROOT%\principal-pausado-ate.txt"
 set "LOGDIR=C:\DarkJutsu\logs"
 set "EVENT_LOGGER=%SHARE_ROOT%\scripts\registrar_evento_servidor_darkjutsu.bat"
 set "LOGFILE=%LOGDIR%\servidor_guardiao.log"
+set "LOCKFILE=%LOGDIR%\guardiao_tick.lock"
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
+if exist "%LOCKFILE%" (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "if((Get-Item -LiteralPath '%LOCKFILE%' -ErrorAction SilentlyContinue).LastWriteTime -lt (Get-Date).AddMinutes(-2)){ exit 0 } else { exit 1 }" >nul 2>&1
+  if errorlevel 1 (
+    >> "%LOGFILE%" echo [%date% %time%] AVISO: tick anterior ainda em andamento; evitando execucao sobreposta.
+    exit /b 0
+  )
+  del "%LOCKFILE%" >nul 2>&1
+)
+>"%LOCKFILE%" echo %COMPUTERNAME% %USERNAME% %date% %time%
 
 echo ==================================================
 echo Dark-Jutsu - Verificacao do guardiao
@@ -35,6 +45,7 @@ if "%LOCAL_IP%"=="" (
     echo FALHOU: esta maquina nao tem IP de principal/reserva.
     >> "%LOGFILE%" echo [%date% %time%] FALHOU: maquina sem IP de principal/reserva. Guardiao nao vai agir.
     if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "GUARDIAO" "Maquina sem IP de principal/reserva; guardiao nao age."
+    del "%LOCKFILE%" >nul 2>&1
     exit /b 0
 )
 if "%LOCAL_IP%"=="%PRIMARY_IP%" (set "LOCAL_ROLE=PRINCIPAL") else (set "LOCAL_ROLE=RESERVA")
@@ -73,6 +84,7 @@ if "%PRIMARY_OK%"=="0" (
     )
     >> "%LOGFILE%" echo [%date% %time%] FIM tick: principal ativa; nenhuma assuncao.
     if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "GUARDIAO" "Principal ativa. Nenhuma assuncao necessaria."
+    del "%LOCKFILE%" >nul 2>&1
     exit /b 0
 )
 
@@ -90,6 +102,7 @@ if "%RESERVE_OK%"=="0" (
         >> "%LOGFILE%" echo [%date% %time%] Resultado failback principal: codigo=!RC!.
         if not "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "ERRO" "FAILBACK" "Principal tentou reassumir, mas falhou. Codigo=!RC!."
         if "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "FAILBACK" "Principal reassumiu com sucesso."
+        del "%LOCKFILE%" >nul 2>&1
         exit /b !RC!
     ) else (
         >> "%LOGFILE%" echo [%date% %time%] RESERVA: reserva esta ativa; solicitando que o principal tente reassumir se estiver ligado.
@@ -105,6 +118,7 @@ if "%RESERVE_OK%"=="0" (
         )
         >> "%LOGFILE%" echo [%date% %time%] FIM tick: reserva ativa nesta maquina; aguardando principal voltar.
         if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "GUARDIAO" "Reserva ativa nesta maquina. Aguardando principal voltar."
+        del "%LOCKFILE%" >nul 2>&1
         exit /b 0
     )
 )
@@ -129,6 +143,7 @@ if "%LOCAL_IP%"=="%PRIMARY_IP%" (
     >> "%LOGFILE%" echo [%date% %time%] Resultado assumir principal: codigo=!RC!.
     if not "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "ERRO" "ASSUMIR" "Principal falhou ao iniciar. Codigo=!RC!."
     if "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "ASSUMIR" "Principal iniciou com sucesso apos tela preta."
+    del "%LOCKFILE%" >nul 2>&1
     exit /b !RC!
 )
 
@@ -148,6 +163,7 @@ if "%LOCAL_IP%"=="%RESERVE_IP%" (
     if %BLACKOUT_MINUTES% LSS 3 (
         >> "%LOGFILE%" echo [%date% %time%] RESERVA: tela preta ha %BLACKOUT_MINUTES% ciclo(s). Aguardando 3 ciclos antes de assumir.
         if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "PRETO" "Reserva ainda nao vai assumir: tela preta ha %BLACKOUT_MINUTES% ciclo(s), precisa de 3."
+        del "%LOCKFILE%" >nul 2>&1
         exit /b 0
     )
     >> "%LOGFILE%" echo [%date% %time%] DECISAO: reserva vai assumir porque nenhum servidor respondeu.
@@ -157,8 +173,10 @@ if "%LOCAL_IP%"=="%RESERVE_IP%" (
     >> "%LOGFILE%" echo [%date% %time%] Resultado assumir reserva: codigo=!RC!.
     if not "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "ERRO" "ASSUMIR" "Reserva falhou ao iniciar. Codigo=!RC!."
     if "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "ASSUMIR" "Reserva iniciou com sucesso apos tela preta."
+    del "%LOCKFILE%" >nul 2>&1
     exit /b !RC!
 )
 
 >> "%LOGFILE%" echo [%date% %time%] FIM tick sem acao: IP local nao casou com principal/reserva apos health.
+del "%LOCKFILE%" >nul 2>&1
 exit /b 0

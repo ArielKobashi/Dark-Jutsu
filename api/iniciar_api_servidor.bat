@@ -17,8 +17,10 @@ if "%PYTHON_EXE%"=="" (
   exit /b 1
 )
 
-if exist "%ROOT%\_local_secrets\sql_auth_runtime.env" (
-  for /f "usebackq tokens=1,* delims==" %%A in ("%ROOT%\_local_secrets\sql_auth_runtime.env") do (
+set "ENV_FILE=%ROOT%\_local_secrets\sql_auth_runtime.env"
+if not exist "%ENV_FILE%" if exist "%USERPROFILE%\Desktop\Dark-Jutsu\_local_secrets\sql_auth_runtime.env" set "ENV_FILE=%USERPROFILE%\Desktop\Dark-Jutsu\_local_secrets\sql_auth_runtime.env"
+if exist "%ENV_FILE%" (
+  for /f "usebackq tokens=1,* delims==" %%A in ("%ENV_FILE%") do (
     if not "%%A"=="" set "%%A=%%B"
   )
 )
@@ -28,6 +30,14 @@ if "%DARK_JUTSU_API_HOST%"=="" set "DARK_JUTSU_API_HOST=0.0.0.0"
 if "%DARK_JUTSU_API_PORT%"=="" set "DARK_JUTSU_API_PORT=8765"
 
 cd /d "%ROOT%"
+curl -fsS --max-time 2 "http://127.0.0.1:%DARK_JUTSU_API_PORT%/health" >nul 2>&1
+if %errorlevel%==0 (
+  echo API SQL ja esta respondendo em http://127.0.0.1:%DARK_JUTSU_API_PORT%
+  exit /b 0
+)
+for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /R /C:":%DARK_JUTSU_API_PORT% .*LISTENING"') do (
+  taskkill /PID %%P /F >nul 2>&1
+)
 echo Iniciando API SQL em http://%DARK_JUTSU_API_HOST%:%DARK_JUTSU_API_PORT%
 "%PYTHON_EXE%" api\dark_jutsu_api.py
 exit /b %errorlevel%

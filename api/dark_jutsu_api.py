@@ -7,6 +7,7 @@ import json
 import re
 import os
 import secrets
+import threading
 import time
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -36,6 +37,11 @@ AUTH_SECRET = _env("DARK_JUTSU_AUTH_SECRET") or API_TOKEN or hashlib.sha256(DATA
 AUTH_TOKEN_TTL_SECONDS = int(_env("DARK_JUTSU_AUTH_TOKEN_TTL_SECONDS", str(12 * 60 * 60)))
 REQUIRE_AUTH = _env("DARK_JUTSU_REQUIRE_AUTH", "1").lower() not in {"0", "false", "no", "nao"}
 ALLOWED_ORIGINS = [origin.strip().rstrip("/") for origin in _env("DARK_JUTSU_ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
+PUBLIC_TUNNEL_MODE = _env("DARK_JUTSU_PUBLIC_TUNNEL_MODE", "0").lower() in {"1", "true", "sim", "yes"}
+LOGIN_RATE_LIMIT_MAX = int(_env("DARK_JUTSU_LOGIN_RATE_LIMIT_MAX", "8"))
+LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(_env("DARK_JUTSU_LOGIN_RATE_LIMIT_WINDOW_SECONDS", "600"))
+_RATE_LIMIT_LOCK = threading.Lock()
+_RATE_LIMIT_BUCKETS: dict[str, list[float]] = {}
 
 
 def _json_default(value: Any) -> Any:
@@ -217,6 +223,24 @@ def _verify_auth_token(token: str) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _rate_limit_allow(key: str, maximum: int, window_seconds: int) -> bool:
+    now = time.time()
+    cutoff = now - max(1, window_seconds)
+    with _RATE_LIMIT_LOCK:
+        attempts = [stamp for stamp in _RATE_LIMIT_BUCKETS.get(key, []) if stamp >= cutoff]
+        if len(attempts) >= max(1, maximum):
+            _RATE_LIMIT_BUCKETS[key] = attempts
+            return False
+        attempts.append(now)
+        _RATE_LIMIT_BUCKETS[key] = attempts
+        return True
+
+
+def _rate_limit_clear(key: str) -> None:
+    with _RATE_LIMIT_LOCK:
+        _RATE_LIMIT_BUCKETS.pop(key, None)
+
+
 def _public_user(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "uid": row.get("id"),
@@ -272,24 +296,32 @@ class Handler(BaseHTTPRequestHandler):
     def _send_json(self, payload: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, ensure_ascii=False, default=_json_default).encode("utf-8")
         origin = self.headers.get("Origin", "").rstrip("/")
-        allow_origin = "*"
+        allow_origin = ""
         if ALLOWED_ORIGINS and ALLOWED_ORIGINS != ["*"]:
-            allow_origin = origin if origin in ALLOWED_ORIGINS else ALLOWED_ORIGINS[0]
+            allow_origin = origin if origin in ALLOWED_ORIGINS else ""
+        elif not PUBLIC_TUNNEL_MODE:
+            allow_origin = "*"
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", allow_origin)
-        self.send_header("Vary", "Origin")
+        if allow_origin:
+            self.send_header("Access-Control-Allow-Origin", allow_origin)
+            self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Headers", "authorization, content-type, x-api-token")
         self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE, OPTIONS")
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self) -> None:
+        if not self._request_origin_allowed():
+            self._send_json({"ok": False, "error": "Origem nao autorizada."}, HTTPStatus.FORBIDDEN)
+            return
         self._send_json({"ok": True})
 
     def do_GET(self) -> None:
         try:
+            if not self._request_origin_allowed():
+                raise ApiError(HTTPStatus.FORBIDDEN, "Origem nao autorizada.")
             self.auth_context = self._authenticate()
             parsed = urlparse(self.path)
             query = parse_qs(parsed.query)
@@ -315,6 +347,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_write(self, method: str) -> None:
         try:
+            if not self._request_origin_allowed():
+                raise ApiError(HTTPStatus.FORBIDDEN, "Origem nao autorizada.")
             self.auth_context = self._authenticate()
             parsed = urlparse(self.path)
             parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
@@ -325,6 +359,24 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": False, "error": exc.message}, exc.status)
         except Exception as exc:
             self._send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def _request_origin_allowed(self) -> bool:
+        origin = self.headers.get("Origin", "").rstrip("/")
+        if not origin:
+            return True
+        if ALLOWED_ORIGINS and ALLOWED_ORIGINS != ["*"]:
+            return origin in ALLOWED_ORIGINS
+        return not PUBLIC_TUNNEL_MODE
+
+    def _client_ip(self) -> str:
+        if PUBLIC_TUNNEL_MODE:
+            cf_ip = _clean_text(self.headers.get("CF-Connecting-IP"))
+            if cf_ip:
+                return cf_ip
+            forwarded = _clean_text(self.headers.get("X-Forwarded-For"))
+            if forwarded:
+                return forwarded.split(",", 1)[0].strip()
+        return str(self.client_address[0] if self.client_address else "")
 
     def _authenticate(self) -> AuthContext:
         if self.path.startswith("/health"):
@@ -706,6 +758,9 @@ class Handler(BaseHTTPRequestHandler):
             login = login.split("@", 1)[0]
         if not login or not password:
             raise ApiError(HTTPStatus.BAD_REQUEST, "Login e senha obrigatorios.")
+        rate_key = f"login:{self._client_ip()}:{login}"
+        if not _rate_limit_allow(rate_key, LOGIN_RATE_LIMIT_MAX, LOGIN_RATE_LIMIT_WINDOW_SECONDS):
+            raise ApiError(HTTPStatus.TOO_MANY_REQUESTS, "Muitas tentativas de login. Aguarde alguns minutos.")
         rows = self._query_as_service(
             """
             select u.id, u.nickname, u.badge, u.sector, u.role, u.active,
@@ -729,6 +784,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.FORBIDDEN, "Usuario inativo.")
         if row.get("banned_user_id"):
             raise ApiError(HTTPStatus.FORBIDDEN, "Usuario banido.")
+        _rate_limit_clear(rate_key)
         return self._make_auth_response(row)
 
     def _auth_change_password(self, payload: dict[str, Any]) -> dict[str, Any]:

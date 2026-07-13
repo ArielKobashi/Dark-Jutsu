@@ -149,6 +149,17 @@ if exist "%SHARE_ROOT%\pacote\Dark-Jutsu\api\iniciar_api_servidor.bat" (
     goto finish
   )
   call :ok "API estavel pronta em %MACHINE_APP_ROOT%\api."
+  if exist "%USERPROFILE%\Desktop\Dark-Jutsu\_local_secrets\sql_auth_runtime.env" (
+    if not exist "%MACHINE_APP_ROOT%\_local_secrets" mkdir "%MACHINE_APP_ROOT%\_local_secrets" 2>nul
+    copy /Y "%USERPROFILE%\Desktop\Dark-Jutsu\_local_secrets\sql_auth_runtime.env" "%MACHINE_APP_ROOT%\_local_secrets\sql_auth_runtime.env" >> "%INSTALL_LOG%" 2>&1
+    if exist "%MACHINE_APP_ROOT%\_local_secrets\sql_auth_runtime.env" (
+      call :ok "Segredos locais da API copiados para a raiz estavel."
+    ) else (
+      call :warn "Nao consegui copiar segredos locais da API para a raiz estavel."
+    )
+  ) else (
+    call :warn "Arquivo local _local_secrets\sql_auth_runtime.env nao encontrado neste usuario."
+  )
 ) else (
   call :fail "Pacote da API nao encontrado na rede."
   goto finish
