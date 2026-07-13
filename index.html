@@ -11537,7 +11537,8 @@ async function signInWithEmailAndPassword(authRef, email, senha){
     const login = String(email || "").split("@")[0];
     const data = await window.sqlApi("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ login, password: senha })
+        body: JSON.stringify({ login, password: senha }),
+        timeoutMs: 8000
     });
     localStorage.setItem(SQL_AUTH_TOKEN_KEY, data.token);
     localStorage.setItem(SQL_AUTH_USER_KEY, JSON.stringify(data.user || {}));
@@ -11578,6 +11579,9 @@ const SQL_API_BASE = (
 ).replace(/\/+$/, "");
 const SQL_API_FALLBACK_BASES = [
     SQL_API_BASE,
+    "http://127.0.0.1:8765",
+    "http://localhost:8765",
+    "http://192.168.5.44:8765",
     "http://192.168.5.38:8765"
 ].filter((base, index, bases) => base && bases.indexOf(base) === index);
 let sqlApiPreferredBase = localStorage.getItem("darkJutsuApiPreferredBase") || "";
@@ -11622,7 +11626,7 @@ window.sqlApi = async function(path, options = {}){
     ].filter((base, index, list) => base && list.indexOf(base) === index);
     for(const base of bases){
         const controller = typeof AbortController !== "undefined" && !options.signal ? new AbortController() : null;
-        const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 1800)) : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 5000)) : null;
         try{
             const { timeoutMs, ...fetchOptions } = options;
             const response = await fetch(`${base}${path}`, { ...fetchOptions, headers, signal: options.signal || controller?.signal });
@@ -11881,9 +11885,10 @@ window.login = async function(){
             loginBtn.disabled = false;
             loginBtn.textContent = loginBtn.dataset.textoOriginal || "Entrar";
         }
+        const loginErrorMessage = String(error?.message || error || "");
         try{
             if(typeof window.sqlApi === "function"){
-                const status = await window.sqlApi(`/api/nicknames/${encodeURIComponent(nick)}/status`);
+                const status = await window.sqlApi(`/api/nicknames/${encodeURIComponent(nick)}/status`, { timeoutMs: 5000 });
                 if(status?.pending){
                     mostrarPending(nick);
                     return;
@@ -11892,6 +11897,10 @@ window.login = async function(){
             throw new Error("API SQL indisponivel.");
         }catch(e){
             console.error("Erro ao checar pendencia:", e);
+        }
+        if(/abort|failed to fetch|indisponivel|network|timeout/i.test(loginErrorMessage)){
+            alert("Nao foi possivel validar o login agora. Verifique se o servidor SQL esta ativo e tente novamente.");
+            return;
         }
         alert("Usuário ou senha inválidos");
     }
