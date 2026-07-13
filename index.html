@@ -1957,7 +1957,7 @@ async function salvarAjusteEstoqueItem(itemKey, minimoRaw, maximoRaw){
                 body: JSON.stringify({ ...ajuste, legacy_key: ajusteKey })
             });
         }else{
-            throw new Error("Firebase ainda não está pronto.");
+            throw new Error("API SQL ainda nao esta pronta.");
         }
         if(typeof mostrarNotificacao === "function"){
             mostrarNotificacao("Limites do item salvos.");
@@ -2181,7 +2181,7 @@ window.recusar = async function(id){
             });
         }
     }catch(sqlErr){
-        console.warn("Falha ao recusar cadastro no SQL; tentando Firebase:", sqlErr);
+        console.warn("Falha ao recusar cadastro no SQL:", sqlErr);
     }
 
     try{
@@ -2285,7 +2285,7 @@ window.toggleAtivo = async function(uid, isAtivo){
                 });
             }
         }catch(sqlErr){
-            console.warn("Falha ao reativar usuario no SQL; tentando Firebase:", sqlErr);
+            console.warn("Falha ao reativar usuario no SQL:", sqlErr);
         }
         throw new Error("API SQL indisponivel.");
     }
@@ -2353,7 +2353,7 @@ function iniciarListaBanidos(){
                 if(!window.banidosSqlTimer) window.banidosSqlTimer = setInterval(carregarBanidosSql, 15000);
                 return true;
             }catch(sqlErr){
-                console.warn("Falha ao listar banidos no SQL; usando Firebase:", sqlErr);
+                console.warn("Falha ao listar banidos no SQL:", sqlErr);
                 return false;
             }
         };
@@ -2517,7 +2517,7 @@ function iniciarListaUsuarios(){
                 });
                 if(!window.usuariosSqlTimer) window.usuariosSqlTimer = setInterval(carregarUsuariosSql, 15000);
             }catch(sqlErr){
-                console.warn("Falha ao listar usuarios no SQL; Firebase nao iniciado neste ciclo:", sqlErr);
+                console.warn("Falha ao listar usuarios no SQL:", sqlErr);
                 const mensagem = /401|403|autentic|permiss|revogada|expirada/i.test(String(sqlErr?.message || sqlErr || ""))
                     ? "Sessao sem permissao para listar usuarios. Saia e entre novamente com um usuario ADM."
                     : "Nao foi possivel carregar usuarios agora. Verifique a API SQL e tente atualizar a pagina.";
@@ -2851,6 +2851,7 @@ function carregarPlanilha(tipo){
 }
 
 async function carregarEstoqueMinimoPadrao(){
+    if(location.protocol === "file:") return false;
     try{
         const response = await fetch("downloads/estoque_minimo.xlsx", { cache: "no-store" });
         if(!response.ok) return false;
@@ -4007,6 +4008,7 @@ function criarTooltipHistoricoSaldo(td, item){
 }
 
 async function carregarPlanilhaPadrao(tipo, arquivo, guia = null){
+    if(location.protocol === "file:") return false;
     try{
         const isArquivoLocalOpcional = arquivo === "dados.mortos.xlsx";
         const emArquivoLocal = location.protocol === "file:";
@@ -5311,6 +5313,7 @@ async function checarResetGlobalContagem(){
             if(data?.setting?.value) aplicarResetGlobalContagem(data.setting.value, false);
             return;
         }catch(sqlErr){
+            if(sqlErr?.status === 404) return;
             console.warn("Falha ao checar reset global no SQL:", sqlErr);
             return;
         }
@@ -9062,7 +9065,7 @@ async function resetarContagemGlobalAdmin(){
         return;
     }
     if(typeof window.sqlApi !== "function" && (!window.set || !window.ref || !window.db)){
-        mostrarNotificacao("Firebase ainda nao esta pronto.");
+        mostrarNotificacao("API SQL ainda nao esta pronta.");
         return;
     }
     const ok = confirm("Formatar a contagem inteira?\n\nIsso limpa o progresso vivo e as etiquetas de maquinas contadas/em andamento. As planilhas historicas salvas continuam disponiveis nos relatorios.");
@@ -9642,7 +9645,7 @@ document.getElementById("chatMessages").addEventListener("scroll", function(){
 
     if(this.scrollTop === 0 && limiteChat < window.mensagens.length){
         limiteChat += 15;
-        renderChat();
+        if(typeof window.renderChat === "function") window.renderChat();
     }
 });
 
@@ -11607,10 +11610,9 @@ const DARK_JUTSU_SQL_ONLY = ["1","true","sim","yes"].includes(
     ).toLowerCase()
 );
 window.darkJutsuSqlOnly = DARK_JUTSU_SQL_ONLY;
-window.darkJutsuAllowFirebaseAuthFallback = false;
+window.darkJutsuAllowLegacyAuthFallback = false;
 
 function assertFirebaseDbAllowed(operation = "Firebase Database"){
-    if(window.darkJutsuAllowFirebaseAuthFallback) return;
     if(!DARK_JUTSU_SQL_ONLY) return;
     const message = `SQL-only ativo: ${operation} bloqueado.`;
     console.warn(message);
@@ -11639,7 +11641,7 @@ window.sqlApi = async function(path, options = {}){
     ].filter((base, index, list) => base && list.indexOf(base) === index);
     for(const base of bases){
         const controller = typeof AbortController !== "undefined" && !options.signal ? new AbortController() : null;
-        const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 5000)) : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 12000)) : null;
         try{
             const { timeoutMs, ...fetchOptions } = options;
             const response = await fetch(`${base}${path}`, { ...fetchOptions, headers, signal: options.signal || controller?.signal });
@@ -11671,6 +11673,113 @@ window.sqlApi = async function(path, options = {}){
     }
     throw lastError || new Error("API SQL indisponivel.");
 };
+
+let servidorSqlOnline = true;
+let servidorSqlOfflineDesde = 0;
+let servidorSqlReloadTimer = null;
+
+function ensureServidorSqlBanner(){
+    let banner = document.getElementById("servidorSqlOfflineBanner");
+    if(banner) return banner;
+    const style = document.createElement("style");
+    style.textContent = `
+        @keyframes servidorSqlBlink {
+            0%, 100% { opacity: 1; box-shadow: 0 10px 28px rgba(176,0,32,.30); }
+            50% { opacity: .55; box-shadow: 0 6px 18px rgba(176,0,32,.16); }
+        }
+        #servidorSqlOfflineBanner {
+            position: fixed;
+            right: 12px;
+            bottom: 12px;
+            z-index: 999999;
+            display: none;
+            width: min(330px, calc(100vw - 24px));
+            box-sizing: border-box;
+            pointer-events: none;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #b00020;
+            color: #fff;
+            font: 700 12px/1.3 Arial, sans-serif;
+            animation: servidorSqlBlink .9s infinite;
+        }
+        #servidorSqlOfflineBanner small {
+            display: block;
+            margin-top: 4px;
+            font-weight: 500;
+            opacity: .92;
+        }
+    `;
+    document.head.appendChild(style);
+    banner = document.createElement("div");
+    banner.id = "servidorSqlOfflineBanner";
+    banner.innerHTML = `SERVIDOR CAIU<small>Tentando reconectar. A pagina sera atualizada a cada 10 segundos.</small>`;
+    document.body.appendChild(banner);
+    return banner;
+}
+
+async function testarServidorSqlAtivo(){
+    const bases = [sqlApiPreferredBase, ...SQL_API_FALLBACK_BASES].filter((base, index, list) => base && list.indexOf(base) === index);
+    for(const base of bases){
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), 1800) : null;
+        try{
+            const response = await fetch(`${base}/health?ts=${Date.now()}`, {
+                cache: "no-store",
+                signal: controller?.signal
+            });
+            const data = await response.json().catch(() => ({}));
+            if(response.ok && data?.ok){
+                if(sqlApiPreferredBase !== base){
+                    sqlApiPreferredBase = base;
+                    try{ localStorage.setItem("darkJutsuApiPreferredBase", base); }catch(e){}
+                }
+                return true;
+            }
+        }catch(e){
+        }finally{
+            if(timeout) clearTimeout(timeout);
+        }
+    }
+    return false;
+}
+
+function setServidorSqlOffline(offline){
+    const banner = offline ? ensureServidorSqlBanner() : document.getElementById("servidorSqlOfflineBanner");
+    servidorSqlOnline = !offline;
+    if(banner) banner.style.display = offline ? "block" : "none";
+    if(!offline){
+        servidorSqlOfflineDesde = 0;
+        if(servidorSqlReloadTimer){
+            clearInterval(servidorSqlReloadTimer);
+            servidorSqlReloadTimer = null;
+        }
+        return;
+    }
+    if(!servidorSqlOfflineDesde) servidorSqlOfflineDesde = Date.now();
+    if(!servidorSqlReloadTimer){
+        servidorSqlReloadTimer = setInterval(async () => {
+            const ok = await testarServidorSqlAtivo();
+            if(ok){
+                setServidorSqlOffline(false);
+            }else{
+                location.reload();
+            }
+        }, 10000);
+    }
+}
+
+async function monitorarServidorSql(){
+    const ok = await testarServidorSqlAtivo();
+    setServidorSqlOffline(!ok);
+}
+
+if(typeof window !== "undefined"){
+    window.addEventListener("load", () => {
+        setTimeout(monitorarServidorSql, 1200);
+        setInterval(monitorarServidorSql, 5000);
+    });
+}
 
 async function carregarUsuarioSql(uid){
     if(!uid || typeof window.sqlApi !== "function") return null;
@@ -11801,7 +11910,7 @@ function iniciarSolicitacoesAdmin(){
                 }
                 if(!window.solicitacoesSqlTimer) window.solicitacoesSqlTimer = setInterval(carregarSolicitacoesSql, 15000);
             }catch(sqlErr){
-                console.warn("Falha ao listar solicitacoes no SQL; Firebase nao iniciado neste ciclo:", sqlErr);
+                console.warn("Falha ao listar solicitacoes no SQL:", sqlErr);
             }
         };
         carregarSolicitacoesSql();
@@ -12259,9 +12368,7 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         if(!dadosUsuario && DARK_JUTSU_SQL_ONLY){
-            console.warn("SQL-only nao encontrou/validou usuario; liberando fallback Firebase para nao bloquear login existente.");
-            window.darkJutsuAllowFirebaseAuthFallback = true;
-            try{ localStorage.removeItem("darkJutsuSqlOnly"); }catch(e){}
+            console.warn("SQL-only nao encontrou/validou usuario; login legado bloqueado.");
         }
 
         let snapshot = null;
@@ -12269,7 +12376,7 @@ onAuthStateChanged(auth, async (user) => {
             snapshot = null;
         }catch(firebaseUserErr){
             if(!dadosUsuario){
-                console.warn("Falha ao carregar usuario no Firebase apos SQL falhar:", firebaseUserErr);
+                console.warn("Falha ao carregar usuario apos SQL falhar:", firebaseUserErr);
                 throw firebaseUserErr;
             }
         }
@@ -12341,7 +12448,7 @@ onAuthStateChanged(auth, async (user) => {
         }
         updateMobileOverlaysState();
         setTimeout(()=>{
-            renderChat();
+            if(typeof window.renderChat === "function") window.renderChat();
         },50);
 
         const nivelUsuario = (dadosUsuario.nivel || dadosUsuario.role || "op").toString().toLowerCase();
@@ -13106,7 +13213,7 @@ async function salvarOcorrencia(event){
         }
         console.error("Erro ao salvar ocorrencia:", err);
         const detalhe = err?.code === "PERMISSION_DENIED" || err?.code === "permission-denied"
-            ? "Permissao negada pelo Firebase. Publique as regras atualizadas."
+            ? "Permissao negada pela API SQL. Verifique permissoes do usuario."
             : (err?.message || "Erro desconhecido.");
         alert("Nao foi possivel salvar a ocorrencia. " + detalhe);
     }finally{
@@ -13723,7 +13830,7 @@ async function carregarEstoqueInicial() {
     if (typeof iniciarProgresso === "function") iniciarProgresso(); 
     if (typeof window.sqlApi === "function") {
         try {
-            const data = await window.sqlApi("/api/dashboard/snapshot?limit=1000");
+            const data = await window.sqlApi("/api/dashboard/snapshot?limit=1000", { timeoutMs: 20000 });
             const banco = data?.inventory || {};
             if (banco && (Array.isArray(banco.dados) || Array.isArray(banco.dadosMortos))) {
                 aplicarSnapshotEstoqueFirebase(banco, { forcarFiltros:true });
@@ -14108,6 +14215,7 @@ function renderChat(){
 
     box.scrollTop = box.scrollHeight;
 }
+window.renderChat = renderChat;
 
 function atualizarVistaChatAtivo(roomId = salaAtual, marcarComoVista = false){
     if(!window.meuNickname) return;
@@ -14141,7 +14249,7 @@ async function carregarMensagensChatSql(silencioso = false){
 }
 
 async function carregarMensagensSalaChatSql(roomId, limit = 120){
-    const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/messages?limit=${encodeURIComponent(limit)}`, { timeoutMs: 1500 });
+    const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/messages?limit=${encodeURIComponent(limit)}`, { timeoutMs: 7000 });
     const lista = (data?.messages || []).map(row => {
         const raw = row?.raw_data && typeof row.raw_data === "object" ? row.raw_data : {};
         return {
@@ -14183,7 +14291,7 @@ function iniciarMonitoramentoSalas(){
                     });
                 }, 7000);
             }else{
-                console.warn("Chat SQL indisponivel; monitoramento Firebase nao sera iniciado em modo SQL.");
+        console.warn("Chat SQL indisponivel; monitoramento legado nao sera iniciado em modo SQL.");
             }
         }).catch(err => console.warn("Chat SQL carregando em segundo plano:", err));
         return;
@@ -14276,7 +14384,7 @@ function setSalaAtiva(roomId){
 async function verificarSenhaSala(roomId){
     if(typeof window.sqlApi === "function"){
         try{
-            const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/password-status`, { timeoutMs: 900 });
+            const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/password-status`, { timeoutMs: 3000 });
             return data?.has_password ? "__SQL_PASSWORD__" : "";
         }catch(sqlErr){
             console.warn("Falha ao consultar senha da sala no SQL:", sqlErr);
@@ -14591,7 +14699,7 @@ async function limparMensagensSala(){
 }
 window.limparMensagensSala = limparMensagensSala;
 
-// Sobrescreve a função de enviar chat para usar Firebase
+// Sobrescreve a funcao de enviar chat para usar SQL/API.
 window.enviarMensagem = async function() {
     if(privateRoomGateState && privateRoomGateState.roomId === salaAtual) return;
     let input = document.getElementById("chatInput");
@@ -14628,7 +14736,7 @@ window.enviarMensagem = async function() {
             await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(salaAtual)}/messages`, {
                 method: "POST",
                 body: JSON.stringify(payload),
-                timeoutMs: 1800
+                timeoutMs: 7000
             });
             atualizarEstadoLocal({ _pending:false, _failed:false });
         }else{

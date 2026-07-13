@@ -301,16 +301,19 @@ class Handler(BaseHTTPRequestHandler):
             allow_origin = origin if origin in ALLOWED_ORIGINS else ""
         elif not PUBLIC_TUNNEL_MODE:
             allow_origin = "*"
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        if allow_origin:
-            self.send_header("Access-Control-Allow-Origin", allow_origin)
-            self.send_header("Vary", "Origin")
-        self.send_header("Access-Control-Allow-Headers", "authorization, content-type, x-api-token")
-        self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE, OPTIONS")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            if allow_origin:
+                self.send_header("Access-Control-Allow-Origin", allow_origin)
+                self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Headers", "authorization, content-type, x-api-token")
+            self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE, OPTIONS")
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
+            return
 
     def do_OPTIONS(self) -> None:
         if not self._request_origin_allowed():
