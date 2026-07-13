@@ -1,4 +1,4 @@
 @echo off
 setlocal EnableExtensions
-call "%~dp0..\parar_api_darkjutsu.bat"
+call "%~dp0..\parar_api_darkjutsu.bat" "parar_servidor_local"
 exit /b %errorlevel%

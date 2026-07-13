@@ -204,7 +204,7 @@ $closeItem.Text = "Encerrar"
 $closeItem.Add_Click({
   if (Confirm-Password "Encerrar servidor local") {
     Write-MonitorLog "Encerrar servidor local solicitado"
-    Start-Process "cmd.exe" -WindowStyle Hidden -ArgumentList "/c call `"$stopScript`""
+    Start-Process "cmd.exe" -WindowStyle Hidden -ArgumentList "/c call `"$stopScript`" monitor_encerrar_menu"
   }
 })
 [void]$menu.Items.Add($closeItem)

@@ -138,7 +138,7 @@ if exist "%SHARE_SCRIPTS%\instalar_atualizar_guardiao_monitor_darkjutsu.bat" (
 )
 if "%LOCAL_API_WAS_ON%"=="1" (
   call :log "API local estava ativa; reiniciando para carregar versao nova."
-  call "%SHARE_SCRIPTS%\parar_api_darkjutsu.bat" >> "%LOGFILE%" 2>&1
+  call "%SHARE_SCRIPTS%\parar_api_darkjutsu.bat" "atualizar_github" >> "%LOGFILE%" 2>&1
   call "%SHARE_SCRIPTS%\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
   if errorlevel 1 (
     call :log "ERRO: API nao reiniciou corretamente apos atualizacao."

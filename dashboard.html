@@ -1205,11 +1205,9 @@
         let mata111Cache = null;
         let mata112Cache = null;
         let historicoCooperatCache = null;
-        const DEFAULT_SQL_API_BASE = (
-            location.protocol.startsWith("http") && location.hostname
-                ? `${location.protocol}//${location.hostname}:8765`
-                : "http://192.168.5.44:8765"
-        );
+        const SQL_API_PRIMARY_BASE = "http://192.168.5.44:8765";
+        const SQL_API_RESERVE_BASE = "http://192.168.5.38:8765";
+        const DEFAULT_SQL_API_BASE = SQL_API_PRIMARY_BASE;
         const SQL_API_BASE = (
             params.get("apiBase") ||
             localStorage.getItem("darkJutsuApiBase") ||
@@ -1217,8 +1215,9 @@
             DEFAULT_SQL_API_BASE
         ).replace(/\/+$/, "");
         const SQL_API_FALLBACK_BASES = [
+            SQL_API_PRIMARY_BASE,
             SQL_API_BASE,
-            "http://192.168.5.38:8765"
+            SQL_API_RESERVE_BASE
         ].filter((base, index, bases) => base && bases.indexOf(base) === index);
         const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
 
@@ -1250,6 +1249,40 @@
                 }
             }
             throw lastError || new Error("API SQL indisponivel.");
+        }
+
+        async function fetchArquivoDashboard(candidatos, options = {}){
+            const lista = Array.isArray(candidatos) ? candidatos : [candidatos];
+            const deveTentarRelativo = location.protocol !== "file:";
+            if(deveTentarRelativo){
+                for(const url of lista){
+                    try{
+                        const response = await fetch(url, { cache: "no-store", ...options });
+                        if(response.ok) return response;
+                    }catch(e){}
+                }
+            }
+            const authHeader = await resolveSqlAuthHeader();
+            const headers = { ...(options.headers || {}) };
+            if(authHeader) headers.Authorization = authHeader;
+            for(const base of SQL_API_FALLBACK_BASES){
+                for(const url of lista){
+                    const partes = String(url || "").replace(/^\.?\//, "").split("/");
+                    if(partes.length < 2) continue;
+                    const folder = partes[0];
+                    const filename = partes.slice(1).join("/");
+                    if(!["downloads", "data"].includes(folder) || filename.includes("/") || filename.includes("\\")) continue;
+                    try{
+                        const response = await fetch(`${base}/api/files/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`, {
+                            cache: "no-store",
+                            ...options,
+                            headers
+                        });
+                        if(response.ok) return response;
+                    }catch(e){}
+                }
+            }
+            return new Response(null, { status: 404, statusText: "Arquivo nao encontrado" });
         }
 
         async function restaurarSessaoSqlSalva(){
@@ -1644,13 +1677,7 @@
         async function carregarPlanilhaDownload(nome, guia = ""){
             try{
                 if(typeof XLSX === "undefined") return [];
-                let response = await fetch(`downloads/${nome}`, { cache: "no-store" });
-                if(!response.ok){
-                    response = await fetch(`data/${nome}`, { cache: "no-store" });
-                }
-                if(!response.ok){
-                    response = await fetch(nome, { cache: "no-store" });
-                }
+                const response = await fetchArquivoDashboard([`downloads/${nome}`, `data/${nome}`]);
                 if(!response.ok) return [];
                 const data = await response.arrayBuffer();
                 const workbook = XLSX.read(data, { type: "array" });
@@ -1684,7 +1711,7 @@
         async function carregarHistoricoCooperatLocal(){
             if(historicoCooperatCache) return historicoCooperatCache;
             try{
-                const response = await fetch("data/historico_cooperat_antigo.json", { cache: "no-store" });
+                const response = await fetchArquivoDashboard("data/historico_cooperat_antigo.json");
                 if(!response.ok) return null;
                 historicoCooperatCache = await response.json();
                 return historicoCooperatCache;
@@ -1699,7 +1726,7 @@
             estoqueMinimoCache = mapa;
             try{
                 if(typeof XLSX === "undefined") return mapa;
-                const response = await fetch("downloads/estoque_minimo.xlsx", { cache: "no-store" });
+                const response = await fetchArquivoDashboard("downloads/estoque_minimo.xlsx");
                 if(!response.ok) return mapa;
                 const data = await response.arrayBuffer();
                 const workbook = XLSX.read(data, { type: "array" });

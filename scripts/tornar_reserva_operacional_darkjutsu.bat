@@ -18,5 +18,5 @@ echo [%date% %time%] ACAO MANUAL: tornar esta maquina reserva operacional. Usuar
 powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-Date).AddMinutes(10).ToString('o') | Set-Content -LiteralPath '%PAUSE_FILE%' -Encoding ASCII" >nul 2>&1
 echo [%date% %time%] Principal pausada por ate 10 minutos para a reserva assumir. >> "%LOGFILE%"
 
-call "%SHARE_ROOT%\scripts\parar_api_darkjutsu.bat" >> "%LOGFILE%" 2>&1
+call "%SHARE_ROOT%\scripts\parar_api_darkjutsu.bat" "tornar_reserva_operacional" >> "%LOGFILE%" 2>&1
 exit /b %errorlevel%

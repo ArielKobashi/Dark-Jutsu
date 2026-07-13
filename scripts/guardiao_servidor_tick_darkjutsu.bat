@@ -5,6 +5,7 @@ set "SHARE_ROOT=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 set "PRIMARY_IP=192.168.5.44"
 set "RESERVE_IP=192.168.5.38"
 set "API_PORT=8765"
+set "HEALTH_TIMEOUT=6"
 set "BLACKOUT_FILE=%SHARE_ROOT%\servidor-preto-contador.txt"
 set "PRIMARY_REQUEST_FILE=%SHARE_ROOT%\solicitar-principal.txt"
 set "OLD_PAUSE_FILE=%SHARE_ROOT%\principal-pausado-ate.txt"
@@ -52,19 +53,63 @@ if "%LOCAL_IP%"=="%PRIMARY_IP%" (set "LOCAL_ROLE=PRINCIPAL") else (set "LOCAL_RO
 >> "%LOGFILE%" echo [%date% %time%] Papel detectado: %LOCAL_ROLE%; IP local=%LOCAL_IP%.
 if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "GUARDIAO" "Papel detectado=%LOCAL_ROLE%; IP=%LOCAL_IP%."
 
->> "%LOGFILE%" echo [%date% %time%] Health principal: http://%PRIMARY_IP%:%API_PORT%/health
-curl -fsS --max-time 3 "http://%PRIMARY_IP%:%API_PORT%/health" >nul 2>&1
+>> "%LOGFILE%" echo [%date% %time%] Health principal: http://%PRIMARY_IP%:%API_PORT%/health timeout=%HEALTH_TIMEOUT%s
+curl -fsS --max-time %HEALTH_TIMEOUT% "http://%PRIMARY_IP%:%API_PORT%/health" >nul 2>&1
 set "PRIMARY_OK=%errorlevel%"
 >> "%LOGFILE%" echo [%date% %time%] Resultado health principal=%PRIMARY_OK%.
+set "PRIMARY_HEALTH=%PRIMARY_OK%"
+curl -fsS --max-time 2 "http://%PRIMARY_IP%:%API_PORT%/live" >nul 2>&1
+set "PRIMARY_LIVE=%errorlevel%"
+>> "%LOGFILE%" echo [%date% %time%] Resultado live principal=%PRIMARY_LIVE%.
+if not "%PRIMARY_HEALTH%"=="0" if "%PRIMARY_LIVE%"=="0" (
+    >> "%LOGFILE%" echo [%date% %time%] AVISO: principal respondeu /live mas /health falhou; API viva, banco/health degradado. Health original=%PRIMARY_HEALTH%.
+    set "PRIMARY_OK=0"
+)
+if not "%PRIMARY_OK%"=="0" (
+    >> "%LOGFILE%" echo [%date% %time%] DETALHE health principal falhou; curl verbose inicio.
+    curl -v --max-time %HEALTH_TIMEOUT% "http://%PRIMARY_IP%:%API_PORT%/health" >> "%LOGFILE%" 2>&1
+    >> "%LOGFILE%" echo [%date% %time%] DETALHE health principal falhou; curl verbose fim.
+)
 if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "HEALTH" "Principal %PRIMARY_IP% respondeu codigo curl=%PRIMARY_OK%."
 
->> "%LOGFILE%" echo [%date% %time%] Health reserva: http://%RESERVE_IP%:%API_PORT%/health
-curl -fsS --max-time 3 "http://%RESERVE_IP%:%API_PORT%/health" >nul 2>&1
+if "%PRIMARY_OK%"=="0" (
+    >> "%LOGFILE%" echo [%date% %time%] Tick guardiao CMD. Local=%LOCAL_IP% papel=%LOCAL_ROLE% principal=%PRIMARY_OK% principal_live=%PRIMARY_LIVE% reserva=SKIP.
+    echo OK: principal respondeu. Nao precisa testar reserva nem assumir.
+    >> "%LOGFILE%" echo [%date% %time%] DECISAO: principal online. Limpando estado preto e pedido remoto.
+    del "%BLACKOUT_FILE%" >nul 2>&1
+    del "%PRIMARY_REQUEST_FILE%" >nul 2>&1
+    if not "%LOCAL_IP%"=="%PRIMARY_IP%" (
+        >> "%LOGFILE%" echo [%date% %time%] DECISAO: este PC e reserva; garantindo API local parada.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "GUARDIAO" "Principal respondeu; reserva deve parar API local se estiver ativa."
+        call "%SHARE_ROOT%\scripts\parar_api_darkjutsu.bat" "guardiao_principal_online" >nul 2>&1
+        >> "%LOGFILE%" echo [%date% %time%] parar_api_darkjutsu retornou codigo !errorlevel!.
+    )
+    >> "%LOGFILE%" echo [%date% %time%] FIM tick: principal ativa; nenhuma assuncao.
+    if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "GUARDIAO" "Principal ativa. Nenhuma assuncao necessaria."
+    del "%LOCKFILE%" >nul 2>&1
+    exit /b 0
+)
+
+>> "%LOGFILE%" echo [%date% %time%] Health reserva: http://%RESERVE_IP%:%API_PORT%/health timeout=%HEALTH_TIMEOUT%s
+curl -fsS --max-time %HEALTH_TIMEOUT% "http://%RESERVE_IP%:%API_PORT%/health" >nul 2>&1
 set "RESERVE_OK=%errorlevel%"
 >> "%LOGFILE%" echo [%date% %time%] Resultado health reserva=%RESERVE_OK%.
+set "RESERVE_HEALTH=%RESERVE_OK%"
+curl -fsS --max-time 2 "http://%RESERVE_IP%:%API_PORT%/live" >nul 2>&1
+set "RESERVE_LIVE=%errorlevel%"
+>> "%LOGFILE%" echo [%date% %time%] Resultado live reserva=%RESERVE_LIVE%.
+if not "%RESERVE_HEALTH%"=="0" if "%RESERVE_LIVE%"=="0" (
+    >> "%LOGFILE%" echo [%date% %time%] AVISO: reserva respondeu /live mas /health falhou; API viva, banco/health degradado. Health original=%RESERVE_HEALTH%.
+    set "RESERVE_OK=0"
+)
+if not "%RESERVE_OK%"=="0" (
+    >> "%LOGFILE%" echo [%date% %time%] DETALHE health reserva falhou; curl verbose inicio.
+    curl -v --max-time %HEALTH_TIMEOUT% "http://%RESERVE_IP%:%API_PORT%/health" >> "%LOGFILE%" 2>&1
+    >> "%LOGFILE%" echo [%date% %time%] DETALHE health reserva falhou; curl verbose fim.
+)
 if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "HEALTH" "Reserva %RESERVE_IP% respondeu codigo curl=%RESERVE_OK%."
 
->> "%LOGFILE%" echo [%date% %time%] Tick guardiao CMD. Local=%LOCAL_IP% papel=%LOCAL_ROLE% principal=%PRIMARY_OK% reserva=%RESERVE_OK%.
+>> "%LOGFILE%" echo [%date% %time%] Tick guardiao CMD. Local=%LOCAL_IP% papel=%LOCAL_ROLE% principal=%PRIMARY_OK% principal_live=%PRIMARY_LIVE% reserva=%RESERVE_OK% reserva_live=%RESERVE_LIVE%.
 echo IP local: %LOCAL_IP%
 echo Principal %PRIMARY_IP%: %PRIMARY_OK%
 echo Reserva   %RESERVE_IP%: %RESERVE_OK%
@@ -79,7 +124,7 @@ if "%PRIMARY_OK%"=="0" (
     if not "%LOCAL_IP%"=="%PRIMARY_IP%" (
         >> "%LOGFILE%" echo [%date% %time%] DECISAO: este PC e reserva; garantindo API local parada.
         if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "GUARDIAO" "Principal respondeu; reserva deve parar API local se estiver ativa."
-        call "%SHARE_ROOT%\scripts\parar_api_darkjutsu.bat" >nul 2>&1
+        call "%SHARE_ROOT%\scripts\parar_api_darkjutsu.bat" "guardiao_principal_online" >nul 2>&1
         >> "%LOGFILE%" echo [%date% %time%] parar_api_darkjutsu retornou codigo !errorlevel!.
     )
     >> "%LOGFILE%" echo [%date% %time%] FIM tick: principal ativa; nenhuma assuncao.
@@ -135,6 +180,12 @@ set "BLACKOUT_MINUTES=%BLACKOUT_COUNT%"
 >> "%LOGFILE%" echo [%date% %time%] Contador preto=%BLACKOUT_MINUTES% ciclo(s).
 
 if "%LOCAL_IP%"=="%PRIMARY_IP%" (
+    if %BLACKOUT_MINUTES% LSS 2 (
+        >> "%LOGFILE%" echo [%date% %time%] PRINCIPAL: falha isolada ha %BLACKOUT_MINUTES% ciclo(s); aguardando 2 ciclos antes de assumir para evitar falso positivo.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "PRETO" "Principal ainda nao vai reiniciar: falha ha %BLACKOUT_MINUTES% ciclo(s), precisa de 2."
+        del "%LOCKFILE%" >nul 2>&1
+        exit /b 0
+    )
     echo ACAO: nenhum servidor respondeu; principal vai iniciar agora.
     >> "%LOGFILE%" echo [%date% %time%] DECISAO: principal vai assumir porque nenhum servidor respondeu.
     if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "ASSUMIR" "Nenhum servidor respondeu; principal vai iniciar imediatamente."

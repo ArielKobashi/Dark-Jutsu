@@ -11601,6 +11601,10 @@ if(!SQL_API_HOST_IS_LOCAL && /^http:\/\/(127\.0\.0\.1|localhost):8765/i.test(sql
     sqlApiPreferredBase = "";
     try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
 }
+if(!SQL_API_HOST_IS_LOCAL && /^http:\/\/192\.168\.5\.38:8765/i.test(sqlApiPreferredBase)){
+    sqlApiPreferredBase = "";
+    try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
+}
 const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
 const DARK_JUTSU_SQL_ONLY = ["1","true","sim","yes"].includes(
     (
@@ -13814,6 +13818,10 @@ function aplicarSnapshotEstoqueFirebase(val, opcoes = {}){
         window.__estoqueSyncToken = syncToken;
         ajustesItensEstoque = val.ajustesItens || {};
         historicoSaldoEstoque = val.historicoSaldo || {};
+        if(val.contagens && typeof val.contagens === "object"){
+            contagemHomeRegistros = val.contagens;
+            contagemHistoricoProgressoGrupos = reconstruirHistoricoProgressoContagem(contagemHomeRegistros);
+        }
         pedidosCompraEstado = calcularPedidosCompraEstado(val.dados || [], val.pedidosCompra || {}, { preservarPedidosPublicados:true });
         dadosMortos = Array.isArray(val.dadosMortos) ? val.dadosMortos.map(item => aplicarAjusteManualItem(corrigirItemIncluirInvertido({...item}))) : [];
         window.dadosMortos = dadosMortos;
@@ -13824,6 +13832,20 @@ function aplicarSnapshotEstoqueFirebase(val, opcoes = {}){
     atualizarTextoUltimaAtualizacaoEstoque(val);
 }
 
+function normalizarSnapshotDashboardSql(data){
+    const inventory = data?.inventory && typeof data.inventory === "object" ? data.inventory : {};
+    const dashboardConfig = data?.dashboardConfig && typeof data.dashboardConfig === "object" ? data.dashboardConfig : {};
+    return {
+        ...inventory,
+        configPaineis: inventory.configPaineis || dashboardConfig.paineis || {},
+        avaliadorPedidos: inventory.avaliadorPedidos || dashboardConfig.avaliadorPedidos || {},
+        contagens: inventory.contagens || data?.contagens || {},
+        contagemRascunhos: inventory.contagemRascunhos || data?.contagemRascunhos || {},
+        etiquetasGeradas: inventory.etiquetasGeradas || data?.etiquetasGeradas || {},
+        rankingEtiquetas: inventory.rankingEtiquetas || data?.rankingEtiquetas || {}
+    };
+}
+
 // --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
 async function carregarEstoqueInicial() {
 
@@ -13831,7 +13853,7 @@ async function carregarEstoqueInicial() {
     if (typeof window.sqlApi === "function") {
         try {
             const data = await window.sqlApi("/api/dashboard/snapshot?limit=1000", { timeoutMs: 20000 });
-            const banco = data?.inventory || {};
+            const banco = normalizarSnapshotDashboardSql(data);
             if (banco && (Array.isArray(banco.dados) || Array.isArray(banco.dadosMortos))) {
                 aplicarSnapshotEstoqueFirebase(banco, { forcarFiltros:true });
                 console.log("Dados de estoque carregados do SQL.");

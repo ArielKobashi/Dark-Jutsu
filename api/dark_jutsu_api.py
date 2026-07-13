@@ -4,11 +4,14 @@ import base64
 import hmac
 import hashlib
 import json
+import logging
+import mimetypes
 import re
 import os
 import secrets
 import threading
 import time
+import traceback
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from http import HTTPStatus
@@ -42,6 +45,27 @@ LOGIN_RATE_LIMIT_MAX = int(_env("DARK_JUTSU_LOGIN_RATE_LIMIT_MAX", "8"))
 LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(_env("DARK_JUTSU_LOGIN_RATE_LIMIT_WINDOW_SECONDS", "600"))
 _RATE_LIMIT_LOCK = threading.Lock()
 _RATE_LIMIT_BUCKETS: dict[str, list[float]] = {}
+API_STARTED_AT = time.time()
+
+
+def _setup_detail_logger() -> logging.Logger:
+    logger = logging.getLogger("dark_jutsu_api_detail")
+    if logger.handlers:
+        return logger
+    logger.setLevel(logging.INFO)
+    log_path = Path(_env("DARK_JUTSU_API_DETAIL_LOG", r"C:\DarkJutsu\logs\api_detalhado.log"))
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        handler: logging.Handler = logging.FileHandler(log_path, encoding="utf-8")
+    except Exception:
+        handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
+
+
+DETAIL_LOG = _setup_detail_logger()
 
 
 def _json_default(value: Any) -> Any:
@@ -291,7 +315,30 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "DarkJutsuSQL/0.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        print("%s - %s" % (self.address_string(), fmt % args))
+        message = fmt % args
+        print("%s - %s" % (self.address_string(), message))
+        DETAIL_LOG.info("HTTP client=%s msg=%s", self._client_ip(), message)
+
+    def _request_log_context(self, started: float, status: int | HTTPStatus, error: str = "") -> None:
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        auth = getattr(self, "auth_context", AuthContext())
+        DETAIL_LOG.info(
+            "REQ method=%s path=%s status=%s elapsed_ms=%s client=%s origin=%s referer=%s ua=%s role=%s user=%s service=%s pid=%s thread=%s error=%s",
+            self.command,
+            self.path,
+            int(status),
+            elapsed_ms,
+            self._client_ip(),
+            self.headers.get("Origin", ""),
+            self.headers.get("Referer", ""),
+            self.headers.get("User-Agent", ""),
+            auth.role,
+            auth.user_id or "",
+            auth.service,
+            os.getpid(),
+            threading.current_thread().name,
+            error,
+        )
 
     def _send_json(self, payload: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, ensure_ascii=False, default=_json_default).encode("utf-8")
@@ -312,7 +359,50 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE, OPTIONS")
             self.end_headers()
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError) as exc:
+            DETAIL_LOG.warning(
+                "SEND_ABORT method=%s path=%s client=%s status=%s error=%s",
+                self.command,
+                self.path,
+                self._client_ip(),
+                int(status),
+                exc,
+            )
+            return
+
+    def _send_file(self, path: Path) -> None:
+        origin = self.headers.get("Origin", "").rstrip("/")
+        allow_origin = ""
+        if ALLOWED_ORIGINS and ALLOWED_ORIGINS != ["*"]:
+            allow_origin = origin if origin in ALLOWED_ORIGINS else ""
+        elif not PUBLIC_TUNNEL_MODE:
+            allow_origin = "*"
+        content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+        try:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(path.stat().st_size))
+            if allow_origin:
+                self.send_header("Access-Control-Allow-Origin", allow_origin)
+                self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Headers", "authorization, content-type, x-api-token")
+            self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE, OPTIONS")
+            self.end_headers()
+            with path.open("rb") as handle:
+                while True:
+                    chunk = handle.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError) as exc:
+            DETAIL_LOG.warning(
+                "SEND_FILE_ABORT method=%s path=%s file=%s client=%s error=%s",
+                self.command,
+                self.path,
+                path,
+                self._client_ip(),
+                exc,
+            )
             return
 
     def do_OPTIONS(self) -> None:
@@ -322,6 +412,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"ok": True})
 
     def do_GET(self) -> None:
+        started = time.perf_counter()
         try:
             if not self._request_origin_allowed():
                 raise ApiError(HTTPStatus.FORBIDDEN, "Origem nao autorizada.")
@@ -329,12 +420,20 @@ class Handler(BaseHTTPRequestHandler):
             parsed = urlparse(self.path)
             query = parse_qs(parsed.query)
             parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
+            if len(parts) == 4 and parts[:2] == ["api", "files"]:
+                self._send_project_file(parts[2], parts[3])
+                self._request_log_context(started, HTTPStatus.OK)
+                return
             payload = self._route(parts, query)
             self._send_json(payload)
+            self._request_log_context(started, HTTPStatus.OK)
         except ApiError as exc:
             self._send_json({"ok": False, "error": exc.message}, exc.status)
+            self._request_log_context(started, exc.status, exc.message)
         except Exception as exc:
+            DETAIL_LOG.error("UNHANDLED method=GET path=%s client=%s error=%s\n%s", self.path, self._client_ip(), exc, traceback.format_exc())
             self._send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            self._request_log_context(started, HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
 
     def do_PUT(self) -> None:
         self._handle_write("PUT")
@@ -349,6 +448,7 @@ class Handler(BaseHTTPRequestHandler):
         self._handle_write("DELETE")
 
     def _handle_write(self, method: str) -> None:
+        started = time.perf_counter()
         try:
             if not self._request_origin_allowed():
                 raise ApiError(HTTPStatus.FORBIDDEN, "Origem nao autorizada.")
@@ -358,10 +458,14 @@ class Handler(BaseHTTPRequestHandler):
             payload = self._read_json_body()
             result = self._write_route(method, parts, payload)
             self._send_json(result)
+            self._request_log_context(started, HTTPStatus.OK)
         except ApiError as exc:
             self._send_json({"ok": False, "error": exc.message}, exc.status)
+            self._request_log_context(started, exc.status, exc.message)
         except Exception as exc:
+            DETAIL_LOG.error("UNHANDLED method=%s path=%s client=%s error=%s\n%s", method, self.path, self._client_ip(), exc, traceback.format_exc())
             self._send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            self._request_log_context(started, HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
 
     def _request_origin_allowed(self) -> bool:
         origin = self.headers.get("Origin", "").rstrip("/")
@@ -382,7 +486,7 @@ class Handler(BaseHTTPRequestHandler):
         return str(self.client_address[0] if self.client_address else "")
 
     def _authenticate(self) -> AuthContext:
-        if self.path.startswith("/health"):
+        if self.path.startswith("/health") or self.path.startswith("/live"):
             return AuthContext(authenticated=True, role="service", service=True)
         parsed = urlparse(self.path)
         parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
@@ -453,6 +557,8 @@ class Handler(BaseHTTPRequestHandler):
         return self._require_roles("admin")
 
     def _route(self, parts: list[str], query: dict[str, list[str]]) -> Any:
+        if parts == ["live"]:
+            return self._live()
         if parts == ["health"]:
             return self._health()
         if parts[:1] != ["api"]:
@@ -518,6 +624,19 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) == 4 and parts[:3] == ["api", "automus", "releases"]:
             return self._automus_release(parts[3])
         raise ApiError(HTTPStatus.NOT_FOUND, "Endpoint nao encontrado.")
+
+    def _send_project_file(self, folder: str, filename: str) -> None:
+        allowed_folders = {"downloads", "data"}
+        allowed_suffixes = {".xlsx", ".json", ".png", ".ttf"}
+        if folder not in allowed_folders:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Pasta nao autorizada.")
+        if "/" in filename or "\\" in filename or filename in {"", ".", ".."}:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Nome de arquivo invalido.")
+        path = (ROOT / folder / filename).resolve()
+        base = (ROOT / folder).resolve()
+        if base not in path.parents or path.suffix.lower() not in allowed_suffixes or not path.is_file():
+            raise ApiError(HTTPStatus.NOT_FOUND, "Arquivo nao encontrado.")
+        self._send_file(path)
 
     def _write_route(self, method: str, parts: list[str], payload: dict[str, Any]) -> Any:
         if method == "POST" and parts == ["api", "auth", "login"]:
@@ -646,8 +765,27 @@ class Handler(BaseHTTPRequestHandler):
                 return list(cur.fetchall())
 
     def _health(self) -> dict[str, Any]:
+        started = time.perf_counter()
         rows = self._query("select now() as database_time")
-        return {"ok": True, "database_time": rows[0]["database_time"], "database_url": "configured"}
+        db_ms = int((time.perf_counter() - started) * 1000)
+        if db_ms >= 1000:
+            DETAIL_LOG.warning("HEALTH_SLOW db_ms=%s pid=%s", db_ms, os.getpid())
+        return {
+            "ok": True,
+            "database_time": rows[0]["database_time"],
+            "database_url": "configured",
+            "db_ms": db_ms,
+            "pid": os.getpid(),
+            "uptime_seconds": int(time.time() - API_STARTED_AT),
+        }
+
+    def _live(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "pid": os.getpid(),
+            "uptime_seconds": int(time.time() - API_STARTED_AT),
+            "threads": threading.active_count(),
+        }
 
     def _ops_status(self) -> dict[str, Any]:
         counts: dict[str, int] = {}
@@ -2689,12 +2827,23 @@ def main() -> int:
     server = ThreadingHTTPServer((API_HOST, API_PORT), Handler)
     print(f"Dark-Jutsu SQL API em http://{API_HOST}:{API_PORT}")
     print(f"Banco: {DATABASE_URL}")
+    DETAIL_LOG.info(
+        "START pid=%s host=%s port=%s require_auth=%s public_tunnel=%s allowed_origins=%s",
+        os.getpid(),
+        API_HOST,
+        API_PORT,
+        REQUIRE_AUTH,
+        PUBLIC_TUNNEL_MODE,
+        ",".join(ALLOWED_ORIGINS),
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("Encerrando API...")
+        DETAIL_LOG.info("STOP_KEYBOARD pid=%s", os.getpid())
     finally:
         server.server_close()
+        DETAIL_LOG.info("STOP pid=%s uptime_seconds=%s", os.getpid(), int(time.time() - API_STARTED_AT))
     return 0
 
 
