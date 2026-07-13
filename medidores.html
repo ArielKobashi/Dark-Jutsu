@@ -222,7 +222,7 @@
           </div></article>
           <article class="setup-card"><h3>Sincronização</h3><div class="body">
             <div class="sync-line">
-              <span>Firebase compartilhado</span>
+              <span>SQL compartilhado</span>
               <span class="tag" id="syncStateTag">ativo</span>
             </div>
             <button class="btn secondary sync-btn" type="button" id="syncNow">Sincronizar</button>
@@ -466,68 +466,21 @@
     </form>
   </dialog>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getDatabase, ref, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyChPIkc1NxpxtpvOU92NxyXsxCFpe3mzgE",
-      authDomain: "chat-fiasul.firebaseapp.com",
-      databaseURL: "https://chat-fiasul-default-rtdb.firebaseio.com",
-      projectId: "chat-fiasul",
-      storageBucket: "chat-fiasul.firebasestorage.app",
-      messagingSenderId: "263776720116",
-      appId: "1:263776720116:web:713fd43f4cb196b0527aa1",
-      measurementId: "G-KC5F0QT711"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const auth = getAuth(app);
-    window.auth = auth;
-    window.db = db;
-    window.ref = ref;
-    window.get = get;
-    window.set = set;
-    window.onValue = onValue;
-    window.darkJutsuFirebaseReady = new Promise(resolve => {
-      onAuthStateChanged(auth, user => resolve({ db, user }));
-    });
-    window.darkJutsuWaitFirebaseUser = function(timeoutMs = 6000){
-      return new Promise(resolve => {
-        const current = auth.currentUser;
-        if(current) return resolve(current);
-        let done = false;
-        const timer = setTimeout(() => {
-          if(done) return;
-          done = true;
-          unsub();
-          resolve(auth.currentUser || null);
-        }, timeoutMs);
-        const unsub = onAuthStateChanged(auth, user => {
-          if(done || !user) return;
-          done = true;
-          clearTimeout(timer);
-          unsub();
-          resolve(user);
-        });
-      });
-    };
-    window.darkJutsuGetFirebasePath = async function(path){
-      const { db: readyDb } = await window.darkJutsuFirebaseReady;
-      const user = await window.darkJutsuWaitFirebaseUser();
-      if(!user) throw new Error("Sessao Firebase nao encontrada. Abra/login no Dark-Jutsu antes de sincronizar.");
-      const snap = await get(ref(readyDb, path));
-      return snap.val();
-    };
-    window.dispatchEvent(new CustomEvent("dark-jutsu-firebase-ready"));
-  </script>
   <script>
     const STORAGE_KEY = "darkJutsuMedidores.v2";
     const DASH_SLOT_KEY = "darkJutsuMedidores.dashboardSlots.v1";
-    const SHARED_STATE_KEY = "chatGlobal/medidores/state";
-    const FIREBASE_DB_URL = "https://chat-fiasul-default-rtdb.firebaseio.com";
+    const SHARED_STATE_KEY = "medidores.state";
+    const SQL_AUTH_TOKEN_KEY = "darkJutsuSqlAuthToken";
+    const SQL_AUTH_USER_KEY = "darkJutsuSqlAuthUser";
+    const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
+    const SQL_API_BASE_URL = (() => {
+      const params = new URLSearchParams(location.search);
+      const explicit = params.get("apiBase") ||
+        localStorage.getItem("darkJutsuApiBase") ||
+        window.DARK_JUTSU_API_BASE_URL ||
+        "http://127.0.0.1:8765";
+      return String(explicit).replace(/\/+$/, "");
+    })();
     const today = new Date().toISOString().slice(0,10);
     const EMPTY_STATE = {rh:[], machine:[], stock:[], stockMovements:[], internal:[]};
     const seed = buildSeedData();
@@ -665,6 +618,41 @@
       const el = document.getElementById("syncStatus");
       if(el) el.textContent = text;
     }
+    function getSqlUser(){
+      try { return JSON.parse(localStorage.getItem(SQL_AUTH_USER_KEY) || "null"); }
+      catch(e){ return null; }
+    }
+    function getSqlAuthHeader(){
+      const sessionToken = localStorage.getItem(SQL_AUTH_TOKEN_KEY) || "";
+      if(sessionToken) return `Bearer ${sessionToken}`;
+      if(SQL_API_TOKEN) return `Bearer ${SQL_API_TOKEN}`;
+      return "";
+    }
+    function sqlApiUrl(path, params = null){
+      const url = new URL(path.startsWith("/") ? path : `/${path}`, SQL_API_BASE_URL);
+      Object.entries(params || {}).forEach(([key, value]) => {
+        if(value !== undefined && value !== null && value !== "") url.searchParams.set(key, value);
+      });
+      return url.toString();
+    }
+    async function sqlApi(path, options = {}){
+      const headers = {"Accept":"application/json", ...(options.headers || {})};
+      const authHeader = getSqlAuthHeader();
+      if(authHeader) headers.Authorization = authHeader;
+      if(options.body !== undefined && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      const res = await fetch(sqlApiUrl(path, options.params), {
+        ...options,
+        headers,
+        body: options.body !== undefined && typeof options.body !== "string" ? JSON.stringify(options.body) : options.body
+      });
+      let data = null;
+      try { data = await res.json(); } catch(e){}
+      if(!res.ok){
+        const msg = data?.error || data?.message || `${path}: ${res.status}`;
+        throw new Error(msg);
+      }
+      return data;
+    }
     function hasSharedData(data = state){
       return ["rh","machine","stock","stockMovements","internal"]
         .some(key => Array.isArray(data?.[key]) && data[key].length);
@@ -679,39 +667,30 @@
         internal:(clean.internal || []).filter(item => item.source === "Dark-Jutsu" && !item.demo && !isDemoRow(item))
       };
     }
-    async function waitSharedFirebaseUser(timeoutMs = 12000){
-      if(!window.db || !window.ref || !window.get || !window.set || !window.onValue){
-        throw new Error("Firebase do Dark ainda nao carregou.");
-      }
-      if(typeof window.darkJutsuWaitFirebaseUser !== "function"){
-        throw new Error("Sessao do Dark ainda nao foi exposta para o Medidores.");
-      }
-      const user = await window.darkJutsuWaitFirebaseUser(timeoutMs);
-      if(!user) throw new Error("Login do Dark nao encontrado nesta aba. Abra pelo Dark-Jutsu logado para sincronizar.");
-      return user;
-    }
     function reportSyncError(err){
-      console.error("Sincronizacao Firebase Medidores falhou:", err);
+      console.error("Sincronizacao SQL Medidores falhou:", err);
       setSyncStateTag("erro", "red");
-      setSyncStatus(err?.message || "Firebase bloqueou a sincronizacao.");
+      setSyncStatus(err?.message || "SQL bloqueou a sincronizacao.");
     }
-    function syncPayload(user = window.auth?.currentUser){
+    function syncPayload(user = getSqlUser()){
       return {
         state: normalizeState(state),
         updatedAt: sharedStateUpdatedAt || Date.now(),
-        updatedBy: user?.uid || localStorage.getItem("darkJutsuApiToken") || ""
+        updatedBy: user?.id || user?.uid || user?.nickname || "medidores"
       };
     }
     async function pushSharedState(reason = "salvo localmente"){
-      const sharedDb = window.db;
-      if(syncBusy || !sharedDb) return;
+      if(syncBusy) return;
       syncBusy = true;
       try{
-        const user = await waitSharedFirebaseUser();
+        const user = getSqlUser();
         sharedStateUpdatedAt = Date.now();
-        await window.set(window.ref(sharedDb, SHARED_STATE_KEY), syncPayload(user));
+        await sqlApi(`/api/settings/${encodeURIComponent(SHARED_STATE_KEY)}`, {
+          method:"PUT",
+          body:{value: syncPayload(user), updated_by: user?.id || user?.uid || user?.nickname || ""}
+        });
         setSyncStateTag("sincronizado", "green");
-        setSyncStatus(`Firebase atualizado ${reason ? `(${reason})` : ""}.`);
+        setSyncStatus(`SQL atualizado ${reason ? `(${reason})` : ""}.`);
       }catch(err){
         reportSyncError(err);
       }finally{
@@ -719,12 +698,9 @@
       }
     }
     async function pullSharedState(){
-      const sharedDb = window.db;
-      if(!sharedDb) return;
       try{
-        await waitSharedFirebaseUser();
-        const snap = await window.get(window.ref(sharedDb, SHARED_STATE_KEY));
-        const remote = snap.val() || {};
+        const result = await sqlApi(`/api/settings/${encodeURIComponent(SHARED_STATE_KEY)}`);
+        const remote = result?.setting?.value || {};
         const remoteState = remote?.state || remote;
         const remoteUpdatedAt = Number(remote.updatedAt || 0) || 0;
         if(remoteState && typeof remoteState === "object" && hasSharedData(remoteState)){
@@ -733,7 +709,7 @@
             sharedStateUpdatedAt = remoteUpdatedAt || Date.now();
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
             setSyncStateTag("sincronizado", "green");
-            setSyncStatus("Firebase carregado.");
+            setSyncStatus("SQL carregado.");
             rebuildItemCatalog();
             render();
             return true;
@@ -747,47 +723,26 @@
           return true;
         }
         setSyncStateTag("vazio", "");
-        setSyncStatus("Nenhum dado no Firebase ainda.");
+        setSyncStatus("Nenhum dado no SQL ainda.");
       }catch(err){
+        if(String(err?.message || "").includes("404") || String(err?.message || "").includes("Configuracao nao encontrada")){
+          if(hasSharedData(state)) {
+            await pushSharedState("primeira carga local");
+            return true;
+          }
+          setSyncStateTag("vazio", "");
+          setSyncStatus("Nenhum dado no SQL ainda.");
+          return false;
+        }
         reportSyncError(err);
       }
       return false;
     }
     async function attachSharedStateListener(){
-      const sharedDb = window.db;
-      if(sharedStateListenerReady || !sharedDb) return;
+      if(sharedStateListenerReady) return;
       sharedStateListenerReady = true;
-      try{
-        await waitSharedFirebaseUser();
-      }catch(err){
-        sharedStateListenerReady = false;
-        reportSyncError(err);
-        return;
-      }
-      window.onValue(window.ref(sharedDb, SHARED_STATE_KEY), snap => {
-        const remote = snap.val() || {};
-        const remoteState = remote?.state || remote;
-        const remoteUpdatedAt = Number(remote.updatedAt || 0) || 0;
-        if(!remoteState || typeof remoteState !== "object" || !hasSharedData(remoteState)) {
-          if(hasSharedData(state)) void pushSharedState("primeira carga local");
-          else {
-            setSyncStateTag("vazio", "");
-            setSyncStatus("Aguardando dados no Firebase.");
-          }
-          return;
-        }
-        if(remoteUpdatedAt && remoteUpdatedAt <= sharedStateUpdatedAt && sharedStateUpdatedAt){
-          setSyncStateTag("sincronizado", "green");
-          return;
-        }
-        state = normalizeState(remoteState);
-        sharedStateUpdatedAt = remoteUpdatedAt || Date.now();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        rebuildItemCatalog();
-        setSyncStateTag("sincronizado", "green");
-        setSyncStatus("Atualizado automaticamente pelo Firebase.");
-        render();
-      }, err => reportSyncError(err));
+      setSyncStateTag("ativo", "");
+      setSyncStatus("Sincronizacao SQL automatica ativa.");
     }
     function saveState(){
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -814,11 +769,11 @@
     async function loadItemCatalogFromDark(){
       rebuildItemCatalog();
       try{
-        const data = await fetchFirebasePath("estoqueGlobal/dados");
-        const list = Array.isArray(data) ? data : Object.values(data || {});
+        const data = await sqlApi("/api/inventory", {params:{limit:500}});
+        const list = Array.isArray(data?.items) ? data.items : [];
         rebuildItemCatalog(list.map(item => ({
-          code: item?.protheus || item?.protheusKey || item?.cooperat || "",
-          desc: item?.descricao || ""
+          code: item?.protheus_code || item?.cooperat_code || item?.legacy_key || "",
+          desc: item?.description || ""
         })));
       }catch(err){
         if(err?.message && String(err.message).includes("401")) return;
@@ -847,74 +802,58 @@
     }
     function requireRhPassword(){
       if(rhUnlocked) return true;
-      const password = prompt("Digite a senha para acessar ocorrências de RH:");
-      if(password === "123456"){
+      const user = getSqlUser();
+      if(user && ["admin", "mod"].includes(String(user.role || user.nivel || "").toLowerCase())){
         rhUnlocked = true;
         sessionStorage.setItem("darkJutsuMedidores.rhUnlocked", "1");
         render();
         return true;
       }
-      if(password !== null) alert("Senha incorreta.");
+      alert("Acesso de RH restrito a administradores e moderadores logados no SQL.");
       return false;
     }
     function occurrenceToInternal(oc){
-      const created = oc.criadoEm || oc.atualizadoEm || Date.now();
-      const date = oc.data || new Date(Number(created)).toISOString().slice(0,10);
-      const classification = oc.classificacao || oc.categoria || oc.tipo || "Sem classificação";
-      const severity = oc.gravidade || oc.prioridade || "Sem gravidade";
+      const raw = oc?.raw_data && typeof oc.raw_data === "object" ? oc.raw_data : oc;
+      const createdRaw = raw.criadoEm || raw.atualizadoEm || oc.created_at || oc.updated_at || Date.now();
+      const created = typeof createdRaw === "number" ? createdRaw : Date.parse(createdRaw);
+      const date = raw.data || oc.date_label || new Date(Number.isFinite(created) ? created : Date.now()).toISOString().slice(0,10);
+      const classification = raw.classificacao || raw.categoria || raw.tipo || oc.type || "Sem classificacao";
+      const severity = raw.gravidade || raw.prioridade || oc.severity || "Sem gravidade";
       return {
         date,
-        darkId: oc.id || "-",
-        requester: oc.operadorNome || oc.acusadoNome || "Dark-Jutsu",
-        sector: oc.operadorSetor || oc.acusadoSetor || "",
+        darkId: raw.id || oc.id || "-",
+        requester: raw.operadorNome || raw.acusadoNome || oc.operator_name || oc.involved_name || "Dark-Jutsu",
+        sector: raw.operadorSetor || raw.acusadoSetor || oc.operator_sector || oc.involved_sector || "",
         type: classification,
         classification,
         severity,
-        owner: oc.responsavelNome || "Sem responsavel",
-        status: oc.status === "aberta" ? "Aberta" : oc.status === "analisada" ? "Em atendimento" : oc.status === "concluida" ? "Concluida" : (oc.status || "Aberta"),
+        owner: raw.responsavelNome || oc.responsible_name || "Sem responsavel",
+        status: raw.status === "aberta" ? "Aberta" : raw.status === "analisada" ? "Em atendimento" : raw.status === "concluida" ? "Concluida" : (raw.status || oc.status || "Aberta"),
         due: date,
-        notes: oc.descricao || oc.tratativa || "",
+        notes: raw.descricao || raw.tratativa || oc.description || oc.treatment_text || "",
         source:"Dark-Jutsu"
       };
-    }
-    async function fetchFirebasePath(path){
-      if(typeof window.darkJutsuGetFirebasePath === "function"){
-        try{
-          return await window.darkJutsuGetFirebasePath(path);
-        }catch(err){
-          console.warn(`Leitura autenticada falhou em ${path}; tentando fallback publico.`, err);
-        }
-      }
-      const res = await fetch(`${FIREBASE_DB_URL}/${path}.json`);
-      if(!res.ok) throw new Error(`${path}: ${res.status}`);
-      return await res.json();
     }
     async function syncInternalFromDark(silent = false){
       const btns = document.querySelectorAll("[data-sync-internal]");
       btns.forEach(btn => btn.setAttribute("disabled","disabled"));
       setInternalSyncStatus("Sincronizando ocorrências do Dark-Jutsu...");
       try{
-        const [primary, fallback] = await Promise.all([
-          fetchFirebasePath("ocorrencias").catch(() => null),
-          fetchFirebasePath("chatGlobal/ocorrencias").catch(() => null)
-        ]);
-        const merged = [];
-        [primary, fallback].forEach(group => {
-          Object.entries(group || {}).forEach(([id, oc]) => merged.push({ id, ...oc }));
-        });
+        const result = await sqlApi("/api/occurrences", {params:{limit:500}});
+        const merged = Array.isArray(result?.occurrences) ? result.occurrences : [];
         const byId = new Map();
-        merged.forEach(oc => byId.set(oc.id, occurrenceToInternal(oc)));
+        merged.forEach(oc => byId.set(oc.id || oc.raw_data?.id, occurrenceToInternal(oc)));
         state.internal = [...byId.values()].sort((a,b) => b.date.localeCompare(a.date));
         saveState();
         render();
         setInternalSyncStatus(state.internal.length
-          ? `${state.internal.length} ocorrência(s) carregada(s) diretamente do Dark-Jutsu.`
-          : "Nenhuma ocorrência encontrada. Se houver ocorrências no Dark, faça login nele neste navegador e clique em Atualizar.");
-        if(!silent && !state.internal.length) alert("Nao encontrei ocorrencias do Dark nos caminhos liberados ou a sessao do Firebase nao esta logada.");
+          ? `${state.internal.length} ocorrência(s) carregada(s) diretamente do SQL.`
+          : "Nenhuma ocorrência encontrada no SQL.");
+        if(!silent && !state.internal.length) alert("Nao encontrei ocorrencias no SQL.");
       }catch(err){
         console.warn("Falha ao carregar ocorrencias do Dark:", err);
         setInternalSyncStatus(err.message || "Falha ao sincronizar ocorrências do Dark-Jutsu.");
-        if(!silent) alert(err.message || "Nao foi possivel carregar ocorrencias do Dark. Verifique permissao/conexao do Firebase.");
+        if(!silent) alert(err.message || "Nao foi possivel carregar ocorrencias do Dark. Verifique permissao/conexao SQL.");
       }finally{
         btns.forEach(btn => btn.removeAttribute("disabled"));
       }
@@ -2065,12 +2004,6 @@
     document.getElementById("clearFilters").addEventListener("click", () => {
       fromDate.value = ""; toDate.value = ""; filterText.value = ""; render();
     });
-    window.addEventListener("dark-jutsu-firebase-ready", () => {
-      syncInternalFromDark(true);
-      loadItemCatalogFromDark();
-      void attachSharedStateListener();
-      void pullSharedState();
-    }, {once:true});
     rebuildItemCatalog();
     loadItemCatalogFromDark();
     renderDashSlots();

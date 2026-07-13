@@ -24,11 +24,9 @@ from urllib.request import Request, urlopen
 from automus_self_update import (
     check_for_update,
     download_update,
-    get_manifest_firebase_path,
     get_manifest_url,
     install_downloaded_update,
     load_local_version,
-    update_info_from_manifest,
 )
 
 
@@ -160,29 +158,6 @@ def _http_json(url: str, method: str = "GET", payload: Optional[dict] = None, ti
         raise RuntimeError(f"Falha de rede: {exc}") from exc
 
 
-def _http_form_json(url: str, payload: dict, timeout: float = 25.0):
-    data = urlencode(payload).encode("utf-8")
-    req = Request(
-        url=url,
-        data=data,
-        method="POST",
-        headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
-    )
-    try:
-        with urlopen(req, timeout=timeout) as resp:
-            raw = resp.read()
-            return json.loads(raw.decode("utf-8")) if raw else None
-    except HTTPError as exc:
-        body = ""
-        try:
-            body = exc.read().decode("utf-8", errors="replace")
-        except Exception:
-            pass
-        raise RuntimeError(f"HTTP {exc.code}: {body}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"Falha de rede: {exc}") from exc
-
-
 def _decode_jwt_payload(token: str) -> dict:
     parts = str(token or "").split(".")
     if len(parts) < 2:
@@ -205,30 +180,6 @@ def _id_token_expired(token: str, skew_seconds: int = 120) -> bool:
         return True
 
 
-def _extract_firebase_config() -> tuple[str, str]:
-    for config_path in (SCRIPT_DIR / "firebase_config.json", BUNDLED_SCRIPT_DIR / "firebase_config.json"):
-        if not config_path.exists():
-            continue
-        cfg = json.loads(config_path.read_text(encoding="utf-8-sig"))
-        api_key = str(cfg.get("apiKey") or "").strip()
-        db_url = str(cfg.get("databaseURL") or "").strip().rstrip("/")
-        if api_key and db_url:
-            return api_key, db_url
-    index_candidates = [PROJECT_ROOT / "index.html", BUNDLE_ROOT / "index.html"] if getattr(sys, "frozen", False) else [PROJECT_ROOT / "index.html"]
-    html = ""
-    for candidate in index_candidates:
-        if candidate.exists():
-            html = candidate.read_text(encoding="utf-8", errors="replace")
-            break
-    if not html:
-        raise RuntimeError("Configuração Firebase não encontrada no Automus.")
-    api_match = re.search(r'apiKey:\s*"([^"]+)"', html)
-    db_match = re.search(r'databaseURL:\s*"([^"]+)"', html)
-    if not api_match or not db_match:
-        raise RuntimeError("Firebase não encontrado no index.html.")
-    return api_match.group(1), db_match.group(1).rstrip("/")
-
-
 def _usuario_pode_usar_automus(usuario: object) -> bool:
     if not isinstance(usuario, dict):
         return False
@@ -239,46 +190,23 @@ def _usuario_pode_usar_automus(usuario: object) -> bool:
 
 
 def _auth_admin_dark_jutsu(login: str, senha: str) -> dict:
-    if _automus_sql_only_enabled() and os.environ.get("DARK_JUTSU_API_TOKEN", "").strip():
-        nick = (login or "").strip() or "automus-sql-service"
-        return {
-            "uid": "automus-sql-service",
-            "email": nick if "@" in nick else f"{nick}@sql.local",
-            "nickname": nick,
-            "nivel": "admin",
-            "idToken": os.environ.get("DARK_JUTSU_API_TOKEN", "").strip(),
-            "refreshToken": "",
-            "serviceToken": True,
-        }
-    nick = (login or "").strip().lower()
-    if not nick or not senha:
-        raise RuntimeError("Informe login e senha.")
-    email = nick if "@" in nick else f"{nick}@sistema.com"
-    api_key, db_url = _extract_firebase_config()
-    auth = _http_json(
-        f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}",
-        method="POST",
-        payload={"email": email, "password": senha, "returnSecureToken": True},
-    )
-    if not isinstance(auth, dict) or not auth.get("idToken") or not auth.get("localId"):
-        raise RuntimeError("Login ou senha inválido.")
-    uid = str(auth["localId"])
-    token = str(auth["idToken"])
-    usuario = _http_json(f"{db_url}/usuarios/{uid}.json?auth={token}", method="GET")
-    if not _usuario_pode_usar_automus(usuario):
-        raise RuntimeError("Acesso bloqueado: este login não tem permissão admin/mod.")
+    token = os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("DARK_JUTSU_API_TOKEN obrigatorio para o controlador SQL-only.")
+    nick = (login or "").strip() or "automus-sql-service"
     return {
-        "uid": uid,
-        "email": email,
-        "nickname": usuario.get("nickname") or nick,
-        "nivel": str(usuario.get("nivel") or "").strip().lower(),
+        "uid": "automus-sql-service",
+        "email": nick if "@" in nick else f"{nick}@sql.local",
+        "nickname": nick,
+        "nivel": "admin",
         "idToken": token,
-        "refreshToken": str(auth.get("refreshToken") or ""),
+        "refreshToken": "",
+        "serviceToken": True,
     }
 
 
 def _automus_sql_only_enabled() -> bool:
-    return os.environ.get("AUTOMUS_SQL_ONLY", "").strip().lower() in {"1", "true", "sim", "yes"}
+    return True
 
 
 def _machine_fingerprint() -> str:
@@ -591,7 +519,7 @@ class _ControlWindow:
             update_source = self._state.get_update_source_label()
             if not update_source:
                 if not silent:
-                    update_status_var.set("Configure updateManifestUrl ou updateManifestFirebasePath no version.json.")
+                    update_status_var.set("Configure updateManifestUrl no version.json.")
                 return
 
             update_status_var.set("Verificando atualização do Automus...")
@@ -1559,13 +1487,14 @@ class _SharedState:
     def ensure_local_request_admin(self, payload: dict) -> tuple[bool, str]:
         if self.authenticated_admin is not None:
             return True, "Usuario ja autenticado."
-        if _automus_sql_only_enabled() and os.environ.get("DARK_JUTSU_API_TOKEN", "").strip():
+        token = os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()
+        if token:
             admin = {
                 "uid": "automus-sql-service",
                 "email": "automus-sql-service@sql.local",
                 "nickname": "automus-sql-service",
                 "nivel": "admin",
-                "idToken": os.environ.get("DARK_JUTSU_API_TOKEN", "").strip(),
+                "idToken": token,
                 "refreshToken": "",
                 "serviceToken": True,
             }
@@ -1574,33 +1503,7 @@ class _SharedState:
             self._ensure_user_schedule(admin)
             emit_status("Interface liberada por token de servico SQL-only.")
             return True, "Usuario autorizado por token SQL-only."
-        token = str((payload or {}).get("idToken") or "").strip()
-        uid = str((payload or {}).get("uid") or "").strip()
-        email = str((payload or {}).get("email") or "").strip()
-        nickname = str((payload or {}).get("nickname") or "").strip()
-        if not token or not uid:
-            return False, "Login admin/mod necessario no sistema para acionar o Automus."
-        try:
-            _, db_url = _extract_firebase_config()
-            usuario = _http_json(f"{db_url}/usuarios/{uid}.json?auth={token}", method="GET")
-            if not _usuario_pode_usar_automus(usuario):
-                return False, "Apenas admin/mod pode acionar o Automus por aqui."
-            admin = {
-                "uid": uid,
-                "email": email,
-                "nickname": usuario.get("nickname") or nickname or email or uid,
-                "nivel": str(usuario.get("nivel") or "").strip().lower(),
-                "idToken": token,
-                "refreshToken": str((payload or {}).get("refreshToken") or "").strip(),
-            }
-            with self.lock:
-                self.authenticated_admin = admin
-            self._save_admin_session(admin)
-            self._ensure_user_schedule(admin)
-            emit_status(f"Interface liberada por comando local para admin/mod: {admin.get('nickname')}.")
-            return True, "Usuario autorizado."
-        except Exception as exc:
-            return False, f"Falha ao validar admin/mod local: {exc}"
+        return False, "DARK_JUTSU_API_TOKEN obrigatorio para acionar o Automus em modo SQL-only."
 
     def login_admin(self, login: str, senha: str) -> dict:
         admin = _auth_admin_dark_jutsu(login, senha)
@@ -1631,56 +1534,19 @@ class _SharedState:
         _save_controller_config(self.config)
 
     def _load_saved_admin_session(self) -> Optional[dict]:
-        if _automus_sql_only_enabled() and os.environ.get("DARK_JUTSU_API_TOKEN", "").strip():
+        token = os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()
+        if token:
             return {
                 "uid": "automus-sql-service",
                 "email": "automus-sql-service@sql.local",
                 "nickname": "automus-sql-service",
                 "nivel": "admin",
-                "idToken": os.environ.get("DARK_JUTSU_API_TOKEN", "").strip(),
+                "idToken": token,
                 "refreshToken": "",
                 "serviceToken": True,
             }
-        session = self.config.get("adminSession") if isinstance(self.config, dict) else None
-        if not isinstance(session, dict):
-            return None
-        admin = {
-            "uid": str(session.get("uid") or "").strip(),
-            "email": str(session.get("email") or "").strip(),
-            "nickname": str(session.get("nickname") or "").strip(),
-            "nivel": str(session.get("nivel") or "").strip().lower(),
-            "idToken": str(session.get("idToken") or "").strip(),
-            "refreshToken": str(session.get("refreshToken") or "").strip(),
-        }
-        try:
-            if admin["refreshToken"] and (not admin["idToken"] or _id_token_expired(admin["idToken"])):
-                api_key, _db_url = _extract_firebase_config()
-                refreshed = _http_form_json(
-                    f"https://securetoken.googleapis.com/v1/token?key={api_key}",
-                    {"grant_type": "refresh_token", "refresh_token": admin["refreshToken"]},
-                )
-                if isinstance(refreshed, dict):
-                    admin["idToken"] = str(refreshed.get("id_token") or admin["idToken"])
-                    admin["refreshToken"] = str(refreshed.get("refresh_token") or admin["refreshToken"])
-                    admin["uid"] = str(refreshed.get("user_id") or admin["uid"])
-            if not admin["idToken"] or not admin["uid"]:
-                return None
-            _api_key, db_url = _extract_firebase_config()
-            usuario = _http_json(f"{db_url}/usuarios/{admin['uid']}.json?auth={admin['idToken']}", method="GET")
-            if not _usuario_pode_usar_automus(usuario):
-                self._clear_admin_session()
-                return None
-            admin["nickname"] = str(usuario.get("nickname") or admin["nickname"] or admin["email"] or admin["uid"])
-            admin["nivel"] = str(usuario.get("nivel") or admin.get("nivel") or "").strip().lower()
-            self.config["adminSession"] = {
-                **admin,
-                "savedAt": datetime.now().isoformat(timespec="seconds"),
-            }
-            _save_controller_config(self.config)
-            return admin
-        except Exception:
-            self._clear_admin_session()
-            return None
+        self._clear_admin_session()
+        return None
 
     def _current_user_key(self) -> Optional[str]:
         admin = self.authenticated_admin or {}
@@ -1797,35 +1663,16 @@ class _SharedState:
     def get_update_manifest_url(self) -> str:
         return get_manifest_url(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
 
-    def get_update_manifest_firebase_path(self) -> str:
-        return get_manifest_firebase_path(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
-
     def get_update_source_label(self) -> str:
         manifest_url = self.get_update_manifest_url()
         if manifest_url:
             return manifest_url
-        firebase_path = self.get_update_manifest_firebase_path()
-        if firebase_path:
-            return f"Firebase:{firebase_path}"
         return ""
 
     def check_app_update(self):
         manifest_url = self.get_update_manifest_url()
         if manifest_url:
             return check_for_update(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
-        firebase_path = self.get_update_manifest_firebase_path()
-        if firebase_path:
-            admin = self.authenticated_admin or {}
-            token = str(admin.get("idToken") or "").strip()
-            if not token:
-                raise RuntimeError("Login admin/mod necessario para consultar update no Firebase.")
-            _, db_url = _extract_firebase_config()
-            manifest = _http_json(f"{db_url}/{firebase_path}.json?auth={token}", method="GET")
-            if not isinstance(manifest, dict):
-                return None
-            local = load_local_version(SCRIPT_DIR, BUNDLED_SCRIPT_DIR)
-            current_version = str(local.get("version") or "dev").strip()
-            return update_info_from_manifest(current_version, manifest, f"firebase:{firebase_path}")
         return None
 
     def download_app_update(self, info):

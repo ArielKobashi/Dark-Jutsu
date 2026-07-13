@@ -5,7 +5,6 @@ set "ROOT=%~dp0.."
 set "PYTHON_EXE="
 
 call :try_python "%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0\python\python.exe"
-if not defined PYTHON_EXE call :try_python "%USERPROFILE%\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe"
 
 if not defined PYTHON_EXE (
   for /d %%D in ("%USERPROFILE%\Desktop\aplica* code") do (
@@ -16,6 +15,12 @@ if not defined PYTHON_EXE (
 if "%PYTHON_EXE%"=="" (
   echo Python portatil valido nao encontrado no Desktop.
   exit /b 1
+)
+
+if exist "%ROOT%\_local_secrets\sql_auth_runtime.env" (
+  for /f "usebackq tokens=1,* delims==" %%A in ("%ROOT%\_local_secrets\sql_auth_runtime.env") do (
+    if not "%%A"=="" set "%%A=%%B"
+  )
 )
 
 if "%DATABASE_URL%"=="" set "DATABASE_URL=postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"

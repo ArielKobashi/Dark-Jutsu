@@ -1,5 +1,3 @@
-import json
-import re
 import shutil
 import subprocess
 import sys
@@ -51,49 +49,15 @@ def prepare_stage():
         shutil.rmtree(STAGE)
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "controlador_config.json", "automus_config.json")
     shutil.copytree(SCRIPTS, STAGE_SCRIPTS, ignore=ignore)
-
-    index_html = (ROOT / "index.html").read_text(encoding="utf-8", errors="replace")
-    api_match = re.search(r'apiKey:\s*"([^"]+)"', index_html)
-    db_match = re.search(r'databaseURL:\s*"([^"]+)"', index_html)
-    if not api_match or not db_match:
-        raise RuntimeError("Não foi possível extrair a configuração Firebase do Dark Jutsu.")
-    (STAGE_SCRIPTS / "firebase_config.json").write_text(
-        json.dumps(
-            {
-                "apiKey": api_match.group(1),
-                "databaseURL": db_match.group(1),
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-
+    legacy_config = STAGE_SCRIPTS / "legacy_config_disabled.json"
+    if legacy_config.exists():
+        legacy_config.unlink()
+    print("Build Automus SQL-only: config legada nao sera empacotada.")
+    return
 
 def prepare_encrypted_automus_config():
-    if not AUTOMUS_CONFIG.exists():
-        print("Aviso: automus_config.json nao encontrado; o exe dependera do login da sessao.")
-        return
-
-    sys.path.insert(0, str(SCRIPTS))
-    from atualizacao.automus_crypto import encrypt_config, read_json
-
-    firebase_cfg = read_json(STAGE_SCRIPTS / "firebase_config.json")
-    api_key = str(firebase_cfg.get("apiKey") or "").strip()
-    db_url = str(firebase_cfg.get("databaseURL") or "").strip().rstrip("/")
-    if not api_key or not db_url:
-        raise RuntimeError("firebase_config.json invalido para criptografar automus_config.")
-
-    plain_cfg = read_json(AUTOMUS_CONFIG)
-    email = str(plain_cfg.get("email") or "").strip()
-    password = str(plain_cfg.get("password") or "").strip()
-    if not email or not password:
-        raise RuntimeError("Preencha email e password em scripts/atualizacao/automus_config.json antes do build.")
-
-    encrypted = encrypt_config(plain_cfg, api_key, db_url)
-    target = STAGE_SCRIPTS / "atualizacao" / "automus_config.enc.json"
-    target.write_text(json.dumps(encrypted, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Credenciais Automus criptografadas no pacote: {target}")
+    print("Build Automus SQL-only: credenciais legadas nao serao criptografadas nem empacotadas.")
+    return
 
 
 def main():

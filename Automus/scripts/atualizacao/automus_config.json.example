@@ -1,5 +1,4 @@
 ﻿{
-  "email": "davi@sistema.com",
-  "password": "pudimA1?",
+  "mode": "sql-only",
   "updated_by": "atualizado automaticamente via Automus"
 }

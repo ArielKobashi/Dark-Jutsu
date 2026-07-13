@@ -12,6 +12,9 @@ set "PYTHON_EXE="
 if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
 >>"%LAUNCH_LOG%" echo ==================================================
 >>"%LAUNCH_LOG%" echo [%date% %time%] Launcher monitor reserva. Usuario=%USERNAME% Maquina=%COMPUTERNAME%
+>>"%LAUNCH_LOG%" echo [%date% %time%] Limpando monitores antigos/duplicados antes de iniciar.
+wmic process where "CommandLine like '%%monitor_servidor_darkjutsu_py.py%%' or CommandLine like '%%monitor_servidor_darkjutsu_py.bat%%' or CommandLine like '%%monitor_servidor_darkjutsu.ps1%%' or CommandLine like '%%monitor_principal_powershell_darkjutsu.ps1%%'" call terminate >> "%LAUNCH_LOG%" 2>&1
+wmic process where "CommandLine like '%%monitor_reserva_python_darkjutsu.py%%'" call terminate >> "%LAUNCH_LOG%" 2>&1
 
 if exist "%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0\python\pythonw.exe" if exist "%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0\python\Lib\encodings\__init__.py" set "PYTHONW_EXE=%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0\python\pythonw.exe"
 if exist "%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0\python\python.exe" if exist "%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0\python\Lib\encodings\__init__.py" set "PYTHON_EXE=%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0\python\python.exe"

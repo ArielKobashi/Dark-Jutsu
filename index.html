@@ -772,7 +772,7 @@ Usuários do Sistema
       </label>
       <label class="toggleItem">
           <input type="checkbox" id="desativarSugestaoEstoque">
-          <span>Sem Sugestão Estoque</span>
+          <span>Sem Gerenciador Estoque</span>
       </label>
           <label class="toggleItem">
               <input type="checkbox" id="mostrarDadosMortos">
@@ -863,6 +863,7 @@ Usuários do Sistema
 <!-- SPLIT: vendor-xlsx.html (3rd-party lib) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="critical-stock-manager.js"></script>
 <!-- /SPLIT: vendor-xlsx.html -->
 
 <!-- SPLIT: app-core.js (ui + estoque + admin logic) -->
@@ -1455,6 +1456,9 @@ function calcularReposicaoMedia(minimo, maximo){
 }
 
 function arredondarLimiteEstoque(valor){
+    if(window.DarkCriticalStockManager?.ceilPositive){
+        return window.DarkCriticalStockManager.ceilPositive(valor);
+    }
     const numero = parsePlanilhaNumero(valor);
     if(numero === null || numero <= 0) return null;
     return Math.max(1, Math.ceil(numero));
@@ -1480,71 +1484,11 @@ function estatisticasConsumoEstoque(item){
 }
 
 function calcularSugestaoLimitesEstoque(item){
-    const pedido = getPedidoCompraItem(item);
-    const consumo = estatisticasConsumoEstoque(item);
-    const saldoAtual = parsePlanilhaNumero(item?.saldo) ?? 0;
-    const saldoAnteriorPlanilha = parsePlanilhaNumero(item?.limitesCooperat?.saldoAnterior);
-    const consumoEntrePlanilhas = saldoAnteriorPlanilha !== null ? Math.max(0, saldoAnteriorPlanilha - saldoAtual) : 0;
-    const mediaPedido = parsePlanilhaNumero(pedido?.mediaPedido) ?? 0;
-    const ultimoPedidoQuantidade = Math.max(
-        parsePlanilhaNumero(pedido?.ultimoPedido?.quantidadeRecebida) ?? 0,
-        parsePlanilhaNumero(pedido?.ultimoPedido?.quantidadePedida) ?? 0
-    );
-    const basePedidoCompra = mediaPedido > 0 ? mediaPedido : ultimoPedidoQuantidade;
-    const minimoPorCompra = basePedidoCompra > 0 ? basePedidoCompra * 0.35 : 0;
-
-    const candidatosConsumo = [
-        consumo.media,
-        consumo.pico * 0.65,
-        consumoEntrePlanilhas
-    ].filter(v => Number.isFinite(v) && v > 0);
-
-    const candidatosDemanda = [
-        ...candidatosConsumo,
-        minimoPorCompra
-    ].filter(v => Number.isFinite(v) && v > 0);
-
-    if(!candidatosDemanda.length) return null;
-
-    const demandaBase = Math.max(...candidatosDemanda);
-    const estoqueSeguranca = Math.max(
-        consumo.desvio,
-        demandaBase * 0.35,
-        consumo.pico * 0.25,
-        minimoPorCompra
-    );
-    const minimoEstimado = candidatosConsumo.length
-        ? Math.max(demandaBase + estoqueSeguranca, minimoPorCompra)
-        : minimoPorCompra;
-    const minimo = arredondarLimiteEstoque(minimoEstimado);
-    if(minimo === null) return null;
-
-    const loteReposicao = arredondarLimiteEstoque(Math.max(
-        basePedidoCompra,
-        demandaBase * 1.5,
-        minimo * 0.8
-    ));
-    const reposicao = loteReposicao || minimo;
-    const maximo = Math.max(minimo + reposicao, minimo + 1);
-
-    return {
-        minimo,
-        maximo,
-        reposicao: maximo - minimo,
-        criterio: {
-            demandaBase,
-            estoqueSeguranca,
-            consumoMedio: consumo.media,
-            consumoPico: consumo.pico,
-            eventosConsumo: consumo.eventos,
-            consumoEntrePlanilhas,
-            mediaPedido,
-            ultimoPedidoQuantidade,
-            basePedidoCompra,
-            minimoPorCompra,
-            fontePrincipal: basePedidoCompra > 0 && !candidatosConsumo.length ? "pedido_compra" : "consumo"
-        }
-    };
+    if(!window.DarkCriticalStockManager?.calculateItemPolicy) return null;
+    return window.DarkCriticalStockManager.calculateItemPolicy(item, {
+        history: getHistoricoSaldoItem(item),
+        purchaseOrder: getPedidoCompraItem(item)
+    });
 }
 
 function chaveAjusteItem(itemOrKey){
@@ -1559,41 +1503,30 @@ function chaveAjusteItem(itemOrKey){
 function aplicarReposicaoCalculada(item){
     if(!item) return item;
     if(!sugestaoAutomaticaEstoqueAtiva){
-        if(item.minimoOrigem === "automatico"){
+        if(item.minimoOrigem === "automatico" || item.minimoOrigem === "gerenciador_critico"){
             delete item.minimo;
             delete item.minimoOrigem;
         }
-        if(item.maximoOrigem === "automatico"){
+        if(item.maximoOrigem === "automatico" || item.maximoOrigem === "gerenciador_critico"){
             delete item.maximo;
             delete item.maximoOrigem;
         }
-        if(item.reposicaoOrigem === "automatico" || item.reposicaoOrigem === "calculada"){
+        if(item.reposicaoOrigem === "automatico" || item.reposicaoOrigem === "calculada" || item.reposicaoOrigem === "gerenciador_critico"){
             delete item.reposicao;
             delete item.reposicaoOrigem;
         }
-        if(item.limitesOrigem === "automatico"){
+        if(item.limitesOrigem === "automatico" || item.limitesOrigem === "gerenciador_critico"){
             delete item.limitesOrigem;
         }
         delete item.sugestaoEstoque;
+        delete item.gerenciadorEstoqueCritico;
         return item;
     }
-    const sugestao = calcularSugestaoLimitesEstoque(item);
-    if(sugestao){
-        if(item.minimo === undefined || item.minimo === null || item.minimo === ""){
-            item.minimo = sugestao.minimo;
-            item.minimoOrigem = "automatico";
-            item.limitesOrigem = item.limitesOrigem || "automatico";
-        }
-        if(item.maximo === undefined || item.maximo === null || item.maximo === ""){
-            item.maximo = sugestao.maximo;
-            item.maximoOrigem = "automatico";
-            item.limitesOrigem = item.limitesOrigem || "automatico";
-        }
-        if(item.limitesOrigem === "automatico"){
-            item.sugestaoEstoque = sugestao.criterio;
-        }
-    }else if(item.limitesOrigem !== "automatico"){
-        delete item.sugestaoEstoque;
+    if(window.DarkCriticalStockManager?.applyPolicy){
+        return window.DarkCriticalStockManager.applyPolicy(item, {
+            history: getHistoricoSaldoItem(item),
+            purchaseOrder: getPedidoCompraItem(item)
+        });
     }
     const reposicaoCooperat = item.reposicaoOrigem === "cooperat" || item.limitesOrigem === "cooperat"
         ? parseLimiteEstoque(item.limitesCooperat?.reposicao)
@@ -2018,8 +1951,11 @@ async function salvarAjusteEstoqueItem(itemKey, minimoRaw, maximoRaw){
             ultimaAtualizacao: Date.now(),
             atualizadoPor: window.meuNickname || "Sistema"
         };
-        if(typeof window.firebaseUpdate === "function" && typeof window.ref === "function" && window.db){
-            await window.firebaseUpdate(window.ref(window.db, "estoqueGlobal"), payload);
+        if(typeof window.sqlApi === "function"){
+            await window.sqlApi(`/api/inventory/${encodeURIComponent(itemKey)}/adjustment`, {
+                method: "PUT",
+                body: JSON.stringify({ ...ajuste, legacy_key: ajusteKey })
+            });
         }else{
             throw new Error("Firebase ainda não está pronto.");
         }
@@ -2180,100 +2116,21 @@ document.addEventListener("click", function(e){
 });
 
 window.aprovar = async function(id){
-
     const botao = event.target;
     const card = botao.closest(".solicitacaoItem");
-
-    card.classList.add("aprovadoPulse");
+    if(card) card.classList.add("aprovadoPulse");
 
     try{
-        if(typeof window.sqlApi === "function"){
-            const reqData = await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}`);
-            const dadosSql = reqData?.signup_request || {};
-            const nivel = document.getElementById("nivel_"+id).value;
-            const uidSql = dadosSql.uid || dadosSql.requested_uid || "";
-            if(uidSql){
-                await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}/approve`, {
-                    method: "POST",
-                    body: JSON.stringify({ uid: uidSql, nivel })
-                });
-                if(card){
-                    card.classList.add("slideOutRight");
-                    setTimeout(()=> card.remove(), 350);
-                }
-                iniciarListaUsuarios();
-                mostrarNotificacao("Cadastro aprovado");
-                return;
-            }
-        }
-        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
-        const dados = snap.val();
-        if(!dados) return;
-
+        if(typeof window.sqlApi !== "function") throw new Error("API SQL indisponivel.");
+        const reqData = await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}`);
+        const dadosSql = reqData?.signup_request || {};
         const nivel = document.getElementById("nivel_"+id).value;
-        let uid = dados.uid;
-        if(dados?.duplicado === true){
-            await mostrarConflitoCadastro(id, dados.nickname);
-            if(card) card.classList.remove("aprovadoPulse");
-            return;
-        }
-        if(!uid){
-            const emailFake = dados.nickname + "@sistema.com";
-            // usa auth secundario para nao trocar a sessao do admin
-            try{
-                const cred = await window.createUserWithEmailAndPassword(window.adminAuth, emailFake, dados.senha);
-                uid = cred.user.uid;
-            }catch(e){
-                if(e?.code === "auth/email-already-in-use"){
-                    try{
-                        await set(ref(db, "nicknamesAuth/" + nickOnlyKey(dados.nickname)), {
-                            nickname: dados.nickname,
-                            criadoEm: Date.now()
-                        });
-                    }catch(err){
-                        console.warn("Falha ao marcar nicknamesAuth:", err?.code || err);
-                    }
-                    await mostrarConflitoCadastro(id, dados.nickname);
-                    if(card) card.classList.remove("aprovadoPulse");
-                    return;
-                }
-                throw e;
-            }
-        }
-
-        await set(ref(db, "usuarios/" + uid), {
-            nickname: dados.nickname,
-            cracha: dados.cracha || "",
-            setor: dados.setor || "",
-            nivel: nivel,
-            ativo: true,
-            criadoEm: Date.now(),
-            senha: "definida",
-            senhaAntiga: dados.senha || "",
-            senhaReset: false
+        const uidSql = dadosSql.uid || dadosSql.requested_uid || "";
+        if(!uidSql) throw new Error("Solicitacao sem UID SQL. Refaca o cadastro no fluxo novo.");
+        await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}/approve`, {
+            method: "POST",
+            body: JSON.stringify({ uid: uidSql, nivel })
         });
-        try{
-            if(typeof window.sqlApi === "function"){
-                await window.sqlApi(`/api/signup-requests/${encodeURIComponent(id)}/approve`, {
-                    method: "POST",
-                    body: JSON.stringify({ uid, nivel })
-                });
-            }
-        }catch(sqlErr){
-            console.warn("Falha ao aprovar cadastro no SQL; mantendo fluxo Firebase:", sqlErr);
-        }
-        try{
-            await set(ref(db, "nicknamesAuth/" + nickOnlyKey(dados.nickname)), {
-                nickname: dados.nickname,
-                criadoEm: Date.now()
-            });
-        }catch(e){
-            console.warn("Falha ao gravar nicknamesAuth:", e?.code || e);
-        }
-        await set(ref(db, "solicitacoesCadastro/"+id), null);
-        await window.ajustarNickSolicCount(dados.nickname, -1);
-        await desmarcarSolicCracha(dados.nickname, dados.cracha);
-        await rebuildNicknamesSimple();
 
         if(card){
             card.classList.add("slideOutRight");
@@ -2311,8 +2168,7 @@ window.recusar = async function(id){
             setTimeout(()=> item.remove(), 350);
             return;
         }
-        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
-        dados = snap.val();
+        throw new Error("API SQL indisponivel.");
     }catch(e){
         console.warn("Falha ao ler solicitação para recusa:", e?.code || e);
     }
@@ -2329,7 +2185,7 @@ window.recusar = async function(id){
     }
 
     try{
-        await set(ref(db, "solicitacoesCadastro/"+id), null);
+        throw new Error("API SQL indisponivel.");
     }catch(e){
         const msg = (e && (e.code || e.message)) ? (e.code || e.message) : "Erro ao recusar";
         mostrarNotificacao(msg);
@@ -2342,7 +2198,7 @@ window.recusar = async function(id){
         await rebuildNicknamesSimple();
         if(dados?.uid){
             try{
-                await set(ref(db, "usuarios/" + dados.uid), null);
+                throw new Error("API SQL indisponivel.");
             }catch(e){
                 console.warn("Falha ao limpar usuário recusado:", e?.code || e);
             }
@@ -2356,52 +2212,45 @@ window.recusar = async function(id){
 
 window.alterarNivel = async function(uid, nivel){
     if(!uid) return;
-    if(typeof window.sqlApi === "function"){
-        try{
-            await window.sqlApi(`/api/users/${encodeURIComponent(uid)}`, {
-                method: "PATCH",
-                body: JSON.stringify({ nivel })
-            });
-            return;
-        }catch(sqlErr){
-            console.warn("Falha ao alterar nivel no SQL:", sqlErr);
-            mostrarNotificacao("Nao foi possivel alterar nivel no SQL.");
-            return;
-        }
+    try{
+        if(typeof window.sqlApi !== "function") throw new Error("API SQL indisponivel.");
+        await window.sqlApi(`/api/users/${encodeURIComponent(uid)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ nivel })
+        });
+    }catch(sqlErr){
+        console.warn("Falha ao alterar nivel no SQL:", sqlErr);
+        mostrarNotificacao("Nao foi possivel alterar nivel no SQL.");
     }
-    await set(ref(db, "usuarios/" + uid + "/nivel"), nivel);
 };
 
 window.toggleAtivo = async function(uid, isAtivo){
     if(!uid) return;
-    if(typeof window.sqlApi === "function"){
-        try{
-            if(isAtivo){
-                await window.sqlApi(`/api/users/${encodeURIComponent(uid)}/ban`, {
-                    method: "POST",
-                    body: JSON.stringify({ banidoEm: Date.now() })
-                });
-            }else{
-                await window.sqlApi(`/api/users/${encodeURIComponent(uid)}`, {
-                    method: "PATCH",
-                    body: JSON.stringify({ ativo: true })
-                });
-            }
-            iniciarListaUsuarios();
-            iniciarListaBanidos();
-            return;
-        }catch(sqlErr){
-            console.warn("Falha ao alterar status do usuario no SQL:", sqlErr);
-            mostrarNotificacao("Nao foi possivel alterar usuario no SQL.");
-            return;
+    try{
+        if(typeof window.sqlApi !== "function") throw new Error("API SQL indisponivel.");
+        if(isAtivo){
+            await window.sqlApi(`/api/users/${encodeURIComponent(uid)}/ban`, {
+                method: "POST",
+                body: JSON.stringify({ banidoEm: Date.now() })
+            });
+        }else{
+            await window.sqlApi(`/api/users/${encodeURIComponent(uid)}`, {
+                method: "PATCH",
+                body: JSON.stringify({ ativo: true })
+            });
         }
+        iniciarListaUsuarios();
+        iniciarListaBanidos();
+    }catch(sqlErr){
+        console.warn("Falha ao alterar status do usuario no SQL:", sqlErr);
+        mostrarNotificacao("Nao foi possivel alterar usuario no SQL.");
     }
+    return;
     if(isAtivo){
         // Banir: remove da base de dados
         let dados = null;
         try{
-            const snap = await get(ref(db, "usuarios/" + uid));
-            dados = snap.val();
+            throw new Error("API SQL indisponivel.");
         }catch(e){
             console.warn("Falha ao ler usuário para banir:", e?.code || e);
         }
@@ -2409,18 +2258,7 @@ window.toggleAtivo = async function(uid, isAtivo){
                 try{
                     const emailLogin = (dados.nickname || "") + "@sistema.com";
                     const emailDesativado = emailLogin + ".desativado";
-                    await set(ref(db, "usuariosBanidos/" + uid), {
-                        ...dados,
-                        emailLogin: emailLogin,
-                        emailLoginDesativado: emailDesativado,
-                        status: "banido",
-                        senha: dados.senhaAntiga || "",
-                        banidoEm: Date.now()
-                    });
-                    await set(ref(db, "nicknamesAuth/" + nickOnlyKey(dados.nickname)), {
-                        nickname: dados.nickname,
-                        criadoEm: Date.now()
-                    });
+                    throw new Error("API SQL indisponivel.");
                 }catch(e){
                     console.warn("Falha ao arquivar usuário banido:", e?.code || e);
                 }
@@ -2435,7 +2273,7 @@ window.toggleAtivo = async function(uid, isAtivo){
         }catch(sqlErr){
             console.warn("Falha ao banir usuario no SQL; seguindo Firebase:", sqlErr);
         }
-        await set(ref(db, "usuarios/" + uid), null);
+        throw new Error("API SQL indisponivel.");
         await rebuildNicknamesSimple();
     }else{
         // Reativar usuário bloqueado existente
@@ -2449,28 +2287,23 @@ window.toggleAtivo = async function(uid, isAtivo){
         }catch(sqlErr){
             console.warn("Falha ao reativar usuario no SQL; tentando Firebase:", sqlErr);
         }
-        await set(ref(db, "usuarios/" + uid + "/ativo"), true);
+        throw new Error("API SQL indisponivel.");
     }
 };
 
 window.resetSenha = async function(uid){
     if(!uid) return;
-    if(typeof window.sqlApi === "function"){
-        try{
-            await window.sqlApi(`/api/users/${encodeURIComponent(uid)}/reset-password`, {
-                method: "POST",
-                body: JSON.stringify({})
-            });
-            mostrarNotificacao("Reset de senha marcado no SQL.");
-            return;
-        }catch(sqlErr){
-            console.warn("Falha ao marcar reset de senha no SQL:", sqlErr);
-            mostrarNotificacao("Nao foi possivel marcar reset no SQL.");
-            return;
-        }
+    try{
+        if(typeof window.sqlApi !== "function") throw new Error("API SQL indisponivel.");
+        await window.sqlApi(`/api/users/${encodeURIComponent(uid)}/reset-password`, {
+            method: "POST",
+            body: JSON.stringify({})
+        });
+        mostrarNotificacao("Reset de senha marcado no SQL.");
+    }catch(sqlErr){
+        console.warn("Falha ao marcar reset de senha no SQL:", sqlErr);
+        mostrarNotificacao("Nao foi possivel marcar reset no SQL.");
     }
-    await set(ref(db, "usuarios/" + uid + "/senha"), "");
-    await set(ref(db, "usuarios/" + uid + "/senhaReset"), true);
 };
 
 function iniciarListaBanidos(){
@@ -2527,8 +2360,10 @@ function iniciarListaBanidos(){
         carregarBanidosSql();
         return;
     }
-    const banidosRef = ref(db, "usuariosBanidos");
-    onValue(banidosRef, snap=>{
+    mostrarNotificacao("API SQL indisponivel para listar banidos.");
+    return;
+    const banidosRef = null;
+    false && ((snap)=>{
         const lista = document.getElementById("listaBanidos");
         if(!lista) return;
         lista.innerHTML = "";
@@ -2587,7 +2422,7 @@ window.apagarBanido = async function(uid){
             return;
         }
     }
-    await set(ref(db, "usuariosBanidos/" + uid), null);
+    throw new Error("API SQL indisponivel.");
 }
 
 window.apagarBanidosSelecionados = async function(){
@@ -2610,7 +2445,7 @@ window.apagarBanidosSelecionados = async function(){
                     return;
                 }
             }
-            await set(ref(db, "usuariosBanidos/" + uid), null);
+            throw new Error("API SQL indisponivel.");
         }
     }
     if(typeof window.sqlApi === "function") iniciarListaBanidos();
@@ -2689,9 +2524,11 @@ function iniciarListaUsuarios(){
         return;
     }
 
-    const usuariosRef = ref(db,"usuarios");
+    mostrarNotificacao("API SQL indisponivel para listar usuarios.");
+    return;
+    const usuariosRef = null;
 
-    onValue(usuariosRef,snap=>{
+    false && ((snap)=>{
 
         const lista = document.getElementById("listaUsuarios");
         lista.innerHTML = "";
@@ -2760,8 +2597,42 @@ window.migrarSetorManutencao = async function(){
             }
             return;
         }
-        const usuariosSnap = await get(ref(db,"usuarios"));
-        const solicitSnap = await get(ref(db,"solicitacoesCadastro"));
+        if(typeof window.sqlApi === "function"){
+            const [usuariosData, solicitacoesData] = await Promise.all([
+                window.sqlApi("/api/users?limit=1000"),
+                window.sqlApi("/api/signup-requests?limit=1000")
+            ]);
+            let usuariosAlterados = 0;
+            let solicitacoesAlteradas = 0;
+            const deveMigrar = setor => {
+                const texto = String(setor || "");
+                return texto === "Administrativo" || texto === "AdministraÃ§Ã£o";
+            };
+            for(const u of (usuariosData?.users || [])){
+                if(!deveMigrar(u.setor || u.sector)) continue;
+                await window.sqlApi(`/api/users/${encodeURIComponent(u.id || u.uid || u.firebase_uid)}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ setor: "ManutenÃ§Ã£o" })
+                });
+                usuariosAlterados++;
+            }
+            for(const s of (solicitacoesData?.signup_requests || solicitacoesData?.requests || [])){
+                if(!deveMigrar(s.setor || s.sector)) continue;
+                await window.sqlApi(`/api/signup-requests/${encodeURIComponent(s.id)}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ setor: "ManutenÃ§Ã£o" })
+                });
+                solicitacoesAlteradas++;
+            }
+            if(typeof window.mostrarNotificacao === "function"){
+                window.mostrarNotificacao(`MigraÃ§Ã£o concluÃ­da no SQL: ${usuariosAlterados} usuÃ¡rios, ${solicitacoesAlteradas} solicitaÃ§Ãµes.`);
+            }
+            console.log("MigraÃ§Ã£o SQL concluÃ­da", { usuariosAlterados, solicitacoesAlteradas });
+            return;
+        }
+        throw new Error("API SQL indisponivel.");
+        const usuariosSnap = null;
+        const solicitSnap = null;
         let usuariosAlterados = 0;
         let solicitacoesAlteradas = 0;
 
@@ -2778,7 +2649,7 @@ window.migrarSetorManutencao = async function(){
             });
             for(const item of updates){
                 try{
-                    await set(ref(db, item.path), "Manutenção");
+                    throw new Error("API SQL indisponivel.");
                     usuariosAlterados++;
                 }catch(e){
                     console.warn("Falha ao migrar usuário:", item.path, e?.code || e);
@@ -2797,7 +2668,7 @@ window.migrarSetorManutencao = async function(){
             });
             for(const item of updates){
                 try{
-                    await set(ref(db, item.path), "Manutenção");
+                    throw new Error("API SQL indisponivel.");
                     solicitacoesAlteradas++;
                 }catch(e){
                     solicitacoesFalha++;
@@ -2845,15 +2716,12 @@ async function baixarAutomusMaisRecenteSeAdmin(){
     if(window.nivelUsuario !== "admin"){
         throw new Error("Apenas ADM pode baixar o Automus mais recente por aqui.");
     }
-    if(!window.get || !window.ref || !window.db){
-        throw new Error("Firebase ainda não está pronto.");
+    if(typeof window.sqlApi !== "function"){
+        throw new Error("API SQL indisponivel.");
     }
 
-    const snap = await window.get(window.ref(window.db, "automus/releases/latest"));
-    if(!snap.exists()){
-        throw new Error("Manifesto do Automus não encontrado no Firebase.");
-    }
-    const manifest = snap.val() || {};
+    const data = await window.sqlApi("/api/automus/releases/latest");
+    const manifest = data?.release?.manifest || data?.release?.raw_data || data?.release || {};
     const packageUrl = normalizarUrlDownloadAutomus(manifest.packageUrl || manifest.url || "");
     if(!packageUrl){
         throw new Error("Manifesto do Automus sem link de pacote.");
@@ -3004,7 +2872,7 @@ let etiquetaCodigosPorTamanho = { "5": "", "7": "", "10": "", "15": "" };
 const ETIQUETA_MEMORIA_STORAGE_KEY = "darkjutsu_etiqueta_tamanho_por_codigo_v1";
 const ETIQUETA_EDITOR_LAYOUTS_STORAGE_KEY = "labelEditorLayoutsBySize";
 const ETIQUETA_EDITOR_PRESETS_STORAGE_KEY = "labelEditorPresetsBySize";
-const ETIQUETA_CONFIG_FIREBASE_PATH = "estoqueGlobal/configuracoesEtiquetas";
+const ETIQUETA_CONFIG_LEGACY_PATH = "estoqueGlobal/configuracoesEtiquetas";
 const ETIQUETA_EDITOR_CM_SCALE = 118;
 const ETIQUETA_LOGO_DATA_URL = "data:image/png;base64,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";
 const ETIQUETA_DPI = 300;
@@ -3290,7 +3158,7 @@ function aplicarConfigEtiquetasCompartilhada(config){
     return alterou;
 }
 window.aplicarConfigEtiquetasCompartilhada = aplicarConfigEtiquetasCompartilhada;
-window.ETIQUETA_CONFIG_FIREBASE_PATH = ETIQUETA_CONFIG_FIREBASE_PATH;
+window.ETIQUETA_CONFIG_LEGACY_PATH = ETIQUETA_CONFIG_LEGACY_PATH;
 
 function obterPresetEditorEtiqueta(tamanho, cfg){
     const presets = lerJsonStorageEtiqueta(ETIQUETA_EDITOR_PRESETS_STORAGE_KEY, {});
@@ -3948,8 +3816,11 @@ async function atualizarBanco(btn) {
 
     try {
         // Backup de segurança: guarda o estado atual antes de sobrescrever.
-        const snapshotAntes = await get(window.estoqueRef);
-        const backupAnterior = snapshotAntes.exists() ? snapshotAntes.val() : null;
+        const backupAnterior = {
+            dados: Array.isArray(window.dados) ? window.dados : [],
+            salvoEm: Date.now(),
+            origem: "memoria-local"
+        };
         window.__ultimoBackupAtualizacao = backupAnterior;
         try {
             localStorage.setItem(
@@ -3963,35 +3834,41 @@ async function atualizarBanco(btn) {
             console.warn("Falha ao gravar backup local de atualização:", e);
         }
 
-        if (typeof window.firebaseUpdate === "function") {
-            await window.firebaseUpdate(window.estoqueRef, payload);
-        } else if (typeof window.firebaseSet === "function") {
-            await window.firebaseSet(window.estoqueRef, payload);
+        if (typeof window.sqlApi !== "function") {
+            throw new Error("API SQL indisponivel.");
+        }
+        const salvo = await window.sqlApi("/api/inventory/automus-update", {
+            method: "POST",
+            body: JSON.stringify(payload)
+        });
+        if (salvo?.ok === false) {
+            throw new Error("API SQL recusou a atualizacao de estoque.");
         }
 
-        const conferido = await get(window.estoqueRef);
-        const salvo = conferido.exists() ? conferido.val() : null;
-        if (!salvo || salvo.ultimaAtualizacao !== payload.ultimaAtualizacao) {
+        const conferido = { exists: () => true, val: () => payload };
+        const salvoLegado = conferido.exists() ? conferido.val() : null;
+        if (false) {
             const msg = "A atualização foi enviada, mas o banco voltou para um estado anterior.";
             console.warn(msg, { salvo, payload });
             if (typeof window.mostrarNotificacao === "function") {
                 window.mostrarNotificacao(msg);
             }
         } else {
-            const okMsg = "AUTO_UPDATE_FIREBASE_OK";
+            const okMsg = "AUTO_UPDATE_SQL_OK";
             console.log(okMsg, {
-                ultimaAtualizacao: salvo.ultimaAtualizacao,
-                atualizadoPor: salvo.atualizadoPor,
-                atualizacaoAutomatica: !!salvo.atualizacaoAutomatica,
-                ultimaAtualizacaoAutomatica: salvo.ultimaAtualizacaoAutomatica || null
+                ultimaAtualizacao: payload.ultimaAtualizacao,
+                atualizadoPor: payload.atualizadoPor,
+                atualizacaoAutomatica: !!payload.atualizacaoAutomatica,
+                ultimaAtualizacaoAutomatica: payload.ultimaAtualizacaoAutomatica || null,
+                snapshotId: salvo?.snapshot_id || salvo?.snapshot?.id || null
             });
             try {
                 localStorage.setItem(
                     "darkjutsu_last_auto_update_ok",
                     JSON.stringify({
                         at: Date.now(),
-                        ultimaAtualizacao: salvo.ultimaAtualizacao,
-                        atualizadoPor: salvo.atualizadoPor
+                        ultimaAtualizacao: payload.ultimaAtualizacao,
+                        atualizadoPor: payload.atualizadoPor
                     })
                 );
             } catch (e) {
@@ -4002,7 +3879,7 @@ async function atualizarBanco(btn) {
             }
         }
     } catch (error) {
-        console.error("Erro ao subir para o Firebase:", error);
+        console.error("Erro ao atualizar estoque no SQL:", error);
         if (typeof window.mostrarNotificacao === "function") {
             window.mostrarNotificacao("Erro ao atualizar o banco. Veja o console.");
         }
@@ -4034,11 +3911,7 @@ async function resetAtualizacaoSegura() {
     }
 
     try {
-        if (typeof window.firebaseSet === "function") {
-            await window.firebaseSet(window.estoqueRef, backup);
-        } else if (typeof window.firebaseUpdate === "function") {
-            await window.firebaseUpdate(window.estoqueRef, backup);
-        }
+        throw new Error("Rollback direto de estoque deve usar o pipeline SQL.");
         if (typeof window.mostrarNotificacao === "function") {
             window.mostrarNotificacao("Reset de atualização concluído com sucesso.");
         } else {
@@ -5433,17 +5306,7 @@ async function checarResetGlobalContagem(){
             return;
         }
     }
-    if(!window.get || !window.ref || !window.db) return;
-    try{
-        const snap = await window.get(window.ref(window.db, "contagemControle/resetGlobal"));
-        if(snap.exists()) aplicarResetGlobalContagem(snap.val(), false);
-    }catch(e){
-        if(String(e?.code || e?.message || "").toLowerCase().includes("permission")){
-            contagemResetGlobalBloqueado = true;
-            return;
-        }
-        console.warn("Falha ao checar reset global da contagem:", e);
-    }
+    return;
 }
 
 function iniciarListenerResetGlobalContagem(){
@@ -5453,26 +5316,7 @@ function iniciarListenerResetGlobalContagem(){
         contagemResetGlobalUnsub = setInterval(checarResetGlobalContagem, 15000);
         return;
     }
-    if(contagemResetGlobalBloqueado || contagemResetGlobalUnsub || !window.onValue || !window.ref || !window.db) return;
-    try{
-        contagemResetGlobalUnsub = window.onValue(window.ref(window.db, "contagemControle/resetGlobal"), snap => {
-            if(snap.exists()) aplicarResetGlobalContagem(snap.val(), true);
-        }, err => {
-            if(String(err?.code || err?.message || "").toLowerCase().includes("permission")){
-                contagemResetGlobalBloqueado = true;
-                if(typeof contagemResetGlobalUnsub === "function"){
-                    try{ contagemResetGlobalUnsub(); }catch(e){}
-                }else if(contagemResetGlobalUnsub){
-                    clearInterval(contagemResetGlobalUnsub);
-                }
-                contagemResetGlobalUnsub = null;
-                return;
-            }
-            console.warn("Falha ao escutar reset global da contagem:", err);
-        });
-    }catch(e){
-        console.warn("Falha ao iniciar listener de reset global da contagem:", e);
-    }
+    return;
 }
 
 function uidRascunhoContagemFirebase(){
@@ -5775,14 +5619,12 @@ async function salvarStatusMaquinasContagemFirebase(payload = null, aberta = tru
             return false;
         }
     }
+    return false;
     if(!window.set || !window.ref || !window.db) return false;
     const writes = [];
     if(maquinaAtual){
         const resumo = resumoProgressoGruposContagem()[maquinaAtual] || { grupo:maquinaAtual, total:totalItensGrupoContagem(maquinaAtual), contados:0 };
-        writes.push(window.set(
-            window.ref(window.db, `contagemStatusMaquinas/${ciclo}/${chaveFirebaseContagem(maquinaAtual)}/${usuario}`),
-            payloadStatusMaquinaContagemFirebase(maquinaAtual, resumo, aberta)
-        ));
+        writes.push(Promise.resolve(false));
     }
     try{
         const resultados = await Promise.allSettled(writes);
@@ -5819,15 +5661,16 @@ async function salvarRascunhoContagemFirebaseAgora(){
             return false;
         }
     }
+    return false;
     if(!window.set || !window.ref || !window.db) return false;
     const writes = [];
     paths.forEach(path => {
-        writes.push(window.set(window.ref(window.db, path), payload));
+        writes.push(Promise.resolve(false));
         if(path.endsWith("/_rascunho_atual")){
             const baseUsuario = path.replace(/\/_rascunho_atual$/, "");
-            writes.push(window.set(window.ref(window.db, `${baseUsuario}/_progresso_itens`), payload.progressoItens || {}));
-            writes.push(window.set(window.ref(window.db, `${baseUsuario}/_progresso_grupos`), payload.progressoGrupos || {}));
-            writes.push(window.set(window.ref(window.db, `${baseUsuario}/_presenca`), payload.presenca || payloadPresencaContagemFirebase(true)));
+            writes.push(Promise.resolve(false));
+            writes.push(Promise.resolve(false));
+            writes.push(Promise.resolve(false));
         }
     });
     writes.push(salvarStatusMaquinasContagemFirebase(payload, true));
@@ -5870,14 +5713,14 @@ async function salvarPresencaContagemFirebase(aberta = true){
     try{
         const presenca = payloadPresencaContagemFirebase(aberta);
         const writes = [
-            window.set(window.ref(window.db, `contagemAtual/${ciclo}/usuarios/${usuario}/_presenca`), presenca),
+            Promise.resolve(false),
             salvarStatusMaquinasContagemFirebase(null, aberta)
         ];
         pathsRascunhoContagemFirebase()
             .filter(path => path.endsWith("/_rascunho_atual"))
             .forEach(path => {
                 const baseUsuario = path.replace(/\/_rascunho_atual$/, "");
-                writes.push(window.set(window.ref(window.db, `${baseUsuario}/_presenca`), presenca));
+                writes.push(Promise.resolve(false));
             });
         const resultados = await Promise.allSettled(writes);
         return resultados.some(r => r.status === "fulfilled" && r.value !== false);
@@ -5911,16 +5754,17 @@ async function limparRascunhoContagemFirebase(){
             return;
         }
     }
+    return;
     if(!paths.length || !window.set || !window.ref || !window.db) return;
     try{
         const writes = [];
         paths.forEach(path => {
-            writes.push(window.set(window.ref(window.db, path), null));
+            writes.push(Promise.resolve(false));
             if(path.endsWith("/_rascunho_atual")){
                 const baseUsuario = path.replace(/\/_rascunho_atual$/, "");
-                writes.push(window.set(window.ref(window.db, `${baseUsuario}/_progresso_itens`), null));
-                writes.push(window.set(window.ref(window.db, `${baseUsuario}/_progresso_grupos`), null));
-                writes.push(window.set(window.ref(window.db, `${baseUsuario}/_presenca`), null));
+                writes.push(Promise.resolve(false));
+                writes.push(Promise.resolve(false));
+                writes.push(Promise.resolve(false));
             }
         });
         await Promise.allSettled(writes);
@@ -5931,10 +5775,76 @@ async function limparRascunhoContagemFirebase(){
 
 async function carregarRascunhoContagemFirebase(){
     const paths = pathsRascunhoContagemFirebase();
+    if(typeof window.sqlApi === "function"){
+        try{
+            const uid = uidRascunhoContagemFirebase();
+            const ciclo = chaveCicloContagemAtual();
+            const data = await window.sqlApi("/api/counting/drafts?limit=500");
+            const remotos = (data?.drafts || [])
+                .filter(row => (!uid || row.uid === uid || row.user_id === uid) && (!ciclo || row.cycle === ciclo))
+                .map(row => ({
+                    usuario: row.user_name || "",
+                    uid: row.uid || row.user_id || "",
+                    valores: row.values_json || {},
+                    verificacoesVazio: row.empty_checks_json || {},
+                    saldosSistema: row.system_balances_json || {},
+                    sessao: row.session_json || {},
+                    updatedAt: row.updated_at ? Date.parse(row.updated_at) : 0
+                }))
+                .filter(remoto => remoto && typeof remoto === "object")
+                .sort((a, b) => Number(a.updatedAt || a.sessao?.updatedAt || 0) - Number(b.updatedAt || b.sessao?.updatedAt || 0));
+            if(!remotos.length) return false;
+            const remoto = remotos.reduce((acc, atual) => {
+                const valores = atual.valores && typeof atual.valores === "object" ? normalizarRascunhoContagemFirebase(atual.valores) : {};
+                const verificacoes = atual.verificacoesVazio && typeof atual.verificacoesVazio === "object" ? normalizarRascunhoContagemFirebase(atual.verificacoesVazio) : {};
+                const saldosSistema = atual.saldosSistema && typeof atual.saldosSistema === "object" ? normalizarRascunhoContagemFirebase(atual.saldosSistema) : {};
+                return {
+                    ...acc,
+                    ...atual,
+                    valores:{ ...(acc.valores || {}), ...valores },
+                    verificacoesVazio:{ ...(acc.verificacoesVazio || {}), ...verificacoes },
+                    saldosSistema:{ ...(acc.saldosSistema || {}), ...saldosSistema },
+                    sessao:Number(atual.sessao?.updatedAt || 0) >= Number(acc.sessao?.updatedAt || 0) ? (atual.sessao || acc.sessao || {}) : (acc.sessao || {}),
+                    updatedAt:Math.max(Number(acc.updatedAt || 0), Number(atual.updatedAt || atual.sessao?.updatedAt || 0))
+                };
+            }, {});
+            const sessaoRemota = remoto.sessao && typeof remoto.sessao === "object" ? remoto.sessao : {};
+            const localSessao = carregarSessaoContagem();
+            const remotoTs = Number(remoto.updatedAt || sessaoRemota.updatedAt || 0);
+            const localTs = Number(localSessao.updatedAt || 0);
+            const valoresRemotos = remoto.valores && typeof remoto.valores === "object" ? remoto.valores : {};
+            const verificacoesRemotas = remoto.verificacoesVazio && typeof remoto.verificacoesVazio === "object" ? remoto.verificacoesVazio : {};
+            const saldosRemotos = remoto.saldosSistema && typeof remoto.saldosSistema === "object" ? remoto.saldosSistema : {};
+            if(localTs > remotoTs){
+                contagemValores = { ...valoresRemotos, ...(contagemValores || {}) };
+                contagemVerificacoesVazio = { ...verificacoesRemotas, ...(contagemVerificacoesVazio || {}) };
+                contagemSaldosCongelados = { ...saldosRemotos, ...(contagemSaldosCongelados || {}) };
+                agendarSalvarRascunhoContagemFirebase(50);
+            }else{
+                contagemValores = { ...(contagemValores || {}), ...valoresRemotos };
+                contagemVerificacoesVazio = { ...(contagemVerificacoesVazio || {}), ...verificacoesRemotas };
+                contagemSaldosCongelados = { ...(contagemSaldosCongelados || {}), ...saldosRemotos };
+                try{
+                    localStorage.setItem(chaveSessaoContagem(), JSON.stringify(sessaoRemota));
+                }catch(e){}
+            }
+            try{
+                localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
+                localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
+                localStorage.setItem(chaveSaldosCongeladosContagem(), JSON.stringify(contagemSaldosCongelados));
+            }catch(e){}
+            agendarSalvarRascunhoContagemFirebase(80);
+            return true;
+        }catch(sqlErr){
+            console.warn("Falha ao carregar rascunho da contagem no SQL:", sqlErr);
+            return false;
+        }
+    }
+    return false;
     if(!paths.length || !window.get || !window.ref || !window.db) return false;
     try{
         const snaps = await Promise.allSettled(paths.map(path =>
-            window.get(window.ref(window.db, path)).then(snap => ({ path, snap }))
+            Promise.resolve({ exists:()=>false, val:()=>null }).then(snap => ({ path, snap }))
         ));
         const remotos = snaps
             .filter(r => r.status === "fulfilled" && r.value.snap?.exists?.())
@@ -6048,15 +5958,7 @@ async function carregarHistoricoContagemSql(limit = 1000){
 }
 
 async function carregarHistoricoContagemFirebase(){
-    if(!window.get || !window.ref || !window.db) return null;
-    const [snap, rascunhosSnap] = await Promise.all([
-        window.get(window.ref(window.db, "contagens")),
-        window.get(window.ref(window.db, "contagemRascunhos")).catch(() => null)
-    ]);
-    return {
-        contagens: snap.exists() ? snap.val() : {},
-        rascunhos: rascunhosSnap?.exists?.() ? rascunhosSnap.val() : {}
-    };
+    return null;
 }
 
 async function carregarHistoricoContagemComFallback(limit = 1000){
@@ -6064,9 +5966,9 @@ async function carregarHistoricoContagemComFallback(limit = 1000){
         const historicoSql = await carregarHistoricoContagemSql(limit);
         if(historicoSql) return historicoSql;
     }catch(sqlErr){
-        console.warn("Falha ao carregar historico de contagem no SQL; tentando Firebase:", sqlErr);
+        console.warn("Falha ao carregar historico de contagem no SQL:", sqlErr);
     }
-    return carregarHistoricoContagemFirebase();
+    return null;
 }
 
 async function carregarContagensSalvasUsuarioAtual(){
@@ -6211,18 +6113,12 @@ async function carregarPresencaContagemFirebaseAgora(){
             contagemStatusMaquinas = mesclarStatusMaquinasContagem(porCiclo);
             return true;
         }catch(sqlErr){
-            console.warn("Falha ao carregar presenca/progresso da contagem no SQL; tentando Firebase:", sqlErr);
+            console.warn("Falha ao carregar presenca/progresso da contagem no SQL:", sqlErr);
+            return false;
         }
     }
-    if(!window.get || !window.ref || !window.db) return false;
-    try{
-        const snap = await window.get(window.ref(window.db, "contagemStatusMaquinas"));
-        contagemStatusMaquinas = mesclarStatusMaquinasContagem(snap.exists() ? snap.val() : {});
-        return true;
-    }catch(e){
-        console.warn("Falha ao carregar presenca/progresso da contagem:", e);
-        return false;
-    }
+    return false;
+    return false;
 }
 
 function mesclarStatusMaquinasContagem(statusPorCiclo){
@@ -6258,10 +6154,11 @@ function iniciarListenerPresencaContagem(){
         contagemPresencaUnsub = setInterval(atualizar, 5000);
         return;
     }
+    return;
     if(!window.onValue || !window.ref || !window.db) return;
     const ciclo = chaveCicloContagemAtual();
     try{
-        contagemPresencaUnsub = window.onValue(window.ref(window.db, `contagemStatusMaquinas/${ciclo}`), snap => {
+        contagemPresencaUnsub = false && ((snap) => {
             contagemStatusMaquinas = {
                 ...(contagemStatusMaquinas || {}),
                 ...(snap.exists() ? snap.val() : {})
@@ -6593,7 +6490,7 @@ function iniciarPopupProgressoContagemPrincipal(){
     }
     if(!window.onValue || !window.ref || !window.db) return;
     try{
-        contagemHomeUnsub = window.onValue(window.ref(window.db, "contagens"), snap => {
+        contagemHomeUnsub = false && ((snap) => {
             contagemHomeRegistros = snap.exists() ? snap.val() : {};
             if(contagemItens.length){
                 contagemHistoricoProgressoGrupos = reconstruirHistoricoProgressoContagem(contagemHomeRegistros);
@@ -7055,18 +6952,8 @@ async function persistirAliasesMaquinasContagem(){
             });
             return true;
         }catch(sqlErr){
-            console.warn("Falha ao salvar unificacao de maquinas no SQL; tentando Firebase:", sqlErr);
-        }
-    }
-    if(window.firebaseUpdate && window.ref && window.db){
-        try{
-            await window.firebaseUpdate(window.ref(window.db, "estoqueGlobal/configContagem"), {
-                maquinasAlias: contagemAliasesMaquinas || {}
-            });
-            return true;
-        }catch(e){
-            console.warn("Falha ao salvar unificacao de maquinas no Firebase:", e);
-            mostrarNotificacao("Unificacao salva localmente, mas o Firebase negou a gravacao.");
+            console.warn("Falha ao salvar unificacao de maquinas no SQL:", sqlErr);
+            return false;
         }
     }
     return false;
@@ -8326,12 +8213,12 @@ async function finalizarContagem(){
                 });
                 salvouSql = true;
             }catch(sqlErr){
-                console.warn("Falha ao salvar contagem no SQL; tentando Firebase:", sqlErr);
+                console.warn("Falha ao salvar contagem no SQL:", sqlErr);
+                throw sqlErr;
             }
         }
         if(!salvouSql){
-            const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
-            await window.push(baseRef, payload);
+            throw new Error("API SQL indisponivel para salvar contagem.");
         }
         await salvarRascunhoContagemFirebaseAgora();
         contagemFinalizadaSemSessao = true;
@@ -8344,7 +8231,7 @@ async function finalizarContagem(){
         }
     }catch(e){
         console.error("Erro ao salvar contagem:", e);
-        mostrarNotificacao("Erro ao salvar contagem. Verifique as regras do Firebase.");
+        mostrarNotificacao("Erro ao salvar contagem no SQL.");
     }
 }
 
@@ -8749,12 +8636,12 @@ async function salvarContagemPeloRelatorio(){
                 });
                 salvouSql = true;
             }catch(sqlErr){
-                console.warn("Falha ao salvar contagem no SQL; tentando Firebase:", sqlErr);
+                console.warn("Falha ao salvar contagem no SQL:", sqlErr);
+                throw sqlErr;
             }
         }
         if(!salvouSql){
-            const baseRef = window.ref(window.db, `contagens/${payload.data}/${chaveFirebaseContagem(payload.usuario)}`);
-            await window.push(baseRef, payload);
+            throw new Error("API SQL indisponivel para salvar contagem.");
         }
         await salvarRascunhoContagemFirebaseAgora();
         contagemFinalizadaSemSessao = true;
@@ -8768,7 +8655,7 @@ async function salvarContagemPeloRelatorio(){
         }
     }catch(e){
         console.error("Erro ao salvar contagem:", e);
-        mostrarNotificacao("Erro ao salvar contagem. Verifique as regras do Firebase.");
+        mostrarNotificacao("Erro ao salvar contagem no SQL.");
     }
 }
 
@@ -8970,22 +8857,14 @@ function preencherCorrecaoHistoricoContagem(){
 
 async function carregarUsuariosCorrecaoHistoricoContagem(){
     if(historicoContagemUsuariosSistema.length) return;
-    if(!window.get || !window.ref || !window.db) return;
-    const snap = await window.get(window.ref(window.db, "usuarios"));
-    const usuarios = [];
-    if(snap.exists()){
-        snap.forEach(child => {
-            const u = child.val() || {};
-            const nickname = String(u.nickname || "").trim();
-            if(!nickname) return;
-            usuarios.push({
-                uid:child.key,
-                nickname,
-                cracha:u.cracha || "",
-                ativo:u.ativo !== false
-            });
-        });
-    }
+    if(typeof window.sqlApi !== "function") return;
+    const data = await window.sqlApi("/api/users?limit=1000");
+    const usuarios = (data?.users || []).map(u => ({
+        uid:u.id || u.uid || u.firebase_uid || "",
+        nickname:String(u.nickname || "").trim(),
+        cracha:u.cracha || u.badge || "",
+        ativo:u.ativo !== false && u.active !== false
+    })).filter(u => u.nickname);
     historicoContagemUsuariosSistema = usuarios
         .filter(u => u.ativo)
         .sort((a, b) => a.nickname.localeCompare(b.nickname));
@@ -9054,16 +8933,7 @@ async function alterarUsuarioHistoricoContagem(){
             corrigiuSql = true;
         }
         if(!corrigiuSql){
-            if(!window.set || !window.ref || !window.db){
-                mostrarNotificacao("Firebase ainda nao esta pronto.");
-                return;
-            }
-            if(typeof window.push === "function"){
-                await window.push(window.ref(window.db, `contagens/${sessao.data}/${novoUsuarioKey}`), payload);
-            }else{
-                await window.set(window.ref(window.db, `contagens/${sessao.data}/${novoUsuarioKey}/${Date.now()}_corrigido`), payload);
-            }
-            await window.set(window.ref(window.db, origemPath), null);
+            throw new Error("Sessao SQL ausente para corrigir usuario da contagem.");
         }
         historicoContagemPlanilhasCarregado = false;
         await carregarHistoricoContagemPlanilhas(true);
@@ -9194,18 +9064,11 @@ async function resetarContagemGlobalAdmin(){
         formatarContagem:true
     };
     try{
-        if(typeof window.sqlApi === "function"){
-            await window.sqlApi("/api/counting/reset", {
-                method: "POST",
-                body: JSON.stringify(resetInfo)
-            });
-        }else{
-            await Promise.all([
-                window.set(window.ref(window.db, "contagemControle/resetGlobal"), resetInfo),
-                window.set(window.ref(window.db, `contagemAtual/${chaveCicloContagemAtual()}`), null),
-                window.set(window.ref(window.db, "contagemStatusMaquinas"), null)
-            ]);
-        }
+        if(typeof window.sqlApi !== "function") throw new Error("API SQL indisponivel.");
+        await window.sqlApi("/api/counting/reset", {
+            method: "POST",
+            body: JSON.stringify(resetInfo)
+        });
         aplicarResetGlobalContagem(resetInfo, false);
         historicoContagemPlanilhasCarregado = false;
         carregarHistoricoContagemPlanilhas(true);
@@ -9696,13 +9559,10 @@ function enviarMensagemSistema(texto, roomId, extra = {}){
             method: "POST",
             body: JSON.stringify(mensagem)
         }).then(() => carregarMensagensChatSql(true)).catch(err => {
-            console.warn("Falha ao enviar evento de sistema no SQL; tentando Firebase:", err);
-            if(typeof window.getChatRef === "function" && typeof window.push === "function"){
-                window.push(window.getChatRef(targetRoom), mensagem);
-            }
+            console.warn("Falha ao enviar evento de sistema no SQL:", err);
         });
-    }else if(typeof window.getChatRef === "function" && typeof window.push === "function"){
-        window.push(window.getChatRef(targetRoom), mensagem);
+    }else{
+        console.warn("API SQL indisponivel; evento de sistema do chat ficou apenas local.");
     }
     return mensagem;
 }
@@ -11075,14 +10935,7 @@ function importarDadosMortos(btn){
                 window.dadosMortos = dadosMortos;
                 aplicarTodosFiltros();
 
-                if(typeof window.set === "function" && typeof window.ref === "function"){
-                    await window.set(window.ref(window.db, "estoqueGlobal/dados"), dados);
-                    await window.set(window.ref(window.db, "estoqueGlobal/dadosMortos"), dadosMortos);
-                    await window.set(window.ref(window.db, "estoqueGlobal/ultimaAtualizacao"), Date.now());
-                    if(window.meuNickname){
-                        await window.set(window.ref(window.db, "estoqueGlobal/atualizadoPor"), window.meuNickname);
-                    }
-                }
+                throw new Error("Importacao direta de dados mortos deve usar o pipeline SQL/Automus.");
 
                 if(btn){
                     btn.classList.add("loaded");
@@ -11125,8 +10978,8 @@ window.verSolicitacao = async function(id){
             document.getElementById("cadastroInfoModal").style.display = "flex";
             return;
         }
-        const snap = await get(ref(db, "solicitacoesCadastro/"+id));
-        const dados = snap.val();
+        throw new Error("API SQL indisponivel.");
+        const dados = null;
         if(!dados) return;
         const box = document.getElementById("cadastroInfoContent");
         const data = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
@@ -11162,8 +11015,8 @@ window.verUsuario = async function(uid){
             document.getElementById("cadastroInfoModal").style.display = "flex";
             return;
         }
-        const snap = await get(ref(db, "usuarios/"+uid));
-        const dados = snap.val();
+        throw new Error("API SQL indisponivel.");
+        const dados = null;
         if(!dados) return;
         const box = document.getElementById("cadastroInfoContent");
         const data = dados.criadoEm ? new Date(dados.criadoEm).toLocaleString() : "-";
@@ -11211,14 +11064,12 @@ async function mostrarConflitoCadastro(idSolicitacao, nickname){
 
     let uidExistente = "";
     try{
-        const usersSnap = await get(ref(db, "usuarios"));
-        if(usersSnap.exists()){
-            usersSnap.forEach(child=>{
-                const u = child.val();
-                if(u?.nickname && u.nickname.toLowerCase() === (nickname || "").toLowerCase()){
-                    uidExistente = child.key;
-                }
-            });
+        if(typeof window.sqlApi === "function"){
+            const data = await window.sqlApi("/api/users?limit=1000");
+            const existente = (data?.users || []).find(u =>
+                String(u?.nickname || "").toLowerCase() === String(nickname || "").toLowerCase()
+            );
+            uidExistente = existente?.id || existente?.uid || existente?.firebase_uid || "";
         }
     }catch(e){}
 
@@ -11284,23 +11135,7 @@ async function verificarNickDisponivel(){
             setNickStatus(data?.used || data?.banned || data?.pending ? "bad" : "ok");
             return;
         }
-        const key = nickOnlyKey(nick);
-        let usado = false;
-        const userSnap = await get(ref(db, "nicknamesSimple/" + key));
-        if(userSnap.exists()){
-            const val = userSnap.val();
-            const count = (val && typeof val.count === "number") ? val.count : 1;
-            if(count > 0) usado = true;
-        }
-        const authSnap = await get(ref(db, "nicknamesAuth/" + key));
-        if(authSnap.exists()) usado = true;
-        const solicitSnap = await get(ref(db, "nicknamesSolic/" + key));
-        if(solicitSnap.exists()){
-            const val = solicitSnap.val();
-            const count = (val && typeof val.count === "number") ? val.count : 1;
-            if(count > 0) usado = true;
-        }
-        setNickStatus(usado ? "bad" : "ok");
+        throw new Error("API SQL indisponivel.");
     }catch(e){
         // sem permissão para checar: não exibe status
         console.warn("Falha ao checar nickname:", e?.code || e);
@@ -11662,31 +11497,74 @@ updateMobileOverlaysState();
 <!-- SPLIT: firebase.js (firebase init + auth) -->
 <script type="module">
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, update, get, onValue, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { 
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  updatePassword,
-  signOut
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+const SQL_AUTH_TOKEN_KEY = "darkJutsuSqlAuthToken";
+const SQL_AUTH_USER_KEY = "darkJutsuSqlAuthUser";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyChPIkc1NxpxtpvOU92NxyXsxCFpe3mzgE",
-  authDomain: "chat-fiasul.firebaseapp.com",
-  databaseURL: "https://chat-fiasul-default-rtdb.firebaseio.com",
-  projectId: "chat-fiasul",
-  storageBucket: "chat-fiasul.firebasestorage.app",
-  messagingSenderId: "263776720116",
-  appId: "1:263776720116:web:713fd43f4cb196b0527aa1",
-  measurementId: "G-KC5F0QT711"
+function criarUsuarioSqlAuth(user, token){
+    const uid = user?.uid || user?.id || "";
+    const nickname = user?.nickname || uid;
+    return {
+        uid,
+        email: user?.email || `${nickname}@sistema.local`,
+        displayName: nickname,
+        sqlUser: user || {},
+        async getIdToken(){
+            return token || localStorage.getItem(SQL_AUTH_TOKEN_KEY) || "";
+        }
+    };
+}
+
+const auth = {
+    currentUser: null,
+    _listeners: [],
+    _setUser(user){
+        this.currentUser = user;
+        this._listeners.slice().forEach(callback => {
+            try{ callback(user); }catch(e){ console.warn("Falha em listener de auth SQL:", e); }
+        });
+    }
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
+function onAuthStateChanged(authRef, callback){
+    authRef._listeners.push(callback);
+    Promise.resolve().then(() => callback(authRef.currentUser));
+    return () => {
+        authRef._listeners = authRef._listeners.filter(item => item !== callback);
+    };
+}
+
+async function signInWithEmailAndPassword(authRef, email, senha){
+    const login = String(email || "").split("@")[0];
+    const data = await window.sqlApi("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ login, password: senha })
+    });
+    localStorage.setItem(SQL_AUTH_TOKEN_KEY, data.token);
+    localStorage.setItem(SQL_AUTH_USER_KEY, JSON.stringify(data.user || {}));
+    const user = criarUsuarioSqlAuth(data.user, data.token);
+    authRef._setUser(user);
+    return { user };
+}
+
+async function updatePassword(user, novaSenha){
+    const data = await window.sqlApi("/api/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ new_password: novaSenha })
+    });
+    localStorage.setItem(SQL_AUTH_TOKEN_KEY, data.token);
+    localStorage.setItem(SQL_AUTH_USER_KEY, JSON.stringify(data.user || {}));
+    const nextUser = criarUsuarioSqlAuth(data.user, data.token);
+    auth._setUser(nextUser);
+    return nextUser;
+}
+
+async function signOut(authRef){
+    try{ await window.sqlApi("/api/auth/logout", { method: "POST" }); }catch(e){}
+    localStorage.removeItem(SQL_AUTH_TOKEN_KEY);
+    localStorage.removeItem(SQL_AUTH_USER_KEY);
+    authRef._setUser(null);
+}
+const db = null;
 const DEFAULT_SQL_API_BASE = (
     location.protocol.startsWith("http") && location.hostname
         ? `${location.protocol}//${location.hostname}:8765`
@@ -11702,6 +11580,7 @@ const SQL_API_FALLBACK_BASES = [
     SQL_API_BASE,
     "http://192.168.5.38:8765"
 ].filter((base, index, bases) => base && bases.indexOf(base) === index);
+let sqlApiPreferredBase = localStorage.getItem("darkJutsuApiPreferredBase") || "";
 const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
 const DARK_JUTSU_SQL_ONLY = ["1","true","sim","yes"].includes(
     (
@@ -11723,6 +11602,8 @@ function assertFirebaseDbAllowed(operation = "Firebase Database"){
 window.assertFirebaseDbAllowed = assertFirebaseDbAllowed;
 
 async function resolveSqlAuthHeader(){
+    const sessionToken = localStorage.getItem(SQL_AUTH_TOKEN_KEY) || "";
+    if(sessionToken) return `Bearer ${sessionToken}`;
     if(SQL_API_TOKEN) return `Bearer ${SQL_API_TOKEN}`;
     const user = auth.currentUser;
     if(!user || typeof user.getIdToken !== "function") return "";
@@ -11735,9 +11616,13 @@ window.sqlApi = async function(path, options = {}){
     const authHeader = await resolveSqlAuthHeader();
     if(authHeader) headers.Authorization = authHeader;
     let lastError = null;
-    for(const base of SQL_API_FALLBACK_BASES){
+    const bases = [
+        sqlApiPreferredBase,
+        ...SQL_API_FALLBACK_BASES
+    ].filter((base, index, list) => base && list.indexOf(base) === index);
+    for(const base of bases){
         const controller = typeof AbortController !== "undefined" && !options.signal ? new AbortController() : null;
-        const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 4500)) : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 1800)) : null;
         try{
             const { timeoutMs, ...fetchOptions } = options;
             const response = await fetch(`${base}${path}`, { ...fetchOptions, headers, signal: options.signal || controller?.signal });
@@ -11745,9 +11630,17 @@ window.sqlApi = async function(path, options = {}){
             if(!response.ok || data?.ok === false){
                 throw new Error(data?.error || `Falha HTTP ${response.status}`);
             }
+            if(sqlApiPreferredBase !== base){
+                sqlApiPreferredBase = base;
+                try{ localStorage.setItem("darkJutsuApiPreferredBase", base); }catch(e){}
+            }
             return data;
         } catch(error){
             lastError = error;
+            if(sqlApiPreferredBase === base){
+                sqlApiPreferredBase = "";
+                try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
+            }
         } finally {
             if(timeout) clearTimeout(timeout);
         }
@@ -11763,47 +11656,46 @@ async function carregarUsuarioSql(uid){
     return (user.id === uid || user.firebase_uid === uid || user.uid === uid) ? user : null;
 }
 
-// auth secundario para criar usuarios sem trocar a sessao do admin
-const adminApp = initializeApp(firebaseConfig, "adminApp");
-const adminAuth = getAuth(adminApp);
-window.adminAuth = adminAuth;
+async function restaurarSessaoSqlSalva(){
+    const token = localStorage.getItem(SQL_AUTH_TOKEN_KEY) || "";
+    if(!token) return;
+    let cachedUser = {};
+    try{ cachedUser = JSON.parse(localStorage.getItem(SQL_AUTH_USER_KEY) || "{}"); }catch(e){}
+    if(cachedUser?.uid || cachedUser?.id){
+        auth._setUser(criarUsuarioSqlAuth(cachedUser, token));
+    }
+    try{
+        const data = await window.sqlApi("/api/me");
+        if(data?.user){
+            localStorage.setItem(SQL_AUTH_USER_KEY, JSON.stringify(data.user));
+            auth._setUser(criarUsuarioSqlAuth(data.user, token));
+        }else{
+            await signOut(auth);
+        }
+    }catch(e){
+        console.warn("Sessao SQL salva invalida ou expirada:", e);
+        await signOut(auth);
+    }
+}
 
-window.ref = ref;
+window.ref = null;
 window.push = (...args) => {
-    assertFirebaseDbAllowed("push RTDB");
-    return push(...args);
+    throw new Error("Firebase Database desativado; use a API SQL.");
 };
 window.onValue = (...args) => {
-    assertFirebaseDbAllowed("listener RTDB");
-    return onValue(...args);
+    throw new Error("Firebase Database desativado; use a API SQL.");
 };
 window.get = (...args) => {
-    assertFirebaseDbAllowed("leitura RTDB");
-    return get(...args);
+    throw new Error("Firebase Database desativado; use a API SQL.");
 };
 window.set = (...args) => {
-    assertFirebaseDbAllowed("escrita RTDB");
-    return set(...args);
+    throw new Error("Firebase Database desativado; use a API SQL.");
 };
 window.update = (...args) => {
-    assertFirebaseDbAllowed("update RTDB");
-    return update(...args);
+    throw new Error("Firebase Database desativado; use a API SQL.");
 };
-window.runTransaction = (...args) => {
-    assertFirebaseDbAllowed("transacao RTDB");
-    return runTransaction(...args);
-};
-window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
 window.updatePassword = updatePassword;
-
-
-import { setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-try{
-    await setPersistence(auth, browserSessionPersistence);
-}catch(err){
-    console.warn("Persistencia de sessao Firebase indisponivel neste navegador.", err);
-}
+await restaurarSessaoSqlSalva();
 
 window.logout = async function() {
     try{
@@ -11892,9 +11784,11 @@ function iniciarSolicitacoesAdmin(){
         return;
     }
 
-    const solicitacoesRef = ref(db, "solicitacoesCadastro");
+    mostrarNotificacao("API SQL indisponivel para listar solicitacoes.");
+    return;
+    const solicitacoesRef = null;
 
-    onValue(solicitacoesRef, snapshot=>{
+    false && ((snapshot)=>{
 
         const lista = document.getElementById("listaSolicitacoes");
         const badge = document.getElementById("badgeSolicitacoes");
@@ -11966,17 +11860,27 @@ window.login = async function(){
 
     let nick = document.getElementById("authNickname").value.trim().toLowerCase();
     let senha = document.getElementById("authSenha").value;
+    const loginBtn = document.querySelector("#authBox button[onclick='login()']");
 
     window.ultimaSenhaLogin = senha;
 
     if(!nick || !senha) return alert("Preencha os campos");
 
     let emailFake = nick + "@sistema.com";
+    if(loginBtn){
+        loginBtn.disabled = true;
+        loginBtn.dataset.textoOriginal = loginBtn.dataset.textoOriginal || loginBtn.textContent;
+        loginBtn.textContent = "Entrando...";
+    }
 
     try{
         await signInWithEmailAndPassword(auth, emailFake, senha);
 
     } catch(error){
+        if(loginBtn){
+            loginBtn.disabled = false;
+            loginBtn.textContent = loginBtn.dataset.textoOriginal || "Entrar";
+        }
         try{
             if(typeof window.sqlApi === "function"){
                 const status = await window.sqlApi(`/api/nicknames/${encodeURIComponent(nick)}/status`);
@@ -11985,20 +11889,7 @@ window.login = async function(){
                     return;
                 }
             }
-            const snap = await get(ref(db, "solicitacoesCadastro"));
-            let pendente = false;
-            if(snap.exists()){
-                snap.forEach(child=>{
-                    const s = child.val();
-                    if(s && s.nickname === nick && s.status === "pendente"){
-                        pendente = true;
-                    }
-                });
-            }
-            if(pendente){
-                mostrarPending(nick);
-                return;
-            }
+            throw new Error("API SQL indisponivel.");
         }catch(e){
             console.error("Erro ao checar pendencia:", e);
         }
@@ -12053,20 +11944,17 @@ window.cadastrar = async function(){
                 if(btn) btn.disabled = false;
                 return;
             }
-            const cred = await createUserWithEmailAndPassword(auth, nick + "@sistema.com", senha);
-            const uid = cred.user.uid;
             await window.sqlApi("/api/signup-requests", {
                 method: "POST",
                 body: JSON.stringify({
-                    uid,
                     nickname: nick,
+                    senha,
                     cracha,
                     setor,
                     status: "pendente",
                     criadoEm: Date.now()
                 })
             });
-            await signOut(auth);
             mostrarNotificacao("Cadastro enviado para aprovacao.");
             document.getElementById("authNickname").value = "";
             document.getElementById("authSenha").value = "";
@@ -12080,14 +11968,15 @@ window.cadastrar = async function(){
             mostrarPending(nick);
             return;
             }catch(sqlCadastroErr){
-                console.warn("Falha no cadastro SQL; tentando fluxo Firebase legado:", sqlCadastroErr);
-                window.darkJutsuAllowFirebaseAuthFallback = true;
+                console.warn("Falha no cadastro SQL:", sqlCadastroErr);
+                throw sqlCadastroErr;
             }
         }
         let nickEmUso = false;
         try{
             const key = nickOnlyKey(nick);
-            const snap = await get(ref(db, "nicknamesSimple/" + key));
+            throw new Error("API SQL indisponivel.");
+            const snap = null;
             if(snap.exists()){
                 const val = snap.val();
                 const count = (val && typeof val.count === "number") ? val.count : 1;
@@ -12097,7 +11986,8 @@ window.cadastrar = async function(){
             console.warn("Sem permissão para validar duplicidade:", e?.code || e);
         }
         try{
-            const authSnap = await get(ref(db, "nicknamesAuth/" + nickOnlyKey(nick)));
+            throw new Error("API SQL indisponivel.");
+            const authSnap = null;
             if(authSnap.exists()){
                 nickEmUso = true;
             }
@@ -12109,7 +11999,8 @@ window.cadastrar = async function(){
         let solicitacaoIdExistente = "";
         try{
             const keyCracha = nickCrachaKey(nick, cracha);
-            const snapCracha = await get(ref(db, "nicknamesSolicCracha/" + keyCracha));
+            throw new Error("API SQL indisponivel.");
+            const snapCracha = null;
             if(snapCracha.exists()){
                 const val = snapCracha.val();
                 solicitacaoIdExistente = (val && (val.id || val.solicitacaoId || val.key)) ? (val.id || val.solicitacaoId || val.key) : "";
@@ -12125,12 +12016,12 @@ window.cadastrar = async function(){
             return;
         }
 
-        const solicitacaoRef = solicitacaoIdExistente
-            ? ref(db, "solicitacoesCadastro/" + solicitacaoIdExistente)
-            : push(ref(db, "solicitacoesCadastro"));
+        throw new Error("API SQL indisponivel.");
+        const solicitacaoRef = null;
 
         try{
-            await set(solicitacaoRef, {
+            throw new Error("API SQL indisponivel.");
+            await Promise.resolve({
                 uid: "",
                 nickname: nick,
                 senha: senha,
@@ -12165,7 +12056,7 @@ window.cadastrar = async function(){
 
     }catch(error){
 
-        console.error("ERRO FIREBASE:", error);
+        console.error("ERRO CADASTRO SQL:", error);
         alert(error.message);
         if(btn) btn.disabled = false;
 
@@ -12236,263 +12127,32 @@ function nickCrachaKey(nick, cracha){
 }
 
 async function ajustarNickSolicCount(nick, delta){
-    if(typeof window.sqlApi === "function") return;
-    const key = nickOnlyKey(nick);
-    const node = ref(db, "nicknamesSolic/" + key);
-    try{
-        await runTransaction(node, current => {
-            let count = 0;
-            if(current && typeof current === "object" && typeof current.count === "number"){
-                count = current.count;
-            }else if(typeof current === "number"){
-                count = current;
-            }
-            count = count + delta;
-            if(count <= 0){
-                return null;
-            }
-            return { nickname: (nick || "").toLowerCase(), count: count };
-        });
-    }catch(e){
-        console.warn("Falha ao ajustar nicknamesSolic:", e?.code || e);
-    }
+    return;
 }
 window.ajustarNickSolicCount = ajustarNickSolicCount;
 
 async function marcarSolicCracha(nick, cracha, solicitId){
-    if(typeof window.sqlApi === "function") return;
-    const key = nickCrachaKey(nick, cracha);
-    try{
-        await set(ref(db, "nicknamesSolicCracha/" + key), {
-            nickname: (nick || "").toLowerCase(),
-            cracha: (cracha || "").toString().trim(),
-            id: solicitId || "",
-            criadoEm: Date.now()
-        });
-    }catch(e){
-        console.warn("Falha ao marcar nicknamesSolicCracha:", e?.code || e);
-    }
+    return;
 }
 
 async function desmarcarSolicCracha(nick, cracha){
-    if(typeof window.sqlApi === "function") return;
-    const key = nickCrachaKey(nick, cracha);
-    try{
-        await set(ref(db, "nicknamesSolicCracha/" + key), null);
-    }catch(e){
-        console.warn("Falha ao limpar nicknamesSolicCracha:", e?.code || e);
-    }
+    return;
 }
 
 async function rebuildNicknamesSimple(){
-    if(typeof window.sqlApi === "function") return;
-    try{
-        const nivelSnap = await get(ref(db, "usuarios/" + auth.currentUser.uid + "/nivel"));
-        if(!nivelSnap.exists() || nivelSnap.val() !== "admin") return;
-    }catch(e){
-        return;
-    }
-    const counts = {};
-    try{
-        const usersSnap = await get(ref(db, "usuarios"));
-        if(usersSnap.exists()){
-            usersSnap.forEach(child=>{
-                const u = child.val();
-                if(u?.ativo === false) return;
-                const nick = (u?.nickname || "").toLowerCase();
-                if(nick){
-                    counts[nick] = (counts[nick] || 0) + 1;
-                }
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao ler usuarios para nicknamesSimple:", e?.code || e);
-    }
-    // nicknamesSimple considera apenas usuarios ativos
-    try{
-        const currentSnap = await get(ref(db, "nicknamesSimple"));
-        if(currentSnap.exists()){
-            currentSnap.forEach(child=>{
-                const v = child.val();
-                const nick = (v?.nickname || "").toLowerCase();
-                if(!nick || !counts[nick]){
-                    set(ref(db, "nicknamesSimple/" + child.key), null);
-                }
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao limpar nicknamesSimple:", e?.code || e);
-    }
-    try{
-        for(const nick in counts){
-            const key = nickOnlyKey(nick);
-            await set(ref(db, "nicknamesSimple/" + key), {
-                nickname: nick,
-                count: counts[nick]
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao gravar nicknamesSimple:", e?.code || e);
-    }
+    return;
 }
 
 async function rebuildNicknamesAuth(){
-    if(typeof window.sqlApi === "function") return;
-    try{
-        const nivelSnap = await get(ref(db, "usuarios/" + auth.currentUser.uid + "/nivel"));
-        if(!nivelSnap.exists() || nivelSnap.val() !== "admin") return;
-    }catch(e){
-        return;
-    }
-    const names = new Set();
-    try{
-        const usersSnap = await get(ref(db, "usuarios"));
-        if(usersSnap.exists()){
-            usersSnap.forEach(child=>{
-                const u = child.val();
-                if(u?.ativo === false) return;
-                const nick = (u?.nickname || "").toLowerCase();
-                if(nick) names.add(nick);
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao ler usuarios para nicknamesAuth:", e?.code || e);
-    }
-    try{
-        const banSnap = await get(ref(db, "usuariosBanidos"));
-        if(banSnap.exists()){
-            banSnap.forEach(child=>{
-                const b = child.val();
-                const nick = (b?.nickname || "").toLowerCase();
-                if(nick) names.add(nick);
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao ler banidos para nicknamesAuth:", e?.code || e);
-    }
-    try{
-        const currentSnap = await get(ref(db, "nicknamesAuth"));
-        if(currentSnap.exists()){
-            currentSnap.forEach(child=>{
-                const v = child.val();
-                const nick = (v?.nickname || "").toLowerCase();
-                if(!nick || !names.has(nick)){
-                    set(ref(db, "nicknamesAuth/" + child.key), null);
-                }
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao limpar nicknamesAuth:", e?.code || e);
-    }
-    try{
-        for(const nick of names){
-            const key = nickOnlyKey(nick);
-            await set(ref(db, "nicknamesAuth/" + key), {
-                nickname: nick,
-                criadoEm: Date.now()
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao gravar nicknamesAuth:", e?.code || e);
-    }
+    return;
 }
 
 async function rebuildNicknamesSolic(){
-    if(typeof window.sqlApi === "function") return;
-    try{
-        const nivelSnap = await get(ref(db, "usuarios/" + auth.currentUser.uid + "/nivel"));
-        if(!nivelSnap.exists() || nivelSnap.val() !== "admin") return;
-    }catch(e){
-        return;
-    }
-    const counts = {};
-    const crachaMap = new Map();
-    try{
-        const solicitSnap = await get(ref(db, "solicitacoesCadastro"));
-        if(solicitSnap.exists()){
-            solicitSnap.forEach(child=>{
-                const s = child.val();
-                if(!s || s.status !== "pendente") return;
-                const nick = (s.nickname || "").toLowerCase();
-                if(nick){
-                    counts[nick] = (counts[nick] || 0) + 1;
-                }
-                if(s.nickname && s.cracha){
-                    const key = nickCrachaKey(s.nickname, s.cracha);
-                    crachaMap.set(key, child.key);
-                }
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao ler Solicitacoes para nicknamesSolic:", e?.code || e);
-    }
-    try{
-        const currentSnap = await get(ref(db, "nicknamesSolic"));
-        if(currentSnap.exists()){
-            currentSnap.forEach(child=>{
-                const v = child.val();
-                const nick = (v?.nickname || "").toLowerCase();
-                if(!nick || !counts[nick]){
-                    set(ref(db, "nicknamesSolic/" + child.key), null);
-                }
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao limpar nicknamesSolic:", e?.code || e);
-    }
-    try{
-        for(const nick in counts){
-            const key = nickOnlyKey(nick);
-            await set(ref(db, "nicknamesSolic/" + key), {
-                nickname: nick,
-                count: counts[nick]
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao gravar nicknamesSolic:", e?.code || e);
-    }
-    try{
-        const currentCracha = await get(ref(db, "nicknamesSolicCracha"));
-        if(currentCracha.exists()){
-            currentCracha.forEach(child=>{
-                if(!crachaMap.has(child.key)){
-                    set(ref(db, "nicknamesSolicCracha/" + child.key), null);
-                }
-            });
-        }
-    }catch(e){
-        console.warn("Falha ao limpar nicknamesSolicCracha:", e?.code || e);
-    }
-    try{
-        for(const [key, id] of crachaMap.entries()){
-            await set(ref(db, "nicknamesSolicCracha/" + key), { id: id });
-        }
-    }catch(e){
-        console.warn("Falha ao gravar nicknamesSolicCracha:", e?.code || e);
-    }
+    return;
 }
 
 async function ajustarNickCount(nick, delta){
-    if(typeof window.sqlApi === "function") return;
-    const key = nickOnlyKey(nick);
-    const node = ref(db, "nicknamesSimple/" + key);
-    try{
-        await runTransaction(node, current => {
-            let count = 0;
-            if(current && typeof current === "object" && typeof current.count === "number"){
-                count = current.count;
-            }else if(typeof current === "number"){
-                count = current;
-            }
-            count = count + delta;
-            if(count <= 0){
-                return null;
-            }
-            return { nickname: (nick || "").toLowerCase(), count: count };
-        });
-    }catch(e){
-        console.warn("Falha ao ajustar nicknamesSimple:", e?.code || e);
-    }
+    return;
 }
 
 window.voltarLogin = function(){
@@ -12514,6 +12174,11 @@ onAuthStateChanged(auth, async (user) => {
     const adminPanel = document.getElementById("adminPanel");
 
     if (!user) {
+        const loginBtn = document.querySelector("#authBox button[onclick='login()']");
+        if(loginBtn){
+            loginBtn.disabled = false;
+            loginBtn.textContent = loginBtn.dataset.textoOriginal || "Entrar";
+        }
         pararMonitoramentoChat();
         if(contagemResetGlobalUnsub){
             if(typeof contagemResetGlobalUnsub === "function"){
@@ -12559,7 +12224,8 @@ onAuthStateChanged(auth, async (user) => {
                 dadosUsuario = await carregarUsuarioSql(user.uid);
                 usuarioFonteSql = !!dadosUsuario;
             }catch(sqlErr){
-                console.warn("Falha ao validar usuario no SQL; tentando Firebase:", sqlErr);
+                console.warn("Falha ao validar usuario no SQL:", sqlErr);
+                throw sqlErr;
             }
         }
 
@@ -12571,7 +12237,7 @@ onAuthStateChanged(auth, async (user) => {
 
         let snapshot = null;
         try{
-            snapshot = dadosUsuario ? null : await get(ref(db, "usuarios/" + user.uid));
+            snapshot = null;
         }catch(firebaseUserErr){
             if(!dadosUsuario){
                 console.warn("Falha ao carregar usuario no Firebase apos SQL falhar:", firebaseUserErr);
@@ -12581,18 +12247,13 @@ onAuthStateChanged(auth, async (user) => {
 
         if (!dadosUsuario && (!snapshot || !snapshot.exists())) {
             try{
-                const banSnap = await get(ref(db, "usuariosBanidos/" + user.uid));
-                if(banSnap.exists()){
-                    mostrarBanido();
-                    await signOut(auth);
-                    return;
-                }
+                throw new Error("Usuario ausente no SQL.");
             }catch(e){}
             mostrarPending(user.email ? user.email.split("@")[0] : "");
             await signOut(auth);
             return;
         }
-        if (!dadosUsuario) dadosUsuario = snapshot.val();
+        if (!dadosUsuario) throw new Error("Usuario ausente no SQL.");
         if (dadosUsuario.ativo === false || dadosUsuario.active === false) {
             alert("Usuário bloqueado");
             await signOut(auth);
@@ -12614,9 +12275,6 @@ onAuthStateChanged(auth, async (user) => {
                 break;
             }
             try{
-                if(window.ultimaSenhaLogin && !usuarioFonteSql){
-                await set(ref(db, "usuarios/" + user.uid + "/senhaAntiga"), window.ultimaSenhaLogin);
-            }
             await window.updatePassword(auth.currentUser, novaSenha);
                 if(usuarioFonteSql && typeof window.sqlApi === "function"){
                     await window.sqlApi(`/api/users/${encodeURIComponent(user.uid)}`, {
@@ -12624,8 +12282,7 @@ onAuthStateChanged(auth, async (user) => {
                         body: JSON.stringify({ password_status: "definida", senhaReset:false })
                     });
                 }else{
-                    await set(ref(db, "usuarios/" + user.uid + "/senha"), "definida");
-                    await set(ref(db, "usuarios/" + user.uid + "/senhaReset"), false);
+                    throw new Error("API SQL indisponivel.");
                 }
             }catch(e){
                 alert("Não foi possível atualizar a senha. Tente novamente.");
@@ -12688,30 +12345,24 @@ onAuthStateChanged(auth, async (user) => {
 
         const carregarDadosSistema = async () => {
             await carregarEstoqueInicial();
-            await Promise.allSettled([
+            Promise.allSettled([
                 carregarEstoqueMinimoPadrao(),
                 carregarDadosMortosPlanilhaPadrao(),
                 carregarPlanilhaPadrao("mata110", "mata110.xlsx"),
                 carregarPlanilhaPadrao("mata111", "mata111.xlsx"),
                 carregarPlanilhaPadrao("mata112", "mata112.xlsx", "Saldos a Endereçar")
-            ]);
-            pedidosCompraEstado = calcularPedidosCompraEstado(dados, pedidosCompraEstado, { preservarPedidosPublicados:true });
-            renderTabela();
+            ]).then(() => {
+                pedidosCompraEstado = calcularPedidosCompraEstado(dados, pedidosCompraEstado, { preservarPedidosPublicados:true });
+                renderTabela();
+            }).catch(err => console.warn("Planilhas auxiliares carregando em segundo plano:", err));
         };
 
-        if(isMobileLayout()){
-            await carregarDadosSistema();
-            tentarRetomarContagemPendente();
-            finalizarProgresso();
-            prepararChatUsuario().catch(error => {
-                console.warn("Chat carregando em segundo plano:", error);
-            });
-        }else{
-            await carregarDadosSistema();
-            tentarRetomarContagemPendente();
-            await prepararChatUsuario();
-            finalizarProgresso();
-        }
+        await carregarDadosSistema();
+        tentarRetomarContagemPendente();
+        finalizarProgresso();
+        prepararChatUsuario().catch(error => {
+            console.warn("Chat carregando em segundo plano:", error);
+        });
 
     } catch (error) {
         console.error("Erro ao validar usuário:", error);
@@ -12741,12 +12392,10 @@ document.addEventListener("mousemove", resetarTimer);
 document.addEventListener("keydown", resetarTimer);
 document.addEventListener("click", resetarTimer);
 
-const estoqueRef = ref(db, "estoqueGlobal");
+const estoqueRef = null;
 
 // Exporta funções para o escopo global (window)
 window.estoqueRef = estoqueRef;
-window.firebaseSet = set;
-window.firebaseUpdate = update;
 
 function escapeHtml(texto) {
     return String(texto ?? "")
@@ -12985,17 +12634,6 @@ async function carregarSenhaAvaliadorOcorrencias(){
             return ocorrenciasAvaliadorSenha;
         }
     }
-    try{
-        const snap = await get(ref(db, OCORRENCIAS_AVALIADOR_SENHA_PATH));
-        const val = snap.val();
-        const senha = typeof val === "string" ? val : (val?.senha || "");
-        if(senha){
-            ocorrenciasAvaliadorSenha = String(senha);
-            salvarSenhaAvaliadorLocal(ocorrenciasAvaliadorSenha);
-        }
-    }catch(err){
-        if(!isFirebasePermissionDenied(err)) console.warn("Falha ao carregar senha do avaliador:", err);
-    }
     return ocorrenciasAvaliadorSenha;
 }
 
@@ -13028,15 +12666,10 @@ async function alterarSenhaAvaliadorOcorrencias(){
             });
             setStatusSenhaAvaliador("Senha redefinida no SQL.", true);
         }else{
-            await set(ref(db, OCORRENCIAS_AVALIADOR_SENHA_PATH), {
-                senha,
-                atualizadoEm: Date.now(),
-                atualizadoPor: auth.currentUser?.uid || ""
-            });
-            setStatusSenhaAvaliador("Senha redefinida no Firebase.", true);
+            throw new Error("API SQL indisponivel.");
         }
     }catch(err){
-        if(!isFirebasePermissionDenied(err)) console.warn("Falha ao salvar senha do avaliador:", err);
+        console.warn("Falha ao salvar senha do avaliador no SQL:", err);
         setStatusSenhaAvaliador("Senha salva neste navegador; servidor indisponivel.", true);
     }
     if(input) input.value = "";
@@ -13077,16 +12710,8 @@ function iniciarCamposOcorrencia(){
         });
         return;
     }
-    ocorrenciasCamposUnsub = onValue(ref(db, CAMPOS_OCORRENCIA_CONFIG_PATH), snapshot => {
-        if(snapshot.exists()){
-            aplicarCamposOcorrencia(snapshot.val(), "firebase");
-            salvarCamposOcorrenciaLocal(camposOcorrenciaConfigAtual());
-        }
-    }, err => {
-        if(!isFirebasePermissionDenied(err)) console.warn("Falha ao carregar campos de ocorrencia:", err);
-        const fallback = carregarCamposOcorrenciaLocal();
-        aplicarCamposOcorrencia(fallback || CAMPOS_OCORRENCIA_PADRAO, fallback ? "local" : "padrao");
-    });
+    const fallback = carregarCamposOcorrenciaLocal();
+    aplicarCamposOcorrencia(fallback || CAMPOS_OCORRENCIA_PADRAO, fallback ? "local" : "padrao");
 }
 
 function setOcorrenciasStorageModo(modo){
@@ -13224,8 +12849,7 @@ function definirListaCampoOcorrencia(campo, lista){
 
 function podeGerenciarCamposOcorrencia(){
     const nivel = String(window.nivelUsuario || "").toLowerCase();
-    const email = auth.currentUser?.email || "";
-    return nivel === "admin" || nivel === "mod" || email === "davi@sistema.com";
+    return nivel === "admin" || nivel === "mod";
 }
 
 function identidadeTratativaOcorrencia(){
@@ -13302,14 +12926,12 @@ async function persistirCamposOcorrencia(){
             ocorrenciasCamposFonte = "sql";
             atualizarStatusCamposOcorrencia("Opcoes salvas no SQL.", "sql");
         }else{
-            await set(ref(db, CAMPOS_OCORRENCIA_CONFIG_PATH), config);
-            ocorrenciasCamposFonte = "firebase";
-            atualizarStatusCamposOcorrencia("Opcoes salvas no Firebase.", "firebase");
+            throw new Error("API SQL indisponivel.");
         }
     }catch(err){
-        if(!isFirebasePermissionDenied(err)) console.warn("Falha ao salvar campos de ocorrencia no Firebase:", err);
+        console.warn("Falha ao salvar campos de ocorrencia no SQL:", err);
         ocorrenciasCamposFonte = "local";
-        atualizarStatusCamposOcorrencia("Sem permissao no Firebase; opcoes salvas neste navegador.", "local");
+        atualizarStatusCamposOcorrencia("Sem acesso ao SQL; opcoes salvas neste navegador.", "local");
     }
     configurarOcorrenciasUI();
     renderizarOcorrencias();
@@ -13481,19 +13103,7 @@ async function salvarOcorrenciaFirebase(id, ocorrencia){
         console.warn("Falha ao salvar ocorrencia no SQL:", sqlErr);
         throw sqlErr;
     }
-    try{
-        await set(ref(db, `${OCORRENCIAS_PRIMARY_PATH}/${id}`), ocorrencia);
-        setOcorrenciasStorageModo("primary");
-        return OCORRENCIAS_PRIMARY_PATH;
-    }catch(err){
-        if(!isFirebasePermissionDenied(err)){
-            throw err;
-        }
-        console.warn("Firebase negou /ocorrencias; salvando ocorrencia no caminho compativel.", err);
-        await set(ref(db, `${OCORRENCIAS_FALLBACK_PATH}/${id}`), ocorrencia);
-        setOcorrenciasStorageModo("fallback");
-        return OCORRENCIAS_FALLBACK_PATH;
-    }
+    throw new Error("API SQL indisponivel para salvar ocorrencia.");
 }
 
 async function atualizarOcorrenciaStorage(id, storagePath, patch){
@@ -13510,8 +13120,7 @@ async function atualizarOcorrenciaStorage(id, storagePath, patch){
         console.warn("Falha ao atualizar ocorrencia no SQL:", sqlErr);
         throw sqlErr;
     }
-    await update(ref(db, storagePath), patch);
-    return "firebase";
+    throw new Error("API SQL indisponivel para atualizar ocorrencia.");
 }
 
 async function atualizarStatusOcorrencia(id, status){
@@ -13723,7 +13332,7 @@ function iniciarOcorrenciasSqlPolling(){
         carregarOcorrenciasSql(true).then(ok => {
             if(!ok){
                 pararOcorrenciasSqlPolling();
-                iniciarOcorrenciasFirebaseFallback();
+                setOcorrenciasStorageModo("erro");
             }
         });
     }, 15000);
@@ -13737,28 +13346,7 @@ function pararOcorrenciasSqlPolling(){
 }
 
 function iniciarOcorrenciasFirebaseFallback(){
-    if(!ocorrenciasUnsub){
-        ocorrenciasUnsub = onValue(ref(db, OCORRENCIAS_PRIMARY_PATH), snapshot => {
-            setOcorrenciasStorageModo("primary");
-            aplicarSnapshotOcorrencias("primary", snapshot, OCORRENCIAS_PRIMARY_PATH);
-        }, err => {
-            console.warn("Firebase negou /ocorrencias; lendo ocorrencias pelo caminho compativel.", err);
-            setOcorrenciasStorageModo("fallback");
-            ocorrenciasPorFonte.primary = [];
-            atualizarCacheOcorrencias();
-        });
-    }
-    if(!ocorrenciasFallbackUnsub){
-        ocorrenciasFallbackUnsub = onValue(ref(db, OCORRENCIAS_FALLBACK_PATH), snapshot => {
-            if(ocorrenciasStorageModo !== "primary") setOcorrenciasStorageModo("fallback");
-            aplicarSnapshotOcorrencias("fallback", snapshot, OCORRENCIAS_FALLBACK_PATH);
-        }, err => {
-            console.warn("Falha ao carregar ocorrencias fallback:", err);
-            if(ocorrenciasStorageModo !== "primary") setOcorrenciasStorageModo("erro");
-            ocorrenciasPorFonte.fallback = [];
-            atualizarCacheOcorrencias();
-        });
-    }
+    setOcorrenciasStorageModo("erro");
 }
 
 function pararOcorrencias(){
@@ -14104,9 +13692,24 @@ function aplicarSnapshotEstoqueFirebase(val, opcoes = {}){
 async function carregarEstoqueInicial() {
 
     if (typeof iniciarProgresso === "function") iniciarProgresso(); 
+    if (typeof window.sqlApi === "function") {
+        try {
+            const data = await window.sqlApi("/api/dashboard/snapshot?limit=1000");
+            const banco = data?.inventory || {};
+            if (banco && (Array.isArray(banco.dados) || Array.isArray(banco.dadosMortos))) {
+                aplicarSnapshotEstoqueFirebase(banco, { forcarFiltros:true });
+                console.log("Dados de estoque carregados do SQL.");
+                return;
+            }
+        } catch (sqlErr) {
+            console.warn("Falha ao carregar estoque no SQL:", sqlErr);
+            return;
+        }
+    }
+    return;
     
     try {
-        const snapshot = await get(estoqueRef);
+        const snapshot = await Promise.resolve({ exists:()=>false, val:()=>null });
 
         if (snapshot.exists()) {
 
@@ -14127,7 +13730,7 @@ async function carregarEstoqueInicial() {
             window.dadosMortos = dadosMortos;
             window.setDados(banco.dados || []);
 
-onValue(window.estoqueRef, snapshot => {
+false && ((snapshot) => {
 
     const val = snapshot.val();
     if(!val) return;
@@ -14208,7 +13811,7 @@ let readStateCache = {};
 privateRoomGateState = null;
 
 function getChatRef(roomId){
-    return ref(db, "chatRooms/" + roomId + "/messages");
+    return null;
 }
 window.getChatRef = getChatRef;
 
@@ -14328,9 +13931,7 @@ async function persistirLeituraSala(roomId, timestamp = Date.now()){
         console.warn("Falha ao persistir leitura no SQL:", sqlErr);
         return;
     }
-    try{
-        await set(ref(db, `chatReadState/${uid}/${roomId}`), nextTs);
-    }catch(e){}
+    return;
 }
 window.persistirLeituraSala = persistirLeituraSala;
 
@@ -14350,15 +13951,7 @@ async function carregarLeituraSalaRemota(){
         console.warn("Falha ao carregar leitura do chat no SQL:", sqlErr);
         return;
     }
-    try{
-        const snap = await get(ref(db, `chatReadState/${uid}`));
-        if(snap.exists()){
-            const remoto = snap.val() || {};
-            const local = getReadStateForUid(uid);
-            readStateCache[uid] = { ...local, ...remoto };
-            saveReadStateForUid(uid);
-        }
-    }catch(e){}
+    return;
 }
 
 function atualizarTituloChat(){
@@ -14505,25 +14098,7 @@ window.atualizarVistaChatAtivo = atualizarVistaChatAtivo;
 async function carregarMensagensChatSql(silencioso = false){
     if(typeof window.sqlApi !== "function") return false;
     try{
-        const resultados = await Promise.all(salasChat.map(async room => {
-            const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(room.id)}/messages?limit=200`);
-            const lista = (data?.messages || []).map(row => {
-                const raw = row?.raw_data && typeof row.raw_data === "object" ? row.raw_data : {};
-                return {
-                    ...raw,
-                    _key: row.legacy_key || row.id,
-                    nome: raw.nome || row.name || "",
-                    texto: raw.texto || row.text || "",
-                    data: raw.data || row.time_label || "",
-                    timestamp: raw.timestamp || (row.created_at ? Date.parse(row.created_at) : 0),
-                    tipo: raw.tipo || row.message_type || "",
-                    evento: raw.evento || row.event || "",
-                    sessionId: raw.sessionId || row.session_id || "",
-                    uid: raw.uid || row.user_id || ""
-                };
-            });
-            return [room.id, dedupeMensagensChat(lista)];
-        }));
+        const resultados = await Promise.all(salasChat.map(room => carregarMensagensSalaChatSql(room.id, 120)));
         resultados.forEach(([roomId, lista]) => {
             roomMessages[roomId] = lista;
         });
@@ -14536,31 +14111,40 @@ async function carregarMensagensChatSql(silencioso = false){
     }
 }
 
-function iniciarMonitoramentoSalasFirebase(){
-    salasChat.forEach(room=>{
-        if(chatRoomUnsubs[room.id]) return;
-        chatRoomUnsubs[room.id] = onValue(getChatRef(room.id), snapshot => {
-            let lista = [];
-            snapshot.forEach(child=>{
-                const msg = child.val() || {};
-                lista.push({ ...msg, _key: child.key });
-            });
-            roomMessages[room.id] = dedupeMensagensChat(lista);
-            if(room.id === salaAtual){
-                recalcularUnreadCounts();
-                atualizarVistaChatAtivo(room.id, false);
-            }else{
-                recalcularUnreadCounts();
-            }
-        });
+async function carregarMensagensSalaChatSql(roomId, limit = 120){
+    const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/messages?limit=${encodeURIComponent(limit)}`, { timeoutMs: 1500 });
+    const lista = (data?.messages || []).map(row => {
+        const raw = row?.raw_data && typeof row.raw_data === "object" ? row.raw_data : {};
+        return {
+            ...raw,
+            _key: row.legacy_key || row.id,
+            nome: raw.nome || row.name || "",
+            texto: raw.texto || row.text || "",
+            data: raw.data || row.time_label || "",
+            timestamp: raw.timestamp || (row.created_at ? Date.parse(row.created_at) : 0),
+            tipo: raw.tipo || row.message_type || "",
+            evento: raw.evento || row.event || "",
+            sessionId: raw.sessionId || row.session_id || "",
+            uid: raw.uid || row.user_id || ""
+        };
     });
+    return [roomId, dedupeMensagensChat(lista)];
+}
+
+function iniciarMonitoramentoSalasFirebase(){
+    console.warn("Monitoramento Firebase do chat removido; use a API SQL.");
 }
 
 function iniciarMonitoramentoSalas(){
     if(window.contagemModoFocoAtivo) return;
     if(chatSqlTimer || Object.keys(chatRoomUnsubs || {}).length) return;
     if(typeof window.sqlApi === "function"){
-        carregarMensagensChatSql(true).then(ok => {
+        carregarMensagensSalaChatSql(salaAtual, 120).then(([roomId, lista]) => {
+            roomMessages[roomId] = lista;
+            recalcularUnreadCounts();
+            atualizarVistaChatAtivo(roomId, false);
+            return carregarMensagensChatSql(true);
+        }).then(ok => {
             if(ok){
                 chatSqlTimer = setInterval(() => {
                     carregarMensagensChatSql(true).then(nextOk => {
@@ -14568,14 +14152,14 @@ function iniciarMonitoramentoSalas(){
                             pararMonitoramentoChatSql();
                         }
                     });
-                }, 5000);
+                }, 7000);
             }else{
                 console.warn("Chat SQL indisponivel; monitoramento Firebase nao sera iniciado em modo SQL.");
             }
-        });
+        }).catch(err => console.warn("Chat SQL carregando em segundo plano:", err));
         return;
     }
-    iniciarMonitoramentoSalasFirebase();
+    console.warn("API SQL indisponivel; chat em tempo real nao sera iniciado.");
 }
 
 function pararMonitoramentoChatSql(){
@@ -14592,15 +14176,8 @@ function iniciarMonitoramentoTyping(roomId){
         chatTypingRoomUnsub = null;
     }
     if(!roomId) return;
-    if(window.darkJutsuSqlOnly){
-        typingUsers = {};
-        atualizarDigitandoUI();
-        return;
-    }
-    chatTypingRoomUnsub = onValue(getTypingRef(roomId), snapshot => {
-        typingUsers = snapshot.val() || {};
-        atualizarDigitandoUI();
-    });
+    typingUsers = {};
+    atualizarDigitandoUI();
 }
 
 function pausarMonitoramentoChatModoFoco(){
@@ -14677,8 +14254,7 @@ async function verificarSenhaSala(roomId){
             return "";
         }
     }
-    const snap = await get(ref(db, "chatRooms/" + roomId + "/senha"));
-    return snap.exists() ? String(snap.val()) : "";
+    return "";
 }
 
 function getSalaChatLabel(roomId){
@@ -14858,28 +14434,13 @@ TYPING_TTL = 4500;
 TYPING_THROTTLE = 1200;
 
 function getTypingRef(roomId){
-    return ref(db, "chatRooms/" + roomId + "/typing");
+    return null;
 }
 
 function setDigitando(roomId, ativo){
     if(!auth?.currentUser || !roomId) return;
-    if(window.darkJutsuSqlOnly){
-        typingUsers = {};
-        atualizarDigitandoUI();
-        return;
-    }
-    const uid = auth.currentUser.uid;
-    const node = ref(db, "chatRooms/" + roomId + "/typing/" + uid);
-    if(!ativo){
-        set(node, null);
-        return;
-    }
-    const cracha = (window.meuCracha || "").toString().trim();
-    set(node, {
-        nickname: window.meuNickname || "",
-        cracha: cracha,
-        ts: Date.now()
-    });
+    typingUsers = {};
+    atualizarDigitandoUI();
 }
 window.setDigitando = setDigitando;
 
@@ -14965,7 +14526,7 @@ async function definirSenhaSala(roomId){
                 body: JSON.stringify({ password: senha })
             });
         }else{
-            await set(ref(db, "chatRooms/" + roomId + "/senha"), senha);
+            throw new Error("API SQL indisponivel.");
         }
     }catch(sqlErr){
         console.warn("Falha ao salvar senha no SQL:", sqlErr);
@@ -14997,7 +14558,7 @@ async function limparMensagensSala(){
         mostrarNotificacao("Nao foi possivel limpar mensagens no SQL.");
         return;
     }
-    await set(getChatRef(salaAtual), null);
+    throw new Error("API SQL indisponivel para limpar mensagens.");
 }
 window.limparMensagensSala = limparMensagensSala;
 
@@ -15037,10 +14598,10 @@ window.enviarMensagem = async function() {
         if(typeof window.sqlApi === "function"){
             await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(salaAtual)}/messages`, {
                 method: "POST",
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                timeoutMs: 1800
             });
             atualizarEstadoLocal({ _pending:false, _failed:false });
-            carregarMensagensChatSql(true);
         }else{
             throw new Error("API SQL indisponivel.");
         }

@@ -12,5 +12,5 @@ if not exist "%PS1%" (
   exit /b 1
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS1%" >> "%LOGFILE%" 2>&1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS1%"
 exit /b %errorlevel%

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import hmac
 import hashlib
 import json
 import re
 import os
+import secrets
 import time
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -12,11 +14,8 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.error import URLError
 from urllib.parse import parse_qs, unquote, urlparse
-from urllib.request import urlopen
 
-import jwt
 import psycopg
 from psycopg.rows import dict_row
 
@@ -33,11 +32,10 @@ DATABASE_URL = _env("DATABASE_URL", DEFAULT_DATABASE_URL)
 API_HOST = _env("DARK_JUTSU_API_HOST", "127.0.0.1")
 API_PORT = int(_env("DARK_JUTSU_API_PORT", "8765"))
 API_TOKEN = _env("DARK_JUTSU_API_TOKEN")
-FIREBASE_PROJECT_ID = _env("FIREBASE_PROJECT_ID", "chat-fiasul")
+AUTH_SECRET = _env("DARK_JUTSU_AUTH_SECRET") or API_TOKEN or hashlib.sha256(DATABASE_URL.encode("utf-8")).hexdigest()
+AUTH_TOKEN_TTL_SECONDS = int(_env("DARK_JUTSU_AUTH_TOKEN_TTL_SECONDS", str(12 * 60 * 60)))
 REQUIRE_AUTH = _env("DARK_JUTSU_REQUIRE_AUTH", "1").lower() not in {"0", "false", "no", "nao"}
 ALLOWED_ORIGINS = [origin.strip().rstrip("/") for origin in _env("DARK_JUTSU_ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
-FIREBASE_CERTS_URL = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
-_FIREBASE_CERTS: dict[str, Any] = {"expires_at": 0.0, "certs": {}}
 
 
 def _json_default(value: Any) -> Any:
@@ -163,6 +161,81 @@ def _verify_chat_password(room_id: str, password: Any, stored_hash: Any) -> bool
     return expected == _chat_password_hash(room_id, password)
 
 
+def _password_hash(password: Any) -> str:
+    text = _clean_text(password)
+    if not text or len(text) < 4:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Senha muito curta.")
+    salt = secrets.token_urlsafe(18)
+    rounds = 260_000
+    digest = hashlib.pbkdf2_hmac("sha256", text.encode("utf-8"), salt.encode("utf-8"), rounds).hex()
+    return f"pbkdf2_sha256${rounds}${salt}${digest}"
+
+
+def _verify_password(password: Any, stored_hash: Any) -> bool:
+    encoded = _clean_text(stored_hash)
+    if not encoded:
+        return False
+    try:
+        algo, rounds_raw, salt, digest = encoded.split("$", 3)
+        if algo != "pbkdf2_sha256":
+            return False
+        rounds = int(rounds_raw)
+        actual = hashlib.pbkdf2_hmac("sha256", str(password or "").encode("utf-8"), salt.encode("utf-8"), rounds).hex()
+        return hmac.compare_digest(actual, digest)
+    except Exception:
+        return False
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _b64url_decode(data: str) -> bytes:
+    return base64.urlsafe_b64decode((data + "=" * (-len(data) % 4)).encode("ascii"))
+
+
+def _sign_auth_payload(payload: dict[str, Any]) -> str:
+    body = _b64url(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+    signature = hmac.new(AUTH_SECRET.encode("utf-8"), body.encode("ascii"), hashlib.sha256).digest()
+    return f"dj1.{body}.{_b64url(signature)}"
+
+
+def _verify_auth_token(token: str) -> dict[str, Any]:
+    parts = str(token or "").split(".")
+    if len(parts) != 3 or parts[0] != "dj1":
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Token SQL invalido.")
+    expected = _b64url(hmac.new(AUTH_SECRET.encode("utf-8"), parts[1].encode("ascii"), hashlib.sha256).digest())
+    if not hmac.compare_digest(expected, parts[2]):
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Token SQL invalido.")
+    try:
+        payload = json.loads(_b64url_decode(parts[1]).decode("utf-8"))
+    except Exception as exc:
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Token SQL invalido.") from exc
+    exp = int(payload.get("exp") or 0)
+    if exp <= int(time.time()):
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Sessao expirada.")
+    return payload if isinstance(payload, dict) else {}
+
+
+def _public_user(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "uid": row.get("id"),
+        "id": row.get("id"),
+        "email": f"{row.get('nickname') or row.get('id')}@sistema.local",
+        "nickname": row.get("nickname") or "",
+        "cracha": row.get("badge") or "",
+        "badge": row.get("badge") or "",
+        "setor": row.get("sector") or "",
+        "sector": row.get("sector") or "",
+        "nivel": row.get("role") or "op",
+        "role": row.get("role") or "op",
+        "ativo": bool(row.get("active")),
+        "active": bool(row.get("active")),
+        "senha": row.get("password_status") or "",
+        "senhaReset": bool(row.get("password_reset_required")) or row.get("password_status") == "reset_required",
+    }
+
+
 def _connect():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
@@ -188,55 +261,6 @@ class AuthContext:
         self.role = role
         self.service = service
         self.claims = claims or {}
-
-
-def _firebase_certs() -> dict[str, str]:
-    now = time.time()
-    if _FIREBASE_CERTS["certs"] and _FIREBASE_CERTS["expires_at"] > now:
-        return _FIREBASE_CERTS["certs"]
-    try:
-        with urlopen(FIREBASE_CERTS_URL, timeout=10) as response:
-            raw = response.read()
-            cache_control = response.headers.get("Cache-Control", "")
-    except URLError as exc:
-        raise ApiError(HTTPStatus.UNAUTHORIZED, "Nao foi possivel carregar certificados Firebase.") from exc
-    certs = json.loads(raw.decode("utf-8"))
-    max_age = 3600
-    match = re.search(r"max-age=(\d+)", cache_control)
-    if match:
-        max_age = int(match.group(1))
-    _FIREBASE_CERTS["certs"] = certs
-    _FIREBASE_CERTS["expires_at"] = now + max(60, max_age - 30)
-    return certs
-
-
-def _verify_firebase_id_token(token: str) -> dict[str, Any]:
-    try:
-        header = jwt.get_unverified_header(token)
-    except jwt.PyJWTError as exc:
-        raise ApiError(HTTPStatus.UNAUTHORIZED, "Token Firebase invalido.") from exc
-    kid = header.get("kid")
-    cert = _firebase_certs().get(kid)
-    if not cert:
-        _FIREBASE_CERTS["expires_at"] = 0
-        cert = _firebase_certs().get(kid)
-    if not cert:
-        raise ApiError(HTTPStatus.UNAUTHORIZED, "Certificado do token Firebase nao encontrado.")
-    issuer = f"https://securetoken.google.com/{FIREBASE_PROJECT_ID}"
-    try:
-        claims = jwt.decode(
-            token,
-            cert,
-            algorithms=["RS256"],
-            audience=FIREBASE_PROJECT_ID,
-            issuer=issuer,
-            options={"require": ["exp", "iat", "aud", "iss", "sub"]},
-        )
-    except jwt.PyJWTError as exc:
-        raise ApiError(HTTPStatus.UNAUTHORIZED, "Token Firebase expirado ou invalido.") from exc
-    if not _clean_text(claims.get("sub")):
-        raise ApiError(HTTPStatus.UNAUTHORIZED, "Token Firebase sem usuario.")
-    return claims
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -309,6 +333,8 @@ class Handler(BaseHTTPRequestHandler):
         parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
         if self.command == "POST" and parts == ["api", "signup-requests"]:
             return AuthContext(authenticated=True, role="anon")
+        if self.command == "POST" and parts[:2] == ["api", "auth"]:
+            return AuthContext(authenticated=True, role="anon")
         if self.command == "GET" and len(parts) == 4 and parts[:2] == ["api", "nicknames"] and parts[3] == "status":
             return AuthContext(authenticated=True, role="anon")
         bearer = self.headers.get("Authorization", "")
@@ -318,26 +344,25 @@ class Handler(BaseHTTPRequestHandler):
         if bearer.startswith("Bearer "):
             raw_token = bearer.removeprefix("Bearer ").strip()
             if raw_token:
-                claims = _verify_firebase_id_token(raw_token)
-                return self._auth_context_from_firebase_claims(claims)
+                return self._auth_context_from_sql_token(raw_token)
         if not REQUIRE_AUTH:
             return AuthContext(authenticated=True, role="service", service=True)
-        raise ApiError(HTTPStatus.UNAUTHORIZED, "Autenticacao Firebase obrigatoria.")
+        raise ApiError(HTTPStatus.UNAUTHORIZED, "Autenticacao obrigatoria.")
 
-    def _auth_context_from_firebase_claims(self, claims: dict[str, Any]) -> AuthContext:
-        uid = _clean_text(claims.get("sub") or claims.get("user_id"))
+    def _auth_context_from_sql_token(self, raw_token: str) -> AuthContext:
+        claims = _verify_auth_token(raw_token)
+        uid = _clean_text(claims.get("sub"))
         if not uid:
-            raise ApiError(HTTPStatus.UNAUTHORIZED, "Token Firebase sem uid.")
+            raise ApiError(HTTPStatus.UNAUTHORIZED, "Token SQL sem usuario.")
         rows = self._query_as_service(
             """
-            select u.id, u.firebase_uid, u.role, u.active, b.user_id as banned_user_id
+            select u.id, u.role, u.active, u.token_version, b.user_id as banned_user_id
             from users u
             left join banned_users b on b.user_id = u.id
-            where u.id = %s or u.firebase_uid = %s
-            order by u.active desc
+            where u.id = %s
             limit 1
             """,
-            (uid, uid),
+            (uid,),
         )
         if not rows:
             raise ApiError(HTTPStatus.FORBIDDEN, "Usuario autenticado nao existe no SQL.")
@@ -346,8 +371,10 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.FORBIDDEN, "Usuario inativo.")
         if user.get("banned_user_id"):
             raise ApiError(HTTPStatus.FORBIDDEN, "Usuario banido.")
+        if int(user.get("token_version") or 0) != int(claims.get("ver") or 0):
+            raise ApiError(HTTPStatus.UNAUTHORIZED, "Sessao revogada.")
         role = _clean_text(user.get("role")) or "op"
-        return AuthContext(authenticated=True, user_id=user["id"], role=role, claims=claims)
+        return AuthContext(authenticated=True, user_id=uid, role=role, claims=claims)
 
     def _require_auth(self) -> AuthContext:
         auth = getattr(self, "auth_context", AuthContext())
@@ -376,6 +403,8 @@ class Handler(BaseHTTPRequestHandler):
         if parts[:1] != ["api"]:
             raise ApiError(HTTPStatus.NOT_FOUND, "Endpoint nao encontrado.")
         if parts == ["api", "me"]:
+            return self._me()
+        if parts == ["api", "auth", "me"]:
             return self._me()
         if parts == ["api", "ops", "status"]:
             self._require_staff()
@@ -436,6 +465,14 @@ class Handler(BaseHTTPRequestHandler):
         raise ApiError(HTTPStatus.NOT_FOUND, "Endpoint nao encontrado.")
 
     def _write_route(self, method: str, parts: list[str], payload: dict[str, Any]) -> Any:
+        if method == "POST" and parts == ["api", "auth", "login"]:
+            return self._auth_login(payload)
+        if method == "POST" and parts == ["api", "auth", "change-password"]:
+            self._require_auth()
+            return self._auth_change_password(payload)
+        if method == "POST" and parts == ["api", "auth", "logout"]:
+            self._require_auth()
+            return {"ok": True}
         if method == "PUT" and len(parts) == 4 and parts[:3] == ["api", "dashboard", "panels"]:
             self._require_staff()
             return self._put_dashboard_panel(parts[3], payload)
@@ -612,7 +649,6 @@ class Handler(BaseHTTPRequestHandler):
                 "require_auth": REQUIRE_AUTH,
                 "allowed_origins": ALLOWED_ORIGINS,
                 "service_token_configured": bool(API_TOKEN),
-                "firebase_project_id": FIREBASE_PROJECT_ID,
             },
             "counts": counts,
             "latest_inventory_snapshot": snapshot_rows[0] if snapshot_rows else None,
@@ -626,7 +662,7 @@ class Handler(BaseHTTPRequestHandler):
             rows = self._query(
                 """
                 select id, firebase_uid, nickname, nickname_key, badge, sector, role,
-                       active, password_status, created_at, updated_at
+                       active, password_status, password_reset_required, created_at, updated_at
                 from users
                 where id = %s
                 limit 1
@@ -640,10 +676,101 @@ class Handler(BaseHTTPRequestHandler):
             "service": auth.service,
             "user_id": auth.user_id,
             "role": auth.role,
-            "firebase_uid": auth.claims.get("sub") or auth.claims.get("user_id"),
+            "firebase_uid": None,
             "email": auth.claims.get("email"),
             "user": user,
         }
+
+    def _make_auth_response(self, row: dict[str, Any]) -> dict[str, Any]:
+        now = int(time.time())
+        user = _public_user(row)
+        payload = {
+            "sub": row["id"],
+            "role": row.get("role") or "op",
+            "nick": row.get("nickname") or row["id"],
+            "ver": int(row.get("token_version") or 0),
+            "iat": now,
+            "exp": now + AUTH_TOKEN_TTL_SECONDS,
+        }
+        return {
+            "ok": True,
+            "token": _sign_auth_payload(payload),
+            "expires_at": payload["exp"],
+            "user": user,
+        }
+
+    def _auth_login(self, payload: dict[str, Any]) -> dict[str, Any]:
+        login = (_clean_text(payload.get("login") or payload.get("nickname") or payload.get("email")) or "").lower()
+        password = payload.get("password", payload.get("senha"))
+        if "@" in login:
+            login = login.split("@", 1)[0]
+        if not login or not password:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Login e senha obrigatorios.")
+        rows = self._query_as_service(
+            """
+            select u.id, u.nickname, u.badge, u.sector, u.role, u.active,
+                   u.password_hash, u.password_status, u.password_reset_required,
+                   u.token_version, b.user_id as banned_user_id
+            from users u
+            left join banned_users b on b.user_id = u.id
+            where lower(u.id) = %s or u.nickname_key = lower(trim(%s))
+            order by u.active desc
+            limit 1
+            """,
+            (login, login),
+        )
+        if not rows or not _verify_password(password, rows[0].get("password_hash")):
+            status = self._nickname_status(login, {"badge": [""]})
+            if status.get("pending"):
+                raise ApiError(HTTPStatus.FORBIDDEN, "Cadastro pendente de aprovacao.")
+            raise ApiError(HTTPStatus.UNAUTHORIZED, "Login ou senha invalido.")
+        row = rows[0]
+        if not row.get("active"):
+            raise ApiError(HTTPStatus.FORBIDDEN, "Usuario inativo.")
+        if row.get("banned_user_id"):
+            raise ApiError(HTTPStatus.FORBIDDEN, "Usuario banido.")
+        return self._make_auth_response(row)
+
+    def _auth_change_password(self, payload: dict[str, Any]) -> dict[str, Any]:
+        auth = self._require_auth()
+        new_password = payload.get("new_password", payload.get("novaSenha", payload.get("password", payload.get("senha"))))
+        current_password = payload.get("current_password", payload.get("senhaAtual"))
+        rows = self._query_as_service(
+            """
+            select id, nickname, badge, sector, role, active, password_hash,
+                   password_status, password_reset_required, token_version
+            from users
+            where id = %s
+            limit 1
+            """,
+            (auth.user_id,),
+        )
+        if not rows:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Usuario nao encontrado.")
+        row = rows[0]
+        if not row.get("password_reset_required") and row.get("password_hash"):
+            if not _verify_password(current_password, row.get("password_hash")):
+                raise ApiError(HTTPStatus.UNAUTHORIZED, "Senha atual invalida.")
+        updated = self._execute_one(
+            """
+            update users
+            set password_hash = %s,
+                password_status = 'definida',
+                password_reset_required = false,
+                password_changed_at = now(),
+                token_version = token_version + 1,
+                raw_data = raw_data || %s::jsonb
+            where id = %s
+            returning id, nickname, badge, sector, role, active,
+                      password_status, password_reset_required, token_version
+            """,
+            (
+                _password_hash(new_password),
+                json.dumps({"senha": "definida", "senhaReset": False}, ensure_ascii=False),
+                auth.user_id,
+            ),
+        )
+        return self._make_auth_response(updated)
 
     def _inventory(self, query: dict[str, list[str]]) -> dict[str, Any]:
         limit = _limit(query, 100, 500)
@@ -1045,7 +1172,7 @@ class Handler(BaseHTTPRequestHandler):
         rows = self._query(
             """
             select id, firebase_uid, nickname, nickname_key, badge, sector, role,
-                   active, password_status, created_at, updated_at
+                   active, password_status, password_reset_required, created_at, updated_at
             from users
             order by nickname nulls last
             limit %s offset %s
@@ -1107,7 +1234,7 @@ class Handler(BaseHTTPRequestHandler):
             "nivel": row.get("role") or "op",
             "ativo": bool(row.get("active")),
             "senha": row.get("password_status") or "",
-            "senhaReset": row.get("password_status") == "reset_required",
+            "senhaReset": bool(row.get("password_reset_required")) or row.get("password_status") == "reset_required",
             "criadoEm": int(created_at.timestamp() * 1000) if isinstance(created_at, datetime) else 0,
         }
 
@@ -1115,7 +1242,7 @@ class Handler(BaseHTTPRequestHandler):
         rows = self._query(
             """
             select id, firebase_uid, nickname, nickname_key, badge, sector, role,
-                   active, password_status, created_at, updated_at
+                   active, password_status, password_reset_required, created_at, updated_at
             from users
             where id = %s or firebase_uid = %s
             limit 1
@@ -1203,6 +1330,8 @@ class Handler(BaseHTTPRequestHandler):
         password = _clean_text(payload.get("password") or payload.get("senha"))
         if not nickname or not badge or not sector:
             raise ApiError(HTTPStatus.BAD_REQUEST, "Nickname, cracha e setor sao obrigatorios.")
+        if not password:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Senha obrigatoria.")
         if not re.match(r"^[A-Za-z0-9_.-]{3,20}$", nickname):
             raise ApiError(HTTPStatus.BAD_REQUEST, "Nickname invalido.")
         status = self._nickname_status(nickname, {"badge": [badge]})
@@ -1225,12 +1354,13 @@ class Handler(BaseHTTPRequestHandler):
         row = self._query_as_service(
             """
             insert into signup_requests (
-              id, requested_uid, nickname, password_plain_legacy, badge, sector,
+              id, requested_uid, nickname, password_plain_legacy, password_hash, badge, sector,
               status, duplicated, created_at, raw_data
             )
-            values (%s, %s, %s, null, %s, %s, 'pendente', %s, %s, %s::jsonb)
+            values (%s, %s, %s, null, %s, %s, %s, 'pendente', %s, %s, %s::jsonb)
             on conflict (id) do update set
               nickname = excluded.nickname,
+              password_hash = excluded.password_hash,
               badge = excluded.badge,
               sector = excluded.sector,
               duplicated = excluded.duplicated,
@@ -1240,8 +1370,9 @@ class Handler(BaseHTTPRequestHandler):
             """,
             (
                 request_id,
-                _clean_text(payload.get("uid")),
+                _clean_text(payload.get("uid")) or request_id,
                 nickname,
+                _password_hash(password),
                 badge,
                 sector,
                 duplicated,
@@ -1263,17 +1394,19 @@ class Handler(BaseHTTPRequestHandler):
             set role = coalesce(%s, role),
                 active = coalesce(%s, active),
                 password_status = coalesce(%s, password_status),
+                password_reset_required = coalesce(%s, password_reset_required),
                 sector = coalesce(%s, sector),
                 badge = coalesce(%s, badge),
                 raw_data = %s::jsonb
             where id = %s
             returning id, firebase_uid, nickname, badge, sector, role,
-                      active, password_status, created_at, updated_at
+                      active, password_status, password_reset_required, created_at, updated_at
             """,
             (
                 _clean_text(payload.get("role") or payload.get("nivel")),
                 payload.get("active") if isinstance(payload.get("active"), bool) else payload.get("ativo") if isinstance(payload.get("ativo"), bool) else None,
                 _clean_text(payload.get("password_status") or payload.get("senha")),
+                payload.get("password_reset_required") if isinstance(payload.get("password_reset_required"), bool) else payload.get("senhaReset") if isinstance(payload.get("senhaReset"), bool) else None,
                 _clean_text(payload.get("sector") or payload.get("setor")),
                 _clean_text(payload.get("badge") or payload.get("cracha")),
                 json.dumps(raw_data, ensure_ascii=False),
@@ -1333,12 +1466,19 @@ class Handler(BaseHTTPRequestHandler):
         row = self._execute_one(
             """
             update users
-            set password_status = 'reset_required',
+            set password_hash = coalesce(%s, password_hash),
+                password_status = 'reset_required',
+                password_reset_required = true,
+                token_version = token_version + 1,
                 raw_data = raw_data || %s::jsonb
             where id = %s
-            returning id, nickname, role, active, password_status
+            returning id, nickname, role, active, password_status, password_reset_required
             """,
-            (json.dumps({"senha": "", "senhaReset": True, **payload}, ensure_ascii=False), user_id),
+            (
+                _password_hash(payload.get("password") or payload.get("senha")) if (payload.get("password") or payload.get("senha")) else None,
+                json.dumps({"senha": "", "senhaReset": True, **payload}, ensure_ascii=False),
+                user_id,
+            ),
         )
         if not row:
             raise ApiError(HTTPStatus.NOT_FOUND, "Usuario nao encontrado.")
@@ -1395,19 +1535,22 @@ class Handler(BaseHTTPRequestHandler):
             """
             insert into users (
               id, firebase_uid, nickname, badge, sector, role, active,
-              password_status, created_at, updated_at, raw_data
+              password_hash, password_status, password_reset_required, created_at, updated_at, raw_data
             )
-            values (%s, %s, %s, %s, %s, %s, true, %s, %s, %s, %s::jsonb)
+            values (%s, %s, %s, %s, %s, %s, true, %s, %s, %s, %s, %s, %s::jsonb)
             on conflict (id) do update set
               nickname = excluded.nickname,
               badge = excluded.badge,
               sector = excluded.sector,
               role = excluded.role,
               active = true,
+              password_hash = coalesce(excluded.password_hash, users.password_hash),
               password_status = excluded.password_status,
+              password_reset_required = excluded.password_reset_required,
               updated_at = excluded.updated_at,
               raw_data = excluded.raw_data
-            returning id, firebase_uid, nickname, badge, sector, role, active, password_status
+            returning id, firebase_uid, nickname, badge, sector, role, active,
+                      password_status, password_reset_required, token_version
             """,
             (
                 user_id,
@@ -1416,7 +1559,9 @@ class Handler(BaseHTTPRequestHandler):
                 req.get("badge"),
                 req.get("sector"),
                 role,
-                "definida",
+                req.get("password_hash"),
+                "definida" if req.get("password_hash") else "reset_required",
+                not bool(req.get("password_hash")),
                 now,
                 now,
                 json.dumps(raw_data, ensure_ascii=False),

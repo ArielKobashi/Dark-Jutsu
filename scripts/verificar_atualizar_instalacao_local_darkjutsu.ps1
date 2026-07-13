@@ -9,6 +9,8 @@ $StateFile = Join-Path $LocalDir "versao_instalada_guardiao_monitor.txt"
 $LockDir = Join-Path $LogDir "autoatualizacao_local.lock"
 $Installer = Join-Path $ShareScripts "instalar_atualizar_guardiao_monitor_darkjutsu.bat"
 $EventLogger = Join-Path $ShareScripts "registrar_evento_servidor_darkjutsu.bat"
+$ForceReinstallFlag = Join-Path $ShareRoot "forcar-reinstalacao-guardiao-monitor.txt"
+$ForceReinstallState = Join-Path $LocalDir "ultima_reinstalacao_forcada.txt"
 
 $TrackedFiles = @(
   "instalar_atualizar_guardiao_monitor_darkjutsu.bat",
@@ -29,9 +31,43 @@ $TrackedFiles = @(
 
 function Write-Log {
   param([string]$Message)
-  New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+  try {
+    New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+  } catch {}
+
   $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-  Add-Content -Path $LogFile -Encoding UTF8 -Value "$stamp | $Message"
+  $line = "$stamp | $Message"
+
+  for ($i = 1; $i -le 8; $i++) {
+    try {
+      $stream = [System.IO.File]::Open($LogFile, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
+      try {
+        $writer = New-Object System.IO.StreamWriter($stream, [System.Text.Encoding]::UTF8)
+        try {
+          $writer.WriteLine($line)
+          return
+        } finally {
+          $writer.Dispose()
+        }
+      } finally {
+        $stream.Dispose()
+      }
+    } catch {
+      Start-Sleep -Milliseconds (150 * $i)
+    }
+  }
+
+  try {
+    $fallback = Join-Path $env:TEMP "autoatualizacao_local_darkjutsu.log"
+    Add-Content -Path $fallback -Encoding UTF8 -Value $line -ErrorAction SilentlyContinue
+  } catch {}
+}
+
+function Append-LogLines {
+  param([object[]]$Lines)
+  foreach ($line in $Lines) {
+    Write-Log ("  " + [string]$line)
+  }
 }
 
 function Write-Event {
@@ -82,9 +118,54 @@ try {
     $localSignature = (Get-Content -Path $StateFile -TotalCount 1 -ErrorAction SilentlyContinue).Trim()
   }
 
-  if ([string]::IsNullOrWhiteSpace($localSignature)) {
+  if (Test-Path $ForceReinstallFlag) {
+    $flagText = Get-Content -Path $ForceReinstallFlag -Raw -ErrorAction SilentlyContinue
+    $lastFlagText = ""
+    if (Test-Path $ForceReinstallState) {
+      $lastFlagText = Get-Content -Path $ForceReinstallState -Raw -ErrorAction SilentlyContinue
+    }
+
+    if ($flagText -ne $lastFlagText) {
+    Write-Log "Reinstalacao forcada solicitada pelo fileserver. Conteudo=$flagText"
+    Write-Event "INFO" "Reinstalacao forcada do guardiao/monitor solicitada pelo fileserver."
+
+    $cmd = "pushd `"$ShareScripts`" && call `"$Installer`" && popd"
+    $output = & cmd.exe /c $cmd 2>&1
+    $exitCode = $LASTEXITCODE
+    Append-LogLines $output
+
+    if ($exitCode -ne 0) {
+      Write-Log "FALHOU: reinstalacao forcada retornou codigo $exitCode."
+      Write-Event "ERRO" "Reinstalacao forcada local falhou. Codigo=$exitCode. Veja C:\DarkJutsu\logs\autoatualizacao_local.log."
+      exit $exitCode
+    }
+
     Set-Content -Path $StateFile -Encoding ASCII -Value $remoteSignature
-    Write-Log "Versao-base registrada nesta maquina: $remoteSignature"
+    Set-Content -Path $ForceReinstallState -Encoding UTF8 -Value $flagText
+    Write-Log "OK: reinstalacao forcada aplicada. Versao=$remoteSignature"
+    Write-Event "OK" "Reinstalacao forcada local aplicada com sucesso. Versao=$remoteSignature."
+    exit 0
+    }
+  }
+
+  if ([string]::IsNullOrWhiteSpace($localSignature)) {
+    Write-Log "Primeira verificacao nesta maquina. Aplicando instalador antes de registrar versao. Remota=$remoteSignature"
+    Write-Event "INFO" "Primeira verificacao local; aplicando instalador automaticamente para alinhar guardiao/monitor."
+
+    $cmd = "pushd `"$ShareScripts`" && call `"$Installer`" && popd"
+    $output = & cmd.exe /c $cmd 2>&1
+    $exitCode = $LASTEXITCODE
+    Append-LogLines $output
+
+    if ($exitCode -ne 0) {
+      Write-Log "FALHOU: instalador de primeira verificacao retornou codigo $exitCode."
+      Write-Event "ERRO" "Autoatualizacao inicial falhou. Instalador retornou codigo $exitCode. Veja C:\DarkJutsu\logs\autoatualizacao_local.log."
+      exit $exitCode
+    }
+
+    Set-Content -Path $StateFile -Encoding ASCII -Value $remoteSignature
+    Write-Log "OK: primeira instalacao/atualizacao local aplicada. Versao=$remoteSignature"
+    Write-Event "OK" "Primeira instalacao/atualizacao local aplicada com sucesso. Versao=$remoteSignature."
     exit 0
   }
 
@@ -98,7 +179,7 @@ try {
   $cmd = "pushd `"$ShareScripts`" && call `"$Installer`" && popd"
   $output = & cmd.exe /c $cmd 2>&1
   $exitCode = $LASTEXITCODE
-  Add-Content -Path $LogFile -Encoding UTF8 -Value ($output | ForEach-Object { "  $_" })
+  Append-LogLines $output
 
   if ($exitCode -ne 0) {
     Write-Log "FALHOU: instalador retornou codigo $exitCode."

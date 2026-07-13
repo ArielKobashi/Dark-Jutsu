@@ -80,49 +80,20 @@ def _http_json(url: str, method: str = "GET", payload: Optional[dict] = None, ti
         raise RuntimeError(f"Falha de rede: {exc}") from exc
 
 
-def _extract_firebase_config() -> tuple[str, str]:
-    for config_path in (SCRIPT_DIR / "firebase_config.json", BUNDLED_SCRIPT_DIR / "firebase_config.json"):
-        if not config_path.exists():
-            continue
-        cfg = json.loads(config_path.read_text(encoding="utf-8-sig"))
-        api_key = str(cfg.get("apiKey") or "").strip()
-        db_url = str(cfg.get("databaseURL") or "").strip().rstrip("/")
-        if api_key and db_url:
-            return api_key, db_url
-    index_candidates = [PROJECT_ROOT / "index.html", BUNDLE_ROOT / "index.html"] if getattr(sys, "frozen", False) else [PROJECT_ROOT / "index.html"]
-    html = ""
-    for candidate in index_candidates:
-        if candidate.exists():
-            html = candidate.read_text(encoding="utf-8", errors="replace")
-            break
-    if not html:
-        raise RuntimeError("Configuração Firebase não encontrada no Automus.")
-    api_match = re.search(r'apiKey:\s*"([^"]+)"', html)
-    db_match = re.search(r'databaseURL:\s*"([^"]+)"', html)
-    if not api_match or not db_match:
-        raise RuntimeError("Firebase não encontrado no index.html.")
-    return api_match.group(1), db_match.group(1).rstrip("/")
-
-
 def _auth_admin_dark_jutsu(login: str, senha: str) -> dict:
-    nick = (login or "").strip().lower()
-    if not nick or not senha:
-        raise RuntimeError("Informe login e senha.")
-    email = nick if "@" in nick else f"{nick}@sistema.com"
-    api_key, db_url = _extract_firebase_config()
-    auth = _http_json(
-        f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}",
-        method="POST",
-        payload={"email": email, "password": senha, "returnSecureToken": True},
-    )
-    if not isinstance(auth, dict) or not auth.get("idToken") or not auth.get("localId"):
-        raise RuntimeError("Login ou senha inválido.")
-    uid = str(auth["localId"])
-    token = str(auth["idToken"])
-    usuario = _http_json(f"{db_url}/usuarios/{uid}.json?auth={token}", method="GET")
-    if not isinstance(usuario, dict) or usuario.get("nivel") != "admin":
-        raise RuntimeError("Acesso bloqueado: este login não tem permissão ADM.")
-    return {"uid": uid, "email": email, "nickname": usuario.get("nickname") or nick, "idToken": token}
+    token = os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("DARK_JUTSU_API_TOKEN obrigatorio para o controlador SQL-only.")
+    nick = (login or "").strip() or "automus-sql-service"
+    return {
+        "uid": "automus-sql-service",
+        "email": nick if "@" in nick else f"{nick}@sql.local",
+        "nickname": nick,
+        "nivel": "admin",
+        "idToken": token,
+        "refreshToken": "",
+        "serviceToken": True,
+    }
 
 
 def _machine_fingerprint() -> str:

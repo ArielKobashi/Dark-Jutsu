@@ -144,6 +144,39 @@ def apply_to_sql(raw: dict[str, Any], database_url: str) -> dict[str, int]:
               treatment_document, updated_at, updated_by, raw_data
             )
             values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb)
+            on conflict (id) do update set
+              source_path = excluded.source_path,
+              created_at = excluded.created_at,
+              date_label = excluded.date_label,
+              time_label = excluded.time_label,
+              operator_user_id = excluded.operator_user_id,
+              operator_name = excluded.operator_name,
+              operator_badge = excluded.operator_badge,
+              operator_sector = excluded.operator_sector,
+              involved_name = excluded.involved_name,
+              involved_badge = excluded.involved_badge,
+              involved_sector = excluded.involved_sector,
+              type = excluded.type,
+              severity = excluded.severity,
+              item_code = excluded.item_code,
+              item_description = excluded.item_description,
+              quantity = excluded.quantity,
+              description = excluded.description,
+              status = excluded.status,
+              responsible_user_id = excluded.responsible_user_id,
+              responsible_name = excluded.responsible_name,
+              responsible_badge = excluded.responsible_badge,
+              responsible_sector = excluded.responsible_sector,
+              responsible_assigned_at = excluded.responsible_assigned_at,
+              treatment_text = excluded.treatment_text,
+              treatment_signature = excluded.treatment_signature,
+              treatment_at = excluded.treatment_at,
+              treatment_by_user_id = excluded.treatment_by_user_id,
+              treatment_by_name = excluded.treatment_by_name,
+              treatment_document = excluded.treatment_document,
+              updated_at = excluded.updated_at,
+              updated_by = excluded.updated_by,
+              raw_data = excluded.raw_data
         """
         history_sql = """
             insert into occurrence_history (
@@ -193,6 +226,7 @@ def apply_to_sql(raw: dict[str, Any], database_url: str) -> dict[str, int]:
                     json_param(driver_name, driver, item),
                 ),
             )
+            cur.execute("delete from occurrence_history where occurrence_id = %s", (oid,))
             occurrences_loaded += 1
             historico = item.get("historico") if isinstance(item.get("historico"), dict) else {}
             for hkey, event in historico.items():

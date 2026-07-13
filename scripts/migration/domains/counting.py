@@ -190,6 +190,19 @@ def apply_to_sql(raw: dict[str, Any], database_url: str) -> dict[str, int]:
               total_empty_checks, is_draft, source, raw_data
             )
             values (%s, %s, null, %s, %s, %s, %s, %s, %s, %s, %s, false, %s, %s::jsonb)
+            on conflict (legacy_path) do update set
+              session_date = excluded.session_date,
+              user_name = excluded.user_name,
+              uid = excluded.uid,
+              machine = excluded.machine,
+              started_at = excluded.started_at,
+              created_at = excluded.created_at,
+              total_items = excluded.total_items,
+              total_quantity_items = excluded.total_quantity_items,
+              total_empty_checks = excluded.total_empty_checks,
+              is_draft = excluded.is_draft,
+              source = excluded.source,
+              raw_data = excluded.raw_data
             returning id
         """
         item_sql = """
@@ -236,6 +249,8 @@ def apply_to_sql(raw: dict[str, Any], database_url: str) -> dict[str, int]:
                 ),
             )
             session_id = cur.fetchone()[0]
+            cur.execute("delete from counting_items where session_id = %s", (session_id,))
+            cur.execute("delete from counting_empty_checks where session_id = %s", (session_id,))
             sessions_loaded += 1
             for item_key, item in itens.items():
                 if not isinstance(item, dict):
@@ -362,6 +377,16 @@ def apply_to_sql(raw: dict[str, Any], database_url: str) -> dict[str, int]:
                   total_codes_submitted, by_size, had_missing_codes, source, raw_data
                 )
                 values (%s, null, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb)
+                on conflict (legacy_path) do update set
+                  user_name = excluded.user_name,
+                  job_date = excluded.job_date,
+                  created_at = excluded.created_at,
+                  total_labels = excluded.total_labels,
+                  total_codes_submitted = excluded.total_codes_submitted,
+                  by_size = excluded.by_size,
+                  had_missing_codes = excluded.had_missing_codes,
+                  source = excluded.source,
+                  raw_data = excluded.raw_data
                 """,
                 (
                     f"{source}/{date_key}/{user_key}/{job_key}",

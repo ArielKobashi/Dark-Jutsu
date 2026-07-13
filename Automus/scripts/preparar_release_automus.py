@@ -1,5 +1,4 @@
 import argparse
-import getpass
 import json
 import os
 import queue
@@ -18,7 +17,6 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
 VERSION_PATH = SCRIPTS / "version.json"
 RELEASES = ROOT / "releases"
-FIREBASE_CONFIG = SCRIPTS / "firebase_config.json"
 
 
 def python_console_executable() -> str:
@@ -60,40 +58,6 @@ def http_json(url: str, method: str = "GET", payload: dict | None = None, timeou
         raise RuntimeError(f"HTTP {exc.code}: {body}") from exc
     except URLError as exc:
         raise RuntimeError(f"Falha de rede: {exc}") from exc
-
-
-def load_firebase_config() -> tuple[str, str]:
-    if not FIREBASE_CONFIG.exists():
-        raise RuntimeError("Crie Automus/scripts/firebase_config.json antes de publicar no Firebase.")
-    cfg = json.loads(FIREBASE_CONFIG.read_text(encoding="utf-8-sig"))
-    api_key = str(cfg.get("apiKey") or "").strip()
-    db_url = str(cfg.get("databaseURL") or "").strip().rstrip("/")
-    if not api_key or not db_url:
-        raise RuntimeError("firebase_config.json precisa ter apiKey e databaseURL.")
-    return api_key, db_url
-
-
-def login_firebase_admin(api_key: str, login: str, senha: str) -> str:
-    email = login if "@" in login else f"{login}@sistema.com"
-    auth = http_json(
-        f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}",
-        method="POST",
-        payload={"email": email, "password": senha, "returnSecureToken": True},
-    )
-    token = str((auth or {}).get("idToken") or "")
-    if not token:
-        raise RuntimeError("Login Firebase invalido.")
-    return token
-
-
-def publish_manifest_to_firebase(path: str, manifest: dict, login: str, senha: str, log=print):
-    api_key, db_url = load_firebase_config()
-    token = login_firebase_admin(api_key, login, senha)
-    clean_path = path.strip().strip("/")
-    if not clean_path:
-        raise RuntimeError("Caminho Firebase vazio.")
-    http_json(f"{db_url}/{clean_path}.json?auth={token}", method="PUT", payload=manifest)
-    log(f"Manifesto publicado no Firebase: {clean_path}")
 
 
 def publish_manifest_to_sql(channel: str, manifest: dict, log=print):
@@ -192,10 +156,7 @@ def prepare_release(
     version: str,
     notes: list[str],
     publish_dir: str = "",
-    publish_firebase: bool = True,
     publish_sql: bool = True,
-    firebase_login: str = "",
-    firebase_password: str = "",
     open_folder: bool = True,
     log=print,
 ):
@@ -228,14 +189,6 @@ def prepare_release(
         except Exception as exc:
             log(f"Nao foi possivel publicar manifesto no SQL: {exc}")
 
-    firebase_path = str(data.get("updateManifestFirebasePath") or "").strip().strip("/")
-    if publish_firebase:
-        if not firebase_path:
-            raise RuntimeError("Configure updateManifestFirebasePath no version.json.")
-        if not firebase_login or not firebase_password:
-            raise RuntimeError("Informe login e senha ADM para publicar no Firebase.")
-        publish_manifest_to_firebase(firebase_path, manifest, firebase_login, firebase_password, log=log)
-
     if open_folder:
         open_releases_folder()
 
@@ -250,7 +203,6 @@ def run_gui():
     data = load_version()
     current_version = str(data.get("version") or "1.0.0")
     publish_dir = str(data.get("publishDir") or "")
-    firebase_path = str(data.get("updateManifestFirebasePath") or "")
     current_notes = "\n".join(str(note) for note in data.get("notes", []) if str(note).strip())
     messages: "queue.Queue[tuple[str, str]]" = queue.Queue()
 
@@ -279,9 +231,6 @@ def run_gui():
     form.columnconfigure(0, weight=1)
 
     version_var = tk.StringVar(value=bump_patch(current_version))
-    firebase_var = tk.BooleanVar(value=bool(firebase_path))
-    login_var = tk.StringVar()
-    password_var = tk.StringVar()
 
     make_label(form, "Nova versao", bg=panel).grid(row=0, column=0, sticky="w", padx=10, pady=(8, 3))
     version_entry = tk.Entry(form, textvariable=version_var, bg="#020617", fg=text, insertbackground=text, relief="flat", font=("Segoe UI", 11))
@@ -293,26 +242,7 @@ def run_gui():
     notes_box.insert("1.0", current_notes or "Atualizacao do Automus")
 
     make_label(form, f"Pasta: {publish_dir or 'nao configurada'}", bg=panel, fg=muted, font=("Segoe UI", 8)).grid(row=4, column=0, sticky="w", padx=10, pady=(0, 5))
-    tk.Checkbutton(
-        form,
-        text="Enviar para Firebase",
-        variable=firebase_var,
-        bg=panel,
-        fg=text,
-        selectcolor="#020617",
-        activebackground=panel,
-        activeforeground=text,
-        font=("Segoe UI", 9, "bold"),
-    ).grid(row=5, column=0, sticky="w", padx=8, pady=(0, 5))
-
-    creds = tk.Frame(form, bg=panel)
-    creds.grid(row=6, column=0, sticky="ew", padx=10, pady=(0, 6))
-    creds.columnconfigure(0, weight=1)
-    creds.columnconfigure(1, weight=1)
-    make_label(creds, "Login ADM", bg=panel, font=("Segoe UI", 8, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 3))
-    make_label(creds, "Senha ADM", bg=panel, font=("Segoe UI", 8, "bold")).grid(row=0, column=1, sticky="w", padx=(8, 0), pady=(0, 3))
-    tk.Entry(creds, textvariable=login_var, bg="#020617", fg=text, insertbackground=text, relief="flat").grid(row=1, column=0, sticky="ew", ipady=5)
-    tk.Entry(creds, textvariable=password_var, show="*", bg="#020617", fg=text, insertbackground=text, relief="flat").grid(row=1, column=1, sticky="ew", padx=(8, 0), ipady=5)
+    make_label(form, "Publicacao: SQL/API", bg=panel, fg=muted, font=("Segoe UI", 8)).grid(row=5, column=0, sticky="w", padx=10, pady=(0, 8))
 
     status_var = tk.StringVar(value="Pronto para gerar e publicar.")
     make_label(root, "", textvariable=status_var, fg=muted, font=("Segoe UI", 8)).pack(fill="x", padx=12)
@@ -333,9 +263,6 @@ def run_gui():
         if running["value"]:
             return
         notes = [line.strip() for line in notes_box.get("1.0", "end").splitlines() if line.strip()]
-        if firebase_var.get() and (not login_var.get().strip() or not password_var.get()):
-            messagebox.showwarning("Atualizar Automus", "Informe login e senha ADM para publicar no Firebase.")
-            return
         running["value"] = True
         start_btn.configure(state="disabled")
         progress.start(12)
@@ -347,9 +274,6 @@ def run_gui():
                     version=version_var.get(),
                     notes=notes,
                     publish_dir=publish_dir,
-                    publish_firebase=firebase_var.get(),
-                    firebase_login=login_var.get().strip(),
-                    firebase_password=password_var.get(),
                     open_folder=True,
                     log=append_log,
                 )
@@ -396,17 +320,10 @@ def cli_main(args):
     data = load_version()
     notes = args.notes or [f"Atualizacao Automus {args.version}"]
     publish_dir = args.publish_dir or str(data.get("publishDir") or "")
-    firebase_login = args.firebase_login or ""
-    firebase_password = args.firebase_password or ""
-    if args.firebase and not firebase_password:
-        firebase_password = getpass.getpass("Senha ADM Firebase: ")
     prepare_release(
         version=args.version,
         notes=notes,
         publish_dir=publish_dir,
-        publish_firebase=args.firebase,
-        firebase_login=firebase_login,
-        firebase_password=firebase_password,
         open_folder=not args.no_open,
     )
 
@@ -416,9 +333,6 @@ def main():
     parser.add_argument("--version", help="Nova versao, exemplo: 1.0.1")
     parser.add_argument("--note", action="append", dest="notes", help="Nota da versao. Pode repetir.")
     parser.add_argument("--publish-dir", help="Pasta local para copiar latest.json e o zip.")
-    parser.add_argument("--firebase", action="store_true", help="Publicar latest.json no Firebase.")
-    parser.add_argument("--firebase-login", help="Login ADM Firebase.")
-    parser.add_argument("--firebase-password", help="Senha ADM Firebase.")
     parser.add_argument("--no-open", action="store_true", help="Nao abrir a pasta releases ao final.")
     args = parser.parse_args()
     if args.version:

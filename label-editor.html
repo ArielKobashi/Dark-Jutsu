@@ -522,7 +522,7 @@
         const cmScale = 118;
         const storageLayoutsKey = "labelEditorLayoutsBySize";
         const storagePresetsKey = "labelEditorPresetsBySize";
-        const firebaseConfigPath = "estoqueGlobal/configuracoesEtiquetas";
+        const legacyConfigPath = "estoqueGlobal/configuracoesEtiquetas";
         const presets = {
             "5": { w:5.0, h:1.48, border:5 },
             "7": { w:7.01, h:2.09, border:5 },
@@ -685,7 +685,7 @@
 
         window.getEtiquetaEditorConfigCompartilhada = montarConfigCompartilhada;
         window.aplicarEtiquetaEditorConfigCompartilhada = aplicarConfigCompartilhada;
-        window.etiquetaEditorFirebaseConfigPath = firebaseConfigPath;
+        window.etiquetaEditorLegacyConfigPath = legacyConfigPath;
 
         function renderStageSize(){
             const p = currentPreset();
@@ -961,22 +961,32 @@
         render();
     </script>
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyChPIkc1NxpxtpvOU92NxyXsxCFpe3mzgE",
-            authDomain: "chat-fiasul.firebaseapp.com",
-            databaseURL: "https://chat-fiasul-default-rtdb.firebaseio.com",
-            projectId: "chat-fiasul",
-            storageBucket: "chat-fiasul.firebasestorage.app",
-            messagingSenderId: "263776720116",
-            appId: "1:263776720116:web:713fd43f4cb196b0527aa1",
-            measurementId: "G-KC5F0QT711"
+        const SQL_AUTH_TOKEN_KEY = "darkJutsuSqlAuthToken";
+        const SQL_AUTH_USER_KEY = "darkJutsuSqlAuthUser";
+        function criarUsuarioSqlAuth(user, token){
+            const uid = user?.uid || user?.id || "";
+            const nickname = user?.nickname || uid;
+            return {
+                uid,
+                email: user?.email || `${nickname}@sistema.local`,
+                displayName: nickname,
+                sqlUser: user || {},
+                async getIdToken(){ return token || localStorage.getItem(SQL_AUTH_TOKEN_KEY) || ""; }
+            };
+        }
+        const auth = {
+            currentUser: null,
+            _listeners: [],
+            _setUser(user){
+                this.currentUser = user;
+                this._listeners.slice().forEach(callback => callback(user));
+            }
         };
-
-        const app = initializeApp(firebaseConfig, "labelEditorApp");
-        const auth = getAuth(app);
+        function onAuthStateChanged(authRef, callback){
+            authRef._listeners.push(callback);
+            Promise.resolve().then(() => callback(authRef.currentUser));
+            return () => { authRef._listeners = authRef._listeners.filter(item => item !== callback); };
+        }
         const DEFAULT_SQL_API_BASE = (
             location.protocol.startsWith("http") && location.hostname
                 ? `${location.protocol}//${location.hostname}:8765`
@@ -997,6 +1007,8 @@
         let usuarioCompartilhado = "";
 
         async function resolveSqlAuthHeader(){
+            const sessionToken = localStorage.getItem(SQL_AUTH_TOKEN_KEY) || "";
+            if(sessionToken) return `Bearer ${sessionToken}`;
             if(SQL_API_TOKEN) return `Bearer ${SQL_API_TOKEN}`;
             const user = auth.currentUser;
             if(!user || typeof user.getIdToken !== "function") return "";
@@ -1024,10 +1036,29 @@
             throw lastError || new Error("API SQL indisponivel.");
         }
 
-        try{
-            await setPersistence(auth, browserSessionPersistence);
-        }catch(e){
-            console.warn("Persistencia Firebase indisponivel no editor de etiquetas:", e);
+        async function restaurarSessaoSqlSalva(){
+            const token = localStorage.getItem(SQL_AUTH_TOKEN_KEY) || "";
+            if(!token) return;
+            let cachedUser = {};
+            try{ cachedUser = JSON.parse(localStorage.getItem(SQL_AUTH_USER_KEY) || "{}"); }catch(e){}
+            if(cachedUser?.uid || cachedUser?.id){
+                auth._setUser(criarUsuarioSqlAuth(cachedUser, token));
+            }
+            try{
+                const data = await sqlApi("/api/me");
+                if(data?.user){
+                    localStorage.setItem(SQL_AUTH_USER_KEY, JSON.stringify(data.user));
+                    auth._setUser(criarUsuarioSqlAuth(data.user, token));
+                }else{
+                    localStorage.removeItem(SQL_AUTH_TOKEN_KEY);
+                    localStorage.removeItem(SQL_AUTH_USER_KEY);
+                    auth._setUser(null);
+                }
+            }catch(e){
+                localStorage.removeItem(SQL_AUTH_TOKEN_KEY);
+                localStorage.removeItem(SQL_AUTH_USER_KEY);
+                auth._setUser(null);
+            }
         }
 
         async function carregarNomeUsuario(user){
@@ -1062,6 +1093,7 @@
             timerSalvarCompartilhado = setTimeout(salvarConfigCompartilhada, 800);
         };
 
+        await restaurarSessaoSqlSalva();
         onAuthStateChanged(auth, async user => {
             if(!user) return;
             usuarioCompartilhado = await carregarNomeUsuario(user);

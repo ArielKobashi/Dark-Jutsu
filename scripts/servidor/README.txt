@@ -3,7 +3,7 @@ Dark-Jutsu - scripts padronizados do servidor
 Use estes comandos daqui para frente:
 
 instalar-tudo.bat
-  Instala guardiao, monitor, atalhos e sincronizacao para o usuario atual.
+  Instala ou atualiza guardiao, monitor e autoatualizacao para o usuario atual.
 
 instalar-monitor.bat
   Atualiza e reabre somente o icone do monitor.
@@ -26,4 +26,4 @@ tornar-reserva.bat
 parar-servidor-local.bat
   Para somente a API local deste PC.
 
-Os scripts antigos continuam existindo por compatibilidade com atalhos e tarefas agendadas ja instalados.
+Os aliases antigos foram removidos. Use o instalador unico para recriar inicializacao automatica.

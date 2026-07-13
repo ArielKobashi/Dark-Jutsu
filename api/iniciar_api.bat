@@ -11,6 +11,12 @@ if "%PYTHON_EXE%"=="" (
   exit /b 1
 )
 
+if exist "%ROOT%\_local_secrets\sql_auth_runtime.env" (
+  for /f "usebackq tokens=1,* delims==" %%A in ("%ROOT%\_local_secrets\sql_auth_runtime.env") do (
+    if not "%%A"=="" set "%%A=%%B"
+  )
+)
+
 if "%DATABASE_URL%"=="" set "DATABASE_URL=postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 if "%DARK_JUTSU_API_HOST%"=="" set "DARK_JUTSU_API_HOST=0.0.0.0"
 if "%DARK_JUTSU_API_PORT%"=="" set "DARK_JUTSU_API_PORT=8765"

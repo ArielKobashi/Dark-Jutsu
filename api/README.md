@@ -29,16 +29,16 @@ C:\Users\Davi.souza\Desktop\aplicações code\WPy64-3.13.12.0\python\python.exe 
 
 A API valida dois tipos de autenticacao:
 
-- Navegador: `Authorization: Bearer <Firebase ID token>`. `index.html`, `dashboard.html` e `label-editor.html` pegam `auth.currentUser.getIdToken()` automaticamente.
+- Navegador: `POST /api/auth/login` retorna um token SQL local. `index.html`, `dashboard.html` e `label-editor.html` salvam esse token em `localStorage.darkJutsuSqlAuthToken` e enviam `Authorization: Bearer <token>`.
 - Servico/script: `DARK_JUTSU_API_TOKEN`, quando definido, autoriza chamadas como `service`.
 
 Variaveis:
 
 ```text
-FIREBASE_PROJECT_ID=chat-fiasul
 DARK_JUTSU_REQUIRE_AUTH=1
 DARK_JUTSU_ALLOWED_ORIGINS=*
 DARK_JUTSU_API_TOKEN=
+DARK_JUTSU_AUTH_SECRET=
 ```
 
 Para scripts, envie:
@@ -53,7 +53,16 @@ ou:
 X-API-Token: <token>
 ```
 
-Com `DARK_JUTSU_REQUIRE_AUTH=1`, chamadas sem token Firebase/servico recebem `401`.
+Com `DARK_JUTSU_REQUIRE_AUTH=1`, chamadas sem token SQL/servico recebem `401`.
+
+Endpoints de auth:
+
+```text
+POST /api/auth/login
+POST /api/auth/change-password
+POST /api/auth/logout
+GET /api/auth/me
+```
 
 ## Endpoints iniciais
 
@@ -117,7 +126,7 @@ PUT /api/automus/releases/{channel}
 
 ## Papel na migracao
 
-Esta API ainda e uma ponte inicial. Ela permite trocar leituras do frontend e do Automus por SQL de forma controlada, antes de implementar escritas, validacao de Firebase Auth no backend e escrita dupla.
+Esta API agora concentra leitura, escrita e autenticacao SQL local para o frontend e Automus, sem depender do Firebase em tempo de execucao.
 
 ## Escritas iniciais
 

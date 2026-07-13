@@ -66,7 +66,7 @@ def decrypt_config(encrypted: dict[str, Any], api_key: str, db_url: str) -> dict
     key = _derive_key(api_key, db_url, salt)
     actual_tag = hmac.new(key, nonce + ciphertext, hashlib.sha256).digest()
     if not hmac.compare_digest(actual_tag, expected_tag):
-        raise RuntimeError("automus_config criptografado nao confere com este projeto Firebase.")
+        raise RuntimeError("automus_config criptografado nao confere com este projeto.")
     payload = _xor_stream(ciphertext, key, nonce)
     data = json.loads(payload.decode("utf-8"))
     if not isinstance(data, dict):

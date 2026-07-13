@@ -614,7 +614,7 @@ def registrar_requisicoes_encerradas(
     except Exception as exc:
         logger.warning(
             "===== AZUL VISUAL ERRO | falhou: %s ===== "
-            "A aba de encerradas sera recriada vazia e o envio ao Firebase continuara.",
+            "A aba de encerradas sera recriada vazia e o envio SQL/API continuara.",
             exc,
         )
 

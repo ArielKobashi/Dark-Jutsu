@@ -10,10 +10,10 @@ userRoot = shell.ExpandEnvironmentStrings("%USERPROFILE%") & "\Desktop\Dark-Juts
 machineRoot = "C:\DarkJutsu\Dark-Jutsu"
 root = ""
 
-If fso.FileExists(userRoot & "\api\iniciar_api_servidor.bat") Then
-  root = userRoot
-ElseIf fso.FileExists(machineRoot & "\api\iniciar_api_servidor.bat") Then
+If fso.FileExists(machineRoot & "\api\iniciar_api_servidor.bat") Then
   root = machineRoot
+ElseIf fso.FileExists(userRoot & "\api\iniciar_api_servidor.bat") Then
+  root = userRoot
 End If
 
 If root = "" Then

@@ -1,5 +1,4 @@
 ﻿{
-  "email": "seu-email-firebase@empresa.com",
-  "password": "SUA_SENHA_AQUI",
+  "mode": "sql-only",
   "updated_by": "atualizado automaticamente via Automus"
 }

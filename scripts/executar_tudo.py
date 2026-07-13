@@ -162,7 +162,7 @@ def enviar_atualizacao_automus(logger: logging.Logger, base: Path, automus_auth:
     config_path = base / "atualizacao" / "automus_config.json"
     project_root = project_root or Path(os.environ.get("AUTOMUS_PROJECT_ROOT") or base.parent)
     logger.info(
-        "AUTOMUS: iniciando envio automatico ao Firebase sem interagir com navegador/sessao aberta."
+        "AUTOMUS: iniciando envio automatico ao SQL/API sem interagir com navegador/sessao aberta."
     )
     run_automus_update(
         config_path=config_path,
@@ -257,7 +257,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
     )
     logger.info(
         "Fluxo esperado: macros 003/004/005 salvam mata105/mata225/mata226; "
-        "apos a macro 005, Automus envia direto ao Firebase (sem mexer na sessao aberta do Dark Jutsu)."
+        "apos a macro 005, Automus envia direto ao SQL/API (sem mexer na sessao aberta do Dark Jutsu)."
     )
 
     for macro in macros:
@@ -329,7 +329,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
                     executar_macro_012_com_verificador(logger, base, project_root, started_at_epoch)
                     enviar_atualizacao_automus(logger, base, automus_auth=automus_auth, project_root=project_root)
                     logger.info(
-                        "CONFIRMACAO: envio Firebase via Automus executado com requisicoes encerradas da MATA185."
+                        "CONFIRMACAO: envio SQL/API via Automus executado com requisicoes encerradas da MATA185."
                     )
                 except Exception as exc:
                     logger.exception("Falha no pos-processamento apos macro_005: %s", exc)

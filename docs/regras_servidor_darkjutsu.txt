@@ -1,5 +1,5 @@
 Dark-Jutsu - regras e descricao dos servidores, APIs, guardiao e monitor
-Revisao: 2026-07-11
+Revisao: 2026-07-12
 
 1. Objetivo
 
@@ -147,10 +147,7 @@ O instalador detecta o IP local:
 - Script principal:
   scripts\guardiao_servidor_tick_darkjutsu.bat
 - Inicializador oculto:
-  scripts\iniciar_guardiao_servidor_oculto.vbs
-- Alias de compatibilidade:
-  scripts\guardiao_continuo_tick_darkjutsu.bat
-  scripts\guardiao_continuo_tick_darkjutsu_hidden.vbs
+  scripts\guardiao_loop_compartilhado_darkjutsu.vbs
 
 6.2. Frequencia
 
@@ -184,8 +181,9 @@ Se principal e reserva estao OFF:
   - principal tenta assumir imediatamente.
 
 - visto pela reserva:
-  - reserva tenta assumir imediatamente no proximo tick;
-  - nao espera mais 3 ou 5 minutos.
+  - reserva registra o estado preto;
+  - tenta acionar a principal como melhor esforco;
+  - assume apenas depois de 3 ciclos seguidos sem resposta.
 
 6.6. Comando manual para rodar um tick do guardiao
 
@@ -233,8 +231,8 @@ Agora ele valida se a API realmente subiu.
 
 O iniciar_api_darkjutsu_service.vbs procura nesta ordem:
 
-1. %USERPROFILE%\Desktop\Dark-Jutsu
-2. C:\DarkJutsu\Dark-Jutsu
+1. C:\DarkJutsu\Dark-Jutsu
+2. %USERPROFILE%\Desktop\Dark-Jutsu
 
 Se nao encontrar api\iniciar_api_servidor.bat em nenhum dos dois, registra erro.
 
@@ -416,7 +414,7 @@ type C:\DarkJutsu\logs\instalador_guardiao_monitor.log
 
 - scripts\instalar_atualizar_guardiao_monitor_darkjutsu.bat
 - scripts\guardiao_servidor_tick_darkjutsu.bat
-- scripts\iniciar_guardiao_servidor_oculto.vbs
+- scripts\guardiao_loop_compartilhado_darkjutsu.vbs
 
 14.2. Assuncao e parada
 
@@ -444,16 +442,9 @@ type C:\DarkJutsu\logs\instalador_guardiao_monitor.log
 - scripts\registrar_evento_servidor_darkjutsu.bat
 - scripts\limpar_log_72h_darkjutsu.py
 
-14.6. Aliases de compatibilidade
+14.6. Arquivos removidos do fluxo atual
 
-Alguns nomes antigos podem existir apenas como redirecionadores pequenos para nao quebrar inicializacoes antigas:
-
-- scripts\monitor_servidor_darkjutsu.ps1
-- scripts\monitor_servidor_darkjutsu_hidden.vbs
-- scripts\monitor_servidor_darkjutsu_py.bat
-- scripts\monitor_servidor_darkjutsu_py_debug.bat
-- scripts\guardiao_continuo_tick_darkjutsu.bat
-- scripts\guardiao_continuo_tick_darkjutsu_hidden.vbs
+Aliases e instaladores antigos de monitor, guardiao, API direta e sincronizacao 5min foram removidos para evitar dois icones, dois guardioes ou inicializacoes conflitantes. O caminho oficial e sempre o instalador unico.
 
 
 15. Riscos conhecidos
@@ -514,4 +505,3 @@ No reserva, o instalador copia Python portable se faltar.
 6. Icones ficam:
    - principal verde;
    - reserva vermelho.
-

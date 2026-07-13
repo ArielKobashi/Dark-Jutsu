@@ -4,7 +4,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 
 ## Estrutura
 
-- `index.html` - aplicacao principal, Firebase, tabela de estoque, chat, painel admin, relatorios, contagem, editor de limites e gerador de etiquetas.
+- `index.html` - aplicacao principal SQL-first, tabela de estoque, chat, painel admin, relatorios, contagem, editor de limites e gerador de etiquetas.
 - `dashboard.html` - dashboard de estoque com filtros por parametros de URL.
 - `label-editor.html` - mini editor visual para simular e ajustar a formatacao das etiquetas.
 - `dashboard-nav.js` - atalhos e comandos para abrir o dashboard, por padrao no armazem 04.
@@ -42,7 +42,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 - Modal de perfil do item com saldo, endereco, minimo, maximo e reposicao.
 - Edicao item a item de minimo e maximo dentro do modal.
 - Reposicao calculada como quantidade para voltar do minimo ao maximo; sugestoes automaticas usam consumo, pedido medio e saldo das planilhas.
-- Ajustes manuais persistidos em `estoqueGlobal/ajustesItens`, preservados apos atualizacoes.
+- Ajustes manuais persistidos no PostgreSQL via API, preservados apos atualizacoes.
 - Chat por salas com:
   - sala publica com blur ate abrir;
   - salas privadas com blur e senha dentro do proprio chat;
@@ -58,7 +58,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
   - possui editor visual simples (`label-editor.html`) com arrastar, redimensionar, guias e exportacao de JSON de layout;
   - download unico `etiquetas.zip`;
   - quando o navegador permite, reutiliza/substitui o mesmo `etiquetas.zip` durante a sessao;
-  - registra ranking em `etiquetasGeradas` e no agregado `rankingEtiquetas`;
+  - registra historico e ranking de etiquetas no PostgreSQL;
   - pastas internas `5cm`, `7cm`, `10cm`, `15cm`;
   - lixeira para limpar a lista do tamanho atual.
 
@@ -72,8 +72,8 @@ Os scripts Python ficam em `scripts/`.
 - `scripts/macro_gravador.py` - gravador de macros.
 - `scripts/identificador_de_pixel.py` - utilitario de leitura de pixel.
 - `scripts/totvs_news_reference.json` e `scripts/totvs_news_reference.png` - referencia do detector TOTVS.
-- `scripts/atualizacao/automus_update.py` - atualizacao do Firebase sem depender do navegador.
-- `scripts/atualizacao/automus_config.json` - credenciais/configuracao local do Automus.
+- `scripts/atualizacao/automus_update.py` - atualizacao do estoque no SQL/API sem depender do navegador.
+- `scripts/atualizacao/automus_config.json` - configuracao local legada do Automus, mantida apenas para compatibilidade.
 - Logs e caches (`*.log`, `__pycache__/`, `*.pyc`) sao artefatos gerados e ficam fora do versionamento.
 
 ## Regras de Estoque
@@ -117,7 +117,7 @@ No painel admin do Dark-Jutsu existem tres acoes:
 
 ## Dashboard
 
-Abra `dashboard.html` para uma visao resumida do estoque. A pagina usa Firebase Auth e aceita os mesmos logins do sistema.
+Abra `dashboard.html` para uma visao resumida do estoque. A pagina usa a sessao SQL local e aceita os mesmos logins do sistema.
 
 Parametros de URL:
 
@@ -144,20 +144,14 @@ Abra:
 dashboard.html?ambiente=avaliador&armazem=04&status=abaixo&limite=50
 ```
 
-O avaliador lista itens abaixo do minimo ainda nao avaliados, mostra historico recente de pedidos por item, prazo medio de recebimento, quantidade media comprada e dias desde o ultimo pedido. A decisao fica salva em `dashboardConfig/avaliadorPedidos`. Itens marcados como passíveis entram no kanban de acompanhamento; itens marcados como minimo incorreto, reposicao incorreta ou nao solicitar ficam separados como avaliados fora do fluxo de compra.
+O avaliador lista itens abaixo do minimo ainda nao avaliados, mostra historico recente de pedidos por item, prazo medio de recebimento, quantidade media comprada e dias desde o ultimo pedido. A decisao fica salva no PostgreSQL via API. Itens marcados como passíveis entram no kanban de acompanhamento; itens marcados como minimo incorreto, reposicao incorreta ou nao solicitar ficam separados como avaliados fora do fluxo de compra.
 
 O historico antigo do Cooperat fica separado visualmente do historico novo MATA111/MATA112. Ele usa:
 
 - `Qtd.Solicitada` como quantidade comprada.
 - `Vlr Baixa` como valor unitario da peca.
-- `historicoComprasCooperat` no Firebase como caminho principal.
-- `data/historico_cooperat_antigo.json` como fallback local enquanto o Firebase ainda nao foi populado.
-
-Para publicar no Firebase, primeiro adicione as regras de [firebase-rules-historico-compras.json](firebase-rules-historico-compras.json) ao Realtime Database Rules. Depois rode:
-
-```powershell
-C:\Users\davi.souza\AppData\Local\Microsoft\WindowsApps\python.exe .\scripts\importar_historico_cooperat_firebase.py --login davi
-```
+- PostgreSQL como base principal.
+- `data/historico_cooperat_antigo.json` apenas como fallback/arquivo historico local.
 
 ## Como executar scripts
 
@@ -181,18 +175,9 @@ python .\scripts\macro_gravador.py
 python .\scripts\identificador_de_pixel.py
 ```
 
-## Firebase
+## Banco SQL
 
-O app usa Firebase Auth e Realtime Database.
-
-Pontos importantes das regras:
-
-- `estoqueGlobal` deve permitir leitura para usuarios ativos.
-- Escrita em `estoqueGlobal` continua restrita a admin ou ao email tecnico autorizado.
-- `chatReadState/$uid` precisa permitir leitura/escrita apenas para o proprio usuario.
-- `chatRooms/$room/typing/$uid` precisa permitir escrita apenas para o proprio usuario.
-- `chatRooms/$room/messages` precisa permitir leitura/escrita para usuarios autenticados.
-- `contagens` precisa permitir leitura/escrita para usuarios autenticados para salvar e consultar contagens.
+O app usa PostgreSQL local via `api/dark_jutsu_api.py`. A autenticacao, estoque, chat, contagens, ocorrencias, dashboard e etiquetas passam pela API SQL.
 
 ## Etiquetas
 
@@ -206,6 +191,63 @@ O gerador integrado replica os moldes do app Python mais recente:
 - `COOPERAT:` sempre aparece, mesmo sem codigo antigo.
 
 Observacao: o navegador gera PNGs via Canvas, enquanto o app `.exe` usa Pillow. As medidas, textos e regras foram espelhadas, mas pode haver pequena diferenca visual de antialiasing entre Canvas e Pillow.
+
+## Servidor Local, API e Guardiao
+
+O Dark-Jutsu roda como sistema local na rede privada. O app fica no servidor de arquivos e a API SQL fica ativa em apenas um dos computadores de servidor por vez.
+
+### Papeis fixos
+
+- Principal: `192.168.5.44` (`ALMOX-PC03`).
+- Reserva: `192.168.5.38` (`ALMOX-EPI`).
+- API SQL: `http://IP_DO_SERVIDOR:8765/health`.
+- PostgreSQL local do servidor ativo: porta `5433`.
+- Pacote compartilhado: `\\fileserver\Almoxarifado\0800\servidor\dark-jutsu`.
+
+### Regra de failover
+
+- Se a principal responde, ela deve ser o servidor ativo.
+- Se a reserva estiver ativa e a principal voltar, a principal tenta reassumir automaticamente e a reserva para a API local.
+- Se nenhuma API responder, a principal tenta iniciar imediatamente.
+- A reserva so assume depois de 3 ciclos seguidos sem resposta, para evitar troca falsa por oscilacao curta de rede.
+- O acionamento remoto da principal via `schtasks` e apenas uma tentativa auxiliar. Se o Windows negar acesso remoto, o guardiao da propria principal ainda deve reassumir quando o usuario/sessao estiver ativo.
+
+### Comando unico de instalacao ou atualizacao
+
+Rode no usuario Windows que deve ver o icone do servidor:
+
+```cmd
+cmd /c "pushd \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts && call instalar_atualizar_guardiao_monitor_darkjutsu.bat && popd"
+```
+
+O instalador detecta o papel pelo IP. No IP da principal instala o monitor PowerShell. No IP da reserva instala o monitor Python e corrige o Tkinter portatil quando necessario.
+
+### Icone do servidor
+
+- Verde: este PC esta servindo a API.
+- Vermelho: outro PC esta servindo a API.
+- Preto: nenhuma API respondeu naquele momento.
+
+O botao `Abrir Dark-Jutsu` nao pede senha. Os comandos de controle pedem a senha operacional `654321`.
+
+### Logs importantes
+
+- Log local do guardiao: `C:\DarkJutsu\logs\servidor_guardiao.log`.
+- Log local do monitor: `C:\DarkJutsu\logs\monitor_servidor.log`, `monitor_python.log` ou `monitor_launcher.log`.
+- Log local da API: `C:\DarkJutsu\logs\api_runtime.log`.
+- Log local do instalador: `C:\DarkJutsu\logs\instalador_guardiao_monitor.log`.
+- Log compartilhado de eventos: `\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\logs\servidor_eventos_darkjutsu.txt`.
+
+O log compartilhado deve registrar eventos de principal, reserva, health checks, tentativas de assumir, falhas de acesso remoto e limpezas de registros antigos.
+
+### Teste rapido
+
+```cmd
+curl http://192.168.5.44:8765/health
+curl http://192.168.5.38:8765/health
+```
+
+Resultado esperado em operacao normal: a principal responde `ok:true` e a reserva nao responde. Se a principal estiver desligada por varios ciclos, a reserva deve responder `ok:true`.
 
 ## Observacoes de manutencao
 

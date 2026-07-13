@@ -24,6 +24,21 @@ Atualizacao 2026-07-11:
 - `index.html` deixou de cair para RTDB em validacao de sessao SQL, parte dos fluxos admin, ocorrencias, chat SQL e rascunho/presenca de contagem quando a API esta disponivel.
 - Automus ganhou modo operacional `AUTOMUS_SQL_ONLY=1` com `DARK_JUTSU_API_TOKEN`: atualizacao, controlador e build pulam dependencias obrigatorias de Firebase no caminho SQL-only.
 
+Atualizacao 2026-07-12:
+
+- `index.html` deixou de importar SDK Firebase; o frontend principal usa autenticacao SQL local.
+- Estoque inicial passou a vir de `/api/dashboard/snapshot`; atualizacao manual de estoque passou a usar `POST /api/inventory/automus-update`.
+- Fluxos de admin/cadastro/usuarios/banidos, chat, read-state, typing, ocorrencias, contagem viva/rascunhos/reset global e download de release Automus foram fechados em SQL/API no `index.html`.
+- Escritas diretas restantes de chat/cadastro/ocorrencias/estoque para RTDB foram removidas ou transformadas em falha fechada.
+- `dashboard.html` e `label-editor.html` usam autenticacao SQL local, sem `databaseURL` do Realtime Database.
+- Automus build/update/release passou a SQL-only por padrao; `Automus/scripts/firebase_config.json` foi removido.
+- Controladores Automus agora exigem `DARK_JUTSU_API_TOKEN` e nao validam mais admin/mod no Realtime Database.
+- Automus update raiz e empacotado nao fazem mais backup remoto, leitura ou escrita final no banco legado; a publicacao termina na API SQL.
+- Importador historico direto para Realtime Database foi bloqueado e aponta para o motor SQL de migracao.
+- Firebase Auth foi substituido por autenticacao SQL local na API e nos HTMLs principais.
+- Auditoria estatica caiu para `0` achados nos alvos principais.
+- API `/health` respondeu em `http://192.168.5.44:8765`; `127.0.0.1:8765` nao respondeu nesta rodada. `GET /api/ops/status` retornou `401` sem credencial administrativa, como esperado.
+
 ## Estado atual
 
 Concluido:
@@ -105,9 +120,9 @@ Concluido:
 
 ### 1. Autenticacao real da API
 
-Status: primeira versao implementada.
+Status: implementado em SQL local.
 
-A API agora aceita `Authorization: Bearer <Firebase ID token>`, valida assinatura/issuer/audience do projeto `chat-fiasul`, localiza o usuario em `users`, bloqueia usuarios inativos/banidos e aplica `app.user_id`/`app.role` por requisicao. `DARK_JUTSU_API_TOKEN` continua existindo como token de servico para scripts locais.
+A API agora aceita `Authorization: Bearer <token SQL local>`, emitido por `POST /api/auth/login`, localiza o usuario em `users`, bloqueia usuarios inativos/banidos e aplica `app.user_id`/`app.role` por requisicao. `DARK_JUTSU_API_TOKEN` continua existindo como token de servico para scripts locais.
 
 Ainda falta para endurecer antes de producao:
 
@@ -124,8 +139,8 @@ O banco ja tem tabelas, mas o frontend e o Automus ainda escrevem no Firebase. P
 | `estoqueGlobal` | Automus update transacional pronto em `POST /api/inventory/automus-update`; ajustes manuais do dashboard usam SQL; falta validar fluxo real do Automus com `AUTOMUS_SQL_ONLY=1` |
 | `dashboardConfig/paineis` | frontend do dashboard usa SQL quando a API esta ativa |
 | `dashboardConfig/avaliadorPedidos` | frontend do dashboard usa SQL para salvar/remover quando a API esta ativa |
-| `usuarios` | admin inicial pronto e lista administrativa SQL-first; aprovar solicitacao, alterar nivel, ativar/desativar, banir e resetar status de senha tentam SQL antes do Firebase; ainda falta substituir Firebase Auth se o objetivo for desligar tambem Authentication |
-| `solicitacoesCadastro` | lista admin SQL-first; aprovar/rejeitar pronto no admin; endpoint publico SQL existe, mas o fluxo final ainda precisa decidir como criar credenciais sem Firebase Auth |
+| `usuarios` | admin, lista administrativa, alteracao de nivel, ativar/desativar, banir e resetar status de senha usam SQL/API; usuarios sem senha migrada exigem reset SQL |
+| `solicitacoesCadastro` | lista admin, criacao publica e aprovacao usam SQL/API; senha da solicitacao fica hasheada ate aprovacao |
 | `usuariosBanidos` | banir/apagar banido pronto no admin; falta revisar fluxo final de reativacao/desbanimento apos corte Firebase |
 | `nicknames*` | endpoint publico de status implementado; falta trocar todos os indices auxiliares Firebase por consultas SQL |
 | `contagens` | finalizacao, relatorio/historico/reaplicacao e correcao de usuario tentam SQL antes do Firebase; falta validar correcao no fluxo admin real e substituir tempo real |
@@ -139,19 +154,18 @@ O banco ja tem tabelas, mas o frontend e o Automus ainda escrevem no Firebase. P
 | `dashboardConfig/ocorrenciasCampos` | SQL-first via `app_settings/occurrences.fields` |
 | `dashboardConfig/ocorrenciasAvaliadorSenha` | SQL-first via `app_settings/occurrences.evaluator_password`; proximo endurecimento e hash/segredo server-side |
 | `chatRooms/*/messages` | frontend agora tenta polling SQL antes do listener Firebase e envio SQL nao publica mais no Firebase quando bem-sucedido |
-| `chatReadState` | leitura e escrita SQL-first; fallback Firebase mantido |
-| `chatRooms/*/typing` | substituir por dado transitorio via WebSocket/SSE/TTL |
+| `chatReadState` | leitura e escrita SQL-only no frontend principal |
+| `chatRooms/*/typing` | Firebase removido no frontend principal; estado fica local ate entrar WebSocket/SSE/TTL |
 | `chatRooms/*/senha` | implementado em SQL com hash e verificacao server-side; fallback Firebase ainda existe para contingencia |
 | `estoqueGlobal/configuracoesEtiquetas` | `label-editor.html` salva/carrega `label.config` no SQL; listener/fallback RTDB removido dessa tela |
 | `automus/releases/latest` | publicar manifest via API/SQL pronto; script de preparo tenta SQL automaticamente quando a API esta ativa |
 
 ### 3. Troca do frontend para API
 
-Arquivos com chamadas Firebase ainda ativas:
+Arquivos com Firebase ainda ativo:
 
-- `index.html`
-- `dashboard.html` ainda tem fallback Firebase, mas a leitura principal agora tenta `GET /api/dashboard/snapshot`.
-- `label-editor.html`
+- `index.html`, `dashboard.html` e `label-editor.html` usam auth SQL local e nao carregam SDK Firebase.
+- Scripts Automus/controlador/importador nao mantem mais caminho operacional de Realtime Database; ferramentas em `scripts/migration` continuam apenas para export/delta final.
 
 Falta criar uma camada JS de dados, por exemplo `api-client.js`, e substituir por etapas:
 
@@ -175,7 +189,7 @@ Falta criar uma camada JS de dados, por exemplo `api-client.js`, e substituir po
 
 ### 4. Adaptacao do Automus
 
-Arquivos principais ainda presos ao Firebase:
+Arquivos principais revisados nesta etapa:
 
 - `scripts/atualizacao/automus_update.py`
 - `Automus/scripts/atualizacao/automus_update.py`
@@ -184,13 +198,13 @@ Arquivos principais ainda presos ao Firebase:
 - `Automus/scripts/controladordeatualização.py`
 - `scripts/controladordeatualização.py`
 
-Falta:
+Status:
 
-- trocar leitura de `estoqueGlobal.json` por endpoint SQL/API no fluxo legado; em `AUTOMUS_SQL_ONLY=1` a leitura Firebase ja e pulada;
-- trocar PATCH/PUT de blocos do estoque por endpoint transacional: primeira versao implementada e testada em 2026-07-09;
+- leitura de `estoqueGlobal.json` foi removida do fluxo operacional Automus SQL-only;
+- PATCH/PUT de blocos do estoque foram removidos do fluxo operacional; publicacao usa endpoint transacional SQL;
 - gravar backup em `inventory_snapshots`: pronto no endpoint SQL;
 - publicar release em `automus_releases`;
-- consultar update por `/api/automus/releases/latest`;
+- consultar update por URL/API/local; fallback por manifest no Realtime Database foi removido do controlador;
 - manter compatibilidade com `latest.json`/arquivo local durante transicao.
 
 ### 5. Tempo real
@@ -206,7 +220,7 @@ Opcoes para concluir:
 
 Recomendacao inicial:
 
-- polling para dashboard, ocorrencias e mensagens de chat iniciado; ainda falta usuarios, contagem viva e demais listeners;
+- polling para dashboard, ocorrencias, mensagens de chat, usuarios e contagem viva iniciado no frontend principal;
 - WebSocket/SSE depois para chat e contagem viva;
 - nao persistir `typing` como dado historico definitivo.
 

@@ -10,16 +10,13 @@ Use:
 atualizar_automus.bat
 ```
 
-Ele abre uma interface para informar a nova versao, as notas, login ADM do Firebase e acompanhar o loading da publicacao. A interface atualiza `scripts\version.json`, fecha qualquer Automus aberto, gera o novo `Automus.exe`, cria o `.zip`, atualiza o `latest.json`, copia para a pasta de publicacao configurada e pode enviar o manifesto para o Firebase.
+Ele abre uma interface para informar a nova versao, as notas e acompanhar o loading da publicacao. A interface atualiza `scripts\version.json`, fecha qualquer Automus aberto, gera o novo `Automus.exe`, cria o `.zip`, atualiza o `latest.json` e copia para a pasta de publicacao configurada.
 
 Na tela:
 
 ```text
 Nova versao: confira ou altere a versao sugerida
 Notas da versao: escreva o que mudou
-Enviar manifesto para Firebase: deixe marcado
-Login ADM Firebase: seu login ADM
-Senha ADM Firebase: sua senha ADM
 ENVIAR ATUALIZACAO: clique para iniciar
 ```
 
@@ -39,20 +36,13 @@ Para ativar atualizacao automatica nos computadores dos usuarios, preencha:
 ```json
 {
   "updateManifestUrl": "https://seu-servidor/automus/latest.json",
-  "updateManifestFirebasePath": "automus/releases/latest",
   "updateBaseUrl": "https://seu-servidor/automus/"
 }
 ```
 
-O `updateManifestUrl` e o endereco HTTP que o Automus instalado consulta. Se preferir Firebase, use `updateManifestFirebasePath`: depois do login ADM, o Automus le esse caminho no Realtime Database. O `updateBaseUrl` e usado na hora de gerar o `latest.json`, para apontar para o `.zip` da versao nova.
+O `updateManifestUrl` e o endereco HTTP que o Automus instalado consulta. O `updateBaseUrl` e usado na hora de gerar o `latest.json`, para apontar para o `.zip` da versao nova.
 
-No Firebase, grave o conteudo de `releases\latest.json` no caminho escolhido, por exemplo:
-
-```text
-automus/releases/latest
-```
-
-O `.zip` nao deve ficar dentro do Realtime Database. Hospede o arquivo em um link HTTP/HTTPS, como Firebase Storage, Firebase Hosting, Google Drive com link direto, servidor interno ou GitHub Releases, e deixe esse link no campo `packageUrl` do manifesto. O assistente `atualizar_automus.bat` pode enviar o `latest.json` para o Firebase depois de gerar a release.
+O `.zip` deve ficar em um link HTTP/HTTPS, compartilhamento de rede Windows ou servidor interno acessivel pelos usuarios.
 
 Tambem pode usar um caminho de rede Windows para o pacote, por exemplo:
 
@@ -79,8 +69,7 @@ Com `updateManifestUrl` configurado, o Automus verifica automaticamente depois d
 
 - `scripts\controladordeatualizacao*.py`: interface e app em segundo plano.
 - `scripts\executar_tudo.py`: fluxo principal de atualizacao.
-- `scripts\atualizacao\automus_update.py`: envio e validacao dos dados no Firebase.
-- `scripts\firebase_config.json`: configuracao Firebase usada pelo Automus sem depender do `index.html` do projeto principal.
+- `scripts\atualizacao\automus_update.py`: envio e validacao dos dados no SQL/API.
 - `scripts\version.json`: versao exibida no titulo e usada nos pacotes de atualizacao.
 - `scripts\preparar_release_automus.py`: assistente para atualizar versao, notas e gerar o pacote completo.
 - `scripts\package_automus_release.py`: cria o `.zip` de atualizacao.

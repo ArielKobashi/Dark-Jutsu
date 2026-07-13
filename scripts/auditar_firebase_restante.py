@@ -13,6 +13,7 @@ TARGET_FILES = [
     "index.html",
     "dashboard.html",
     "label-editor.html",
+    "medidores.html",
     "api",
     "scripts",
     "Automus",
@@ -26,6 +27,9 @@ EXCLUDED_PARTS = {
     "dist",
     "pyinstaller",
     "_migration_runs",
+}
+EXCLUDED_FILES = {
+    "scripts/auditar_firebase_restante.py",
 }
 PATTERNS = [
     ("import", re.compile(r"firebasejs|getDatabase|getAuth|initializeApp|databaseURL")),
@@ -54,10 +58,13 @@ def iter_files() -> list[Path]:
     for item in TARGET_FILES:
         path = ROOT / item
         if path.is_file():
-            files.append(path)
+            rel = path.relative_to(ROOT).as_posix()
+            if rel not in EXCLUDED_FILES:
+                files.append(path)
         elif path.is_dir():
             for child in path.rglob("*"):
-                if any(part in EXCLUDED_PARTS for part in child.relative_to(ROOT).parts):
+                rel = child.relative_to(ROOT).as_posix()
+                if rel in EXCLUDED_FILES or any(part in EXCLUDED_PARTS for part in child.relative_to(ROOT).parts):
                     continue
                 if child.suffix.lower() in {".html", ".js", ".py", ".bat", ".ps1", ".json"}:
                     files.append(child)

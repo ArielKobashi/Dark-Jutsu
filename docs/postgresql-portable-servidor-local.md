@@ -12,16 +12,17 @@ Solucao provisoria para manter o PostgreSQL portable do Dark-Jutsu ativo na maqu
 
 Nao use `Z:\` nem `\\fileserver` como `PGDATA` ativo. O PostgreSQL deve gravar os dados localmente para evitar lentidao, travamentos e risco de corrupcao.
 
-## Scripts
+## Scripts oficiais atuais
 
-Copie estes arquivos para `\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts`:
+Os servidores usam o instalador unico e o guardiao ativo/passivo:
 
 ```text
+scripts\instalar_atualizar_guardiao_monitor_darkjutsu.bat
+scripts\guardiao_servidor_tick_darkjutsu.bat
+scripts\assumir_servidor_darkjutsu.bat
 scripts\iniciar_postgres_darkjutsu.bat
 scripts\parar_postgres_darkjutsu.bat
-scripts\instalar_atalho_postgres_darkjutsu.bat
-scripts\iniciar_api_darkjutsu_rede.bat
-scripts\instalar_atalho_api_darkjutsu.bat
+scripts\iniciar_api_darkjutsu_service.vbs
 ```
 
 O script de inicio:
@@ -32,29 +33,15 @@ O script de inicio:
 - inicia o PostgreSQL com `pg_ctl`;
 - grava logs em `C:\DarkJutsu\logs`.
 
-## Atalho por usuario
+## Instalacao por usuario
 
 Para cada usuario Windows da maquina compartilhada, execute uma vez:
 
 ```bat
-\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts\instalar_atalho_postgres_darkjutsu.bat
+cmd /c "pushd \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts && call instalar_atualizar_guardiao_monitor_darkjutsu.bat && popd"
 ```
 
-Alternativamente, abra `shell:startup` e crie um atalho para:
-
-```text
-\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts\iniciar_postgres_darkjutsu.bat
-```
-
-Nome sugerido: `Iniciar PostgreSQL Dark-Jutsu`.
-
-Para iniciar a API automaticamente no login do usuario, execute tambem:
-
-```bat
-\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts\instalar_atalho_api_darkjutsu.bat
-```
-
-Esse atalho chama `iniciar_api_darkjutsu.bat`, que primeiro garante o PostgreSQL ativo e depois inicia a API em `0.0.0.0:8765`.
+Esse comando instala monitor, guardiao e autoatualizacao. Nao use mais atalhos separados de PostgreSQL/API, porque eles podem gerar dois servidores ativos.
 
 ## Configuracao do PostgreSQL
 

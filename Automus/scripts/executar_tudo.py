@@ -290,7 +290,7 @@ def enviar_atualizacao_automus(logger: logging.Logger, base: Path, automus_auth:
     config_path = base / "atualizacao" / "automus_config.json"
     project_root = project_root or Path(os.environ.get("AUTOMUS_PROJECT_ROOT") or base.parent)
     logger.info(
-        "AUTOMUS: iniciando envio automatico ao Firebase sem interagir com navegador/sessao aberta."
+        "AUTOMUS: iniciando envio automatico ao SQL/API sem interagir com navegador/sessao aberta."
     )
     run_automus_update(
         config_path=config_path,
@@ -332,7 +332,7 @@ def preparar_e_enviar_etapa(
         faltando = ", ".join(cod for cod in required_codes if not mapa.get(cod, False))
         raise RuntimeError(f"Validacao forte falhou na {etapa}: planilhas obrigatorias ausentes: {faltando}.")
     enviar_atualizacao_automus(logger, base, automus_auth=automus_auth, project_root=project_root)
-    logger.info("CONFIRMACAO: envio Firebase via Automus concluido na %s.", etapa)
+    logger.info("CONFIRMACAO: envio SQL/API via Automus concluido na %s.", etapa)
 
 
 def executar_macro_extra(
@@ -504,11 +504,11 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
                 try:
                     executar_scan_final_nivel1(logger, controller)
                     logger.info(
-                        "CONFIRMACAO: primeira parte concluida. Iniciando verificacao de requisicoes encerradas antes do Firebase."
+                        "CONFIRMACAO: primeira parte concluida. Iniciando verificacao de requisicoes encerradas antes do envio SQL/API."
                     )
                     executar_macro_012_com_verificador(logger, controller, base, project_root, started_at_epoch)
                     logger.info(
-                        "CONFIRMACAO: verificacao de azuis concluida. Enviando nivel 1 ao Firebase."
+                        "CONFIRMACAO: verificacao de azuis concluida. Enviando nivel 1 ao SQL/API."
                     )
                     preparar_e_enviar_etapa(
                         logger,
@@ -534,7 +534,7 @@ def main(macro_ref: str | None = None, automus_auth: dict | None = None, modo_at
             if macro.name.lower() == "macro_009.py" and modo_atualizacao in {"nivel2", "todos"}:
                 try:
                     logger.info(
-                        "CONFIRMACAO: segunda parte concluida. Enviando pedido/compra/enderecamento ao Firebase."
+                        "CONFIRMACAO: segunda parte concluida. Enviando pedido/compra/enderecamento ao SQL/API."
                     )
                     preparar_e_enviar_etapa(
                         logger,

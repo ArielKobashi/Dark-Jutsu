@@ -166,14 +166,14 @@ def _post_inventory_to_sql_api(payload: dict[str, Any], id_token: str, log: logg
 
 
 def _automus_sql_only_enabled() -> bool:
-    return os.environ.get("AUTOMUS_SQL_ONLY", "").strip().lower() in {"1", "true", "sim", "yes"}
+    return True
 
 
 def _load_automus_config_sql_only(config_path: Path) -> tuple[dict[str, Any], Path | None]:
     if config_path.exists():
         cfg = read_json(config_path)
         if cfg.get("format") == "automus-config-v1":
-            raise RuntimeError("AUTOMUS_SQL_ONLY nao abre automus_config criptografado sem Firebase. Use DARK_JUTSU_API_TOKEN ou config plano.")
+            raise RuntimeError("AUTOMUS_SQL_ONLY nao abre automus_config criptografado legado. Use DARK_JUTSU_API_TOKEN ou config plano.")
         return cfg, config_path
     return {}, None
 
@@ -198,27 +198,6 @@ def _id_token_expired(token: str, skew_seconds: int = 120) -> bool:
         return int(exp) <= int(time.time()) + skew_seconds
     except Exception:
         return False
-
-
-def _extract_firebase_config(index_html_path: Path) -> tuple[str, str]:
-    bundled_root = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "frozen", False) else None
-    candidates = [index_html_path.parent / "scripts" / "firebase_config.json"]
-    if bundled_root:
-        candidates.append(bundled_root / "scripts" / "firebase_config.json")
-    for scripts_config in candidates:
-        if not scripts_config or not scripts_config.exists():
-            continue
-        cfg = json.loads(scripts_config.read_text(encoding="utf-8-sig"))
-        api_key = _safe_text(cfg.get("apiKey"))
-        db_url = _safe_text(cfg.get("databaseURL")).rstrip("/")
-        if api_key and db_url:
-            return api_key, db_url
-    html = index_html_path.read_text(encoding="utf-8", errors="replace")
-    api_match = re.search(r'apiKey:\s*"([^"]+)"', html)
-    db_match = re.search(r'databaseURL:\s*"([^"]+)"', html)
-    if not api_match or not db_match:
-        raise RuntimeError("Nao foi possivel extrair apiKey/databaseURL do index.html")
-    return api_match.group(1), db_match.group(1).rstrip("/")
 
 
 def _load_automus_config(config_path: Path, api_key: str, db_url: str) -> tuple[dict[str, Any], Path | None]:
@@ -1362,7 +1341,7 @@ def _resolve_optional_file(base_dir: Path, filename: str) -> Path | None:
 def _write_local_backup(project_root: Path, backup_payload: dict[str, Any], agora_ms: int, log: logging.Logger) -> Path:
     backup_dir = project_root / "_backups" / "automus"
     backup_dir.mkdir(parents=True, exist_ok=True)
-    backup_path = backup_dir / f"firebase_backup_{agora_ms}.json"
+    backup_path = backup_dir / f"sql_backup_{agora_ms}.json"
     backup_path.write_text(
         _json_payload(backup_payload, indent=2),
         encoding="utf-8",
@@ -1385,17 +1364,9 @@ def run_automus_update(
     auth_email: str | None = None,
 ) -> None:
     log = logger or logging.getLogger("automus_update")
-    sql_only = _automus_sql_only_enabled()
-
-    index_path = project_root / "index.html"
-    api_key = ""
-    db_url = ""
-    if sql_only:
-        cfg, resolved_config_path = _load_automus_config_sql_only(config_path)
-    else:
-        api_key, db_url = _extract_firebase_config(index_path)
-        cfg, resolved_config_path = _load_automus_config(config_path, api_key, db_url)
-    if not resolved_config_path and not auth_id_token and not (sql_only and os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()):
+    cfg, resolved_config_path = _load_automus_config_sql_only(config_path)
+    service_token = str(auth_id_token or os.environ.get("DARK_JUTSU_API_TOKEN", "")).strip()
+    if not resolved_config_path and not service_token:
         raise FileNotFoundError(
             f"Config do Automus nao encontrada em {config_path}. Crie automus_config.json ou automus_config.enc.json."
         )
@@ -1404,23 +1375,9 @@ def run_automus_update(
     password = _safe_text(cfg.get("password"))
     updated_by = _safe_text(cfg.get("updated_by")) or "atualizado automaticamente via Automus"
 
-    if not sql_only and not auth_id_token and (not email or not password):
-        raise RuntimeError("Config invalida: preencha 'email' e 'password' em automus_config.json")
     log.info("TEST_AUTOMUS_CONFIG_OK | config=%s | email=%s", resolved_config_path or config_path, auth_email or email)
-
-    def autenticar_config() -> tuple[str, str]:
-        auth_resp = _http_json(
-            f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}",
-            method="POST",
-            payload={
-                "email": email,
-                "password": password,
-                "returnSecureToken": True,
-            },
-        )
-        if not isinstance(auth_resp, dict) or not auth_resp.get("idToken"):
-            raise RuntimeError("AUTOMUS: falha ao autenticar no Firebase.")
-        return str(auth_resp["idToken"]), _safe_text(auth_resp.get("email")) or email
+    if not service_token:
+        raise RuntimeError("DARK_JUTSU_API_TOKEN obrigatorio para publicar o Automus no SQL.")
 
     incluir_path = _resolve_file(project_root, FILE_MAP["mata105"])
     saldo_atual_path = _resolve_file(project_root, FILE_MAP["mata225"])
@@ -1439,45 +1396,11 @@ def run_automus_update(
         estoque_minimo_path or "NAO_ENCONTRADA",
     )
 
-    if auth_id_token and not sql_only and _id_token_expired(auth_id_token):
-        if not email or not password:
-            raise RuntimeError("AUTOMUS: sessao Firebase expirada e automus_config.json nao tem email/password para renovar.")
-        log.warning("AUTOMUS: sessao Firebase ADM expirada; renovando autenticacao antes do envio.")
-        auth_id_token = None
-
-    if sql_only:
-        id_token = str(auth_id_token or os.environ.get("DARK_JUTSU_API_TOKEN", "")).strip()
-        safe_email = _safe_text(auth_email or email) or "automus-sql-only"
-        banco = {}
-        hash_banco_antes = _json_hash(banco)
-        log.info("AUTOMUS_SQL_ONLY: pulando autenticacao e leitura Firebase.")
-    elif auth_id_token:
-        log.info("AUTOMUS: usando sessão Firebase ADM já autenticada.")
-        id_token = str(auth_id_token)
-        safe_email = _safe_text(auth_email) or "sessao-adm"
-    else:
-        log.info("AUTOMUS: iniciando autenticacao Firebase para envio sem navegador.")
-        id_token, safe_email = autenticar_config()
-    if not sql_only:
-        token_qs = f"?auth={id_token}"
-
-        usando_token_sessao = bool(auth_id_token)
-        while True:
-            estoque_url = f"{db_url}/estoqueGlobal.json{token_qs}"
-            try:
-                snapshot = _http_json(estoque_url, method="GET")
-                break
-            except RuntimeError as exc:
-                if usando_token_sessao and email and password and "HTTP 401" in str(exc):
-                    log.warning("AUTOMUS: sessao Firebase ADM recusada pelo banco; renovando autenticacao e tentando novamente.")
-                    id_token, safe_email = autenticar_config()
-                    token_qs = f"?auth={id_token}"
-                    usando_token_sessao = False
-                    continue
-                raise
-        banco = snapshot if isinstance(snapshot, dict) else {}
-        hash_banco_antes = _json_hash(banco)
-        log.info("TEST_FIREBASE_LEITURA_OK | hashAntes=%s", hash_banco_antes)
+    id_token = service_token
+    safe_email = _safe_text(auth_email or email) or "automus-sql-only"
+    banco = {}
+    hash_banco_antes = _json_hash(banco)
+    log.info("AUTOMUS_SQL_ONLY: pulando autenticacao e leitura do banco legado.")
 
     dados_anteriores = banco.get("dados") if isinstance(banco.get("dados"), list) else []
     dados_mortos = banco.get("dadosMortos") if isinstance(banco.get("dadosMortos"), list) else []
@@ -1598,27 +1521,6 @@ def run_automus_update(
     backup_remote_payload["tamanhoBackupLocalBytes"] = backup_local_path.stat().st_size
 
     backup_remoto_ok = False
-    if not sql_only:
-        backup_url = f"{db_url}/estoqueGlobalBackups/automus_last.json{token_qs}"
-        try:
-            log.info("AUTOMUS: gravando indice remoto do backup de seguranca.")
-            _http_json(backup_url, method="PUT", payload=backup_remote_payload)
-            backup_check = _http_json(backup_url, method="GET")
-            if not isinstance(backup_check, dict):
-                raise RuntimeError("NAO CONFORME: indice remoto do backup nao pode ser conferido.")
-            if backup_check.get("salvoEm") != agora_ms or backup_check.get("hashAntes") != hash_banco_antes:
-                raise RuntimeError("NAO CONFORME: indice remoto do backup gravou dados divergentes.")
-            log.info(
-                "BACKUP_REMOTO_INDICE_OK | salvoEm=%s | hashAntes=%s",
-                backup_check.get("salvoEm"),
-                backup_check.get("hashAntes"),
-            )
-            backup_remoto_ok = True
-        except Exception as exc:
-            log.warning(
-                "BACKUP_REMOTO_INDISPONIVEL | mantendo backup local como fonte de rollback | motivo=%s",
-                exc,
-            )
 
     log.info(
         "BACKUP_GARANTIA_OK | local=%s | remoto=%s",
@@ -1636,68 +1538,13 @@ def run_automus_update(
             raise RuntimeError("API SQL nao confirmou a carga Automus.")
         sql_update_ok = True
     except Exception as exc:
-        log.warning("AUTOMUS_SQL_UPDATE_FALHOU | seguindo fluxo Firebase | motivo=%s", exc)
+        log.warning("AUTOMUS_SQL_UPDATE_FALHOU | motivo=%s", exc)
 
-    if sql_only:
-        if not sql_update_ok:
-            raise RuntimeError("AUTOMUS_SQL_ONLY ativo, mas a escrita SQL falhou.")
-        log.info("AUTOMUS_SQL_ONLY_OK | Firebase nao foi atualizado.")
-        _mirror_mata112_to_dashboards(mata112_path, project_root, log)
-        return
-
-    log.info("AUTOMUS: enviando atualizacao final para estoqueGlobal em blocos.")
-    blocos = [
-        ("dados", novos_dados),
-        ("dadosMortos", dados_mortos),
-        ("ajustesItens", ajustes_itens),
-        ("historicoSaldo", historico_saldo),
-        ("pedidosCompra", pedidos_compra),
-        ("movimentacoesMata185", movimentacoes_mata185),
-        ("mapeamentoArquivos", payload["mapeamentoArquivos"]),
-        ("automus", payload["automus"]),
-    ]
-    for nome_bloco, bloco in blocos:
-        bloco_url = f"{db_url}/estoqueGlobal/{nome_bloco}.json{token_qs}"
-        tamanho = len(_json_payload(bloco).encode("utf-8"))
-        log.info("AUTOMUS: enviando bloco %s | bytes=%s", nome_bloco, tamanho)
-        _http_json(bloco_url, method="PUT", payload=bloco)
-
-    meta_payload = {
-        "ultimaAtualizacao": agora_ms,
-        "atualizadoPor": updated_by,
-        "atualizacaoAutomatica": True,
-        "ultimaAtualizacaoAutomatica": agora_ms,
-    }
-    _http_json(estoque_url, method="PATCH", payload=meta_payload)
-    log.info("TEST_FIREBASE_PATCH_OK")
-
-    check = _http_json(estoque_url, method="GET")
-    if not isinstance(check, dict):
-        raise RuntimeError("NAO CONFORME: leitura de conferencia pos-escrita retornou formato invalido.")
-
-    ultima = check.get("ultimaAtualizacao")
-    dados_pos = check.get("dados") if isinstance(check.get("dados"), list) else []
-    auto_flag = bool(check.get("atualizacaoAutomatica"))
-
-    if ultima != agora_ms:
-        raise RuntimeError("AUTOMUS: atualizacao enviada, mas conferencia final nao confirmou timestamp.")
-    if len(dados_pos) != len(novos_dados):
-        raise RuntimeError("NAO CONFORME: quantidade de itens no banco diverge da carga enviada.")
-    if not auto_flag:
-        raise RuntimeError("NAO CONFORME: flag de atualizacao automatica nao foi persistida.")
-
-    log.info(
-        "TEST_FIREBASE_CONSISTENCIA_OK | itensBanco=%s | atualizacaoAutomatica=%s",
-        len(dados_pos),
-        auto_flag,
-    )
-    log.info(
-        "AUTO_UPDATE_FIREBASE_OK | usuario=%s | itens=%s | ultimaAtualizacao=%s",
-        safe_email,
-        len(novos_dados),
-        agora_ms,
-    )
+    if not sql_update_ok:
+        raise RuntimeError("AUTOMUS_SQL_ONLY ativo, mas a escrita SQL falhou.")
+    log.info("AUTOMUS_SQL_ONLY_OK | banco legado nao foi atualizado.")
     _mirror_mata112_to_dashboards(mata112_path, project_root, log)
+    return
 
 
 def _setup_cli_logger() -> logging.Logger:
@@ -1712,7 +1559,7 @@ def _setup_cli_logger() -> logging.Logger:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Automus: atualiza o estoqueGlobal no Firebase sem usar navegador.")
+    parser = argparse.ArgumentParser(description="Automus: atualiza o estoque no SQL sem usar navegador.")
     parser.add_argument(
         "--config",
         default=str(Path(__file__).resolve().parent / "automus_config.json"),

@@ -247,17 +247,26 @@ create policy counting_sessions_write on counting_sessions
 create policy counting_sessions_staff_update on counting_sessions
   for update using (app_is_staff()) with check (app_is_staff());
 
+create policy counting_sessions_service_maintenance on counting_sessions
+  for delete using (app_role() = 'service');
+
 create policy counting_items_read on counting_items
   for select using (app_role() in ('op', 'mod', 'admin', 'service'));
 
 create policy counting_items_write on counting_items
   for insert with check (app_role() in ('op', 'mod', 'admin', 'service'));
 
+create policy counting_items_service_maintenance on counting_items
+  for delete using (app_role() = 'service');
+
 create policy counting_empty_read on counting_empty_checks
   for select using (app_role() in ('op', 'mod', 'admin', 'service'));
 
 create policy counting_empty_write on counting_empty_checks
   for insert with check (app_role() in ('op', 'mod', 'admin', 'service'));
+
+create policy counting_empty_service_maintenance on counting_empty_checks
+  for delete using (app_role() = 'service');
 
 create policy counting_drafts_owner_all on counting_drafts
   for all using (uid = app_user_id() or user_id = app_user_id() or app_is_staff())
@@ -278,6 +287,9 @@ create policy label_jobs_read on label_print_jobs
 
 create policy label_jobs_write on label_print_jobs
   for insert with check (app_role() in ('op', 'mod', 'admin', 'service'));
+
+create policy label_jobs_service_maintenance on label_print_jobs
+  for all using (app_role() = 'service') with check (app_role() = 'service');
 
 create policy label_ranking_read on label_user_ranking
   for select using (app_role() in ('op', 'mod', 'admin', 'service'));
@@ -322,11 +334,17 @@ create policy occurrences_update_allowed on occurrences
   for update using (app_is_staff() or operator_user_id = app_user_id() or responsible_user_id = app_user_id())
   with check (app_is_staff() or operator_user_id = app_user_id() or responsible_user_id = app_user_id());
 
+create policy occurrences_service_maintenance on occurrences
+  for delete using (app_role() = 'service');
+
 create policy occurrence_history_read on occurrence_history
   for select using (app_role() in ('op', 'mod', 'admin', 'service'));
 
 create policy occurrence_history_write on occurrence_history
   for insert with check (app_role() in ('op', 'mod', 'admin', 'service'));
+
+create policy occurrence_history_service_maintenance on occurrence_history
+  for delete using (app_role() = 'service');
 
 create policy chat_rooms_read on chat_rooms
   for select using (app_role() in ('op', 'mod', 'admin', 'service'));

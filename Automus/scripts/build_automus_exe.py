@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -14,13 +13,11 @@ STAGE = BUILD / "stage"
 STAGE_SCRIPTS = STAGE / "scripts"
 DIST = ROOT / "dist"
 ICON = BUILD / "automus.ico"
-FIREBASE_CONFIG = SCRIPTS / "firebase_config.json"
 AUTOMUS_CONFIG = SCRIPTS / "atualizacao" / "automus_config.json"
-LEGACY_AUTOMUS_CONFIG = ROOT.parent / "scripts" / "atualizacao" / "automus_config.json"
 
 
 def automus_sql_only_enabled() -> bool:
-    return os.environ.get("AUTOMUS_SQL_ONLY", "").strip().lower() in {"1", "true", "sim", "yes"}
+    return True
 
 
 def python_console_executable() -> str:
@@ -73,67 +70,17 @@ def prepare_stage():
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "controlador_config.json", "automus_config.json")
     shutil.copytree(SCRIPTS, STAGE_SCRIPTS, ignore=ignore)
 
-    firebase_stage = STAGE_SCRIPTS / "firebase_config.json"
-    if automus_sql_only_enabled():
-        if firebase_stage.exists():
-            firebase_stage.unlink()
-        print("AUTOMUS_SQL_ONLY ativo: build sem firebase_config.json.")
-        return
-    if FIREBASE_CONFIG.exists():
-        shutil.copy2(FIREBASE_CONFIG, firebase_stage)
-        return
-
-    index_path = ROOT / "index.html"
-    if not index_path.exists():
-        raise RuntimeError("Crie scripts/firebase_config.json antes de gerar o Automus.exe.")
-
-    index_html = index_path.read_text(encoding="utf-8", errors="replace")
-    api_match = re.search(r'apiKey:\s*"([^"]+)"', index_html)
-    db_match = re.search(r'databaseURL:\s*"([^"]+)"', index_html)
-    if not api_match or not db_match:
-        raise RuntimeError("Nao foi possivel encontrar a configuracao Firebase.")
-    firebase_stage.write_text(
-        json.dumps(
-            {
-                "apiKey": api_match.group(1),
-                "databaseURL": db_match.group(1),
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    legacy_stage = STAGE_SCRIPTS / "legacy_config_disabled.json"
+    if legacy_stage.exists():
+        legacy_stage.unlink()
+    print("AUTOMUS_SQL_ONLY ativo: build sem config legada.")
 
 
 def prepare_encrypted_automus_config():
     if automus_sql_only_enabled():
-        print("AUTOMUS_SQL_ONLY ativo: credenciais Firebase criptografadas nao serao empacotadas.")
+        print("AUTOMUS_SQL_ONLY ativo: credenciais legadas nao serao empacotadas.")
         return
-    source_config = AUTOMUS_CONFIG if AUTOMUS_CONFIG.exists() else LEGACY_AUTOMUS_CONFIG
-    if not source_config.exists():
-        print("Aviso: automus_config.json nao encontrado; o exe dependera do login da sessao.")
-        return
-
-    sys.path.insert(0, str(SCRIPTS))
-    from atualizacao.automus_crypto import encrypt_config, read_json
-
-    firebase_stage = STAGE_SCRIPTS / "firebase_config.json"
-    firebase_cfg = read_json(firebase_stage)
-    api_key = str(firebase_cfg.get("apiKey") or "").strip()
-    db_url = str(firebase_cfg.get("databaseURL") or "").strip().rstrip("/")
-    if not api_key or not db_url:
-        raise RuntimeError("firebase_config.json invalido para criptografar automus_config.")
-
-    plain_cfg = read_json(source_config)
-    email = str(plain_cfg.get("email") or "").strip()
-    password = str(plain_cfg.get("password") or "").strip()
-    if not email or not password:
-        raise RuntimeError(f"Preencha email e password em {source_config} antes do build.")
-
-    encrypted = encrypt_config(plain_cfg, api_key, db_url)
-    target = STAGE_SCRIPTS / "atualizacao" / "automus_config.enc.json"
-    target.write_text(json.dumps(encrypted, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Credenciais Automus criptografadas no pacote: {target}")
+    raise RuntimeError("Build legado desativado; gere o Automus em modo SQL-only.")
 
 
 def install_dependencies():

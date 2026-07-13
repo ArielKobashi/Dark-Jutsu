@@ -67,11 +67,6 @@ def get_manifest_url(script_dir: Path, bundled_script_dir: Path) -> str:
     return str(data.get("updateManifestUrl") or "").strip()
 
 
-def get_manifest_firebase_path(script_dir: Path, bundled_script_dir: Path) -> str:
-    data = load_local_version(script_dir, bundled_script_dir)
-    return str(data.get("updateManifestFirebasePath") or "").strip().strip("/")
-
-
 def _current_exe_sha256() -> str:
     try:
         if getattr(sys, "frozen", False):

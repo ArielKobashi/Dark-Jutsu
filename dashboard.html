@@ -503,6 +503,76 @@
         .avaliadorActions .okBtn{background:#14532d;border-color:#22c55e}
         .avaliadorActions .warnBtn{background:#713f12;border-color:#f59e0b}
         .avaliadorActions .stopBtn{background:#7f1d1d;border-color:#ef4444}
+        .avaliadorActions .infoBtn{background:#0f3f56;border-color:#38bdf8}
+        .criterioOverlay{
+            position:fixed;
+            inset:0;
+            z-index:50;
+            display:flex;
+            align-items:stretch;
+            justify-content:flex-end;
+            background:rgba(2,6,23,.58);
+        }
+        .criterioDrawer{
+            width:min(440px,100%);
+            height:100%;
+            overflow:auto;
+            background:#151923;
+            border-left:1px solid rgba(56,189,248,.32);
+            box-shadow:-12px 0 32px rgba(0,0,0,.38);
+            padding:16px;
+        }
+        .criterioHead{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:12px;
+        }
+        .criterioHead h2{margin:0;font-size:18px}
+        .criterioClose{
+            width:34px;
+            height:34px;
+            padding:0;
+            background:#1f2937;
+            border-color:#334155;
+        }
+        .criterioBlock{
+            border:1px solid rgba(148,163,184,.18);
+            border-radius:8px;
+            background:rgba(15,23,42,.46);
+            padding:10px;
+            margin-top:10px;
+        }
+        .criterioBlock h3{
+            margin:0 0 8px;
+            font-size:12px;
+            color:#bfdbfe;
+            text-transform:uppercase;
+        }
+        .criterioGrid{
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:8px;
+        }
+        .criterioMetric span{
+            display:block;
+            color:var(--muted);
+            font-size:10px;
+            text-transform:uppercase;
+        }
+        .criterioMetric strong{
+            display:block;
+            margin-top:3px;
+            font-size:17px;
+        }
+        .criterioList{
+            margin:0;
+            padding-left:18px;
+            color:#dbeafe;
+            font-size:12px;
+            line-height:1.45;
+        }
         .historicoMini{
             overflow:auto;
             border:1px solid rgba(148,163,184,.13);
@@ -1087,24 +1157,47 @@
     <main id="app"></main>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="critical-stock-manager.js"></script>
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyChPIkc1NxpxtpvOU92NxyXsxCFpe3mzgE",
-            authDomain: "chat-fiasul.firebaseapp.com",
-            databaseURL: "https://chat-fiasul-default-rtdb.firebaseio.com",
-            projectId: "chat-fiasul",
-            storageBucket: "chat-fiasul.firebasestorage.app",
-            messagingSenderId: "263776720116",
-            appId: "1:263776720116:web:713fd43f4cb196b0527aa1",
-            measurementId: "G-KC5F0QT711"
-        };
-
         const params = new URLSearchParams(location.search);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
+        const SQL_AUTH_TOKEN_KEY = "darkJutsuSqlAuthToken";
+        const SQL_AUTH_USER_KEY = "darkJutsuSqlAuthUser";
+        function criarUsuarioSqlAuth(user, token){
+            const uid = user?.uid || user?.id || "";
+            const nickname = user?.nickname || uid;
+            return {
+                uid,
+                email: user?.email || `${nickname}@sistema.local`,
+                displayName: nickname,
+                sqlUser: user || {},
+                async getIdToken(){ return token || localStorage.getItem(SQL_AUTH_TOKEN_KEY) || ""; }
+            };
+        }
+        const auth = {
+            currentUser: null,
+            _listeners: [],
+            _setUser(user){
+                this.currentUser = user;
+                this._listeners.slice().forEach(callback => callback(user));
+            }
+        };
+        function onAuthStateChanged(authRef, callback){
+            authRef._listeners.push(callback);
+            Promise.resolve().then(() => callback(authRef.currentUser));
+            return () => { authRef._listeners = authRef._listeners.filter(item => item !== callback); };
+        }
+        async function signInWithEmailAndPassword(authRef, email, senha){
+            const login = String(email || "").split("@")[0];
+            const data = await sqlApi("/api/auth/login", {
+                method: "POST",
+                body: JSON.stringify({ login, password: senha })
+            });
+            localStorage.setItem(SQL_AUTH_TOKEN_KEY, data.token);
+            localStorage.setItem(SQL_AUTH_USER_KEY, JSON.stringify(data.user || {}));
+            const user = criarUsuarioSqlAuth(data.user, data.token);
+            authRef._setUser(user);
+            return { user };
+        }
         const root = document.getElementById("app");
         const btnAtualizar = document.getElementById("btnAtualizar");
         let estoqueMinimoCache = null;
@@ -1130,6 +1223,8 @@
         const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
 
         async function resolveSqlAuthHeader(){
+            const sessionToken = localStorage.getItem(SQL_AUTH_TOKEN_KEY) || "";
+            if(sessionToken) return `Bearer ${sessionToken}`;
             if(SQL_API_TOKEN) return `Bearer ${SQL_API_TOKEN}`;
             const user = auth.currentUser;
             if(!user || typeof user.getIdToken !== "function") return "";
@@ -1155,6 +1250,31 @@
                 }
             }
             throw lastError || new Error("API SQL indisponivel.");
+        }
+
+        async function restaurarSessaoSqlSalva(){
+            const token = localStorage.getItem(SQL_AUTH_TOKEN_KEY) || "";
+            if(!token) return;
+            let cachedUser = {};
+            try{ cachedUser = JSON.parse(localStorage.getItem(SQL_AUTH_USER_KEY) || "{}"); }catch(e){}
+            if(cachedUser?.uid || cachedUser?.id){
+                auth._setUser(criarUsuarioSqlAuth(cachedUser, token));
+            }
+            try{
+                const data = await sqlApi("/api/me");
+                if(data?.user){
+                    localStorage.setItem(SQL_AUTH_USER_KEY, JSON.stringify(data.user));
+                    auth._setUser(criarUsuarioSqlAuth(data.user, token));
+                }else{
+                    localStorage.removeItem(SQL_AUTH_TOKEN_KEY);
+                    localStorage.removeItem(SQL_AUTH_USER_KEY);
+                    auth._setUser(null);
+                }
+            }catch(e){
+                localStorage.removeItem(SQL_AUTH_TOKEN_KEY);
+                localStorage.removeItem(SQL_AUTH_USER_KEY);
+                auth._setUser(null);
+            }
         }
 
         function parametroPermitido(valor, permitidos, padrao){
@@ -1608,6 +1728,9 @@
             return max - min;
         }
         function arredondarLimiteEstoque(valor){
+            if(window.DarkCriticalStockManager?.ceilPositive){
+                return window.DarkCriticalStockManager.ceilPositive(valor);
+            }
             const numero = num(valor);
             if(numero === null || numero <= 0) return null;
             return Math.max(1, Math.ceil(numero));
@@ -1640,65 +1763,11 @@
             return { media, pico:Math.max(...consumos), desvio:Math.sqrt(variancia), eventos:consumos.length };
         }
         function calcularSugestaoLimitesDashboard(item, banco, pedidos){
-            const pedido = pedidoItem(item, pedidos);
-            const consumo = estatisticasConsumoDashboard(item, banco);
-            const saldoAtual = num(item?.saldo) ?? 0;
-            const saldoAnteriorPlanilha = num(item?.limitesCooperat?.saldoAnterior);
-            const consumoEntrePlanilhas = saldoAnteriorPlanilha !== null ? Math.max(0, saldoAnteriorPlanilha - saldoAtual) : 0;
-            const mediaPedido = num(pedido?.mediaPedido) ?? 0;
-            const ultimoPedidoQuantidade = Math.max(
-                num(pedido?.ultimoPedido?.quantidadeRecebida) ?? 0,
-                num(pedido?.ultimoPedido?.quantidadePedida) ?? 0
-            );
-            const basePedidoCompra = mediaPedido > 0 ? mediaPedido : ultimoPedidoQuantidade;
-            const minimoPorCompra = basePedidoCompra > 0 ? basePedidoCompra * 0.35 : 0;
-            const candidatosConsumo = [
-                consumo.media,
-                consumo.pico * 0.65,
-                consumoEntrePlanilhas
-            ].filter(v => Number.isFinite(v) && v > 0);
-            const candidatosDemanda = [
-                ...candidatosConsumo,
-                minimoPorCompra
-            ].filter(v => Number.isFinite(v) && v > 0);
-            if(!candidatosDemanda.length) return null;
-            const demandaBase = Math.max(...candidatosDemanda);
-            const estoqueSeguranca = Math.max(
-                consumo.desvio,
-                demandaBase * 0.35,
-                consumo.pico * 0.25,
-                minimoPorCompra
-            );
-            const minimoEstimado = candidatosConsumo.length
-                ? Math.max(demandaBase + estoqueSeguranca, minimoPorCompra)
-                : minimoPorCompra;
-            const minimo = arredondarLimiteEstoque(minimoEstimado);
-            if(minimo === null) return null;
-            const loteReposicao = arredondarLimiteEstoque(Math.max(
-                basePedidoCompra,
-                demandaBase * 1.5,
-                minimo * 0.8
-            ));
-            const repos = loteReposicao || minimo;
-            const maximo = Math.max(minimo + repos, minimo + 1);
-            return {
-                minimo,
-                maximo,
-                reposicao:maximo - minimo,
-                criterio:{
-                    demandaBase,
-                    estoqueSeguranca,
-                    consumoMedio:consumo.media,
-                    consumoPico:consumo.pico,
-                    eventosConsumo:consumo.eventos,
-                    consumoEntrePlanilhas,
-                    mediaPedido,
-                    ultimoPedidoQuantidade,
-                    basePedidoCompra,
-                    minimoPorCompra,
-                    fontePrincipal:basePedidoCompra > 0 && !candidatosConsumo.length ? "pedido_compra" : "consumo"
-                }
-            };
+            if(!window.DarkCriticalStockManager?.calculateItemPolicy) return null;
+            return window.DarkCriticalStockManager.calculateItemPolicy(item, {
+                history: historicoSaldoItemDashboard(item, banco),
+                purchaseOrder: pedidoItem(item, pedidos)
+            });
         }
         function aplicarLimitesDashboard(item, mapaMinimo, ajustes, banco, pedidos){
             const novo = {...(item || {})};
@@ -1753,20 +1822,19 @@
             }
             const sugestao = calcularSugestaoLimitesDashboard(novo, banco, pedidos);
             if(sugestao){
+                novo.gerenciadorEstoqueCritico = sugestao.criterio;
+                novo.sugestaoEstoque = sugestao.criterio;
                 if(novo.minimo === undefined || novo.minimo === null || novo.minimo === ""){
                     novo.minimo = sugestao.minimo;
-                    novo.minimoOrigem = "automatico";
-                    novo.limitesOrigem = novo.limitesOrigem || "automatico";
+                    novo.minimoOrigem = "gerenciador_critico";
+                    novo.limitesOrigem = novo.limitesOrigem || "gerenciador_critico";
                     temSuposicao = true;
                 }
                 if(novo.maximo === undefined || novo.maximo === null || novo.maximo === ""){
                     novo.maximo = sugestao.maximo;
-                    novo.maximoOrigem = "automatico";
-                    novo.limitesOrigem = novo.limitesOrigem || "automatico";
+                    novo.maximoOrigem = "gerenciador_critico";
+                    novo.limitesOrigem = novo.limitesOrigem || "gerenciador_critico";
                     temSuposicao = true;
-                }
-                if(novo.limitesOrigem === "automatico"){
-                    novo.sugestaoEstoque = sugestao.criterio;
                 }
             }
             const reposicaoInformada = limite(novo.reposicao);
@@ -1775,9 +1843,9 @@
                 novo.reposicao = repo;
                 if(reposicaoInformada === null){
                     temSuposicao = true;
-                    novo.reposicaoOrigem = novo.reposicaoOrigem || "calculada";
+                    novo.reposicaoOrigem = novo.reposicaoOrigem || "gerenciador_critico";
                 }else{
-                    novo.reposicaoOrigem = novo.reposicaoOrigem || novo.limitesOrigem || "calculada";
+                    novo.reposicaoOrigem = novo.reposicaoOrigem || novo.limitesOrigem || "gerenciador_critico";
                 }
             }
             novo.temSuposicaoEstoque = !!temSuposicao;
@@ -2531,6 +2599,7 @@
                         <div class="avaliadorDetailsBody avaliadorDecisionPanel">
                             <span>Escolha o destino deste item apos conferir minimo, reposicao e historico.</span>
                             <div class="avaliadorActions">
+                                ${renderBotaoCriterioGerenciador(item)}
                                 <button class="okBtn" type="button" data-avaliador-action="passivel" data-codigo="${esc(codigo)}">Solicitar</button>
                                 <button class="stopBtn" type="button" data-avaliador-action="nao_solicitar" data-codigo="${esc(codigo)}">Nao solicitar</button>
                                 <button class="warnBtn" type="button" data-avaliador-action="minimo_incorreto" data-codigo="${esc(codigo)}">Minimo incorreto</button>
@@ -2588,6 +2657,139 @@
         }
         let historicoComprasMesaStore = {};
         let kanbanAvaliadorStore = {};
+        let criterioGerenciadorStore = {};
+        function rotuloDecisaoGerenciador(decisao){
+            return {
+                aplicar_politica:"Aplicar politica",
+                sugerir_politica:"Sugerir politica",
+                critico_solicitar_agora:"Solicitar agora",
+                alto_solicitar:"Solicitar",
+                monitorar:"Monitorar",
+                aguardar_pedido_aberto:"Aguardar pedido aberto",
+                revisar_politica:"Revisar politica",
+                dados_insuficientes:"Dados insuficientes",
+                nao_solicitar:"Nao solicitar",
+                excesso_estoque:"Excesso",
+                bloqueado_manual:"Bloqueado manual",
+                bloqueado_obsoleto:"Bloqueado obsoleto"
+            }[decisao] || decisao || "Sem decisao";
+        }
+        function textoMotivoGerenciador(codigo){
+            return {
+                saldo_abaixo_ponto_reposicao:"Saldo atual abaixo do ponto de reposicao calculado.",
+                saldo_acima_maximo:"Saldo atual acima do maximo calculado.",
+                sem_pedido_aberto:"Nao ha pedido ou solicitacao aberta para este item.",
+                pedido_aberto_detectado:"Existe pedido, solicitacao ou entrada em andamento.",
+                historico_consumo_forte:"Historico de consumo/requisicao suficiente para politica automatica.",
+                historico_consumo_fraco:"Historico pequeno; calculo exige revisao.",
+                demanda_intermitente:"Demanda intermitente detectada.",
+                demanda_regular:"Demanda regular detectada.",
+                lead_time_real:"Lead time calculado por pedidos e entradas reais.",
+                lead_time_padrao:"Lead time padrao usado por falta de amostras confiaveis.",
+                lote_compra_recente:"Lote de reposicao baseado em pedidos recentes.",
+                outlier_detectado:"Pico historico detectado; aplicacao automatica bloqueada.",
+                entrada_elevada_fora_padrao:"Entrada elevada fora do padrao detectada; nao inflou o minimo automaticamente.",
+                entrada_preventiva_possivel:"Entrada pode ter vindo maior por preventiva, lote especial ou compra programada.",
+                aumento_acima_limite:"Aumento sugerido acima da trava global; requer avaliador.",
+                reducao_acima_limite:"Reducao sugerida acima da trava global; requer avaliador.",
+                manual_tem_prioridade:"Limite manual existente tem prioridade sobre o motor.",
+                avaliador_tem_prioridade:"Decisao anterior do avaliador tem prioridade.",
+                cooperat_usado_fallback:"Limite Cooperat usado como referencia/fallback.",
+                saldo_inicial_ignorado:"Saldo inicial e saldo anterior nao foram usados no aprendizado.",
+                item_morto_bloqueado:"Item morto/inativo nao gera reposicao.",
+                codigo_inconsistente:"Codigo do item nao permitiu cruzamento confiavel entre fontes.",
+                dados_insuficientes:"Dados insuficientes para politica automatica confiavel.",
+                manual_ou_cooperat_tem_prioridade:"Limite manual ou Cooperat foi preservado."
+            }[codigo] || codigo;
+        }
+        function criterioGerenciadorItem(item){
+            return item?.gerenciadorEstoqueCritico || item?.sugestaoEstoque || null;
+        }
+        function renderBotaoCriterioGerenciador(item){
+            const criterio = criterioGerenciadorItem(item);
+            if(!criterio) return "";
+            const codigo = key(item);
+            const decisao = rotuloDecisaoGerenciador(criterio.decisao);
+            return `<button class="infoBtn" type="button" data-criterio-gerenciador="${esc(codigo)}">Critério: ${esc(decisao)}</button>`;
+        }
+        function renderDrawerCriterioGerenciador(linha){
+            const item = linha?.item || {};
+            const criterio = criterioGerenciadorItem(item) || {};
+            const codigo = key(item);
+            const motivos = Array.isArray(criterio.reasonCodes) ? criterio.reasonCodes : [];
+            const travas = Array.isArray(criterio.travas) ? criterio.travas : [];
+            const confianca = Number(criterio.confianca || 0);
+            const atualMin = criterio.minimoAtual ?? item.minimo;
+            const atualMax = criterio.maximoAtual ?? item.maximo;
+            const atualRep = criterio.reposicaoAtual ?? item.reposicao;
+            return `
+                <div class="criterioOverlay" data-criterio-overlay>
+                    <aside class="criterioDrawer" role="dialog" aria-modal="true" aria-label="Critério do gerenciador">
+                        <div class="criterioHead">
+                            <div>
+                                <h2>Critério do Gerenciador</h2>
+                                <div class="sub">${esc(item.protheus || item.cooperat || codigo || "-")} - ${esc(item.descricao || "-")}</div>
+                            </div>
+                            <button class="criterioClose" type="button" data-criterio-close>×</button>
+                        </div>
+                        <div class="criterioBlock">
+                            <h3>Decisão</h3>
+                            <div class="criterioGrid">
+                                <div class="criterioMetric"><span>Decisão</span><strong>${esc(rotuloDecisaoGerenciador(criterio.decisao))}</strong></div>
+                                <div class="criterioMetric"><span>Confiança</span><strong>${esc(fmt(Math.round(confianca * 100)))}%</strong></div>
+                                <div class="criterioMetric"><span>Qtd. sugerida</span><strong>${esc(fmt(criterio.quantidadeSugerida))}</strong></div>
+                            </div>
+                        </div>
+                        <div class="criterioBlock">
+                            <h3>Política</h3>
+                            <div class="criterioGrid">
+                                <div class="criterioMetric"><span>Atual</span><strong>${esc(fmt(atualMin))}/${esc(fmt(atualMax))}/${esc(fmt(atualRep))}</strong></div>
+                                <div class="criterioMetric"><span>Sugerida</span><strong>${esc(fmt(criterio.minimoSugerido ?? criterio.pontoReposicao))}/${esc(fmt(criterio.maximoSugerido))}/${esc(fmt(criterio.reposicaoSugerida))}</strong></div>
+                                <div class="criterioMetric"><span>Origem</span><strong>${esc(origemLimiteTitulo(item.limitesOrigem || item.minimoOrigem))}</strong></div>
+                            </div>
+                        </div>
+                        <div class="criterioBlock">
+                            <h3>Evidências</h3>
+                            <div class="criterioGrid">
+                                <div class="criterioMetric"><span>Eventos</span><strong>${esc(fmt(criterio.eventosConsumo))}</strong></div>
+                                <div class="criterioMetric"><span>Demanda</span><strong>${esc(criterio.demandaClasse || "-")}</strong></div>
+                                <div class="criterioMetric"><span>Lead time</span><strong>${esc(fmt(criterio.leadTimeDias))} d</strong></div>
+                            </div>
+                        </div>
+                        <div class="criterioBlock">
+                            <h3>Comentários</h3>
+                            <ul class="criterioList">
+                                ${motivos.map(motivo => `<li>${esc(textoMotivoGerenciador(motivo))}</li>`).join("") || "<li>Sem comentários do motor.</li>"}
+                            </ul>
+                        </div>
+                        ${travas.length ? `
+                            <div class="criterioBlock">
+                                <h3>Travas</h3>
+                                <ul class="criterioList">${travas.map(trava => `<li>${esc(textoMotivoGerenciador(trava))}</li>`).join("")}</ul>
+                            </div>
+                        ` : ""}
+                    </aside>
+                </div>
+            `;
+        }
+        function abrirCriterioGerenciador(codigo){
+            const linha = criterioGerenciadorStore[normalizarCodigo(codigo)] || criterioGerenciadorStore[codigo];
+            if(!linha) return;
+            document.querySelectorAll("[data-criterio-overlay]").forEach(el => el.remove());
+            document.body.insertAdjacentHTML("beforeend", renderDrawerCriterioGerenciador(linha));
+            document.querySelector("[data-criterio-close]")?.addEventListener("click", fecharCriterioGerenciador);
+            document.querySelector("[data-criterio-overlay]")?.addEventListener("click", event => {
+                if(event.target?.matches?.("[data-criterio-overlay]")) fecharCriterioGerenciador();
+            });
+        }
+        function fecharCriterioGerenciador(){
+            document.querySelectorAll("[data-criterio-overlay]").forEach(el => el.remove());
+        }
+        function bindCriterioGerenciador(){
+            root.querySelectorAll("[data-criterio-gerenciador]").forEach(btn => {
+                btn.addEventListener("click", () => abrirCriterioGerenciador(btn.dataset.criterioGerenciador));
+            });
+        }
         function idHistoricoComprasMesa(prefixo, codigo){
             return `${prefixo}_${ajusteKey(codigo || "item")}`;
         }
@@ -2708,6 +2910,7 @@
                         <span class="avaliadorTag" title="${esc(tituloEnderecosItem(item))}">Endereco ${esc(item.enderecoPrincipal || "-")}</span>
                     </div>
                     <div class="triageActions avaliadorActions">
+                        ${renderBotaoCriterioGerenciador(item)}
                         <button class="okBtn" type="button" data-avaliador-action="passivel" data-codigo="${esc(codigo)}">Solicitar</button>
                         <button class="warnBtn" type="button" data-avaliador-action="minimo_incorreto" data-codigo="${esc(codigo)}">Corrigir minimo</button>
                         <button class="warnBtn" type="button" data-avaliador-action="reposicao_incorreta" data-codigo="${esc(codigo)}">Corrigir reposicao</button>
@@ -2816,6 +3019,7 @@
                                 ${registro?.observacao ? `<span>Obs.: ${esc(registro.observacao)}</span>` : ""}
                             </div>
                             <div class="avaliadorActions">
+                                ${renderBotaoCriterioGerenciador(item)}
                                 <button type="button" data-kanban-status="solicitacao_aprovada" data-codigo="${esc(codigo)}">Aprovada</button>
                                 <button type="button" data-kanban-status="pedido_feito" data-codigo="${esc(codigo)}">Pedido</button>
                                 <button type="button" data-kanban-status="entrega_pendente" data-codigo="${esc(codigo)}">Entrada</button>
@@ -2940,6 +3144,11 @@
 
             historicoComprasMesaStore = {};
             kanbanAvaliadorStore = {};
+            criterioGerenciadorStore = {};
+            linhasBase.forEach(linha => {
+                const codigo = key(linha.item);
+                if(codigo) criterioGerenciadorStore[normalizarCodigo(codigo)] = linha;
+            });
             document.getElementById("subtitulo").textContent = `${filaTotal.length} item(ns) aguardando avaliacao no armazem ${cfg.armazens.join(",") || "04"}`;
             root.innerHTML = `
                 <section class="cards">
@@ -3619,6 +3828,7 @@
             bindHistoricoComprasLazy();
             bindKanbanAvaliadorLazy();
             bindAvaliadorNavegacaoLocal();
+            bindCriterioGerenciador();
         }
         async function carregar(){
             if(!auth.currentUser){
@@ -4243,6 +4453,7 @@
             aplicarModoEmbed();
         }
 
+        await restaurarSessaoSqlSalva();
         onAuthStateChanged(auth, user => {
             if(!user){
                 renderLogin();

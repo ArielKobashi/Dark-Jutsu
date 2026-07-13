@@ -10,9 +10,9 @@ set "PRIMARY_REQUEST_FILE=%SHARE_ROOT%\solicitar-principal.txt"
 set "OLD_PAUSE_FILE=%SHARE_ROOT%\principal-pausado-ate.txt"
 set "LOGDIR=C:\DarkJutsu\logs"
 set "EVENT_LOGGER=%SHARE_ROOT%\scripts\registrar_evento_servidor_darkjutsu.bat"
+set "LOGFILE=%LOGDIR%\servidor_guardiao.log"
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
-set "LOGFILE=%LOGDIR%\servidor_guardiao.log"
 
 echo ==================================================
 echo Dark-Jutsu - Verificacao do guardiao
@@ -20,6 +20,8 @@ echo Usuario: %USERNAME%
 echo Maquina: %COMPUTERNAME%
 echo ==================================================
 echo.
+>> "%LOGFILE%" echo [%date% %time%] INICIO tick guardiao. Usuario=%USERNAME% Maquina=%COMPUTERNAME%.
+if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "GUARDIAO" "Inicio do tick do guardiao."
 
 set "LOCAL_IP="
 ipconfig | findstr /C:"%PRIMARY_IP%" >nul 2>&1
@@ -31,104 +33,132 @@ if "%LOCAL_IP%"=="" (
 
 if "%LOCAL_IP%"=="" (
     echo FALHOU: esta maquina nao tem IP de principal/reserva.
-    echo [%date% %time%] Esta maquina nao tem IP de principal/reserva. Guardiao nao vai iniciar servidor. >> "%LOGFILE%"
-    call :event AVISO GUARDIAO "Maquina sem IP de principal/reserva; guardiao nao age."
+    >> "%LOGFILE%" echo [%date% %time%] FALHOU: maquina sem IP de principal/reserva. Guardiao nao vai agir.
+    if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "GUARDIAO" "Maquina sem IP de principal/reserva; guardiao nao age."
     exit /b 0
 )
+if "%LOCAL_IP%"=="%PRIMARY_IP%" (set "LOCAL_ROLE=PRINCIPAL") else (set "LOCAL_ROLE=RESERVA")
+>> "%LOGFILE%" echo [%date% %time%] Papel detectado: %LOCAL_ROLE%; IP local=%LOCAL_IP%.
+if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "GUARDIAO" "Papel detectado=%LOCAL_ROLE%; IP=%LOCAL_IP%."
 
-call :health "%PRIMARY_IP%"
+>> "%LOGFILE%" echo [%date% %time%] Health principal: http://%PRIMARY_IP%:%API_PORT%/health
+curl -fsS --max-time 3 "http://%PRIMARY_IP%:%API_PORT%/health" >nul 2>&1
 set "PRIMARY_OK=%errorlevel%"
-call :health "%RESERVE_IP%"
-set "RESERVE_OK=%errorlevel%"
+>> "%LOGFILE%" echo [%date% %time%] Resultado health principal=%PRIMARY_OK%.
+if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "HEALTH" "Principal %PRIMARY_IP% respondeu codigo curl=%PRIMARY_OK%."
 
-echo [%date% %time%] Tick guardiao CMD. Local=%LOCAL_IP% principal=%PRIMARY_OK% reserva=%RESERVE_OK%. >> "%LOGFILE%"
+>> "%LOGFILE%" echo [%date% %time%] Health reserva: http://%RESERVE_IP%:%API_PORT%/health
+curl -fsS --max-time 3 "http://%RESERVE_IP%:%API_PORT%/health" >nul 2>&1
+set "RESERVE_OK=%errorlevel%"
+>> "%LOGFILE%" echo [%date% %time%] Resultado health reserva=%RESERVE_OK%.
+if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "HEALTH" "Reserva %RESERVE_IP% respondeu codigo curl=%RESERVE_OK%."
+
+>> "%LOGFILE%" echo [%date% %time%] Tick guardiao CMD. Local=%LOCAL_IP% papel=%LOCAL_ROLE% principal=%PRIMARY_OK% reserva=%RESERVE_OK%.
 echo IP local: %LOCAL_IP%
 echo Principal %PRIMARY_IP%: %PRIMARY_OK%
 echo Reserva   %RESERVE_IP%: %RESERVE_OK%
 echo.
-call :event INFO GUARDIAO "Tick. Local=%LOCAL_IP%; principal=%PRIMARY_OK%; reserva=%RESERVE_OK%."
+if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "GUARDIAO" "Tick. Local=%LOCAL_IP%; principal=%PRIMARY_OK%; reserva=%RESERVE_OK%."
 
 if "%PRIMARY_OK%"=="0" (
     echo OK: principal respondeu. Nao precisa assumir.
+    >> "%LOGFILE%" echo [%date% %time%] DECISAO: principal online. Limpando estado preto e pedido remoto.
     del "%BLACKOUT_FILE%" >nul 2>&1
     del "%PRIMARY_REQUEST_FILE%" >nul 2>&1
     if not "%LOCAL_IP%"=="%PRIMARY_IP%" (
-        call :event INFO GUARDIAO "Principal respondeu; reserva deve parar API local se estiver ativa."
+        >> "%LOGFILE%" echo [%date% %time%] DECISAO: este PC e reserva; garantindo API local parada.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "GUARDIAO" "Principal respondeu; reserva deve parar API local se estiver ativa."
         call "%SHARE_ROOT%\scripts\parar_api_darkjutsu.bat" >nul 2>&1
+        >> "%LOGFILE%" echo [%date% %time%] parar_api_darkjutsu retornou codigo !errorlevel!.
     )
-    echo [%date% %time%] Principal ativa; reserva deve ficar sem API local. >> "%LOGFILE%"
-    call :event OK GUARDIAO "Principal ativa. Nenhuma assuncao necessaria."
+    >> "%LOGFILE%" echo [%date% %time%] FIM tick: principal ativa; nenhuma assuncao.
+    if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "GUARDIAO" "Principal ativa. Nenhuma assuncao necessaria."
     exit /b 0
 )
 
 if "%RESERVE_OK%"=="0" (
     echo OK: reserva respondeu.
+    >> "%LOGFILE%" echo [%date% %time%] DECISAO: reserva online e principal offline.
     del "%BLACKOUT_FILE%" >nul 2>&1
     del "%PRIMARY_REQUEST_FILE%" >nul 2>&1
     if "%LOCAL_IP%"=="%PRIMARY_IP%" (
         del "%OLD_PAUSE_FILE%" >nul 2>&1
-        echo [%date% %time%] Reserva ativa e principal livre; principal vai reassumir agora. >> "%LOGFILE%"
-        call :event INFO FAILBACK "Reserva respondeu e principal esta livre; principal vai reassumir."
+        >> "%LOGFILE%" echo [%date% %time%] FAILBACK: este PC e principal; tentando reassumir da reserva.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "FAILBACK" "Reserva respondeu e principal esta livre; principal vai reassumir."
         call "%SHARE_ROOT%\scripts\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
         set "RC=!errorlevel!"
-        if not "!RC!"=="0" call :event ERRO FAILBACK "Principal tentou reassumir, mas falhou. Codigo=!RC!."
+        >> "%LOGFILE%" echo [%date% %time%] Resultado failback principal: codigo=!RC!.
+        if not "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "ERRO" "FAILBACK" "Principal tentou reassumir, mas falhou. Codigo=!RC!."
+        if "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "FAILBACK" "Principal reassumiu com sucesso."
         exit /b !RC!
     ) else (
-        echo [%date% %time%] Reserva ativa nesta maquina. Aguardando principal voltar. >> "%LOGFILE%"
-        call :event OK GUARDIAO "Reserva ativa nesta maquina. Aguardando principal voltar."
+        >> "%LOGFILE%" echo [%date% %time%] RESERVA: reserva esta ativa; solicitando que o principal tente reassumir se estiver ligado.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "FAILBACK" "Reserva ativa; enviando pedido para principal tentar reassumir."
+        echo %COMPUTERNAME% %USERNAME% %date% %time% > "%PRIMARY_REQUEST_FILE%" 2>nul
+        schtasks /Run /S %PRIMARY_IP% /TN "Dark-Jutsu Guardiao Servidor" >> "%LOGFILE%" 2>&1
+        if !errorlevel!==0 (
+            >> "%LOGFILE%" echo [%date% %time%] Pedido remoto enviado para tarefa da principal.
+            if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "FAILBACK" "Pedido remoto enviado para tarefa do principal via schtasks."
+        ) else (
+            >> "%LOGFILE%" echo [%date% %time%] AVISO: nao conseguiu acionar tarefa remota da principal; pedido ficou registrado em %PRIMARY_REQUEST_FILE%.
+            if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "FAILBACK" "Nao consegui acionar tarefa remota do principal via schtasks; pedido ficou registrado no fileserver."
+        )
+        >> "%LOGFILE%" echo [%date% %time%] FIM tick: reserva ativa nesta maquina; aguardando principal voltar.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "GUARDIAO" "Reserva ativa nesta maquina. Aguardando principal voltar."
         exit /b 0
     )
 )
 
-call :blackout_minutes
-set "BLACKOUT_MINUTES=%errorlevel%"
+>> "%LOGFILE%" echo [%date% %time%] ALERTA: nenhum health respondeu. Principal=%PRIMARY_OK%; Reserva=%RESERVE_OK%.
+if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "PRETO" "Nenhum servidor respondeu. Local=%LOCAL_IP%; papel=%LOCAL_ROLE%; principal=%PRIMARY_OK%; reserva=%RESERVE_OK%."
 
-if "%LOCAL_IP%"=="%PRIMARY_IP%" (
-    echo ACAO: nenhum servidor respondeu; principal vai iniciar agora.
-    echo [%date% %time%] Nenhum servidor ativo; principal vai iniciar imediatamente. >> "%LOGFILE%"
-    call :event INFO ASSUMIR "Nenhum servidor respondeu; principal vai iniciar imediatamente."
-    call "%SHARE_ROOT%\scripts\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-    set "RC=!errorlevel!"
-    if not "!RC!"=="0" call :event ERRO ASSUMIR "Principal falhou ao iniciar. Codigo=!RC!."
-    exit /b !RC!
-)
-
-if "%LOCAL_IP%"=="%RESERVE_IP%" (
-    echo ACAO: nenhum servidor respondeu; reserva vai iniciar agora.
-    echo [%date% %time%] Preto ha %BLACKOUT_MINUTES% ciclo(s); reserva vai assumir agora para manter o sistema online. >> "%LOGFILE%"
-    call :event INFO ASSUMIR "Nenhum servidor respondeu; reserva vai assumir agora. Ciclos pretos=%BLACKOUT_MINUTES%."
-    call "%SHARE_ROOT%\scripts\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-    set "RC=!errorlevel!"
-    if not "!RC!"=="0" call :event ERRO ASSUMIR "Reserva falhou ao iniciar. Codigo=!RC!."
-    exit /b !RC!
-)
-
-exit /b 0
-
-:health
-curl -fsS --max-time 3 "http://%~1:%API_PORT%/health" >nul 2>&1
-exit /b %errorlevel%
-
-:blackout_minutes
 set "BLACKOUT_COUNT=0"
 if exist "%BLACKOUT_FILE%" set /p BLACKOUT_COUNT=<"%BLACKOUT_FILE%"
 set /a BLACKOUT_COUNT=BLACKOUT_COUNT+1
 if %BLACKOUT_COUNT% GTR 120 set "BLACKOUT_COUNT=1"
 >"%BLACKOUT_FILE%" echo %BLACKOUT_COUNT%
-exit /b %BLACKOUT_COUNT%
+set "BLACKOUT_MINUTES=%BLACKOUT_COUNT%"
+>> "%LOGFILE%" echo [%date% %time%] Contador preto=%BLACKOUT_MINUTES% ciclo(s).
 
-:request_primary_start
-echo %COMPUTERNAME% %USERNAME% %date% %time% > "%PRIMARY_REQUEST_FILE%" 2>nul
-schtasks /Run /S %PRIMARY_IP% /TN "Dark-Jutsu Guardiao Servidor" >> "%LOGFILE%" 2>&1
-if %errorlevel%==0 (
-    echo [%date% %time%] Pedido remoto enviado para tarefa da principal. >> "%LOGFILE%"
-) else (
-    echo [%date% %time%] AVISO: nao conseguiu acionar tarefa remota da principal; pedido ficou registrado em %PRIMARY_REQUEST_FILE%. >> "%LOGFILE%"
+if "%LOCAL_IP%"=="%PRIMARY_IP%" (
+    echo ACAO: nenhum servidor respondeu; principal vai iniciar agora.
+    >> "%LOGFILE%" echo [%date% %time%] DECISAO: principal vai assumir porque nenhum servidor respondeu.
+    if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "ASSUMIR" "Nenhum servidor respondeu; principal vai iniciar imediatamente."
+    call "%SHARE_ROOT%\scripts\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
+    set "RC=!errorlevel!"
+    >> "%LOGFILE%" echo [%date% %time%] Resultado assumir principal: codigo=!RC!.
+    if not "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "ERRO" "ASSUMIR" "Principal falhou ao iniciar. Codigo=!RC!."
+    if "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "ASSUMIR" "Principal iniciou com sucesso apos tela preta."
+    exit /b !RC!
 )
+
+if "%LOCAL_IP%"=="%RESERVE_IP%" (
+    echo ACAO: nenhum servidor respondeu; reserva vai aguardar confirmacao antes de assumir.
+    >> "%LOGFILE%" echo [%date% %time%] RESERVA: antes de assumir, enviando pedido para principal tentar iniciar/reassumir.
+    if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "FAILBACK" "Nenhum servidor respondeu; reserva vai pedir principal e aguardar confirmacao para evitar falso positivo."
+    echo %COMPUTERNAME% %USERNAME% %date% %time% > "%PRIMARY_REQUEST_FILE%" 2>nul
+    schtasks /Run /S %PRIMARY_IP% /TN "Dark-Jutsu Guardiao Servidor" >> "%LOGFILE%" 2>&1
+    if !errorlevel!==0 (
+        >> "%LOGFILE%" echo [%date% %time%] Pedido remoto enviado para tarefa da principal.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "FAILBACK" "Pedido remoto enviado para tarefa do principal via schtasks."
+    ) else (
+        >> "%LOGFILE%" echo [%date% %time%] AVISO: nao conseguiu acionar tarefa remota da principal; pedido ficou registrado em %PRIMARY_REQUEST_FILE%.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "FAILBACK" "Nao consegui acionar tarefa remota do principal via schtasks; pedido ficou registrado no fileserver."
+    )
+    if %BLACKOUT_MINUTES% LSS 3 (
+        >> "%LOGFILE%" echo [%date% %time%] RESERVA: tela preta ha %BLACKOUT_MINUTES% ciclo(s). Aguardando 3 ciclos antes de assumir.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "PRETO" "Reserva ainda nao vai assumir: tela preta ha %BLACKOUT_MINUTES% ciclo(s), precisa de 3."
+        exit /b 0
+    )
+    >> "%LOGFILE%" echo [%date% %time%] DECISAO: reserva vai assumir porque nenhum servidor respondeu.
+    if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "INFO" "ASSUMIR" "Nenhum servidor respondeu; reserva vai assumir agora. Ciclos pretos=%BLACKOUT_MINUTES%."
+    call "%SHARE_ROOT%\scripts\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
+    set "RC=!errorlevel!"
+    >> "%LOGFILE%" echo [%date% %time%] Resultado assumir reserva: codigo=!RC!.
+    if not "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "ERRO" "ASSUMIR" "Reserva falhou ao iniciar. Codigo=!RC!."
+    if "!RC!"=="0" if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "OK" "ASSUMIR" "Reserva iniciou com sucesso apos tela preta."
+    exit /b !RC!
+)
+
+>> "%LOGFILE%" echo [%date% %time%] FIM tick sem acao: IP local nao casou com principal/reserva apos health.
 exit /b 0
-
-:event
-if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "%~1" "%~2" "%~3"
-exit /b 0
-
-

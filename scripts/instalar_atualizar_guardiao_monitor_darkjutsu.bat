@@ -21,6 +21,7 @@ set "ROLE="
 set "MONITOR_KIND="
 set "MONITOR_CMD="
 set "MONITOR_MATCH="
+set "GUARDIAN_CMD="
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
 if not exist "%LOGDIR%" (
@@ -75,7 +76,7 @@ if exist "%SHARE_SCRIPTS%\guardiao_servidor_tick_darkjutsu.bat" (
 
 echo.
 echo [2. Arquivos obrigatorios]
-set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py atualizar_darkjutsu_do_github.bat corrigir_python_tkinter_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.ps1"
+set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat guardiao_loop_compartilhado_darkjutsu.vbs registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py atualizar_darkjutsu_do_github.bat corrigir_python_tkinter_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.ps1"
 if "%MONITOR_KIND%"=="PYTHON" (
   set "REQUIRED=%REQUIRED% monitor_reserva_python_darkjutsu.py iniciar_monitor_reserva_python_darkjutsu.bat diagnosticar_monitor_reserva_python_darkjutsu.bat"
 ) else (
@@ -99,6 +100,14 @@ if exist "%LOCAL_SCRIPTS%" (
   call :fail "Nao consegui criar %LOCAL_SCRIPTS%."
   goto finish
 )
+
+echo.
+echo [3b. Encerrar instancias antigas antes de atualizar arquivos]
+call :log "Encerrando monitores antigos antes de copiar arquivos."
+wmic process where "CommandLine like '%%monitor_reserva_python_darkjutsu%%' or CommandLine like '%%monitor_servidor_darkjutsu_py%%' or CommandLine like '%%monitor_principal_powershell_darkjutsu%%' or CommandLine like '%%monitor_servidor_darkjutsu.ps1%%' or CommandLine like '%%monitor_servidor_darkjutsu_py.py%%'" call terminate >> "%INSTALL_LOG%" 2>&1
+call :log "Encerrando guardioes antigos antes de copiar arquivos."
+wmic process where "CommandLine like '%%guardiao_loop_darkjutsu%%' or CommandLine like '%%guardiao_continuo_tick_darkjutsu%%' or CommandLine like '%%iniciar_guardiao_servidor_oculto%%' or CommandLine like '%%guardiao_loop_compartilhado_darkjutsu%%'" call terminate >> "%INSTALL_LOG%" 2>&1
+call :ok "Instancias antigas solicitadas para encerramento."
 
 echo.
 echo [4. Python portable, se reserva]
@@ -180,29 +189,34 @@ echo [8. Guardiao local]
   echo Loop
 ) > "%LOCAL_SCRIPTS%\guardiao_loop_darkjutsu.vbs"
 if exist "%LOCAL_SCRIPTS%\guardiao_loop_darkjutsu.vbs" (
+  set "GUARDIAN_CMD=wscript.exe //B %LOCAL_SCRIPTS%\guardiao_loop_darkjutsu.vbs"
   call :ok "Guardiao local criado."
 ) else (
-  call :fail "Nao consegui criar guardiao local."
-  goto finish
+  set "GUARDIAN_CMD=wscript.exe //B %SHARE_SCRIPTS%\guardiao_loop_compartilhado_darkjutsu.vbs"
+  call :warn "Nao consegui criar guardiao local; usando guardiao compartilhado da rede."
 )
 
 echo.
 echo [9. Inicializacao automatica]
+call :cleanup_old_startup
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Dark-Jutsu Monitor Servidor" /t REG_SZ /d "%MONITOR_CMD%" /f >> "%INSTALL_LOG%" 2>&1
 if errorlevel 1 (call :warn "Registro bloqueou monitor.") else (call :ok "Monitor no Registro HKCU Run.")
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Dark-Jutsu Guardiao Servidor" /t REG_SZ /d "wscript.exe //B %LOCAL_SCRIPTS%\guardiao_loop_darkjutsu.vbs" /f >> "%INSTALL_LOG%" 2>&1
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Dark-Jutsu Guardiao Servidor" /t REG_SZ /d "%GUARDIAN_CMD%" /f >> "%INSTALL_LOG%" 2>&1
 if errorlevel 1 (call :warn "Registro bloqueou guardiao.") else (call :ok "Guardiao no Registro HKCU Run.")
 (
   echo @echo off
   echo %MONITOR_CMD%
-  echo wscript.exe //B "%LOCAL_SCRIPTS%\guardiao_loop_darkjutsu.vbs"
+  echo %GUARDIAN_CMD%
 ) > "%DESKTOP%\Iniciar Dark-Jutsu Monitor.cmd" 2>nul
 if exist "%DESKTOP%\Iniciar Dark-Jutsu Monitor.cmd" call :ok "Iniciador manual criado na Area de Trabalho."
 
 echo.
 echo [10. Iniciar monitor e guardiao]
-wmic process where "CommandLine like '%%monitor_reserva_python_darkjutsu%%' or CommandLine like '%%monitor_servidor_darkjutsu_py%%' or CommandLine like '%%monitor_principal_powershell_darkjutsu%%'" call terminate >> "%INSTALL_LOG%" 2>&1
-start "" wscript.exe //B "%LOCAL_SCRIPTS%\guardiao_loop_darkjutsu.vbs"
+call :log "Encerrando monitores antigos antes de iniciar uma unica instancia."
+wmic process where "CommandLine like '%%monitor_reserva_python_darkjutsu%%' or CommandLine like '%%monitor_servidor_darkjutsu_py%%' or CommandLine like '%%monitor_principal_powershell_darkjutsu%%' or CommandLine like '%%monitor_servidor_darkjutsu.ps1%%' or CommandLine like '%%monitor_servidor_darkjutsu_py.py%%'" call terminate >> "%INSTALL_LOG%" 2>&1
+call :log "Encerrando guardioes antigos antes de iniciar loop atual."
+wmic process where "CommandLine like '%%guardiao_loop_darkjutsu%%' or CommandLine like '%%guardiao_continuo_tick_darkjutsu%%' or CommandLine like '%%iniciar_guardiao_servidor_oculto%%'" call terminate >> "%INSTALL_LOG%" 2>&1
+start "" %GUARDIAN_CMD%
 if "%MONITOR_KIND%"=="PYTHON" (
   call "%LOCAL_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat"
 ) else (
@@ -233,7 +247,44 @@ set "PAUSE_END=%~3"
   if "%PAUSE_END%"=="1" echo pause
   echo exit /b %%EC%%
 ) > "%LOCAL_SCRIPTS%\%WRAPPER%"
-if exist "%LOCAL_SCRIPTS%\%WRAPPER%" (call :ok "Comando criado: %WRAPPER%") else (call :fail "Falha ao criar %WRAPPER%")
+if exist "%LOCAL_SCRIPTS%\%WRAPPER%" (
+  call :ok "Comando criado: %WRAPPER%"
+) else (
+  if "%ROLE%"=="PRINCIPAL" (
+    call :warn "Nao consegui criar %WRAPPER% local; principal usa comandos da rede."
+  ) else (
+    call :fail "Falha ao criar %WRAPPER%"
+  )
+)
+exit /b 0
+
+:cleanup_old_startup
+call :log "Limpando inicializacoes antigas para evitar dois icones/guardioes."
+for %%R in (
+  "Dark-Jutsu Monitor Servidor"
+  "Dark-Jutsu Guardiao Servidor"
+  "Monitor Servidor Dark-Jutsu"
+  "Guardiao Continuo Dark-Jutsu"
+  "Dark-Jutsu Monitor"
+  "Dark-Jutsu Guardiao"
+) do (
+  reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "%%~R" /f >> "%INSTALL_LOG%" 2>&1
+)
+for %%F in (
+  "%STARTUP%\Monitor Servidor Dark-Jutsu.lnk"
+  "%STARTUP%\Monitor Servidor Dark-Jutsu.cmd"
+  "%STARTUP%\Guardiao Continuo Dark-Jutsu.cmd"
+  "%STARTUP%\Iniciar API Dark-Jutsu.lnk"
+  "%STARTUP%\Iniciar PostgreSQL Dark-Jutsu.lnk"
+  "%STARTUP%\Dark-Jutsu Monitor Servidor.lnk"
+  "%STARTUP%\Dark-Jutsu Guardiao Servidor.lnk"
+) do (
+  if exist "%%~F" (
+    del /F /Q "%%~F" >> "%INSTALL_LOG%" 2>&1
+    if exist "%%~F" (call :warn "Nao consegui remover inicializacao antiga: %%~F") else (call :log "Removida inicializacao antiga: %%~F")
+  )
+)
+call :ok "Limpeza de inicializacoes antigas concluida."
 exit /b 0
 
 :log

@@ -5,6 +5,7 @@ __pycache__/
 *.pyo
 *.log
 .env
+_local_secrets/
 db/data/
 scripts/controlador_config.json
 scripts/firebase_config.json

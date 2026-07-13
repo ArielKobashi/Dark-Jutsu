@@ -214,6 +214,8 @@ $notify.Add_DoubleClick({ Start-Process $AppPath })
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 15000
+$guardTimer = New-Object System.Windows.Forms.Timer
+$guardTimer.Interval = 60000
 
 function Update-Status {
   $localIp = Get-LocalServerIp
@@ -256,6 +258,11 @@ function Update-Status {
 
 $timer.Add_Tick({ Update-Status })
 $timer.Start()
+$guardTimer.Add_Tick({
+  Write-MonitorLog "Tick automatico do monitor principal chamando guardiao"
+  Start-Process "cmd.exe" -WindowStyle Hidden -ArgumentList "/c call `"$GuardScript`""
+})
+$guardTimer.Start()
 Update-Status
 
 [System.Windows.Forms.Application]::Run()
