@@ -6,6 +6,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dark-Jutsu</title>
 <link rel="icon" href="logo-tab.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="theme-color" content="#15151D">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dark-Jutsu">
 <link rel="stylesheet" href="style.css?v=5">
 <link rel="stylesheet" href="mobile.css?v=11">
 <script src="dashboard-nav.js" defer></script>
@@ -19,17 +24,18 @@
 
 <!-- SPLIT: auth.html (login and cadastro) -->
 <div id="authScreen">
-    <div id="authBox">
+    <form id="authBox" autocomplete="on" onsubmit="event.preventDefault(); login();">
         <div class="authBrand">
             <img src="logo.png" alt="Dark-Jutsu" class="authLogo">
             <div class="authName">Dark-Jutsu</div>
         </div>
         <h2 class="authTitle">Login</h2>
-        <input type="text" id="authNickname" placeholder="Nickname">
-        <input type="password" id="authSenha" placeholder="Senha">
-        <button onclick="login()">Entrar</button>
-        <button onclick="abrirCadastro()">Cadastrar</button>
-    </div>
+        <input type="text" id="authNickname" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Nickname">
+        <input type="password" id="authSenha" name="password" autocomplete="current-password" placeholder="Senha">
+        <button type="submit">Entrar</button>
+        <button type="button" onclick="abrirCadastro()">Cadastrar</button>
+        <button type="button" id="installAppBtn" class="installAppBtn" onclick="instalarDarkJutsuApp()">Instalar app web</button>
+    </form>
 </div>
 <!-- /SPLIT: auth.html -->
 
@@ -38,11 +44,11 @@
     <div id="cadastroBox">
         <h2>Primeiro Acesso</h2>
         <div class="nickWrap">
-            <input type="text" id="cadastroNickname" placeholder="Confirmar nickname">
+            <input type="text" id="cadastroNickname" name="new-username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Confirmar nickname">
             <span id="nickStatus" class="nickStatus" aria-hidden="true"></span>
         </div>
         <div class="senhaWrap">
-            <input type="password" id="cadastroSenha" placeholder="Confirmar senha">
+            <input type="password" id="cadastroSenha" name="new-password" autocomplete="new-password" placeholder="Confirmar senha">
             <button type="button" class="toggleSenha" onclick="toggleSenha('cadastroSenha', this)">&#128065;</button>
         </div>
         <input type="tel" id="cadastroCracha" placeholder="Número do crachá" inputmode="numeric" pattern="[0-9]*">
@@ -9570,7 +9576,7 @@ function enviarMensagemSistema(texto, roomId, extra = {}){
         window.sqlApi(`/api/chat/rooms/${encodeURIComponent(targetRoom)}/messages`, {
             method: "POST",
             body: JSON.stringify(mensagem)
-        }).then(() => carregarMensagensChatSql(true)).catch(err => {
+        }).then(() => atualizarChatSqlRapido(targetRoom !== salaAtual)).catch(err => {
             console.warn("Falha ao enviar evento de sistema no SQL:", err);
         });
     }else{
@@ -11537,6 +11543,51 @@ const auth = {
     }
 };
 
+let darkJutsuInstallPrompt = null;
+
+function atualizarBotaoInstalarApp(){
+    const btn = document.getElementById("installAppBtn");
+    if(!btn) return;
+    const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone;
+    btn.style.display = standalone ? "none" : "block";
+}
+
+window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    darkJutsuInstallPrompt = event;
+    atualizarBotaoInstalarApp();
+});
+
+window.addEventListener("appinstalled", () => {
+    darkJutsuInstallPrompt = null;
+    atualizarBotaoInstalarApp();
+    if(typeof mostrarNotificacao === "function") mostrarNotificacao("App web instalado.");
+});
+
+window.instalarDarkJutsuApp = async function(){
+    if(darkJutsuInstallPrompt){
+        darkJutsuInstallPrompt.prompt();
+        await darkJutsuInstallPrompt.userChoice.catch(() => null);
+        darkJutsuInstallPrompt = null;
+        atualizarBotaoInstalarApp();
+        return;
+    }
+    if(typeof mostrarNotificacao === "function"){
+        mostrarNotificacao("No Chrome, use o icone de instalar na barra de endereco ou menu > Instalar app.");
+    }
+};
+
+if("serviceWorker" in navigator && location.protocol !== "file:"){
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch(err => {
+            console.warn("Falha ao registrar app web:", err);
+        });
+        atualizarBotaoInstalarApp();
+    });
+}else{
+    window.addEventListener("load", atualizarBotaoInstalarApp);
+}
+
 function onAuthStateChanged(authRef, callback){
     authRef._listeners.push(callback);
     Promise.resolve().then(() => callback(authRef.currentUser));
@@ -11634,6 +11685,13 @@ async function resolveSqlAuthHeader(){
 }
 
 window.sqlApi = async function(path, options = {}){
+    const method = String(options.method || "GET").toUpperCase();
+    const isWrite = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
+    if(isWrite && servidorSqlOnline === false){
+        const message = "Servidor offline: salvamentos bloqueados ate a API voltar.";
+        if(typeof mostrarNotificacao === "function") mostrarNotificacao(message);
+        throw new Error(message);
+    }
     const headers = { ...(options.headers || {}) };
     if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
     const authHeader = await resolveSqlAuthHeader();
@@ -11661,6 +11719,7 @@ window.sqlApi = async function(path, options = {}){
                 sqlApiPreferredBase = base;
                 try{ localStorage.setItem("darkJutsuApiPreferredBase", base); }catch(e){}
             }
+            if(typeof setServidorSqlOffline === "function") setServidorSqlOffline(false);
             return data;
         } catch(error){
             lastError = error;
@@ -11675,21 +11734,22 @@ window.sqlApi = async function(path, options = {}){
             if(timeout) clearTimeout(timeout);
         }
     }
+    if(typeof setServidorSqlOffline === "function") setServidorSqlOffline(true);
     throw lastError || new Error("API SQL indisponivel.");
 };
 
 let servidorSqlOnline = true;
 let servidorSqlOfflineDesde = 0;
-let servidorSqlReloadTimer = null;
+let servidorSqlCheckInFlight = false;
 
 function ensureServidorSqlBanner(){
     let banner = document.getElementById("servidorSqlOfflineBanner");
     if(banner) return banner;
     const style = document.createElement("style");
     style.textContent = `
-        @keyframes servidorSqlBlink {
-            0%, 100% { opacity: 1; box-shadow: 0 10px 28px rgba(176,0,32,.30); }
-            50% { opacity: .55; box-shadow: 0 6px 18px rgba(176,0,32,.16); }
+        @keyframes servidorSqlPulse {
+            0%, 100% { box-shadow: 0 14px 34px rgba(15,23,42,.22), 0 0 0 1px rgba(248,113,113,.24); }
+            50% { box-shadow: 0 18px 42px rgba(15,23,42,.28), 0 0 0 4px rgba(248,113,113,.10); }
         }
         #servidorSqlOfflineBanner {
             position: fixed;
@@ -11699,25 +11759,44 @@ function ensureServidorSqlBanner(){
             display: none;
             width: min(330px, calc(100vw - 24px));
             box-sizing: border-box;
-            pointer-events: none;
-            padding: 10px 12px;
-            border-radius: 8px;
-            background: #b00020;
-            color: #fff;
-            font: 700 12px/1.3 Arial, sans-serif;
-            animation: servidorSqlBlink .9s infinite;
+            pointer-events: auto;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(248,113,113,.34);
+            background: linear-gradient(135deg, rgba(255,247,237,.98), rgba(255,241,242,.98));
+            color: #7f1d1d;
+            font: 600 12px/1.35 Arial, sans-serif;
+            animation: servidorSqlPulse 1.8s ease-in-out infinite;
         }
-        #servidorSqlOfflineBanner small {
+        #servidorSqlOfflineBanner strong {
             display: block;
-            margin-top: 4px;
+            color: #991b1b;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        #servidorSqlOfflineBanner span {
+            display: block;
             font-weight: 500;
-            opacity: .92;
+            color: #7f1d1d;
+        }
+        #servidorSqlOfflineBanner em {
+            display: block;
+            margin-top: 7px;
+            color: #475569;
+            font-size: 11px;
+            font-style: normal;
         }
     `;
     document.head.appendChild(style);
     banner = document.createElement("div");
     banner.id = "servidorSqlOfflineBanner";
-    banner.innerHTML = `SERVIDOR CAIU<small>Tentando reconectar. A pagina sera atualizada a cada 10 segundos.</small>`;
+    banner.setAttribute("role", "status");
+    banner.setAttribute("aria-live", "polite");
+    banner.innerHTML = `
+        <strong>Servidor offline</strong>
+        <span>Modo somente leitura ativo. Salvamentos e alteracoes estao bloqueados.</span>
+        <em>Reconectando em segundo plano. A pagina nao sera reiniciada automaticamente.</em>
+    `;
     document.body.appendChild(banner);
     return banner;
 }
@@ -11726,9 +11805,9 @@ async function testarServidorSqlAtivo(){
     const bases = [sqlApiPreferredBase, ...SQL_API_FALLBACK_BASES].filter((base, index, list) => base && list.indexOf(base) === index);
     for(const base of bases){
         const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-        const timeout = controller ? setTimeout(() => controller.abort(), 1800) : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), 2500) : null;
         try{
-            const response = await fetch(`${base}/health?ts=${Date.now()}`, {
+            const response = await fetch(`${base}/live?ts=${Date.now()}`, {
                 cache: "no-store",
                 signal: controller?.signal
             });
@@ -11754,34 +11833,30 @@ function setServidorSqlOffline(offline){
     if(banner) banner.style.display = offline ? "block" : "none";
     if(!offline){
         servidorSqlOfflineDesde = 0;
-        if(servidorSqlReloadTimer){
-            clearInterval(servidorSqlReloadTimer);
-            servidorSqlReloadTimer = null;
-        }
         return;
     }
     if(!servidorSqlOfflineDesde) servidorSqlOfflineDesde = Date.now();
-    if(!servidorSqlReloadTimer){
-        servidorSqlReloadTimer = setInterval(async () => {
-            const ok = await testarServidorSqlAtivo();
-            if(ok){
-                setServidorSqlOffline(false);
-            }else{
-                location.reload();
-            }
-        }, 10000);
-    }
 }
 
 async function monitorarServidorSql(){
-    const ok = await testarServidorSqlAtivo();
-    setServidorSqlOffline(!ok);
+    if(servidorSqlCheckInFlight) return;
+    servidorSqlCheckInFlight = true;
+    try{
+        const ok = await testarServidorSqlAtivo();
+        if(ok){
+            setServidorSqlOffline(false);
+            return;
+        }
+        setServidorSqlOffline(true);
+    }finally{
+        servidorSqlCheckInFlight = false;
+    }
 }
 
 if(typeof window !== "undefined"){
     window.addEventListener("load", () => {
         setTimeout(monitorarServidorSql, 1200);
-        setInterval(monitorarServidorSql, 5000);
+        setInterval(monitorarServidorSql, 3000);
     });
 }
 
@@ -11997,7 +12072,7 @@ window.login = async function(){
 
     let nick = document.getElementById("authNickname").value.trim().toLowerCase();
     let senha = document.getElementById("authSenha").value;
-    const loginBtn = document.querySelector("#authBox button[onclick='login()']");
+    const loginBtn = document.querySelector("#authBox button[type='submit']");
 
     window.ultimaSenhaLogin = senha;
 
@@ -12012,6 +12087,14 @@ window.login = async function(){
 
     try{
         await signInWithEmailAndPassword(auth, emailFake, senha);
+        try{
+            const form = document.getElementById("authBox");
+            if(window.PasswordCredential && navigator.credentials && form){
+                await navigator.credentials.store(new PasswordCredential(form));
+            }
+        }catch(credentialError){
+            console.warn("Chrome nao salvou credencial automaticamente:", credentialError);
+        }
 
     } catch(error){
         if(loginBtn){
@@ -12316,7 +12399,7 @@ onAuthStateChanged(auth, async (user) => {
     const adminPanel = document.getElementById("adminPanel");
 
     if (!user) {
-        const loginBtn = document.querySelector("#authBox button[onclick='login()']");
+        const loginBtn = document.querySelector("#authBox button[type='submit']");
         if(loginBtn){
             loginBtn.disabled = false;
             loginBtn.textContent = loginBtn.dataset.textoOriginal || "Entrar";
@@ -13951,6 +14034,10 @@ let chatSessionState = null;
 let chatRoomUnsubs = {};
 let chatTypingRoomUnsub = null;
 let chatSqlTimer = null;
+let chatSqlPolling = false;
+let chatSqlNextFullPollAt = 0;
+const CHAT_ACTIVE_POLL_MS = 1800;
+const CHAT_ALL_ROOMS_POLL_MS = 7000;
 let typingUsers = {};
 typingIdleTimer = null;
 lastTypingSent = 0;
@@ -14270,6 +14357,29 @@ async function carregarMensagensChatSql(silencioso = false){
     }
 }
 
+async function atualizarChatSqlRapido(forcarTodas = false){
+    if(chatSqlPolling || typeof window.sqlApi !== "function") return false;
+    chatSqlPolling = true;
+    try{
+        const agora = Date.now();
+        const deveCarregarTodas = forcarTodas || agora >= chatSqlNextFullPollAt;
+        const salas = deveCarregarTodas ? salasChat.map(room => room.id) : [salaAtual];
+        const resultados = await Promise.all(salas.map(roomId => carregarMensagensSalaChatSql(roomId, 120)));
+        resultados.forEach(([roomId, lista]) => {
+            roomMessages[roomId] = lista;
+        });
+        if(deveCarregarTodas) chatSqlNextFullPollAt = agora + CHAT_ALL_ROOMS_POLL_MS;
+        recalcularUnreadCounts();
+        atualizarVistaChatAtivo(salaAtual, false);
+        return true;
+    }catch(err){
+        console.warn("Falha ao atualizar chat SQL:", err);
+        return false;
+    }finally{
+        chatSqlPolling = false;
+    }
+}
+
 async function carregarMensagensSalaChatSql(roomId, limit = 120){
     const data = await window.sqlApi(`/api/chat/rooms/${encodeURIComponent(roomId)}/messages?limit=${encodeURIComponent(limit)}`, { timeoutMs: 7000 });
     const lista = (data?.messages || []).map(row => {
@@ -14298,20 +14408,11 @@ function iniciarMonitoramentoSalas(){
     if(window.contagemModoFocoAtivo) return;
     if(chatSqlTimer || Object.keys(chatRoomUnsubs || {}).length) return;
     if(typeof window.sqlApi === "function"){
-        carregarMensagensSalaChatSql(salaAtual, 120).then(([roomId, lista]) => {
-            roomMessages[roomId] = lista;
-            recalcularUnreadCounts();
-            atualizarVistaChatAtivo(roomId, false);
-            return carregarMensagensChatSql(true);
-        }).then(ok => {
+        atualizarChatSqlRapido(true).then(ok => {
             if(ok){
                 chatSqlTimer = setInterval(() => {
-                    carregarMensagensChatSql(true).then(nextOk => {
-                        if(!nextOk){
-                            pararMonitoramentoChatSql();
-                        }
-                    });
-                }, 7000);
+                    atualizarChatSqlRapido(false);
+                }, CHAT_ACTIVE_POLL_MS);
             }else{
         console.warn("Chat SQL indisponivel; monitoramento legado nao sera iniciado em modo SQL.");
             }
@@ -14761,13 +14862,15 @@ window.enviarMensagem = async function() {
                 timeoutMs: 7000
             });
             atualizarEstadoLocal({ _pending:false, _failed:false });
+            atualizarChatSqlRapido(false);
         }else{
             throw new Error("API SQL indisponivel.");
         }
     }catch(sqlErr){
         console.warn("Falha ao enviar mensagem no SQL:", sqlErr);
         atualizarEstadoLocal({ _pending:false, _failed:true });
-        alert("Nao foi possivel enviar a mensagem. Verifique se o servidor esta ativo e tente novamente.");
+        if(!input.value) input.value = texto;
+        mostrarNotificacao("Mensagem nao enviada. Servidor indisponivel.");
         return;
     }
 };

@@ -82,6 +82,20 @@ grant select, insert, update, delete on all tables in schema public to dark_juts
 grant select, insert, update, delete on all tables in schema public to dark_jutsu_service;
 grant usage, select on all sequences in schema public to dark_jutsu_app, dark_jutsu_service;
 
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'dark_jutsu') then
+    grant dark_jutsu_service to dark_jutsu;
+    alter role dark_jutsu inherit;
+    grant usage on schema public to dark_jutsu;
+    grant select, insert, update, delete on all tables in schema public to dark_jutsu;
+    grant usage, select on all sequences in schema public to dark_jutsu;
+    execute 'alter default privileges in schema public grant select, insert, update, delete on tables to dark_jutsu';
+    execute 'alter default privileges in schema public grant usage, select on sequences to dark_jutsu';
+  end if;
+end;
+$$;
+
 alter default privileges in schema public grant select on tables to dark_jutsu_readonly;
 alter default privileges in schema public grant select, insert, update, delete on tables to dark_jutsu_app;
 alter default privileges in schema public grant select, insert, update, delete on tables to dark_jutsu_service;

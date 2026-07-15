@@ -2275,6 +2275,17 @@ body:not(.app-ready) .historicoContagemPanel{
     width:250px;
 }
 
+.installAppBtn{
+    background:#0F766E;
+    border-color:#5EEAD4;
+    color:#F0FDFA;
+    display:block;
+}
+
+.installAppBtn:hover{
+    box-shadow:0 0 10px rgba(45,212,191,0.38);
+}
+
 .authBrand{
     display:flex;
     flex-direction:column;

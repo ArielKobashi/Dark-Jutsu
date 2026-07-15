@@ -15,11 +15,21 @@ PORT = 8765
 SHARE_ROOT = r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 APP_PATH = os.path.join(SHARE_ROOT, "app", "index.html")
 SCRIPTS = os.path.join(SHARE_ROOT, "scripts")
+CMD_EXE = r"C:\Windows\SysWOW64\cmd.exe" if os.path.exists(r"C:\Windows\SysWOW64\cmd.exe") else "cmd.exe"
+PYTHON_EXE = os.path.join(os.path.dirname(sys.executable), "python.exe")
 PASSWORD = "654321"
+INFINITY_PASSWORD = "123456789"
+INFINITY_INTERVAL_SECONDS = 150
 LOG_DIR = r"C:\DarkJutsu\logs"
 LOG_FILE = os.path.join(LOG_DIR, "monitor_python.log")
+ANTI_SLEEP_STATUS_FILE = os.path.join(LOG_DIR, "anti_sleep_darkjutsu.status")
+SHARED_MONITOR_LOG = os.path.join(SHARE_ROOT, "logs", "monitor_python_eventos.txt")
+TEST_ACTIVE_FILE = os.path.join(SHARE_ROOT, "status", "teste_inicializacao_ativo.txt")
+TEST_LOG = os.path.join(SHARE_ROOT, "logs", "teste_inicializacao_manual_darkjutsu.txt")
 MUTEX_NAME = "Global\\DarkJutsuMonitorReservaPython"
 ERROR_ALREADY_EXISTS = 183
+ES_CONTINUOUS = 0x80000000
+ES_SYSTEM_REQUIRED = 0x00000001
 
 WM_USER = 0x0400
 WM_TRAY = WM_USER + 20
@@ -42,6 +52,7 @@ ID_TEST = 1002
 ID_SWITCH = 1003
 ID_STOP = 1004
 ID_GUARD = 1005
+ID_INFINITY_TOGGLE = 1006
 
 user32 = ctypes.windll.user32
 shell32 = ctypes.windll.shell32
@@ -144,6 +155,8 @@ user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM,
 user32.DefWindowProcW.restype = wintypes.LRESULT
 user32.DestroyMenu.argtypes = [wintypes.HMENU]
 user32.DestroyMenu.restype = wintypes.BOOL
+user32.mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.ULONG]
+user32.mouse_event.restype = None
 
 
 def message(text, title="Dark-Jutsu"):
@@ -151,12 +164,56 @@ def message(text, title="Dark-Jutsu"):
 
 
 def log(text):
+    line = time.strftime("%Y-%m-%d %H:%M:%S") + " | " + str(text)
     try:
         os.makedirs(LOG_DIR, exist_ok=True)
         with open(LOG_FILE, "a", encoding="utf-8") as fh:
-            fh.write(time.strftime("%Y-%m-%d %H:%M:%S") + " | " + str(text) + "\n")
+            fh.write(line + "\n")
     except Exception:
         pass
+    try:
+        os.makedirs(os.path.dirname(SHARED_MONITOR_LOG), exist_ok=True)
+        actor = f"{os.environ.get('COMPUTERNAME', '?')}\\{os.environ.get('USERNAME', '?')}"
+        with open(SHARED_MONITOR_LOG, "a", encoding="utf-8") as fh:
+            fh.write(line + f" | {actor}\n")
+    except Exception:
+        pass
+    try:
+        if os.path.exists(TEST_ACTIVE_FILE):
+            with open(TEST_ACTIVE_FILE, "r", encoding="utf-8", errors="ignore") as fh:
+                session = fh.read().strip().replace("\n", " | ")
+            os.makedirs(os.path.dirname(TEST_LOG), exist_ok=True)
+            actor = f"{os.environ.get('COMPUTERNAME', '?')}\\{os.environ.get('USERNAME', '?')}"
+            with open(TEST_LOG, "a", encoding="utf-8") as fh:
+                fh.write(line + f" | {actor} | TESTE_ATIVO={session}\n")
+    except Exception:
+        pass
+
+
+def boot_hint():
+    try:
+        ps = "(Get-CimInstance Win32_OperatingSystem).LastBootUpTime"
+        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=8).stdout.strip()
+        return out or "indisponivel"
+    except Exception:
+        return "indisponivel"
+
+
+def anti_sleep_loop():
+    last_logged = 0
+    while True:
+        try:
+            result = kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+            os.makedirs(LOG_DIR, exist_ok=True)
+            with open(ANTI_SLEEP_STATUS_FILE, "w", encoding="ascii") as fh:
+                fh.write(time.strftime("%Y-%m-%d %H:%M:%S") + " | anti-sleep ativo | retorno=" + str(result) + "\n")
+            now = time.time()
+            if now - last_logged > 1800:
+                log("anti-sleep ativo: Windows nao deve suspender enquanto o monitor estiver aberto")
+                last_logged = now
+        except Exception as exc:
+            log(f"ERRO anti-sleep: {type(exc).__name__}: {exc}")
+        time.sleep(45)
 
 
 _mutex_handle = None
@@ -200,6 +257,28 @@ def ask_password(action):
         return True
 
 
+def ask_infinity_password(action):
+    try:
+        import tkinter as tk
+        from tkinter import simpledialog
+
+        root = tk.Tk()
+        root.title("Infinity")
+        root.attributes("-topmost", True)
+        root.lift()
+        root.focus_force()
+        root.withdraw()
+        value = simpledialog.askstring("Infinity", f"Senha do Infinity para {action}:", show="*", parent=root)
+        root.destroy()
+        if value == INFINITY_PASSWORD:
+            return True
+        if value:
+            message("Senha incorreta.", "Infinity")
+        return False
+    except Exception:
+        return False
+
+
 def run_hidden(args):
     try:
         log("run_hidden: " + " ".join(args))
@@ -216,6 +295,39 @@ def run_visible(args):
     except Exception as exc:
         log(f"ERRO run_visible: {type(exc).__name__}: {exc}")
         message(f"Nao consegui abrir o comando:\n{type(exc).__name__}: {exc}", "Dark-Jutsu")
+
+
+class InfinityKeepAwake:
+    def __init__(self):
+        self.enabled = True
+        self._lock = threading.Lock()
+
+    def status_text(self):
+        return f"Infinity: {'ativo (2m30s)' if self.enabled else 'parado'}"
+
+    def set_enabled(self, enabled):
+        with self._lock:
+            self.enabled = enabled
+        log(f"Infinity {'iniciado' if enabled else 'parado'} pelo menu")
+
+    def nudge(self):
+        with self._lock:
+            enabled = self.enabled
+        if not enabled:
+            return
+        try:
+            user32.mouse_event(0x0001, 1, 0, 0, 0)
+            time.sleep(0.08)
+            user32.mouse_event(0x0001, -1, 0, 0, 0)
+            log("Infinity: mouse movido 1px e retornado")
+        except Exception as exc:
+            log(f"Infinity: falha ao mover mouse: {type(exc).__name__}: {exc}")
+
+    def run(self):
+        self.nudge()
+        while True:
+            time.sleep(INFINITY_INTERVAL_SECONDS)
+            self.nudge()
 
 
 def local_ips():
@@ -254,14 +366,26 @@ def script_args(name, keep_open=False):
     mode = "/k" if keep_open else "/c"
     wrapper = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_" + name.replace(".bat", ".cmd"))
     if os.path.exists(wrapper):
-        return ["cmd.exe", mode, wrapper]
+        return [CMD_EXE, mode, wrapper]
     body = f'pushd {SCRIPTS} && call {name} && popd'
-    return ["cmd.exe", mode, body]
+    return [CMD_EXE, mode, body]
 
 
 def panel_args():
     panel = local_script("abrir_painel_servidor_darkjutsu.bat")
-    return ["cmd.exe", "/c", f'call "{panel}"']
+    return [CMD_EXE, "/k", panel]
+
+
+def test_args():
+    base = os.path.dirname(os.path.abspath(__file__))
+    local_launcher = os.path.join(base, "abrir_status_darkjutsu.py")
+    shared_launcher = os.path.join(SCRIPTS, "abrir_status_darkjutsu.py")
+    script = local_launcher if os.path.exists(local_launcher) else shared_launcher
+    if not os.path.exists(script):
+        local_status = os.path.join(base, "status_compartilhado_servidores_darkjutsu.py")
+        shared_status = os.path.join(SCRIPTS, "status_compartilhado_servidores_darkjutsu.py")
+        script = local_status if os.path.exists(local_status) else shared_status
+    return [PYTHON_EXE, script]
 
 
 def make_icon(color):
@@ -338,15 +462,28 @@ def load_icon(name, fallback_color):
     return make_icon(fallback_color)
 
 
+def format_duration(seconds):
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, sec = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}min {sec}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}min"
+
+
 class Tray:
     def __init__(self):
         self.local_ip = ""
         self.this_active = False
+        self.offline_since = None
         self.tip = "Dark-Jutsu: verificando..."
         self.icon_black = load_icon("dark-jutsu-black.ico", 0x202020)
         self.icon_red = load_icon("dark-jutsu-red.ico", 0x2D2DCD)
         self.icon_green = load_icon("dark-jutsu-green.ico", 0x56A11C)
         self.icon = self.icon_black
+        self.infinity = InfinityKeepAwake()
         self.wndproc = ctypes.WINFUNCTYPE(wintypes.LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)(self.proc)
         cls = WNDCLASSW()
         cls.lpfnWndProc = ctypes.cast(self.wndproc, ctypes.c_void_p).value
@@ -365,6 +502,7 @@ class Tray:
         shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(self.nid))
         self.update_status()
         threading.Thread(target=self.loop_status, daemon=True).start()
+        threading.Thread(target=self.infinity.run, daemon=True).start()
 
     def loop_status(self):
         while True:
@@ -382,6 +520,7 @@ class Tray:
         primary = health(PRIMARY_IP)
         reserve = health(RESERVE_IP)
         if primary or reserve:
+            self.offline_since = None
             active_ip = PRIMARY_IP if primary else RESERVE_IP
             active_name = "principal" if primary else "reserva"
             self.this_active = self.local_ip == active_ip
@@ -392,9 +531,12 @@ class Tray:
                 self.icon = self.icon_red
                 self.tip = f"Dark-Jutsu: servidor ativo em outro PC ({active_name})"
         else:
+            if self.offline_since is None:
+                self.offline_since = time.time()
+            offline_text = format_duration(time.time() - self.offline_since)
             self.this_active = False
             self.icon = self.icon_black
-            self.tip = "Dark-Jutsu: nenhum servidor esta ligado"
+            self.tip = f"Dark-Jutsu: nenhum servidor ligado - offline ha {offline_text}"
         self.update_icon()
 
     def popup_menu(self):
@@ -406,6 +548,10 @@ class Tray:
         user32.AppendMenuW(menu, 0, ID_GUARD, "Verificar/iniciar agora")
         switch_text = "Tornar este PC o reserva" if self.this_active else "Tornar este PC o Principal"
         user32.AppendMenuW(menu, 0, ID_SWITCH, switch_text)
+        user32.AppendMenuW(menu, 0, 2, self.infinity.status_text())
+        user32.EnableMenuItem(menu, 2, 0x00000002)
+        infinity_text = "Parar Infinity" if self.infinity.enabled else "Iniciar Infinity"
+        user32.AppendMenuW(menu, 0, ID_INFINITY_TOGGLE, infinity_text)
         user32.AppendMenuW(menu, 0, ID_STOP, "Encerrar servidor local")
         pt = POINT()
         user32.GetCursorPos(ctypes.byref(pt))
@@ -421,7 +567,7 @@ class Tray:
             os.startfile(APP_PATH)
         elif ident == ID_TEST:
             if ask_password("testar servidor"):
-                run_hidden(panel_args())
+                run_visible(test_args())
         elif ident == ID_GUARD:
             if ask_password("verificar/iniciar agora"):
                 run_visible(script_args("guardiao_servidor_tick_darkjutsu.bat", keep_open=True))
@@ -436,6 +582,12 @@ class Tray:
         elif ident == ID_STOP:
             if ask_password("encerrar servidor local"):
                 run_hidden(script_args("parar_api_darkjutsu.bat"))
+        elif ident == ID_INFINITY_TOGGLE:
+            if self.infinity.enabled:
+                if ask_infinity_password("parar"):
+                    self.infinity.set_enabled(False)
+            else:
+                self.infinity.set_enabled(True)
         threading.Thread(target=self.update_status, daemon=True).start()
 
     def proc(self, hwnd, msg, wparam, lparam):
@@ -446,6 +598,10 @@ class Tray:
             self.command(wparam & 0xFFFF)
             return 0
         if msg == WM_DESTROY:
+            try:
+                kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+            except Exception:
+                pass
             shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(self.nid))
             user32.PostQuitMessage(0)
             return 0
@@ -460,9 +616,10 @@ class Tray:
 
 if __name__ == "__main__":
     try:
-        log("iniciando monitor python")
+        log(f"iniciando monitor python. Maquina={os.environ.get('COMPUTERNAME')} Usuario={os.environ.get('USERNAME')} IPs={sorted(local_ips())} BootWindows={boot_hint()} PID={os.getpid()}")
         if not acquire_single_instance():
             sys.exit(0)
+        threading.Thread(target=anti_sleep_loop, daemon=True).start()
         Tray().run()
     except Exception as exc:
         log(f"ERRO: {type(exc).__name__}: {exc}")

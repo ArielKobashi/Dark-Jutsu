@@ -7,6 +7,8 @@ instalar-tudo.bat
 
 instalar-monitor.bat
   Atualiza e reabre somente o icone do monitor.
+  O monitor inclui o Infinity, que move o mouse 1px e retorna a cada 2m30s para manter a tela ativa.
+  Para parar: clique com o botao direito no icone do monitor, escolha "Parar Infinity" e use a senha 123456789.
 
 reiniciar-guardiao.bat
   Remove a tarefa antiga do guardiao, reinstala a rotina e cria fallback no Inicializar se a tarefa agendada for bloqueada.

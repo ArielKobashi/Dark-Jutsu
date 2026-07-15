@@ -76,7 +76,7 @@ if exist "%SHARE_SCRIPTS%\guardiao_servidor_tick_darkjutsu.bat" (
 
 echo.
 echo [2. Arquivos obrigatorios]
-set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat guardiao_loop_compartilhado_darkjutsu.vbs registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py atualizar_darkjutsu_do_github.bat corrigir_python_tkinter_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.ps1"
+set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat guardiao_loop_compartilhado_darkjutsu.vbs guardiao_loop_python_darkjutsu.py atualizar_usuario_guardiao_monitor_darkjutsu.ps1 registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py abrir_status_darkjutsu.py status_compartilhado_servidores_darkjutsu.py atualizar_darkjutsu_do_github.bat corrigir_python_tkinter_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.ps1"
 if "%MONITOR_KIND%"=="PYTHON" (
   set "REQUIRED=%REQUIRED% monitor_reserva_python_darkjutsu.py iniciar_monitor_reserva_python_darkjutsu.bat diagnosticar_monitor_reserva_python_darkjutsu.bat"
 ) else (
@@ -169,6 +169,9 @@ echo.
 echo [6. Copia do monitor e painel]
 copy /Y "%SHARE_SCRIPTS%\abrir_painel_servidor_darkjutsu.bat" "%LOCAL_SCRIPTS%\abrir_painel_servidor_darkjutsu.bat" >> "%INSTALL_LOG%" 2>&1
 copy /Y "%SHARE_SCRIPTS%\painel_servidor_darkjutsu.py" "%LOCAL_SCRIPTS%\painel_servidor_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
+copy /Y "%SHARE_SCRIPTS%\abrir_status_darkjutsu.py" "%LOCAL_SCRIPTS%\abrir_status_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
+copy /Y "%SHARE_SCRIPTS%\status_compartilhado_servidores_darkjutsu.py" "%LOCAL_SCRIPTS%\status_compartilhado_servidores_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
+copy /Y "%SHARE_SCRIPTS%\guardiao_loop_python_darkjutsu.py" "%LOCAL_SCRIPTS%\guardiao_loop_python_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
 if "%MONITOR_KIND%"=="PYTHON" (
   copy /Y "%SHARE_SCRIPTS%\monitor_reserva_python_darkjutsu.py" "%LOCAL_SCRIPTS%\monitor_reserva_python_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
   copy /Y "%SHARE_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat" "%LOCAL_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat" >> "%INSTALL_LOG%" 2>&1
@@ -205,6 +208,11 @@ if exist "%LOCAL_SCRIPTS%\guardiao_loop_darkjutsu.vbs" (
 ) else (
   set "GUARDIAN_CMD=wscript.exe //B %SHARE_SCRIPTS%\guardiao_loop_compartilhado_darkjutsu.vbs"
   call :warn "Nao consegui criar guardiao local; usando guardiao compartilhado da rede."
+)
+set "PYDIR=%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0\python"
+if exist "%PYDIR%\pythonw.exe" if exist "%LOCAL_SCRIPTS%\guardiao_loop_python_darkjutsu.py" (
+  set "GUARDIAN_CMD=""%PYDIR%\pythonw.exe"" ""%LOCAL_SCRIPTS%\guardiao_loop_python_darkjutsu.py"""
+  call :ok "Guardiao Python selecionado."
 )
 
 echo.

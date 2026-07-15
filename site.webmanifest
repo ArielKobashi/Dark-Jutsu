@@ -1,0 +1,24 @@
+{
+  "name": "Dark-Jutsu",
+  "short_name": "Dark-Jutsu",
+  "description": "Aplicativo interno Dark-Jutsu",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#15151D",
+  "theme_color": "#15151D",
+  "icons": [
+    {
+      "src": "logo-tab.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

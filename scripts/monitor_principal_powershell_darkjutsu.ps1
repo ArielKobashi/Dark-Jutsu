@@ -3,6 +3,15 @@ $ErrorActionPreference = "SilentlyContinue"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName Microsoft.VisualBasic
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class InfinityMouseInput {
+  [DllImport("user32.dll")]
+  public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
+}
+"@
 
 $createdNew = $false
 $mutex = New-Object System.Threading.Mutex($true, "Global\DarkJutsuServerTrayMonitor", [ref]$createdNew)
@@ -23,6 +32,8 @@ $MakeReserveScript = Join-Path $ShareRoot "scripts\tornar_reserva_operacional_da
 $LogDir = "C:\DarkJutsu\logs"
 $LogFile = Join-Path $LogDir "monitor_servidor.log"
 $script:thisPcIsActiveServer = $false
+$script:InfinityEnabled = $true
+$InfinityPassword = "123456789"
 
 function Write-MonitorLog([string]$message) {
   try {
@@ -107,6 +118,40 @@ function Confirm-Password([string]$actionName) {
     ) | Out-Null
   }
   return $false
+}
+
+function Confirm-InfinityPassword([string]$actionName) {
+  $password = [Microsoft.VisualBasic.Interaction]::InputBox(
+    "Digite a senha do Infinity para executar: $actionName",
+    "Infinity",
+    ""
+  )
+  if ($password -eq $InfinityPassword) {
+    return $true
+  }
+  if ($password -ne "") {
+    [System.Windows.Forms.MessageBox]::Show(
+      "Senha incorreta.",
+      "Infinity",
+      [System.Windows.Forms.MessageBoxButtons]::OK,
+      [System.Windows.Forms.MessageBoxIcon]::Warning
+    ) | Out-Null
+  }
+  return $false
+}
+
+function Invoke-InfinityNudge {
+  if (-not $script:InfinityEnabled) {
+    return
+  }
+  try {
+    [InfinityMouseInput]::mouse_event(0x0001, 1, 0, 0, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 80
+    [InfinityMouseInput]::mouse_event(0x0001, -1, 0, 0, [UIntPtr]::Zero)
+    Write-MonitorLog "Infinity: mouse movido 1px e retornado"
+  } catch {
+    Write-MonitorLog "Infinity: falha ao mover mouse: $($_.Exception.Message)"
+  }
 }
 
 function Show-Info([string]$message) {
@@ -198,6 +243,32 @@ $assumeItem.Add_Click({
 
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 
+$infinityStatusItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$infinityStatusItem.Text = "Infinity: ativo (2m30s)"
+$infinityStatusItem.Enabled = $false
+[void]$menu.Items.Add($infinityStatusItem)
+
+$infinityToggleItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$infinityToggleItem.Text = "Parar Infinity"
+$infinityToggleItem.Add_Click({
+  if ($script:InfinityEnabled) {
+    if (Confirm-InfinityPassword "Parar Infinity") {
+      $script:InfinityEnabled = $false
+      $infinityStatusItem.Text = "Infinity: parado"
+      $infinityToggleItem.Text = "Iniciar Infinity"
+      Write-MonitorLog "Infinity parado pelo menu"
+    }
+  } else {
+    $script:InfinityEnabled = $true
+    $infinityStatusItem.Text = "Infinity: ativo (2m30s)"
+    $infinityToggleItem.Text = "Parar Infinity"
+    Write-MonitorLog "Infinity iniciado pelo menu"
+  }
+})
+[void]$menu.Items.Add($infinityToggleItem)
+
+[void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+
 $stopScript = Join-Path $ShareRoot "scripts\parar_api_darkjutsu.bat"
 $closeItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $closeItem.Text = "Encerrar"
@@ -216,6 +287,8 @@ $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 15000
 $guardTimer = New-Object System.Windows.Forms.Timer
 $guardTimer.Interval = 60000
+$infinityTimer = New-Object System.Windows.Forms.Timer
+$infinityTimer.Interval = 150000
 
 function Update-Status {
   $localIp = Get-LocalServerIp
@@ -263,6 +336,9 @@ $guardTimer.Add_Tick({
   Start-Process "cmd.exe" -WindowStyle Hidden -ArgumentList "/c call `"$GuardScript`""
 })
 $guardTimer.Start()
+$infinityTimer.Add_Tick({ Invoke-InfinityNudge })
+$infinityTimer.Start()
+Invoke-InfinityNudge
 Update-Status
 
 [System.Windows.Forms.Application]::Run()
