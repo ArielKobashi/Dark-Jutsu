@@ -18,7 +18,7 @@ PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
 API_PORT = 8765
 PG_PORT = 5433
-STATUS_VERSION = "2026-07-15.3"
+STATUS_VERSION = "2026-07-15.4"
 PG_ISREADY = Path(r"C:\DarkJutsu\PostgreSQL\pgsql\bin\pg_isready.exe")
 ANTI_SLEEP_STATUS_FILE = Path(r"C:\DarkJutsu\logs\anti_sleep_darkjutsu.status")
 LOCAL_MONITOR_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "DarkJutsu" / "monitor"
@@ -26,6 +26,7 @@ LOCAL_GUARDIAN = LOCAL_MONITOR_DIR / "guardiao_loop_python_darkjutsu.py"
 SHARE_GUARDIAN = SHARE_ROOT / "scripts" / "guardiao_loop_python_darkjutsu.py"
 LOCAL_GUARDIAN_LOCK = Path(r"C:\DarkJutsu\logs\guardiao_loop_python.lock")
 LOCAL_GUARDIAN_RUNTIME_VERSION = LOCAL_MONITOR_DIR / "guardian_runtime_version.txt"
+CREATE_NO_WINDOW = 0x08000000
 
 
 SERVERS = {
@@ -46,7 +47,7 @@ def local_ips():
     except Exception:
         pass
     try:
-        out = subprocess.run(["ipconfig"], capture_output=True, text=True, errors="ignore", timeout=5).stdout
+        out = subprocess.run(["ipconfig"], capture_output=True, text=True, errors="ignore", timeout=5, creationflags=CREATE_NO_WINDOW).stdout
         for line in out.splitlines():
             if "IPv4" in line and ":" in line:
                 ips.add(line.split(":", 1)[1].strip())
@@ -83,7 +84,7 @@ def http_probe(ip, endpoint, timeout=4):
 
 def port_listening(port):
     try:
-        out = subprocess.run(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True, errors="ignore", timeout=8).stdout
+        out = subprocess.run(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True, errors="ignore", timeout=8, creationflags=CREATE_NO_WINDOW).stdout
         return any(f":{port} " in line and "LISTENING" in line.upper() for line in out.splitlines())
     except Exception:
         return False
@@ -98,7 +99,7 @@ def proc_exists(*patterns):
             "-and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
             "Select-Object -First 1 -ExpandProperty ProcessId"
         )
-        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=10).stdout
+        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=10, creationflags=CREATE_NO_WINDOW).stdout
         return any(ch.isdigit() for ch in out)
     except Exception:
         return False
@@ -108,19 +109,28 @@ def pg_ready():
     if not PG_ISREADY.exists():
         return False
     try:
-        return subprocess.run([str(PG_ISREADY), "-h", "127.0.0.1", "-p", str(PG_PORT), "-U", "dark_jutsu", "-d", "dark_jutsu"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8).returncode == 0
+        return subprocess.run([str(PG_ISREADY), "-h", "127.0.0.1", "-p", str(PG_PORT), "-U", "dark_jutsu", "-d", "dark_jutsu"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8, creationflags=CREATE_NO_WINDOW).returncode == 0
     except Exception:
         return False
 
 
 def latest_backup():
     try:
-        backups = sorted(BACKUP_DIR.glob("darkjutsu_backup_*.backup"), key=lambda p: p.stat().st_mtime, reverse=True)
+        backups = sorted(
+            (p for p in BACKUP_DIR.glob("darkjutsu_backup_*.backup") if p.stat().st_size >= 1_000_000),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
         if not backups:
             return {"name": "", "mtime": "", "age_min": None}
         p = backups[0]
         age = int((time.time() - p.stat().st_mtime) / 60)
-        return {"name": p.name, "mtime": datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"), "age_min": age}
+        return {
+            "name": p.name,
+            "mtime": datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+            "age_min": age,
+            "size_bytes": p.stat().st_size,
+        }
     except Exception:
         return {"name": "", "mtime": "", "age_min": None}
 
@@ -269,7 +279,7 @@ def self_heal_guardian(local_role):
         except Exception:
             pass
         pyw = local_pythonw()
-        subprocess.Popen([str(pyw), str(LOCAL_GUARDIAN)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen([str(pyw), str(LOCAL_GUARDIAN)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=CREATE_NO_WINDOW)
         LOCAL_GUARDIAN_RUNTIME_VERSION.write_text(share_version, encoding="ascii")
         progress(f"Guardiao local atualizado automaticamente: {local_version} -> {share_version}")
     except Exception as exc:
@@ -284,7 +294,7 @@ def stop_guardian_processes():
         "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
     )
     try:
-        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, creationflags=CREATE_NO_WINDOW)
     except Exception:
         pass
 

@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 
 set "SHARE_ROOT=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 set "PG_SOURCE=%SHARE_ROOT%\instaladores\pgsql"
@@ -91,16 +91,32 @@ if errorlevel 1 exit /b 1
 "%PG_BIN%\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "select 'create database dark_jutsu owner dark_jutsu' where not exists (select from pg_database where datname = 'dark_jutsu')" -At | "%PG_BIN%\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d postgres
 if errorlevel 1 exit /b 1
 
-echo Localizando backup mais recente...
-for /f "usebackq delims=" %%B in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%SHARE_ROOT%\backups' -Filter '*.backup' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName"`) do set "LATEST_BACKUP=%%B"
+echo Localizando backup valido mais recente...
+set "LATEST_BACKUP="
+set "CANDIDATE_LIST=%TEMP%\darkjutsu_restore_candidate.lst"
+for /f "usebackq delims=" %%B in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%SHARE_ROOT%\backups' -Filter '*.backup' | Where-Object { $_.Length -ge 1000000 } | Sort-Object LastWriteTime -Descending | Select-Object -First 20 -ExpandProperty FullName"`) do (
+    if not defined LATEST_BACKUP (
+        echo Validando candidato:
+        echo %%B
+        "%PG_BIN%\pg_restore.exe" -l "%%B" > "%CANDIDATE_LIST%" 2>nul
+        if not errorlevel 1 (
+            findstr /C:"TABLE DATA public users" "%CANDIDATE_LIST%" >nul
+            if not errorlevel 1 (
+                findstr /C:"TABLE DATA public inventory_items" "%CANDIDATE_LIST%" >nul
+                if not errorlevel 1 set "LATEST_BACKUP=%%B"
+            )
+        )
+    )
+)
 
 if "%LATEST_BACKUP%"=="" (
-    echo AVISO: nenhum backup .backup encontrado em %SHARE_ROOT%\backups.
+    echo AVISO: nenhum backup valido encontrado em %SHARE_ROOT%\backups.
+    echo Backups pequenos ou truncados foram ignorados.
     echo O banco foi criado, mas nao foi restaurado.
 ) else (
     echo Restaurando backup:
     echo %LATEST_BACKUP%
-    "%PG_BIN%\pg_restore.exe" -h 127.0.0.1 -p 5433 -U postgres -d dark_jutsu --clean --if-exists --no-owner "%LATEST_BACKUP%"
+    "%PG_BIN%\pg_restore.exe" --exit-on-error -h 127.0.0.1 -p 5433 -U postgres -d dark_jutsu --clean --if-exists --no-owner "%LATEST_BACKUP%"
     if errorlevel 1 exit /b 1
 )
 

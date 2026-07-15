@@ -33,7 +33,9 @@ $LogDir = "C:\DarkJutsu\logs"
 $LogFile = Join-Path $LogDir "monitor_servidor.log"
 $script:thisPcIsActiveServer = $false
 $script:InfinityEnabled = $true
+$script:ServerOfflineSince = $null
 $InfinityPassword = "123456789"
+$OfflineGraceSeconds = 45
 
 function Write-MonitorLog([string]$message) {
   try {
@@ -54,7 +56,7 @@ function Get-LocalServerIp {
 
 function Test-Health($ip) {
   try {
-    $result = Invoke-RestMethod -Uri "http://${ip}:${Port}/health" -TimeoutSec 2
+    $result = Invoke-RestMethod -Uri "http://${ip}:${Port}/health" -TimeoutSec 3
     return ($result.ok -eq $true)
   } catch {
     return $false
@@ -303,6 +305,7 @@ function Update-Status {
   }
 
   if ($primaryOk -or $reserveOk) {
+    $script:ServerOfflineSince = $null
     $activeIp = if ($primaryOk) { $PrimaryIp } else { $ReserveIp }
     $activeName = if ($primaryOk) { "principal" } else { "reserva" }
     $script:thisPcIsActiveServer = ($localIp -eq $activeIp)
@@ -318,8 +321,17 @@ function Update-Status {
     }
   } else {
     $script:thisPcIsActiveServer = $false
-    $notify.Icon = $iconBlack
-    $text = "Dark-Jutsu: nenhum servidor esta ligado"
+    if ($null -eq $script:ServerOfflineSince) {
+      $script:ServerOfflineSince = Get-Date
+    }
+    $offlineSeconds = [int]((Get-Date) - $script:ServerOfflineSince).TotalSeconds
+    if ($offlineSeconds -lt $OfflineGraceSeconds) {
+      $notify.Icon = $iconBlack
+      $text = "Dark-Jutsu: reconfirmando servidor (${offlineSeconds}s sem resposta)"
+    } else {
+      $notify.Icon = $iconRed
+      $text = "Dark-Jutsu: nenhum servidor esta ligado"
+    }
     if ($localIp) {
       $assumeItem.Text = "Tornar este PC o Principal"
     }

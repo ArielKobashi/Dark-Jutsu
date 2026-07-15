@@ -11,6 +11,7 @@ from pathlib import Path
 PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
 API_PORT = 8765
+FAILOVER_BLACKOUT_SECONDS = 180
 SHARE_ROOT = Path(r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu")
 SCRIPTS = SHARE_ROOT / "scripts"
 STATUS_DIR = SHARE_ROOT / "status"
@@ -20,12 +21,17 @@ LOCAL_API = Path(r"C:\DarkJutsu\Dark-Jutsu\api\dark_jutsu_api.py")
 SHARE_API_DIR = SHARE_ROOT / "pacote" / "Dark-Jutsu" / "api"
 LOCAL_API_DIR = LOCAL_API.parent
 LOG_DIR = Path(r"C:\DarkJutsu\logs")
+PG_BIN = Path(r"C:\DarkJutsu\PostgreSQL\pgsql\bin")
+PGDATA = Path(r"C:\DarkJutsu\postgres-data")
+PG_CTL = PG_BIN / "pg_ctl.exe"
+PG_ISREADY = PG_BIN / "pg_isready.exe"
+PG_RUNTIME_LOG = LOG_DIR / "postgres_runtime.log"
 LOG_FILE = LOG_DIR / "guardiao_loop_python.log"
 API_LOG = LOG_DIR / "api_runtime_python_guardiao.log"
 LOCK_FILE = LOG_DIR / "guardiao_loop_python.lock"
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-15.8"
+GUARDIAN_VERSION = "2026-07-15.15"
 SHARED_LOG = SHARE_ROOT / "logs" / "guardiao_python_eventos.txt"
 TEST_ACTIVE_FILE = SHARE_ROOT / "status" / "teste_inicializacao_ativo.txt"
 TEST_LOG = SHARE_ROOT / "logs" / "teste_inicializacao_manual_darkjutsu.txt"
@@ -60,7 +66,7 @@ def log(message):
 def boot_hint():
     try:
         ps = "(Get-CimInstance Win32_OperatingSystem).LastBootUpTime"
-        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=8).stdout.strip()
+        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=8, creationflags=CREATE_NO_WINDOW).stdout.strip()
         return out or "indisponivel"
     except Exception:
         return "indisponivel"
@@ -76,10 +82,15 @@ def acquire_lock():
                 old_pid = 0
             if old_pid:
                 try:
-                    out = subprocess.run(["tasklist", "/FI", f"PID eq {old_pid}"], capture_output=True, text=True, errors="ignore", timeout=5).stdout
-                    if str(old_pid) in out:
+                    ps = (
+                        f"Get-CimInstance Win32_Process -Filter \"ProcessId={old_pid}\" | "
+                        "Select-Object -ExpandProperty CommandLine"
+                    )
+                    out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=8, creationflags=CREATE_NO_WINDOW).stdout
+                    if "guardiao_loop_python_darkjutsu.py" in out:
                         log(f"Guardiao Python ja esta rodando no PID {old_pid}. Encerrando duplicado.")
                         return False
+                    log(f"Lock antigo ignorado: PID {old_pid} nao e guardiao ativo.")
                 except Exception:
                     pass
         LOCK_FILE.write_text(str(os.getpid()), encoding="ascii")
@@ -97,7 +108,7 @@ def local_ips():
     except Exception:
         pass
     try:
-        out = subprocess.run(["ipconfig"], capture_output=True, text=True, errors="ignore", timeout=5).stdout
+        out = subprocess.run(["ipconfig"], capture_output=True, text=True, errors="ignore", timeout=5, creationflags=CREATE_NO_WINDOW).stdout
         for line in out.splitlines():
             if "IPv4" in line and ":" in line:
                 ips.add(line.split(":", 1)[1].strip())
@@ -131,7 +142,7 @@ def publish_status():
     if py.name.lower() == "pythonw.exe":
         py = py.with_name("python.exe")
     try:
-        subprocess.run([str(py), str(STATUS_SCRIPT), "--publish-only"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=40, creationflags=CREATE_NO_WINDOW)
+        subprocess.run([str(py), str(STATUS_SCRIPT), "--publish-only"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20, creationflags=CREATE_NO_WINDOW)
     except Exception as exc:
         log(f"AVISO: falha ao publicar status: {type(exc).__name__}: {exc}")
 
@@ -165,7 +176,7 @@ def api_processes():
             "-and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
             "Select-Object ProcessId,Name,CommandLine | Format-List"
         )
-        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=10).stdout
+        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=10, creationflags=CREATE_NO_WINDOW).stdout
         return out
     except Exception:
         return ""
@@ -184,13 +195,13 @@ def stop_local_api(reason):
             "-and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
             "Select-Object ProcessId,Name,CommandLine"
         )
-        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=10).stdout
+        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=10, creationflags=CREATE_NO_WINDOW).stdout
         stopped = False
         for line in out.splitlines():
             line = line.strip()
             if line and line[0].isdigit():
                 pid = line.split()[0]
-                subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", f"Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", f"Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, creationflags=CREATE_NO_WINDOW)
                 stopped = True
         if stopped:
             log(f"API local parada. Motivo={reason}")
@@ -215,6 +226,9 @@ def start_local_api(reason):
         log(f"ERRO: API local nao encontrada em {LOCAL_API}")
         return
     sync_local_api()
+    if not ensure_postgres_ready():
+        log(f"ERRO: PostgreSQL local nao ficou pronto; API nao sera iniciada. Motivo={reason}")
+        return
     py = Path(sys.executable)
     if py.name.lower() == "pythonw.exe":
         py = py.with_name("python.exe")
@@ -245,6 +259,54 @@ def start_local_api(reason):
         log(f"ERRO: API local foi solicitada, mas nao respondeu /health em 12s. Log compartilhado={shared_api_log}")
     except Exception as exc:
         log(f"ERRO ao iniciar API local: {type(exc).__name__}: {exc}")
+
+
+def ensure_postgres_ready():
+    if pg_ready():
+        log("PostgreSQL local pronto antes de iniciar API.")
+        return True
+    if not PG_CTL.exists():
+        log(f"ERRO: pg_ctl.exe nao encontrado em {PG_CTL}")
+        return False
+    if not (PGDATA / "postgresql.conf").exists():
+        log(f"ERRO: PGDATA invalido em {PGDATA}")
+        return False
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log("PostgreSQL local nao respondeu; iniciando pelo guardiao.")
+        proc = subprocess.run(
+            [str(PG_CTL), "-D", str(PGDATA), "-l", str(PG_RUNTIME_LOG), "start"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        log(f"pg_ctl start retorno={proc.returncode}; vou verificar pg_isready.")
+    except subprocess.TimeoutExpired:
+        log("AVISO: pg_ctl start excedeu 15s; vou continuar verificando pg_isready.")
+    except Exception as exc:
+        log(f"ERRO ao iniciar PostgreSQL pelo guardiao: {type(exc).__name__}: {exc}")
+    for attempt in range(1, 31):
+        if pg_ready():
+            log(f"PostgreSQL local pronto apos tentativa {attempt}/30.")
+            return True
+        time.sleep(1)
+    return False
+
+
+def pg_ready():
+    if not PG_ISREADY.exists():
+        return False
+    try:
+        return subprocess.run(
+            [str(PG_ISREADY), "-h", "127.0.0.1", "-p", "5433", "-U", "dark_jutsu", "-d", "dark_jutsu"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=8,
+            creationflags=CREATE_NO_WINDOW,
+        ).returncode == 0
+    except Exception:
+        return False
 
 
 def sync_local_api():
@@ -279,9 +341,12 @@ def main():
     log(f"Guardiao Python iniciado. Versao={GUARDIAN_VERSION} Papel={current_role} Usuario={os.environ.get('USERNAME')} Maquina={os.environ.get('COMPUTERNAME')} IPs={sorted(local_ips())} BootWindows={boot_hint()} PID={os.getpid()}")
     while True:
         try:
+            detected_role = role()
+            if detected_role != current_role:
+                log(f"Papel/IP atualizado: {current_role} -> {detected_role}. IPs={sorted(local_ips())}")
+                current_role = detected_role
             handle_status_request(current_role)
             if time.time() - last_full_cycle >= 15:
-                publish_status()
                 primary_ok = health(PRIMARY_IP)
                 reserve_ok = health(RESERVE_IP)
                 local_ok = health("127.0.0.1", timeout=2)
@@ -296,10 +361,13 @@ def main():
                     start_local_api("principal sem API ativa")
                 elif current_role == "reserva":
                     if primary_ok:
-                        if local_ok:
+                        if local_ok or api_process_running():
                             stop_local_api("principal voltou; reserva retorna para espera")
-                    elif blackout_seconds >= 65 and not reserve_ok:
+                    elif blackout_seconds >= FAILOVER_BLACKOUT_SECONDS and not reserve_ok:
                         start_local_api(f"reserva assumindo apos {blackout_seconds}s sem principal")
+                elif current_role == "desconhecido":
+                    log("Papel desconhecido; aguardando IP fixo principal/reserva para agir.")
+                publish_status()
                 last_full_cycle = time.time()
             time.sleep(5)
         except Exception as exc:

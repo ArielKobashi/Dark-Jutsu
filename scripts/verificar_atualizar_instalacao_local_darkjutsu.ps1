@@ -14,8 +14,11 @@ $ForceReinstallState = Join-Path $LocalDir "ultima_reinstalacao_forcada.txt"
 
 $TrackedFiles = @(
   "instalar_atualizar_guardiao_monitor_darkjutsu.bat",
+  "guardiao_loop_python_darkjutsu.py",
   "guardiao_servidor_tick_darkjutsu.bat",
   "atualizar_darkjutsu_do_github.bat",
+  "status_compartilhado_servidores_darkjutsu.py",
+  "abrir_status_darkjutsu.py",
   "monitor_reserva_python_darkjutsu.py",
   "monitor_principal_powershell_darkjutsu.ps1",
   "iniciar_monitor_reserva_python_darkjutsu.bat",

@@ -12,6 +12,8 @@ from ctypes import wintypes
 PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
 PORT = 8765
+HEALTH_TIMEOUT_SECONDS = 3
+OFFLINE_GRACE_SECONDS = 45
 SHARE_ROOT = r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 APP_PATH = os.path.join(SHARE_ROOT, "app", "index.html")
 SCRIPTS = os.path.join(SHARE_ROOT, "scripts")
@@ -349,7 +351,7 @@ def local_ips():
 
 def health(ip):
     try:
-        with urllib.request.urlopen(f"http://{ip}:{PORT}/health", timeout=1) as resp:
+        with urllib.request.urlopen(f"http://{ip}:{PORT}/health", timeout=HEALTH_TIMEOUT_SECONDS) as resp:
             return b'"ok":true' in resp.read().replace(b" ", b"").lower()
     except Exception:
         return False
@@ -533,10 +535,14 @@ class Tray:
         else:
             if self.offline_since is None:
                 self.offline_since = time.time()
-            offline_text = format_duration(time.time() - self.offline_since)
+            offline_seconds = time.time() - self.offline_since
+            offline_text = format_duration(offline_seconds)
             self.this_active = False
             self.icon = self.icon_black
-            self.tip = f"Dark-Jutsu: nenhum servidor ligado - offline ha {offline_text}"
+            self.tip = f"Dark-Jutsu: reconfirmando servidor - sem resposta ha {offline_text}"
+            if offline_seconds >= OFFLINE_GRACE_SECONDS:
+                self.icon = self.icon_red
+                self.tip = f"Dark-Jutsu: nenhum servidor ligado - offline ha {offline_text}"
         self.update_icon()
 
     def popup_menu(self):

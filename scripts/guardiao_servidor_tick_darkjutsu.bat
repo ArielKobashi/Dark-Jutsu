@@ -5,7 +5,9 @@ set "SHARE_ROOT=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 set "PRIMARY_IP=192.168.5.44"
 set "RESERVE_IP=192.168.5.38"
 set "API_PORT=8765"
-set "HEALTH_TIMEOUT=6"
+set "HEALTH_TIMEOUT=8"
+set "BLACKOUT_PRIMARY_MIN_CYCLES=4"
+set "BLACKOUT_RESERVE_MIN_CYCLES=5"
 set "BLACKOUT_FILE=%SHARE_ROOT%\servidor-preto-contador.txt"
 set "PRIMARY_REQUEST_FILE=%SHARE_ROOT%\solicitar-principal.txt"
 set "OLD_PAUSE_FILE=%SHARE_ROOT%\principal-pausado-ate.txt"
@@ -180,9 +182,9 @@ set "BLACKOUT_MINUTES=%BLACKOUT_COUNT%"
 >> "%LOGFILE%" echo [%date% %time%] Contador preto=%BLACKOUT_MINUTES% ciclo(s).
 
 if "%LOCAL_IP%"=="%PRIMARY_IP%" (
-    if %BLACKOUT_MINUTES% LSS 2 (
-        >> "%LOGFILE%" echo [%date% %time%] PRINCIPAL: falha isolada ha %BLACKOUT_MINUTES% ciclo(s); aguardando 2 ciclos antes de assumir para evitar falso positivo.
-        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "PRETO" "Principal ainda nao vai reiniciar: falha ha %BLACKOUT_MINUTES% ciclo(s), precisa de 2."
+    if %BLACKOUT_MINUTES% LSS %BLACKOUT_PRIMARY_MIN_CYCLES% (
+        >> "%LOGFILE%" echo [%date% %time%] PRINCIPAL: falha isolada ha %BLACKOUT_MINUTES% ciclo(s); aguardando %BLACKOUT_PRIMARY_MIN_CYCLES% ciclos antes de assumir para evitar falso positivo.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "PRETO" "Principal ainda nao vai reiniciar: falha ha %BLACKOUT_MINUTES% ciclo(s), precisa de %BLACKOUT_PRIMARY_MIN_CYCLES%."
         del "%LOCKFILE%" >nul 2>&1
         exit /b 0
     )
@@ -211,9 +213,9 @@ if "%LOCAL_IP%"=="%RESERVE_IP%" (
         >> "%LOGFILE%" echo [%date% %time%] AVISO: nao conseguiu acionar tarefa remota da principal; pedido ficou registrado em %PRIMARY_REQUEST_FILE%.
         if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "FAILBACK" "Nao consegui acionar tarefa remota do principal via schtasks; pedido ficou registrado no fileserver."
     )
-    if %BLACKOUT_MINUTES% LSS 3 (
-        >> "%LOGFILE%" echo [%date% %time%] RESERVA: tela preta ha %BLACKOUT_MINUTES% ciclo(s). Aguardando 3 ciclos antes de assumir.
-        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "PRETO" "Reserva ainda nao vai assumir: tela preta ha %BLACKOUT_MINUTES% ciclo(s), precisa de 3."
+    if %BLACKOUT_MINUTES% LSS %BLACKOUT_RESERVE_MIN_CYCLES% (
+        >> "%LOGFILE%" echo [%date% %time%] RESERVA: tela preta ha %BLACKOUT_MINUTES% ciclo(s). Aguardando %BLACKOUT_RESERVE_MIN_CYCLES% ciclos antes de assumir.
+        if exist "%EVENT_LOGGER%" call "%EVENT_LOGGER%" "AVISO" "PRETO" "Reserva ainda nao vai assumir: tela preta ha %BLACKOUT_MINUTES% ciclo(s), precisa de %BLACKOUT_RESERVE_MIN_CYCLES%."
         del "%LOCKFILE%" >nul 2>&1
         exit /b 0
     )
