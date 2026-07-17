@@ -1,3 +1,12 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "git.path": "C:\\Users\\Nicolas.sehnem\\AppData\\Local\\Programs\\Git\\cmd\\git.exe",
+    "git.autofetch": true,
+    "git.confirmSync": false,
+    "terminal.integrated.env.windows": {
+        "Path": "C:\\Users\\Nicolas.sehnem\\AppData\\Local\\Programs\\Git\\cmd;${env:Path}"
+    },
+    "files.eol": "\n",
+    "files.trimTrailingWhitespace": true,
+    "editor.formatOnSave": true
 }

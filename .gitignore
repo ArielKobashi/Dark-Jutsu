@@ -7,6 +7,9 @@ __pycache__/
 .env
 _local_secrets/
 db/data/
+downloads/
+Automus/downloads/
+data/historico_cooperat_antigo.json
 scripts/controlador_config.json
 scripts/firebase_config.json
 scripts/atualizacao/automus_config.json

@@ -1,0 +1,9 @@
+{
+    "recommendations": [
+        "ms-python.python",
+        "ms-python.debugpy",
+        "ms-azuretools.vscode-docker",
+        "github.vscode-pull-request-github",
+        "ritwickdey.liveserver"
+    ]
+}
