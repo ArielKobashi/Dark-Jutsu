@@ -3,3 +3,4 @@ pillow
 pynput
 pystray
 pyinstaller
+pywin32

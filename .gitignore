@@ -22,6 +22,8 @@ Automus/AutomusData/
 Automus/build/
 Automus/dist/
 Automus/releases/
+Automus/.build-packages/
+Automus/.build-packages-py313/
 build/
 dist/
 *.spec

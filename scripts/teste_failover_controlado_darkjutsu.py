@@ -7,6 +7,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+from servidor_eleicao_darkjutsu import computer_name, load_config, read_lease, read_nodes
+
 
 PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
@@ -36,6 +38,14 @@ def health(ip, timeout=4):
             return resp.status == 200 and b'"ok":true' in body
     except Exception:
         return False
+
+
+def node_ip(node):
+    for value in node.get("ips") or []:
+        value = str(value).strip()
+        if value and not value.startswith("127."):
+            return value
+    return ""
 
 
 def local_role():
@@ -128,43 +138,57 @@ def wait_until(label, predicate, seconds):
 def main():
     execute = "--execute" in sys.argv
     log("==================================================")
-    log("Teste de failover controlado iniciado.")
-    if local_role() != "principal":
-        log("ABORTADO: este teste deve rodar no PC principal.")
+    log("Teste de failover dinamico controlado iniciado.")
+    me = computer_name()
+    lease = read_lease()
+    leader = str(lease.get("leader") or "").upper()
+    if leader != me:
+        log(f"ABORTADO: este teste deve rodar no lider atual. Lider={leader or 'nenhum'} EstePC={me}.")
         return 1
-    if not health(PRIMARY_IP):
-        log("ABORTADO: principal nao esta saudavel antes do teste.")
+    if not health("127.0.0.1"):
+        log("ABORTADO: API local do lider nao esta saudavel antes do teste.")
         return 1
-    reserve_status, reserve_age = read_status("reserva")
-    if reserve_age is None or reserve_age > 180:
-        log("ABORTADO: status da reserva esta ausente/velho.")
+    config = load_config()
+    nodes = read_nodes(config)
+    followers = sorted(
+        (node for name, node in nodes.items() if name != me and node.get("eligible") and node_ip(node)),
+        key=lambda node: (int(node.get("priority", 1000)), node.get("computer", "")),
+    )
+    if not followers:
+        log("ABORTADO: nenhum outro candidato elegivel publicou heartbeat recente.")
         return 1
-    for key in ("guardiao_active", "monitor_active", "anti_sleep_active", "sql_local", "pg_port_listening"):
-        if not reserve_status.get(key):
-            log(f"ABORTADO: reserva nao esta pronta: {key}=False.")
-            return 1
-    if not request_reserve_now():
-        return 1
+    successor = followers[0]
+    successor_name = str(successor.get("computer"))
+    successor_ip = node_ip(successor)
+    log(f"Sucessor previsto: {successor_name} prioridade={successor.get('priority')} ip={successor_ip}.")
     if not execute:
-        log("PRE-FLIGHT OK. Rode com --execute para derrubar API/guardiao do principal e testar a assuncao real.")
+        log("PRE-FLIGHT OK. Rode com --execute para derrubar API/guardiao do lider e testar a eleicao real.")
         return 0
 
-    log("DERRUBANDO principal: pausando guardiao e API local.")
+    log("DERRUBANDO lider atual: pausando guardiao e API local.")
     stop_processes(["guardiao_loop_python_darkjutsu", "dark_jutsu_api.py"])
     time.sleep(8)
-    if health(PRIMARY_IP, timeout=2):
-        log("ABORTADO: principal continuou respondendo; nao vou prosseguir.")
+    if health("127.0.0.1", timeout=2):
+        log("ABORTADO: API local continuou respondendo; nao vou prosseguir.")
         start_guardian()
         return 1
-    log("Principal saiu do ar. Aguardando reserva assumir.")
-    reserve_assumed = wait_until("reserva assumiu API/SQL em ate 2min30s", lambda: health(RESERVE_IP, timeout=3), 150)
-    log("Retornando principal.")
+    log(f"Lider saiu do ar. Aguardando {successor_name} assumir.")
+    successor_assumed = wait_until(
+        f"{successor_name} assumiu API/SQL",
+        lambda: health(successor_ip, timeout=3) and str(read_lease().get("leader") or "").upper() == successor_name,
+        150,
+    )
+    log("Retornando candidato preferencial original.")
     start_api()
     start_guardian()
-    primary_back = wait_until("principal voltou com API/SQL", lambda: health(PRIMARY_IP, timeout=3), 90)
-    reserve_stopped = wait_until("reserva voltou para espera", lambda: not health(RESERVE_IP, timeout=2), 180)
-    if reserve_assumed and primary_back and reserve_stopped:
-        log("RESULTADO: OK failover e retorno confirmados.")
+    preferred_back = wait_until(
+        "preferencial reassumiu com API/SQL",
+        lambda: health("127.0.0.1", timeout=3) and str(read_lease().get("leader") or "").upper() == me,
+        210,
+    )
+    successor_stopped = wait_until(f"{successor_name} voltou para espera", lambda: not health(successor_ip, timeout=2), 120)
+    if successor_assumed and preferred_back and successor_stopped:
+        log("RESULTADO: OK failover dinamico e retorno por prioridade confirmados.")
         return 0
     log("RESULTADO: ATENCAO. Verifique tabela de status e logs.")
     return 2

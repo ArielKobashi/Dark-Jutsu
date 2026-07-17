@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import socket
 import subprocess
@@ -6,6 +7,8 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
+
+from servidor_eleicao_darkjutsu import election_tick, publish_heartbeat
 
 
 PRIMARY_IP = "192.168.5.44"
@@ -17,12 +20,17 @@ SCRIPTS = SHARE_ROOT / "scripts"
 STATUS_DIR = SHARE_ROOT / "status"
 REQUEST_DIR = STATUS_DIR / "requests"
 STATUS_SCRIPT = SCRIPTS / "status_compartilhado_servidores_darkjutsu.py"
-LOCAL_API = Path(r"C:\DarkJutsu\Dark-Jutsu\api\dark_jutsu_api.py")
+SYSTEM_RUNTIME_ROOT = Path(r"C:\DarkJutsu")
+USER_RUNTIME_ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "DarkJutsu"
+RUNTIME_ROOT = Path(os.environ.get("DARK_JUTSU_RUNTIME_ROOT") or (SYSTEM_RUNTIME_ROOT if SYSTEM_RUNTIME_ROOT.exists() else USER_RUNTIME_ROOT))
+LOCAL_API = RUNTIME_ROOT / "Dark-Jutsu" / "api" / "dark_jutsu_api.py"
 SHARE_API_DIR = SHARE_ROOT / "pacote" / "Dark-Jutsu" / "api"
 LOCAL_API_DIR = LOCAL_API.parent
-LOG_DIR = Path(r"C:\DarkJutsu\logs")
-PG_BIN = Path(r"C:\DarkJutsu\PostgreSQL\pgsql\bin")
-PGDATA = Path(r"C:\DarkJutsu\postgres-data")
+LOG_DIR = RUNTIME_ROOT / "logs"
+USER_PG_HOME = Path.home() / "Desktop" / "aplicacoes code" / "pgsql"
+PG_HOME = USER_PG_HOME if not SYSTEM_RUNTIME_ROOT.exists() and (USER_PG_HOME / "bin" / "pg_ctl.exe").exists() else RUNTIME_ROOT / "PostgreSQL" / "pgsql"
+PG_BIN = PG_HOME / "bin"
+PGDATA = (PG_HOME / "data") if PG_HOME == USER_PG_HOME else RUNTIME_ROOT / "postgres-data"
 PG_CTL = PG_BIN / "pg_ctl.exe"
 PG_ISREADY = PG_BIN / "pg_isready.exe"
 PG_RUNTIME_LOG = LOG_DIR / "postgres_runtime.log"
@@ -31,7 +39,8 @@ API_LOG = LOG_DIR / "api_runtime_python_guardiao.log"
 LOCK_FILE = LOG_DIR / "guardiao_loop_python.lock"
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-15.15"
+GUARDIAN_VERSION = "2026-07-17.21"
+MAINTENANCE_DIR = STATUS_DIR / "maintenance"
 SHARED_LOG = SHARE_ROOT / "logs" / "guardiao_python_eventos.txt"
 TEST_ACTIVE_FILE = SHARE_ROOT / "status" / "teste_inicializacao_ativo.txt"
 TEST_LOG = SHARE_ROOT / "logs" / "teste_inicializacao_manual_darkjutsu.txt"
@@ -332,41 +341,65 @@ def sync_local_api():
         log(f"AVISO: falha ao sincronizar API local: {type(exc).__name__}: {exc}")
 
 
+def maintenance_active():
+    request = MAINTENANCE_DIR / f"{os.environ.get('COMPUTERNAME', '').strip().upper()}.json"
+    try:
+        data = json.loads(request.read_text(encoding="utf-8"))
+        until = float(data.get("untilEpoch") or 0)
+        if until > time.time():
+            return True, data
+        request.unlink(missing_ok=True)
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        log(f"AVISO: pedido de manutencao invalido: {type(exc).__name__}: {exc}")
+    return False, {}
+
+
 def main():
-    current_role = role()
     if not acquire_lock():
         return
-    blackout_since = None
     last_full_cycle = 0
-    log(f"Guardiao Python iniciado. Versao={GUARDIAN_VERSION} Papel={current_role} Usuario={os.environ.get('USERNAME')} Maquina={os.environ.get('COMPUTERNAME')} IPs={sorted(local_ips())} BootWindows={boot_hint()} PID={os.getpid()}")
+    last_leader = None
+    log(f"Guardiao Python dinamico iniciado. Versao={GUARDIAN_VERSION} Usuario={os.environ.get('USERNAME')} Maquina={os.environ.get('COMPUTERNAME')} IPs={sorted(local_ips())} BootWindows={boot_hint()} PID={os.getpid()}")
     while True:
         try:
-            detected_role = role()
-            if detected_role != current_role:
-                log(f"Papel/IP atualizado: {current_role} -> {detected_role}. IPs={sorted(local_ips())}")
-                current_role = detected_role
-            handle_status_request(current_role)
+            local_ok = health("127.0.0.1", timeout=2)
+            sql_ok = pg_ready()
+            in_maintenance, maintenance = maintenance_active()
+            if in_maintenance:
+                publish_heartbeat(
+                    ready=False,
+                    api_healthy=False,
+                    ips=sorted(local_ips()),
+                    details={"guardianVersion": GUARDIAN_VERSION, "pid": os.getpid(), "maintenance": maintenance},
+                )
+                if local_ok or api_process_running():
+                    stop_local_api("teste de queda controlado")
+                log(f"manutencao controlada ativa ate epoch={maintenance.get('untilEpoch')}")
+                time.sleep(5)
+                continue
+            heartbeat = publish_heartbeat(
+                ready=sql_ok,
+                api_healthy=local_ok,
+                ips=sorted(local_ips()),
+                details={"guardianVersion": GUARDIAN_VERSION, "pid": os.getpid()},
+            )
+            decision = election_tick()
+            leader = decision.get("leader")
+            if leader != last_leader:
+                log(f"Eleicao alterada: lider={leader or 'nenhum'} epoch={decision.get('epoch')} prioridade_local={heartbeat.get('priority')}")
+                last_leader = leader
+            if decision.get("isLeader"):
+                if not local_ok:
+                    start_local_api(f"eleito lider dinamico epoch={decision.get('epoch')}")
+            elif local_ok or api_process_running():
+                stop_local_api(f"lease pertence a {leader or 'nenhum'}")
             if time.time() - last_full_cycle >= 15:
-                primary_ok = health(PRIMARY_IP)
-                reserve_ok = health(RESERVE_IP)
-                local_ok = health("127.0.0.1", timeout=2)
-                if primary_ok or reserve_ok:
-                    blackout_since = None
-                else:
-                    if blackout_since is None:
-                        blackout_since = time.time()
-                blackout_seconds = 0 if blackout_since is None else int(time.time() - blackout_since)
-                log(f"ciclo papel={current_role} primary={primary_ok} reserve={reserve_ok} local={local_ok} blackout={blackout_seconds}s")
-                if current_role == "principal" and not primary_ok:
-                    start_local_api("principal sem API ativa")
-                elif current_role == "reserva":
-                    if primary_ok:
-                        if local_ok or api_process_running():
-                            stop_local_api("principal voltou; reserva retorna para espera")
-                    elif blackout_seconds >= FAILOVER_BLACKOUT_SECONDS and not reserve_ok:
-                        start_local_api(f"reserva assumindo apos {blackout_seconds}s sem principal")
-                elif current_role == "desconhecido":
-                    log("Papel desconhecido; aguardando IP fixo principal/reserva para agir.")
+                log(
+                    f"ciclo dinamico lider={leader or 'nenhum'} self_leader={decision.get('isLeader')} "
+                    f"epoch={decision.get('epoch')} sql={sql_ok} api_local={local_ok} prioridade={heartbeat.get('priority')}"
+                )
                 publish_status()
                 last_full_cycle = time.time()
             time.sleep(5)

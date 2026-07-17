@@ -1057,13 +1057,15 @@ class Handler(BaseHTTPRequestHandler):
     def _inventory_legacy_snapshot(self) -> dict[str, Any]:
         rows = self._query(
             """
-            select payload
+            select payload, saved_at, raw_metadata, updated_by
             from inventory_snapshots
             order by saved_at desc
             limit 1
             """
         )
-        payload = rows[0].get("payload") if rows and isinstance(rows[0].get("payload"), dict) else {}
+        latest_snapshot = rows[0] if rows else {}
+        payload = latest_snapshot.get("payload") if isinstance(latest_snapshot.get("payload"), dict) else {}
+        metadata = latest_snapshot.get("raw_metadata") if isinstance(latest_snapshot.get("raw_metadata"), dict) else {}
         if not payload:
             items = self._query("select raw_data from inventory_items where not is_dead order by description nulls last")
             dead_items = self._query("select raw_data from inventory_items where is_dead order by description nulls last")
@@ -1071,6 +1073,22 @@ class Handler(BaseHTTPRequestHandler):
                 "dados": [row.get("raw_data") or {} for row in items],
                 "dadosMortos": [row.get("raw_data") or {} for row in dead_items],
             }
+        ultima_atualizacao = (
+            payload.get("ultimaAtualizacao")
+            or payload.get("ultima_atualizacao")
+            or metadata.get("ultimaAtualizacao")
+            or metadata.get("ultima_atualizacao")
+            or latest_snapshot.get("saved_at")
+        )
+        ultima_dt = _timestamp(ultima_atualizacao)
+        if ultima_dt:
+            payload = {
+                **payload,
+                "ultimaAtualizacao": int(ultima_dt.timestamp() * 1000),
+                "ultimaAtualizacaoIso": ultima_dt.isoformat(),
+            }
+        if not payload.get("atualizadoPor") and (metadata.get("atualizadoPor") or latest_snapshot.get("updated_by")):
+            payload = {**payload, "atualizadoPor": metadata.get("atualizadoPor") or latest_snapshot.get("updated_by")}
         ajustes = self._query(
             """
             select legacy_key, item_legacy_key, min_qty, max_qty, reorder_qty, updated_by_name, updated_at, raw_data

@@ -1,0 +1,25 @@
+{
+  "schema": 2,
+  "autoDiscover": true,
+  "defaultPriority": 1000,
+  "heartbeatTimeoutSeconds": 60,
+  "leaseSeconds": 35,
+  "preferredReturnGraceSeconds": 90,
+  "candidates": [
+    {
+      "computer": "ALMOX-PC03",
+      "priority": 10,
+      "enabled": true
+    },
+    {
+      "computer": "ALMOX-PC01",
+      "priority": 20,
+      "enabled": true
+    },
+    {
+      "computer": "ALMOX-EPI",
+      "priority": 30,
+      "enabled": true
+    }
+  ]
+}

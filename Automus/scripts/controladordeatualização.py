@@ -2265,7 +2265,6 @@ class _SharedState:
         emit_status(f"PIXEL | X:{x} Y:{y} RGB:({r},{g},{b}) HEX:#{r:02X}{g:02X}{b:02X}")
 
     def start_totvs_news_reference_capture(self):
-        self._show_window_now()
         with self.lock:
             if self.totvs_news_test_running:
                 return
@@ -2330,7 +2329,6 @@ class _SharedState:
             self.totvs_news_last_details = ""
             self.totvs_news_last_score = 0
 
-        self._show_window_now()
         emit_status("Verificando TOTVS News em 4 camadas...", level="INFO")
 
         def worker():

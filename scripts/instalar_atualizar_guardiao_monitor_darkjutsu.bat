@@ -5,11 +5,13 @@ set "SHARE_ROOT=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 set "SHARE_SCRIPTS=%SHARE_ROOT%\scripts"
 set "PY_SOURCE=%SHARE_ROOT%\instaladores\WPy64-3.13.12.0"
 set "PY_TARGET=%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0"
-set "MACHINE_APP_ROOT=C:\DarkJutsu\Dark-Jutsu"
+set "RUNTIME_ROOT=%LOCALAPPDATA%\DarkJutsu"
+if exist "C:\DarkJutsu\PostgreSQL\pgsql\bin\pg_ctl.exe" set "RUNTIME_ROOT=C:\DarkJutsu"
+set "MACHINE_APP_ROOT=%RUNTIME_ROOT%\Dark-Jutsu"
 set "LOCAL_SCRIPTS=%LOCALAPPDATA%\DarkJutsu\monitor"
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "DESKTOP=%USERPROFILE%\Desktop"
-set "LOGDIR=C:\DarkJutsu\logs"
+set "LOGDIR=%RUNTIME_ROOT%\logs"
 set "INSTALL_LOG=%LOGDIR%\instalador_guardiao_monitor.log"
 set "SUMMARY=%TEMP%\darkjutsu_instalador_%RANDOM%_%RANDOM%.txt"
 set "PRIMARY_IP=192.168.5.44"
@@ -22,6 +24,7 @@ set "MONITOR_KIND="
 set "MONITOR_CMD="
 set "MONITOR_MATCH="
 set "GUARDIAN_CMD="
+set "AUTOMUS_CMD=powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCAL_SCRIPTS%\iniciar_automus_com_guardiao_darkjutsu.ps1""
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
 if not exist "%LOGDIR%" (
@@ -40,30 +43,13 @@ echo.
 call :log "==== inicio instalador usuario=%USERNAME% maquina=%COMPUTERNAME% ===="
 
 echo [0. Detectar papel pelo IP]
-ipconfig | findstr /C:"%PRIMARY_IP%" >nul 2>&1
-if !errorlevel!==0 (
-  set "LOCAL_IP=%PRIMARY_IP%"
-  set "ROLE=PRINCIPAL"
-  set "MONITOR_KIND=POWERSHELL"
-  set "MONITOR_CMD=wscript.exe //B %SHARE_SCRIPTS%\iniciar_monitor_principal_powershell_oculto.vbs"
-  set "MONITOR_MATCH=monitor_principal_powershell_darkjutsu.ps1"
-)
-if "%LOCAL_IP%"=="" (
-  ipconfig | findstr /C:"%RESERVE_IP%" >nul 2>&1
-  if !errorlevel!==0 (
-    set "LOCAL_IP=%RESERVE_IP%"
-    set "ROLE=RESERVA"
-    set "MONITOR_KIND=PYTHON"
-    set "MONITOR_CMD=%LOCAL_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat"
-    set "MONITOR_MATCH=monitor_reserva_python_darkjutsu.py"
-  )
-)
-if "%LOCAL_IP%"=="" (
-  call :fail "Esta maquina nao tem IP %PRIMARY_IP% nem %RESERVE_IP%. Nada instalado."
-  goto finish
-) else (
-  call :ok "IP=%LOCAL_IP%; papel=%ROLE%; monitor=%MONITOR_KIND%."
-)
+set "ROLE=CANDIDATO"
+set "MONITOR_KIND=PYTHON"
+set "MONITOR_CMD=%LOCAL_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat"
+set "MONITOR_MATCH=monitor_reserva_python_darkjutsu.py"
+for /f "tokens=2 delims=:" %%I in ('ipconfig ^| findstr /C:"IPv4"') do if not defined LOCAL_IP set "LOCAL_IP=%%I"
+set "LOCAL_IP=%LOCAL_IP: =%"
+call :ok "Maquina registrada como candidata dinamica; IP=%LOCAL_IP%; prioridade vem de servidores_config.json."
 
 echo.
 echo [1. Acesso ao servidor de arquivos]
@@ -76,7 +62,7 @@ if exist "%SHARE_SCRIPTS%\guardiao_servidor_tick_darkjutsu.bat" (
 
 echo.
 echo [2. Arquivos obrigatorios]
-set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat guardiao_loop_compartilhado_darkjutsu.vbs guardiao_loop_python_darkjutsu.py atualizar_usuario_guardiao_monitor_darkjutsu.ps1 registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py abrir_status_darkjutsu.py status_compartilhado_servidores_darkjutsu.py atualizar_darkjutsu_do_github.bat corrigir_python_tkinter_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.ps1"
+set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat guardiao_loop_compartilhado_darkjutsu.vbs guardiao_loop_python_darkjutsu.py servidor_eleicao_darkjutsu.py servidores_config.json atualizar_usuario_guardiao_monitor_darkjutsu.ps1 registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py abrir_status_darkjutsu.py status_compartilhado_servidores_darkjutsu.py atualizar_darkjutsu_do_github.bat corrigir_python_tkinter_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.ps1 iniciar_automus_com_guardiao_darkjutsu.ps1"
 if "%MONITOR_KIND%"=="PYTHON" (
   set "REQUIRED=%REQUIRED% monitor_reserva_python_darkjutsu.py iniciar_monitor_reserva_python_darkjutsu.bat diagnosticar_monitor_reserva_python_darkjutsu.bat"
 ) else (
@@ -172,6 +158,9 @@ copy /Y "%SHARE_SCRIPTS%\painel_servidor_darkjutsu.py" "%LOCAL_SCRIPTS%\painel_s
 copy /Y "%SHARE_SCRIPTS%\abrir_status_darkjutsu.py" "%LOCAL_SCRIPTS%\abrir_status_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
 copy /Y "%SHARE_SCRIPTS%\status_compartilhado_servidores_darkjutsu.py" "%LOCAL_SCRIPTS%\status_compartilhado_servidores_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
 copy /Y "%SHARE_SCRIPTS%\guardiao_loop_python_darkjutsu.py" "%LOCAL_SCRIPTS%\guardiao_loop_python_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
+copy /Y "%SHARE_SCRIPTS%\servidor_eleicao_darkjutsu.py" "%LOCAL_SCRIPTS%\servidor_eleicao_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
+copy /Y "%SHARE_SCRIPTS%\servidores_config.json" "%LOCAL_SCRIPTS%\servidores_config.json" >> "%INSTALL_LOG%" 2>&1
+copy /Y "%SHARE_SCRIPTS%\iniciar_automus_com_guardiao_darkjutsu.ps1" "%LOCAL_SCRIPTS%\iniciar_automus_com_guardiao_darkjutsu.ps1" >> "%INSTALL_LOG%" 2>&1
 if "%MONITOR_KIND%"=="PYTHON" (
   copy /Y "%SHARE_SCRIPTS%\monitor_reserva_python_darkjutsu.py" "%LOCAL_SCRIPTS%\monitor_reserva_python_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
   copy /Y "%SHARE_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat" "%LOCAL_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat" >> "%INSTALL_LOG%" 2>&1
@@ -222,10 +211,13 @@ reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Dark-Jutsu Moni
 if errorlevel 1 (call :warn "Registro bloqueou monitor.") else (call :ok "Monitor no Registro HKCU Run.")
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Dark-Jutsu Guardiao Servidor" /t REG_SZ /d "%GUARDIAN_CMD%" /f >> "%INSTALL_LOG%" 2>&1
 if errorlevel 1 (call :warn "Registro bloqueou guardiao.") else (call :ok "Guardiao no Registro HKCU Run.")
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "Automus com Guardiao Dark-Jutsu" /t REG_SZ /d "%AUTOMUS_CMD%" /f >> "%INSTALL_LOG%" 2>&1
+if errorlevel 1 (call :warn "Registro bloqueou Automus.") else (call :ok "Automus no Registro HKCU Run para este servidor.")
 (
   echo @echo off
   echo %MONITOR_CMD%
   echo %GUARDIAN_CMD%
+  echo %AUTOMUS_CMD%
 ) > "%DESKTOP%\Iniciar Dark-Jutsu Monitor.cmd" 2>nul
 if exist "%DESKTOP%\Iniciar Dark-Jutsu Monitor.cmd" call :ok "Iniciador manual criado na Area de Trabalho."
 
@@ -236,6 +228,7 @@ wmic process where "CommandLine like '%%monitor_reserva_python_darkjutsu%%' or C
 call :log "Encerrando guardioes antigos antes de iniciar loop atual."
 wmic process where "CommandLine like '%%guardiao_loop_darkjutsu%%' or CommandLine like '%%guardiao_continuo_tick_darkjutsu%%' or CommandLine like '%%iniciar_guardiao_servidor_oculto%%'" call terminate >> "%INSTALL_LOG%" 2>&1
 start "" %GUARDIAN_CMD%
+start "" %AUTOMUS_CMD%
 if "%MONITOR_KIND%"=="PYTHON" (
   call "%LOCAL_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat"
 ) else (
@@ -286,6 +279,7 @@ for %%R in (
   "Guardiao Continuo Dark-Jutsu"
   "Dark-Jutsu Monitor"
   "Dark-Jutsu Guardiao"
+  "Automus com Guardiao Dark-Jutsu"
 ) do (
   reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "%%~R" /f >> "%INSTALL_LOG%" 2>&1
 )
@@ -360,4 +354,3 @@ echo ==================================================
 del "%SUMMARY%" >nul 2>&1
 call :log "RESULTADO FINAL FALHOU"
 exit /b 1
-

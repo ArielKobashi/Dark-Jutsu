@@ -13935,11 +13935,44 @@ function formatarTextoUltimaAtualizacao(data, usuario) {
     );
 }
 
+function timestampUltimaAtualizacaoEstoque(val){
+    const candidatos = [
+        val?.ultimaAtualizacao,
+        val?.ultimaAtualizacaoAutomatica,
+        val?.ultimaAtualizacaoIso,
+        val?.ultima_atualizacao,
+        val?.updatedAt,
+        val?.updated_at,
+        val?.savedAt,
+        val?.saved_at,
+        val?.metadata?.ultimaAtualizacao,
+        val?.raw_metadata?.ultimaAtualizacao,
+        val?.snapshot?.ultimaAtualizacao,
+        val?.snapshot?.saved_at
+    ];
+    for(const candidato of candidatos){
+        if(candidato === null || candidato === undefined || candidato === "") continue;
+        if(typeof candidato === "number" && Number.isFinite(candidato)){
+            return candidato < 100000000000 ? candidato * 1000 : candidato;
+        }
+        const texto = String(candidato).trim();
+        if(!texto) continue;
+        const numerico = Number(texto);
+        if(Number.isFinite(numerico)){
+            return numerico < 100000000000 ? numerico * 1000 : numerico;
+        }
+        const parsed = Date.parse(texto);
+        if(Number.isFinite(parsed)) return parsed;
+    }
+    return 0;
+}
+
 function atualizarTextoUltimaAtualizacaoEstoque(val){
     const el = document.getElementById("lastUpdate");
     if(!el || !val) return;
-    const data = val.ultimaAtualizacao
-        ? new Date(val.ultimaAtualizacao).toLocaleString()
+    const timestamp = timestampUltimaAtualizacaoEstoque(val);
+    const data = timestamp
+        ? new Date(timestamp).toLocaleString("pt-BR")
         : "Nunca";
     const usuario = val.atualizadoPor || "Sistema";
     el.innerHTML = formatarTextoUltimaAtualizacao(data, usuario);
@@ -13953,7 +13986,7 @@ function aplicarSnapshotEstoqueFirebase(val, opcoes = {}){
     if(typeof window.aplicarConfigContagemCompartilhada === "function"){
         window.aplicarConfigContagemCompartilhada(val.configContagem);
     }
-    const syncToken = val.ultimaAtualizacao || 0;
+    const syncToken = timestampUltimaAtualizacaoEstoque(val);
     if(window.contagemModoFocoAtivo && !opcoes.forcarModoFoco){
         estoqueSnapshotPendenteModoFoco = val;
         filtrosPendentesModoFoco = true;
@@ -13983,6 +14016,8 @@ function normalizarSnapshotDashboardSql(data){
     const dashboardConfig = data?.dashboardConfig && typeof data.dashboardConfig === "object" ? data.dashboardConfig : {};
     return {
         ...inventory,
+        ultimaAtualizacao: timestampUltimaAtualizacaoEstoque(inventory) || timestampUltimaAtualizacaoEstoque(data),
+        atualizadoPor: inventory.atualizadoPor || data?.atualizadoPor || data?.updated_by || "Sistema",
         configPaineis: inventory.configPaineis || dashboardConfig.paineis || {},
         avaliadorPedidos: inventory.avaliadorPedidos || dashboardConfig.avaliadorPedidos || {},
         contagens: inventory.contagens || data?.contagens || {},

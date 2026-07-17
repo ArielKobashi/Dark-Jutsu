@@ -9,6 +9,8 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+from servidor_eleicao_darkjutsu import candidate_settings, computer_name, load_config, read_lease, read_nodes
+
 
 SHARE_ROOT = Path(r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu")
 STATUS_DIR = SHARE_ROOT / "status"
@@ -18,13 +20,19 @@ PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
 API_PORT = 8765
 PG_PORT = 5433
-STATUS_VERSION = "2026-07-15.4"
-PG_ISREADY = Path(r"C:\DarkJutsu\PostgreSQL\pgsql\bin\pg_isready.exe")
-ANTI_SLEEP_STATUS_FILE = Path(r"C:\DarkJutsu\logs\anti_sleep_darkjutsu.status")
+STATUS_VERSION = "2026-07-17.20"
+SYSTEM_RUNTIME_ROOT = Path(r"C:\DarkJutsu")
+USER_RUNTIME_ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "DarkJutsu"
+RUNTIME_ROOT = Path(os.environ.get("DARK_JUTSU_RUNTIME_ROOT") or (SYSTEM_RUNTIME_ROOT if SYSTEM_RUNTIME_ROOT.exists() else USER_RUNTIME_ROOT))
+USER_PG_ISREADY = Path.home() / "Desktop" / "aplicacoes code" / "pgsql" / "bin" / "pg_isready.exe"
+PG_ISREADY = USER_PG_ISREADY if not SYSTEM_RUNTIME_ROOT.exists() and USER_PG_ISREADY.exists() else RUNTIME_ROOT / "PostgreSQL" / "pgsql" / "bin" / "pg_isready.exe"
+ANTI_SLEEP_STATUS_FILE = RUNTIME_ROOT / "logs" / "anti_sleep_darkjutsu.status"
 LOCAL_MONITOR_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "DarkJutsu" / "monitor"
 LOCAL_GUARDIAN = LOCAL_MONITOR_DIR / "guardiao_loop_python_darkjutsu.py"
 SHARE_GUARDIAN = SHARE_ROOT / "scripts" / "guardiao_loop_python_darkjutsu.py"
-LOCAL_GUARDIAN_LOCK = Path(r"C:\DarkJutsu\logs\guardiao_loop_python.lock")
+SHARE_ELECTION = SHARE_ROOT / "scripts" / "servidor_eleicao_darkjutsu.py"
+LOCAL_ELECTION = LOCAL_MONITOR_DIR / "servidor_eleicao_darkjutsu.py"
+LOCAL_GUARDIAN_LOCK = RUNTIME_ROOT / "logs" / "guardiao_loop_python.lock"
 LOCAL_GUARDIAN_RUNTIME_VERSION = LOCAL_MONITOR_DIR / "guardian_runtime_version.txt"
 CREATE_NO_WINDOW = 0x08000000
 
@@ -57,11 +65,8 @@ def local_ips():
 
 
 def role_for_ips(ips):
-    if PRIMARY_IP in ips:
-        return "principal"
-    if RESERVE_IP in ips:
-        return "reserva"
-    return "desconhecido"
+    lease = read_lease()
+    return "lider" if str(lease.get("leader") or "").upper() == computer_name() else "candidato"
 
 
 def http_probe(ip, endpoint, timeout=4):
@@ -257,8 +262,6 @@ def local_pythonw():
 
 
 def self_heal_guardian(local_role):
-    if local_role not in ("principal", "reserva"):
-        return
     if not SHARE_GUARDIAN.exists():
         return
     local_version = guardian_version_from(LOCAL_GUARDIAN)
@@ -273,6 +276,8 @@ def self_heal_guardian(local_role):
         LOCAL_MONITOR_DIR.mkdir(parents=True, exist_ok=True)
         if local_version != share_version:
             shutil.copy2(SHARE_GUARDIAN, LOCAL_GUARDIAN)
+        if SHARE_ELECTION.exists():
+            shutil.copy2(SHARE_ELECTION, LOCAL_ELECTION)
         stop_guardian_processes()
         try:
             LOCAL_GUARDIAN_LOCK.unlink()
@@ -302,11 +307,10 @@ def stop_guardian_processes():
 def write_local_status(status):
     progress("Publicando status local no servidor de arquivos...")
     STATUS_DIR.mkdir(parents=True, exist_ok=True)
-    role = status.get("role", "desconhecido")
-    if role in SERVERS:
-        path = SERVERS[role]["status_file"]
-    else:
-        path = STATUS_DIR / f"{status.get('computer','desconhecido')}.json"
+    name = str(status.get("computer") or "desconhecido").upper()
+    detail_dir = STATUS_DIR / "nodes-detail"
+    detail_dir.mkdir(parents=True, exist_ok=True)
+    path = detail_dir / f"{name}.json"
     tmp = path.with_name(f"{path.stem}.{os.getpid()}.{int(time.time() * 1000)}.tmp")
     tmp.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
     for _ in range(5):
@@ -316,6 +320,31 @@ def write_local_status(status):
         except PermissionError:
             time.sleep(0.3)
     path.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def print_dynamic_cluster():
+    config = load_config()
+    lease = read_lease()
+    nodes = read_nodes(config)
+    leader = str(lease.get("leader") or "").upper()
+    print("")
+    print("=" * 104)
+    print("DARK-JUTSU - CLUSTER DINAMICO DE SERVIDORES")
+    print(f"Lider atual: {leader or 'NENHUM'} | epoch={lease.get('epoch', 0)}")
+    print("=" * 104)
+    print(f"{'COMPUTADOR':<22} {'PRIORIDADE':<11} {'ESTADO':<14} {'API':<8} {'SQL':<8} {'IPS'}")
+    print("-" * 104)
+    for name, node in sorted(nodes.items(), key=lambda item: (int(item[1].get('priority', 1000)), item[0])):
+        state = "LIDER" if name == leader else "PRONTO" if node.get("eligible") else "INDISPONIVEL"
+        details = node.get("details") if isinstance(node.get("details"), dict) else {}
+        print(
+            f"{name:<22} {int(node.get('priority', 1000)):<11} {state:<14} "
+            f"{'SIM' if node.get('apiHealthy') else 'NAO':<8} "
+            f"{'SIM' if node.get('ready') else 'NAO':<8} {', '.join(node.get('ips') or [])}"
+        )
+    if not nodes:
+        print("Nenhum candidato publicou heartbeat ainda.")
+    print("=" * 104)
 
 
 def read_status(role):
@@ -460,6 +489,9 @@ def main():
     write_local_status(local)
     if "--publish-only" in sys.argv:
         return
+
+    print_dynamic_cluster()
+    return
 
     local_role = local.get("role")
     if local_role == "principal":

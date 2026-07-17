@@ -1199,6 +1199,7 @@ def play():
             m.release(mouse.Button.left)
             release_alt_click_153 = False
             release_alt_click_153_wait = 0.0
+            last = float(t)
             continue
 
         controller.update_event_position(idx - 1, idx, len(events))
@@ -1249,7 +1250,6 @@ def play():
 
 if __name__ == '__main__':
     play()
-
 
 
 

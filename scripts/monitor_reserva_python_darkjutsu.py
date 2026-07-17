@@ -8,6 +8,8 @@ import time
 import urllib.request
 from ctypes import wintypes
 
+from servidor_eleicao_darkjutsu import computer_name, load_config, read_lease, read_nodes
+
 
 PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
@@ -22,7 +24,10 @@ PYTHON_EXE = os.path.join(os.path.dirname(sys.executable), "python.exe")
 PASSWORD = "654321"
 INFINITY_PASSWORD = "123456789"
 INFINITY_INTERVAL_SECONDS = 150
-LOG_DIR = r"C:\DarkJutsu\logs"
+SYSTEM_RUNTIME_ROOT = r"C:\DarkJutsu"
+USER_RUNTIME_ROOT = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local")), "DarkJutsu")
+RUNTIME_ROOT = SYSTEM_RUNTIME_ROOT if os.path.isdir(SYSTEM_RUNTIME_ROOT) else USER_RUNTIME_ROOT
+LOG_DIR = os.path.join(RUNTIME_ROOT, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "monitor_python.log")
 ANTI_SLEEP_STATUS_FILE = os.path.join(LOG_DIR, "anti_sleep_darkjutsu.status")
 SHARED_MONITOR_LOG = os.path.join(SHARE_ROOT, "logs", "monitor_python_eventos.txt")
@@ -518,20 +523,24 @@ class Tray:
 
     def update_status(self):
         ips = local_ips()
-        self.local_ip = PRIMARY_IP if PRIMARY_IP in ips else RESERVE_IP if RESERVE_IP in ips else ""
-        primary = health(PRIMARY_IP)
-        reserve = health(RESERVE_IP)
-        if primary or reserve:
+        self.local_ip = next((ip for ip in ips if not ip.startswith("127.")), "")
+        config = load_config()
+        lease = read_lease()
+        nodes = read_nodes(config)
+        leader_name = str(lease.get("leader") or "").strip().upper()
+        leader_node = nodes.get(leader_name, {})
+        leader_ips = leader_node.get("ips") or []
+        active_ip = next((ip for ip in leader_ips if ip and not ip.startswith("127.")), "")
+        leader_ok = bool(active_ip and health(active_ip))
+        if leader_name and leader_ok:
             self.offline_since = None
-            active_ip = PRIMARY_IP if primary else RESERVE_IP
-            active_name = "principal" if primary else "reserva"
-            self.this_active = self.local_ip == active_ip
+            self.this_active = leader_name == computer_name()
             if self.this_active:
                 self.icon = self.icon_green
-                self.tip = f"Dark-Jutsu: este PC esta rodando o servidor ({active_name})"
+                self.tip = f"Dark-Jutsu: este PC lidera a API ({leader_name})"
             else:
                 self.icon = self.icon_red
-                self.tip = f"Dark-Jutsu: servidor ativo em outro PC ({active_name})"
+                self.tip = f"Dark-Jutsu: API liderada por {leader_name} ({active_ip})"
         else:
             if self.offline_since is None:
                 self.offline_since = time.time()
@@ -552,8 +561,7 @@ class Tray:
         user32.AppendMenuW(menu, 0, ID_OPEN, "Abrir Dark-Jutsu")
         user32.AppendMenuW(menu, 0, ID_TEST, "Testar servidor")
         user32.AppendMenuW(menu, 0, ID_GUARD, "Verificar/iniciar agora")
-        switch_text = "Tornar este PC o reserva" if self.this_active else "Tornar este PC o Principal"
-        user32.AppendMenuW(menu, 0, ID_SWITCH, switch_text)
+        user32.AppendMenuW(menu, 0, ID_SWITCH, "Reavaliar lideranca agora")
         user32.AppendMenuW(menu, 0, 2, self.infinity.status_text())
         user32.EnableMenuItem(menu, 2, 0x00000002)
         infinity_text = "Parar Infinity" if self.infinity.enabled else "Iniciar Infinity"
@@ -578,13 +586,8 @@ class Tray:
             if ask_password("verificar/iniciar agora"):
                 run_visible(script_args("guardiao_servidor_tick_darkjutsu.bat", keep_open=True))
         elif ident == ID_SWITCH:
-            if self.this_active:
-                if ask_password("tornar reserva"):
-                    run_hidden(script_args("tornar_reserva_operacional_darkjutsu.bat"))
-            else:
-                if ask_password("tornar Principal"):
-                    target = "assumir_servidor_darkjutsu.bat" if self.local_ip == PRIMARY_IP else "tornar_principal_operacional_darkjutsu.bat"
-                    run_hidden(script_args(target))
+            if ask_password("reavaliar lideranca"):
+                run_visible(script_args("guardiao_servidor_tick_darkjutsu.bat", keep_open=True))
         elif ident == ID_STOP:
             if ask_password("encerrar servidor local"):
                 run_hidden(script_args("parar_api_darkjutsu.bat"))

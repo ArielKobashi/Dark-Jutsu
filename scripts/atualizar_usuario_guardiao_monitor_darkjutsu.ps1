@@ -7,10 +7,8 @@ $ErrorActionPreference = "Continue"
 $ShareRoot = "\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 $Scripts = Join-Path $ShareRoot "scripts"
 $LocalDir = Join-Path $env:LOCALAPPDATA "DarkJutsu\monitor"
-$LogDir = "C:\DarkJutsu\logs"
+$LogDir = Join-Path $env:LOCALAPPDATA "DarkJutsu\logs"
 $LogFile = Join-Path $LogDir "atualizar_usuario_guardiao_monitor.log"
-$PrimaryIp = "192.168.5.44"
-$ReserveIp = "192.168.5.38"
 $PyDir = Join-Path $env:USERPROFILE "Desktop\aplicacoes code\WPy64-3.13.12.0\python"
 $Python = Join-Path $PyDir "python.exe"
 $PythonW = Join-Path $PyDir "pythonw.exe"
@@ -110,24 +108,27 @@ Log "=================================================="
 Log "Atualizando usuario Dark-Jutsu. Usuario=$env:USERNAME Maquina=$env:COMPUTERNAME"
 
 if (-not (Test-Path $PythonW) -or -not (Test-Path $Python)) {
-  Log "ERRO: Python portable nao encontrado em $PyDir"
-  exit 1
+  $pySource = Join-Path $ShareRoot "instaladores\WPy64-3.13.12.0"
+  $pyTarget = Split-Path $PyDir -Parent
+  Log "Python portable ausente; copiando para o perfil deste usuario..."
+  New-Item -ItemType Directory -Force -Path $pyTarget | Out-Null
+  & robocopy $pySource $pyTarget /E /R:2 /W:2 /NFL /NDL /NP | Out-Null
+  if ($LASTEXITCODE -ge 8 -or -not (Test-Path $PythonW) -or -not (Test-Path $Python)) {
+    Log "ERRO: nao consegui preparar o Python portable em $PyDir"
+    exit 1
+  }
 }
 
-$role = "DESCONHECIDO"
-$monitorPrefix = "monitor_servidor_python_darkjutsu"
-if (Has-Ip $PrimaryIp) {
-  $role = "PRINCIPAL"
-  $monitorPrefix = "monitor_servidor_python_darkjutsu"
-} elseif (Has-Ip $ReserveIp) {
-  $role = "RESERVA"
-  $monitorPrefix = "monitor_reserva_python_darkjutsu"
-}
+$role = "CANDIDATO"
+$monitorPrefix = "monitor_reserva_python_darkjutsu"
 Log "Papel detectado: $role"
 
 Copy-Required "status_compartilhado_servidores_darkjutsu.py" | Out-Null
 Copy-Required "abrir_status_darkjutsu.py" | Out-Null
 Copy-Required "guardiao_loop_python_darkjutsu.py" | Out-Null
+Copy-Required "servidor_eleicao_darkjutsu.py" | Out-Null
+Copy-Required "servidores_config.json" | Out-Null
+Copy-Required "iniciar_automus_com_guardiao_darkjutsu.ps1" | Out-Null
 
 Stop-OldProcesses
 Start-Sleep -Seconds 1
@@ -144,14 +145,17 @@ try {
 
 $guardianLocal = Join-Path $LocalDir "guardiao_loop_python_darkjutsu.py"
 $statusLauncher = Join-Path $LocalDir "abrir_status_darkjutsu.py"
+$automusLauncher = Join-Path $LocalDir "iniciar_automus_com_guardiao_darkjutsu.ps1"
 
 $startupMonitorOk = Write-StartupVbs "Monitor Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$monitorLocal`""
 $startupGuardianOk = Write-StartupVbs "Guardiao Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$guardianLocal`""
+$startupAutomusOk = Write-StartupVbs "Automus com Guardiao Dark-Jutsu.vbs" "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$automusLauncher`""
 
 try {
   New-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Force -ErrorAction Stop | Out-Null
   Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Dark-Jutsu Monitor Servidor" -Value "`"$PythonW`" `"$monitorLocal`"" -ErrorAction Stop
   Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Dark-Jutsu Guardiao Servidor" -Value "`"$PythonW`" `"$guardianLocal`"" -ErrorAction Stop
+  Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Dark-Jutsu Automus" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$automusLauncher`"" -ErrorAction Stop
   Log "OK: inicializacao tambem registrada em HKCU Run."
   $registryOk = $true
 } catch {
@@ -161,6 +165,7 @@ try {
 
 Start-Process -FilePath $PythonW -ArgumentList "`"$monitorLocal`""
 Start-Process -FilePath $PythonW -ArgumentList "`"$guardianLocal`""
+Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$automusLauncher`""
 Start-Sleep -Seconds 5
 
 $procs = Get-CimInstance Win32_Process | Where-Object {
@@ -181,13 +186,13 @@ if ((-not $NoStatus) -and (Test-Path $statusLauncher)) {
   & $Python $statusLauncher
 }
 
-if ($monitorOk -and $guardianOk -and (($startupMonitorOk -and $startupGuardianOk) -or $registryOk)) {
+if ($monitorOk -and $guardianOk -and (($startupMonitorOk -and $startupGuardianOk -and $startupAutomusOk) -or $registryOk)) {
   Log "RESULTADO: OK"
   exit 0
 }
 
 Log "RESULTADO: ATENCAO"
-if (-not (($startupMonitorOk -and $startupGuardianOk) -or $registryOk)) {
+if (-not (($startupMonitorOk -and $startupGuardianOk -and $startupAutomusOk) -or $registryOk)) {
   Log "ATENCAO: monitor/guardiao estao rodando agora, mas inicializacao automatica foi bloqueada pelo Windows."
 }
 exit 2

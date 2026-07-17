@@ -196,21 +196,24 @@ Observacao: o navegador gera PNGs via Canvas, enquanto o app `.exe` usa Pillow. 
 
 O Dark-Jutsu roda como sistema local na rede privada. O app fica no servidor de arquivos e a API SQL fica ativa em apenas um dos computadores de servidor por vez.
 
-### Papeis fixos
+### Candidatos e prioridade
 
-- Principal: `192.168.5.44` (`ALMOX-PC03`).
-- Reserva: `192.168.5.38` (`ALMOX-EPI`).
+- Todo PC instalado pode hospedar a API e funciona como candidato.
+- O arquivo `scripts/servidores_config.json` define a prioridade; o menor numero vence.
+- `ALMOX-PC03` tem prioridade preferencial, seguido por `ALMOX-PC01` e `ALMOX-EPI`.
 - API SQL: `http://IP_DO_SERVIDOR:8765/health`.
 - PostgreSQL local do servidor ativo: porta `5433`.
 - Pacote compartilhado: `\\fileserver\Almoxarifado\0800\servidor\dark-jutsu`.
 
 ### Regra de failover
 
-- Se a principal responde, ela deve ser o servidor ativo.
-- Se a reserva estiver ativa e a principal voltar, a principal tenta reassumir automaticamente e a reserva para a API local.
-- Se nenhuma API responder, a principal tenta iniciar imediatamente.
-- A reserva so assume depois de 3 ciclos seguidos sem resposta, para evitar troca falsa por oscilacao curta de rede.
-- O acionamento remoto da principal via `schtasks` e apenas uma tentativa auxiliar. Se o Windows negar acesso remoto, o guardiao da propria principal ainda deve reassumir quando o usuario/sessao estiver ativo.
+- Cada candidato publica um heartbeat compartilhado com disponibilidade, IP e saude local.
+- Uma eleicao protegida por trava escolhe o candidato elegivel de maior prioridade e publica uma concessao (`lease`) curta.
+- Se o lider cair ou deixar de renovar, o proximo candidato disponivel assume.
+- Quando o candidato preferencial volta estavel, ele reassume apos o periodo de seguranca configurado.
+- Somente o dono da `lease` mantem a API local ligada, reduzindo o risco de dois servidores ativos.
+
+Os detalhes operacionais e de migracao estao em `docs/cluster-dinamico-servidores.md`.
 
 ### Comando unico de instalacao ou atualizacao
 
@@ -220,7 +223,7 @@ Rode no usuario Windows que deve ver o icone do servidor:
 cmd /c "pushd \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts && call instalar_atualizar_guardiao_monitor_darkjutsu.bat && popd"
 ```
 
-O instalador detecta o papel pelo IP. No IP da principal instala o monitor PowerShell. No IP da reserva instala o monitor Python e corrige o Tkinter portatil quando necessario.
+O instalador registra qualquer PC como candidato, instala o mesmo guardiao/monitor e usa a prioridade do arquivo compartilhado.
 
 ### Icone do servidor
 
@@ -238,16 +241,15 @@ O botao `Abrir Dark-Jutsu` nao pede senha. Os comandos de controle pedem a senha
 - Log local do instalador: `C:\DarkJutsu\logs\instalador_guardiao_monitor.log`.
 - Log compartilhado de eventos: `\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\logs\servidor_eventos_darkjutsu.txt`.
 
-O log compartilhado deve registrar eventos de principal, reserva, health checks, tentativas de assumir, falhas de acesso remoto e limpezas de registros antigos.
+O log compartilhado registra heartbeats, lider eleito, epoca da eleicao, health checks e trocas de lideranca.
 
 ### Teste rapido
 
 ```cmd
-curl http://192.168.5.44:8765/health
-curl http://192.168.5.38:8765/health
+python scripts/status_compartilhado_servidores_darkjutsu.py
 ```
 
-Resultado esperado em operacao normal: a principal responde `ok:true` e a reserva nao responde. Se a principal estiver desligada por varios ciclos, a reserva deve responder `ok:true`.
+Resultado esperado: exatamente um candidato aparece como lider saudavel; os demais ficam prontos, mas com a API local parada.
 
 ## Observacoes de manutencao
 
