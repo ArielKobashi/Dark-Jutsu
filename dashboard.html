@@ -1206,7 +1206,8 @@
         let mata112Cache = null;
         let historicoCooperatCache = null;
         const SQL_API_PRIMARY_BASE = "http://192.168.5.44:8765";
-        const SQL_API_RESERVE_BASE = "http://192.168.5.38:8765";
+        const SQL_API_RESERVE_BASE = "http://192.168.5.41:8765";
+        const SQL_API_LEGACY_RESERVE_BASE = "http://192.168.5.38:8765";
         const DEFAULT_SQL_API_BASE = SQL_API_PRIMARY_BASE;
         const SQL_API_BASE = (
             params.get("apiBase") ||
@@ -1217,7 +1218,8 @@
         const SQL_API_FALLBACK_BASES = [
             SQL_API_PRIMARY_BASE,
             SQL_API_BASE,
-            SQL_API_RESERVE_BASE
+            SQL_API_RESERVE_BASE,
+            SQL_API_LEGACY_RESERVE_BASE
         ].filter((base, index, bases) => base && bases.indexOf(base) === index);
         const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
 

@@ -1575,8 +1575,18 @@ class _SharedState:
                 "refreshToken": "",
                 "serviceToken": True,
             }
-        self._clear_admin_session()
-        return None
+        session = self.config.get("adminSession")
+        if not isinstance(session, dict):
+            return None
+        saved_token = str(session.get("idToken") or "").strip()
+        if not saved_token or _id_token_expired(saved_token):
+            self._clear_admin_session()
+            return None
+        nivel = str(session.get("nivel") or "").strip().lower()
+        if nivel not in {"admin", "adm", "mod", "moderador"}:
+            self._clear_admin_session()
+            return None
+        return dict(session)
 
     def _current_user_key(self) -> Optional[str]:
         admin = self.authenticated_admin or {}
@@ -1890,9 +1900,13 @@ class _SharedState:
 
                 if due_runs:
                     selected = due_runs[0]
-                    self.last_schedule_run[selected["key"]] = "done"
                     emit_status(f"Horário programado atingido ({selected['horario']}). Iniciando atualização.")
-                    self.run_executar_tudo(origem=f"agendada {selected['horario']}", usuario=selected["usuario"])
+                    started = self.run_executar_tudo(
+                        origem=f"agendada {selected['horario']}",
+                        usuario=selected["usuario"],
+                    )
+                    if started:
+                        self.last_schedule_run[selected["key"]] = "done"
             except Exception as exc:
                 emit_status(f"Falha no agendador: {exc}", level="ERROR")
             self.scheduler_stop.wait(20)

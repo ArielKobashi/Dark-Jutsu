@@ -11694,6 +11694,7 @@ const SQL_API_FALLBACK_BASES = [
     SQL_API_BASE,
     ...(SQL_API_HOST_IS_LOCAL ? ["http://127.0.0.1:8765", "http://localhost:8765"] : []),
     "http://192.168.5.44:8765",
+    "http://192.168.5.41:8765",
     "http://192.168.5.38:8765"
 ].filter((base, index, bases) => base && bases.indexOf(base) === index);
 let sqlApiPreferredBase = localStorage.getItem("darkJutsuApiPreferredBase") || "";
