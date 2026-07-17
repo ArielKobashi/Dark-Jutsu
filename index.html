@@ -11790,6 +11790,9 @@ window.sqlApi = async function(path, options = {}){
 let servidorSqlOnline = true;
 let servidorSqlOfflineDesde = 0;
 let servidorSqlCheckInFlight = false;
+let servidorSqlFalhasConsecutivas = 0;
+const SERVIDOR_SQL_OFFLINE_MIN_FALHAS = 2;
+const SERVIDOR_SQL_OFFLINE_GRACE_MS = 7000;
 
 function ensureServidorSqlBanner(){
     let banner = document.getElementById("servidorSqlOfflineBanner");
@@ -11854,7 +11857,7 @@ async function testarServidorSqlAtivo(){
     const bases = [sqlApiPreferredBase, ...SQL_API_FALLBACK_BASES].filter((base, index, list) => base && list.indexOf(base) === index);
     for(const base of bases){
         const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-        const timeout = controller ? setTimeout(() => controller.abort(), 2500) : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), 4500) : null;
         try{
             const response = await fetch(`${base}/live?ts=${Date.now()}`, {
                 cache: "no-store",
@@ -11882,9 +11885,19 @@ function setServidorSqlOffline(offline){
     if(banner) banner.style.display = offline ? "block" : "none";
     if(!offline){
         servidorSqlOfflineDesde = 0;
+        servidorSqlFalhasConsecutivas = 0;
         return;
     }
     if(!servidorSqlOfflineDesde) servidorSqlOfflineDesde = Date.now();
+}
+
+function registrarFalhaMonitorServidorSql(){
+    if(!servidorSqlOfflineDesde) servidorSqlOfflineDesde = Date.now();
+    servidorSqlFalhasConsecutivas++;
+    const tempoOffline = Date.now() - servidorSqlOfflineDesde;
+    if(servidorSqlFalhasConsecutivas >= SERVIDOR_SQL_OFFLINE_MIN_FALHAS && tempoOffline >= SERVIDOR_SQL_OFFLINE_GRACE_MS){
+        setServidorSqlOffline(true);
+    }
 }
 
 async function monitorarServidorSql(){
@@ -11896,7 +11909,7 @@ async function monitorarServidorSql(){
             setServidorSqlOffline(false);
             return;
         }
-        setServidorSqlOffline(true);
+        registrarFalhaMonitorServidorSql();
     }finally{
         servidorSqlCheckInFlight = false;
     }
