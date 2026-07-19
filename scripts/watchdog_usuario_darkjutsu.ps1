@@ -54,7 +54,8 @@ function Process-Exists([string]$pattern) {
     try {
       if (-not (Test-Path -LiteralPath $lockFile)) { return $false }
       $lockPid = [int](Get-Content -LiteralPath $lockFile -Raw).Trim()
-      return [bool](Get-Process -Id $lockPid -ErrorAction Stop)
+      $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$lockPid" -ErrorAction Stop
+      return [bool]($proc -and $proc.CommandLine -and $proc.CommandLine -match [regex]::Escape($pattern))
     } catch { return $false }
   }
   if ($pattern -eq "monitor_reserva_python_darkjutsu.py") {

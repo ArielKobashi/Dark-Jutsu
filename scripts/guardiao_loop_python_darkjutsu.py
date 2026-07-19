@@ -95,9 +95,19 @@ def acquire_lock():
                 old_pid = 0
             if old_pid:
                 try:
-                    handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, old_pid)
-                    if handle:
-                        ctypes.windll.kernel32.CloseHandle(handle)
+                    ps = (
+                        "$p=Get-CimInstance Win32_Process -Filter 'ProcessId=%s' -ErrorAction SilentlyContinue; "
+                        "if($p -and $p.CommandLine -match 'guardiao_loop_python_darkjutsu.py'){ 'guardiao' }"
+                    ) % old_pid
+                    out = subprocess.run(
+                        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                        capture_output=True,
+                        text=True,
+                        errors="ignore",
+                        timeout=8,
+                        creationflags=CREATE_NO_WINDOW,
+                    ).stdout.strip()
+                    if out == "guardiao":
                         log(f"Guardiao Python ja esta rodando no PID {old_pid}. Encerrando duplicado.")
                         return False
                     log(f"Lock antigo ignorado: PID {old_pid} nao e guardiao ativo.")

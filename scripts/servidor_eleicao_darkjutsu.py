@@ -20,6 +20,7 @@ DEFAULT_CONFIG = {
     "defaultPriority": 1000,
     "heartbeatTimeoutSeconds": 60,
     "leaseSeconds": 35,
+    "leaderApiStartupGraceSeconds": 45,
     "preferredReturnGraceSeconds": 90,
     "candidates": [],
 }
@@ -142,8 +143,20 @@ def choose_preferred(nodes: dict[str, dict]) -> dict | None:
 
 def decide_leader(config: dict, nodes: dict[str, dict], lease: dict, now: float | None = None) -> str | None:
     now = now or time.time()
-    preferred = choose_preferred(nodes)
     current_name = str(lease.get("leader") or "").strip().upper()
+    current_api_grace = max(15, int(config.get("leaderApiStartupGraceSeconds", 45)))
+    current_acquired_at = float(lease.get("acquiredAtEpoch") or now)
+    current_api_grace_expired = bool(
+        current_name
+        and (now - current_acquired_at) > current_api_grace
+        and (nodes.get(current_name) or {}).get("apiHealthy") is False
+    )
+    if current_api_grace_expired:
+        nodes = {name: dict(node) for name, node in nodes.items()}
+        if current_name in nodes:
+            nodes[current_name]["eligible"] = False
+
+    preferred = choose_preferred(nodes)
     current = nodes.get(current_name)
     lease_valid = bool(
         current_name

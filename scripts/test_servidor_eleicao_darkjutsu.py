@@ -41,6 +41,19 @@ class ElectionTests(unittest.TestCase):
     def test_no_eligible_candidate_returns_none(self):
         self.assertIsNone(decide_leader(CONFIG, {"A": node("A", 10, eligible=False)}, {}, now=1000))
 
+    def test_standby_without_api_can_be_selected(self):
+        nodes = {"A": node("A", 10) | {"apiHealthy": False}, "B": node("B", 20)}
+        self.assertEqual(decide_leader(CONFIG, nodes, {}, now=1000), "A")
+
+    def test_leader_without_api_after_grace_is_replaced(self):
+        config = CONFIG | {"leaderApiStartupGraceSeconds": 45}
+        nodes = {
+            "A": node("A", 10) | {"apiHealthy": False},
+            "B": node("B", 20) | {"apiHealthy": True},
+        }
+        lease = {"leader": "A", "expiresAtEpoch": 1100, "acquiredAtEpoch": 900}
+        self.assertEqual(decide_leader(config, nodes, lease, now=1000), "B")
+
     @unittest.skip("Teste de integracao SMB executado somente no ambiente de homologacao.")
     def test_heartbeat_lease_and_failover_in_temporary_share(self):
         original = {name: getattr(election, name) for name in (

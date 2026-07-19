@@ -9,13 +9,30 @@ $pointerPath = Join-Path $releaseRoot "versao_atual.txt"
 $serverLauncher = Join-Path $releaseRoot "Iniciar_Automus_Servidor.vbs"
 $logDir = Join-Path $env:LOCALAPPDATA "DarkJutsu\logs"
 $logPath = Join-Path $logDir "automus_guardiao.log"
+$serverStatusDir = Join-Path $releaseRoot "status"
+$serverStatusPath = Join-Path $serverStatusDir ("guardiao_automus_{0}_{1}.json" -f $env:COMPUTERNAME, $env:USERNAME)
 $stateDir = Join-Path $env:LOCALAPPDATA "Automus"
 $versionState = Join-Path $stateDir "guardiao-versao-ativa.txt"
 
-New-Item -ItemType Directory -Force -Path $logDir,$stateDir | Out-Null
+New-Item -ItemType Directory -Force -Path $logDir,$stateDir,$serverStatusDir | Out-Null
 
 function Write-Log([string]$Message) {
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $Message"
+}
+
+function Write-ServerStatus([string]$Status, [string]$Message, [string]$Version = "", [string]$ExePath = "") {
+    try {
+        $payload = [ordered]@{
+            updatedAt = (Get-Date -Format s)
+            computer = $env:COMPUTERNAME
+            user = $env:USERNAME
+            status = $Status
+            message = $Message
+            version = $Version
+            exePath = $ExePath
+        }
+        $payload | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $serverStatusPath -Encoding UTF8
+    } catch {}
 }
 
 function Normalize-Path([string]$PathValue) {
@@ -25,6 +42,7 @@ function Normalize-Path([string]$PathValue) {
 }
 
 try {
+    Write-ServerStatus "checking" "Verificando Automus central."
     if (-not (Test-Path -LiteralPath $pointerPath)) {
         throw "Ponteiro central nao encontrado: $pointerPath"
     }
@@ -47,6 +65,7 @@ try {
 
     if ($currentProcesses.Count -gt 0 -and -not $ForceStart) {
         Set-Content -LiteralPath $versionState -Encoding ASCII -NoNewline -Value $version
+        Write-ServerStatus "ok" "Automus ja estava na versao central." $version $exePath
         exit 0
     }
 
@@ -68,7 +87,9 @@ try {
     Start-Process -FilePath $exePath -WorkingDirectory $appDir -ArgumentList "--background" -WindowStyle Hidden
     Set-Content -LiteralPath $versionState -Encoding ASCII -NoNewline -Value $version
     Write-Log "Automus central $version iniciado oculto. Origem=$exePath"
+    Write-ServerStatus "started" "Automus central iniciado oculto." $version $exePath
 } catch {
     Write-Log "ERRO ao verificar/atualizar Automus central: $($_.Exception.Message)"
+    Write-ServerStatus "error" $_.Exception.Message
     exit 1
 }

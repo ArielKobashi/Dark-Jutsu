@@ -7,7 +7,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -21,6 +21,7 @@ DIST_APP = ROOT / "dist" / "Automus"
 SERVER_SUPPORT_FILES = (
     "Iniciar_Automus_Servidor.vbs",
     "Configurar_Automus_neste_PC.bat",
+    "Forcar_Atualizar_Automus_neste_PC.bat",
     "configurar_automus_servidor.ps1",
 )
 
