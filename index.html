@@ -11901,7 +11901,10 @@ async function testarServidorSqlAtivo(){
                     try{
                         localStorage.setItem(SERVIDOR_SQL_ULTIMA_ATUALIZACAO_KEY, JSON.stringify(registro));
                     }catch(e){}
-                    atualizarUltimaAtualizacaoBannerServidor();
+                    atualizarTextoUltimaAtualizacaoEstoque({
+                        ultimaAtualizacao: registro.timestamp,
+                        atualizadoPor: registro.usuario
+                    });
                 }
                 if(sqlApiPreferredBase !== base){
                     sqlApiPreferredBase = base;
