@@ -23,14 +23,77 @@ REQUEST_DIR = STATUS_DIR / "requests"
 STATUS_SCRIPT = SCRIPTS / "status_compartilhado_servidores_darkjutsu.py"
 SYSTEM_RUNTIME_ROOT = Path(r"C:\DarkJutsu")
 USER_RUNTIME_ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "DarkJutsu"
-RUNTIME_ROOT = Path(os.environ.get("DARK_JUTSU_RUNTIME_ROOT") or (SYSTEM_RUNTIME_ROOT if SYSTEM_RUNTIME_ROOT.exists() else USER_RUNTIME_ROOT))
-LOCAL_API = RUNTIME_ROOT / "Dark-Jutsu" / "api" / "dark_jutsu_api.py"
+SYSTEM_PG_HOME = SYSTEM_RUNTIME_ROOT / "PostgreSQL" / "pgsql"
+LOCALAPPDATA_PG_HOME = USER_RUNTIME_ROOT / "PostgreSQL" / "pgsql"
+USER_PG_CANDIDATES = (
+    Path.home() / "Desktop" / "aplicacoes code" / "pgsql",
+    Path.home() / "Desktop" / "pgsql",
+    Path.home() / "Desktop" / "PostgreSQL" / "pgsql",
+    Path.home() / "Desktop" / "PostgreSQL",
+    Path.home() / "Área de Trabalho" / "aplicacoes code" / "pgsql",
+    Path.home() / "Área de Trabalho" / "pgsql",
+    Path.home() / "Área de Trabalho" / "PostgreSQL" / "pgsql",
+    Path.home() / "Área de Trabalho" / "PostgreSQL",
+)
+
+
+def has_pg_ctl(pg_home: Path) -> bool:
+    return (pg_home / "bin" / "pg_ctl.exe").exists() and (pg_home / "share" / "postgres.bki").exists()
+
+
+def desktop_roots() -> list[Path]:
+    roots = [
+        Path.home() / "Desktop",
+        Path.home() / "Área de Trabalho",
+    ]
+    for env_name in ("USERPROFILE", "OneDrive", "OneDriveCommercial", "OneDriveConsumer"):
+        value = os.environ.get(env_name)
+        if value:
+            roots.append(Path(value) / "Desktop")
+    unique = []
+    seen = set()
+    for root in roots:
+        key = str(root).lower()
+        if key not in seen:
+            unique.append(root)
+            seen.add(key)
+    return unique
+
+
+def select_user_pg_home() -> Path:
+    for candidate in USER_PG_CANDIDATES:
+        if has_pg_ctl(candidate):
+            return candidate
+    for desktop in desktop_roots():
+        try:
+            for pg_ctl in desktop.rglob("pg_ctl.exe"):
+                candidate = pg_ctl.parent.parent
+                if pg_ctl.parent.name.lower() == "bin" and has_pg_ctl(candidate):
+                    return candidate
+        except Exception:
+            pass
+    return USER_PG_CANDIDATES[0]
+
+
+USER_PG_HOME = select_user_pg_home()
+
+
+def select_runtime_root() -> Path:
+    override = os.environ.get("DARK_JUTSU_RUNTIME_ROOT")
+    if override:
+        return Path(override)
+    if has_pg_ctl(SYSTEM_PG_HOME):
+        return SYSTEM_RUNTIME_ROOT
+    if has_pg_ctl(LOCALAPPDATA_PG_HOME) or has_pg_ctl(USER_PG_HOME):
+        return USER_RUNTIME_ROOT
+    return USER_RUNTIME_ROOT
+
+
+RUNTIME_ROOT = select_runtime_root()
 SHARE_API_DIR = SHARE_ROOT / "pacote" / "Dark-Jutsu" / "api"
-LOCAL_API_DIR = LOCAL_API.parent
 LOG_DIR = RUNTIME_ROOT / "logs"
 LOCAL_MONITOR_DIR = RUNTIME_ROOT / "monitor"
-USER_PG_HOME = Path.home() / "Desktop" / "aplicacoes code" / "pgsql"
-PG_HOME = USER_PG_HOME if not SYSTEM_RUNTIME_ROOT.exists() and (USER_PG_HOME / "bin" / "pg_ctl.exe").exists() else RUNTIME_ROOT / "PostgreSQL" / "pgsql"
+PG_HOME = USER_PG_HOME if has_pg_ctl(USER_PG_HOME) else (SYSTEM_PG_HOME if RUNTIME_ROOT == SYSTEM_RUNTIME_ROOT else LOCALAPPDATA_PG_HOME)
 PG_BIN = PG_HOME / "bin"
 PGDATA = (PG_HOME / "data") if PG_HOME == USER_PG_HOME else RUNTIME_ROOT / "postgres-data"
 PG_CTL = PG_BIN / "pg_ctl.exe"
@@ -41,13 +104,59 @@ API_LOG = LOG_DIR / "api_runtime_python_guardiao.log"
 LOCK_FILE = LOG_DIR / "guardiao_loop_python.lock"
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-18.24"
+GUARDIAN_VERSION = "2026-07-19.05"
 MAINTENANCE_DIR = STATUS_DIR / "maintenance"
 STARTUP_VBS_SOURCE = SCRIPTS / "iniciar_cluster_usuario_darkjutsu.vbs"
 WATCHDOG_SOURCE = SCRIPTS / "watchdog_usuario_darkjutsu.ps1"
 SHARED_LOG = SHARE_ROOT / "logs" / "guardiao_python_eventos.txt"
 TEST_ACTIVE_FILE = SHARE_ROOT / "status" / "teste_inicializacao_ativo.txt"
 TEST_LOG = SHARE_ROOT / "logs" / "teste_inicializacao_manual_darkjutsu.txt"
+
+
+def select_api_runtime_root():
+    override = os.environ.get("DARK_JUTSU_API_RUNTIME_ROOT")
+    if override:
+        return Path(override)
+    preferred = RUNTIME_ROOT
+    try:
+        api_dir = preferred / "Dark-Jutsu" / "api"
+        api_dir.mkdir(parents=True, exist_ok=True)
+        probe = api_dir / ".guardian_write_test"
+        probe.write_text("ok", encoding="ascii")
+        probe.unlink(missing_ok=True)
+        return preferred
+    except Exception as exc:
+        try:
+            USER_RUNTIME_ROOT.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        try:
+            SHARED_LOG.parent.mkdir(parents=True, exist_ok=True)
+            actor = f"{os.environ.get('COMPUTERNAME', '?')}\\{os.environ.get('USERNAME', '?')}"
+            with SHARED_LOG.open("a", encoding="utf-8") as fh:
+                fh.write(time.strftime("%Y-%m-%d %H:%M:%S") + f" | API runtime do sistema bloqueado; usando perfil do usuario. Motivo={type(exc).__name__}: {exc} | {actor}\n")
+        except Exception:
+            pass
+        return USER_RUNTIME_ROOT
+
+
+API_RUNTIME_ROOT = select_api_runtime_root()
+LOCAL_API = API_RUNTIME_ROOT / "Dark-Jutsu" / "api" / "dark_jutsu_api.py"
+LOCAL_API_DIR = LOCAL_API.parent
+
+
+def set_api_runtime_root(root: Path, reason: str = ""):
+    global API_RUNTIME_ROOT, LOCAL_API, LOCAL_API_DIR
+    API_RUNTIME_ROOT = root
+    LOCAL_API = API_RUNTIME_ROOT / "Dark-Jutsu" / "api" / "dark_jutsu_api.py"
+    LOCAL_API_DIR = LOCAL_API.parent
+    try:
+        LOCAL_MONITOR_DIR.mkdir(parents=True, exist_ok=True)
+        (LOCAL_MONITOR_DIR / "active_runtime.txt").write_text(str(API_RUNTIME_ROOT), encoding="utf-8")
+    except Exception:
+        pass
+    if reason:
+        log(f"Runtime da API alterado para {API_RUNTIME_ROOT}. Motivo={reason}")
 
 
 def log(message):
@@ -291,9 +400,17 @@ def ensure_postgres_ready():
     if not (PGDATA / "postgresql.conf").exists():
         log(f"ERRO: PGDATA invalido em {PGDATA}")
         return False
+    ensure_postgres_config()
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         log("PostgreSQL local nao respondeu; iniciando pelo guardiao.")
+        subprocess.run(
+            [str(PG_CTL), "-D", str(PGDATA), "stop", "-m", "fast"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            creationflags=CREATE_NO_WINDOW,
+        )
         proc = subprocess.run(
             [str(PG_CTL), "-D", str(PGDATA), "-l", str(PG_RUNTIME_LOG), "start"],
             stdout=subprocess.DEVNULL,
@@ -314,6 +431,21 @@ def ensure_postgres_ready():
     return False
 
 
+def ensure_postgres_config():
+    conf = PGDATA / "postgresql.conf"
+    try:
+        text = conf.read_text(encoding="utf-8", errors="ignore")
+        if "# Dark-Jutsu runtime config" in text and "port = 5433" in text:
+            return
+        with conf.open("a", encoding="utf-8") as fh:
+            fh.write("\n# Dark-Jutsu runtime config\n")
+            fh.write("port = 5433\n")
+            fh.write("listen_addresses = '*'\n")
+        log(f"Config PostgreSQL ajustada para porta 5433 em {conf}")
+    except Exception as exc:
+        log(f"AVISO: nao consegui ajustar postgresql.conf: {type(exc).__name__}: {exc}")
+
+
 def pg_ready():
     if not PG_ISREADY.exists():
         return False
@@ -332,24 +464,35 @@ def pg_ready():
 def sync_local_api():
     if not SHARE_API_DIR.exists():
         log(f"AVISO: pasta compartilhada da API nao encontrada: {SHARE_API_DIR}")
-        return
-    try:
-        LOCAL_API_DIR.mkdir(parents=True, exist_ok=True)
-        copied = 0
-        for source in SHARE_API_DIR.rglob("*"):
-            if not source.is_file():
+        return False
+
+    for attempt in range(2):
+        try:
+            LOCAL_API_DIR.mkdir(parents=True, exist_ok=True)
+            copied = 0
+            for source in SHARE_API_DIR.rglob("*"):
+                if not source.is_file():
+                    continue
+                rel = source.relative_to(SHARE_API_DIR)
+                target = LOCAL_API_DIR / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                needs_copy = not target.exists() or source.stat().st_size != target.stat().st_size or int(source.stat().st_mtime) > int(target.stat().st_mtime)
+                if needs_copy:
+                    shutil.copy2(source, target)
+                    copied += 1
+            if copied:
+                log(f"API local sincronizada com pacote compartilhado. Arquivos copiados={copied} Destino={LOCAL_API_DIR}")
+            return True
+        except PermissionError as exc:
+            if API_RUNTIME_ROOT != USER_RUNTIME_ROOT and attempt == 0:
+                set_api_runtime_root(USER_RUNTIME_ROOT, f"sem permissao em {API_RUNTIME_ROOT}: {exc}")
                 continue
-            rel = source.relative_to(SHARE_API_DIR)
-            target = LOCAL_API_DIR / rel
-            target.parent.mkdir(parents=True, exist_ok=True)
-            needs_copy = not target.exists() or source.stat().st_size != target.stat().st_size or int(source.stat().st_mtime) > int(target.stat().st_mtime)
-            if needs_copy:
-                shutil.copy2(source, target)
-                copied += 1
-        if copied:
-            log(f"API local sincronizada com pacote compartilhado. Arquivos copiados={copied}")
-    except Exception as exc:
-        log(f"AVISO: falha ao sincronizar API local: {type(exc).__name__}: {exc}")
+            log(f"AVISO: falha ao sincronizar API local: {type(exc).__name__}: {exc}")
+            return False
+        except Exception as exc:
+            log(f"AVISO: falha ao sincronizar API local: {type(exc).__name__}: {exc}")
+            return False
+    return False
 
 
 def maintenance_active():

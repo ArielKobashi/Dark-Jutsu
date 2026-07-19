@@ -788,6 +788,15 @@ class Handler(BaseHTTPRequestHandler):
             raise RuntimeError(f"Schema SQL incompleto: {table_status}")
         if db_ms >= 1000:
             DETAIL_LOG.warning("HEALTH_SLOW db_ms=%s pid=%s", db_ms, os.getpid())
+        snapshot_rows = self._query_as_service(
+            """
+            select saved_at, updated_by
+            from inventory_snapshots
+            order by saved_at desc nulls last, id desc
+            limit 1
+            """
+        )
+        latest_snapshot = snapshot_rows[0] if snapshot_rows else None
         return {
             "ok": True,
             "database_time": rows[0]["database_time"],
@@ -796,6 +805,7 @@ class Handler(BaseHTTPRequestHandler):
             "tables": table_status,
             "pid": os.getpid(),
             "uptime_seconds": int(time.time() - API_STARTED_AT),
+            "latest_inventory_snapshot": latest_snapshot,
         }
 
     def _live(self) -> dict[str, Any]:
@@ -1113,6 +1123,35 @@ class Handler(BaseHTTPRequestHandler):
             }
         if ajustes_map:
             payload = {**payload, "ajustesItens": ajustes_map}
+        historico_atual = payload.get("historicoSaldo")
+        if not isinstance(historico_atual, dict) or not historico_atual:
+            historico_rows = self._query(
+                """
+                select item_legacy_key, event_at, event_date_label, previous_balance,
+                       current_balance, delta, event_type, raw_data
+                from inventory_balance_history
+                order by item_legacy_key nulls last, event_at nulls last, id
+                """
+            )
+            historico_map: dict[str, list[Any]] = {}
+            for row in historico_rows:
+                item_key = _clean_text(row.get("item_legacy_key"))
+                if not item_key:
+                    continue
+                raw = row.get("raw_data") if isinstance(row.get("raw_data"), dict) else {}
+                evento = {
+                    **raw,
+                    "data": raw.get("data") or row.get("event_date_label"),
+                    "saldoAnterior": raw.get("saldoAnterior", row.get("previous_balance")),
+                    "saldoAtual": raw.get("saldoAtual", row.get("current_balance")),
+                    "delta": raw.get("delta", row.get("delta")),
+                    "tipo": raw.get("tipo") or row.get("event_type"),
+                }
+                if not evento.get("timestamp") and row.get("event_at"):
+                    evento["timestamp"] = int(row["event_at"].timestamp() * 1000)
+                historico_map.setdefault(item_key, []).append(evento)
+            if historico_map:
+                payload = {**payload, "historicoSaldo": historico_map}
         return payload
 
     def _put_inventory_adjustment(self, code: str, payload: dict[str, Any]) -> dict[str, Any]:

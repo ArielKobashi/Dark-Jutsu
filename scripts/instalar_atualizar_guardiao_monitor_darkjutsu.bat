@@ -3,6 +3,14 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 set "SHARE_ROOT=\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 set "SHARE_SCRIPTS=%SHARE_ROOT%\scripts"
+set "NEW_INSTALLER=%SHARE_SCRIPTS%\atualizar_usuario_guardiao_monitor_darkjutsu.ps1"
+
+if exist "%NEW_INSTALLER%" (
+  echo Encaminhando para o instalador novo do usuario...
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%NEW_INSTALLER%"
+  exit /b %ERRORLEVEL%
+)
+
 set "PY_SOURCE=%SHARE_ROOT%\instaladores\WPy64-3.13.12.0"
 set "PY_TARGET=%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0"
 set "RUNTIME_ROOT=%LOCALAPPDATA%\DarkJutsu"

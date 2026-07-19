@@ -6,11 +6,25 @@ if not exist "%PG_SOURCE%\bin\pg_ctl.exe" set "PG_SOURCE=%USERPROFILE%\Desktop\a
 set "PY_SOURCE=%SHARE_ROOT%\instaladores\WPy64-3.13.12.0"
 set "PROJECT_SOURCE=%SHARE_ROOT%\pacote\Dark-Jutsu"
 set "RUNTIME_ROOT=%LOCALAPPDATA%\DarkJutsu"
-set "PG_HOME=%RUNTIME_ROOT%\PostgreSQL\pgsql"
-if exist "%USERPROFILE%\Desktop\aplicacoes code\pgsql\bin\pg_ctl.exe" set "PG_HOME=%USERPROFILE%\Desktop\aplicacoes code\pgsql"
+set "DESKTOP_DIR=%USERPROFILE%\Desktop"
+for /f "usebackq delims=" %%D in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "[Environment]::GetFolderPath('Desktop')" 2^>nul`) do if not "%%D"=="" set "DESKTOP_DIR=%%D"
+set "PG_HOME="
+for %%G in ("%DESKTOP_DIR%\aplicacoes code\pgsql" "%DESKTOP_DIR%\pgsql" "%DESKTOP_DIR%\PostgreSQL\pgsql" "%DESKTOP_DIR%\PostgreSQL" "%DESKTOP_DIR%\Dark-Jutsu\PostgreSQL\pgsql" "%DESKTOP_DIR%\Dark-Jutsu\PostgreSQL") do (
+  if not defined PG_HOME if exist "%%~fG\bin\pg_ctl.exe" if exist "%%~fG\share\postgres.bki" set "PG_HOME=%%~fG"
+)
+if not defined PG_HOME if exist "%DESKTOP_DIR%" (
+  for /f "delims=" %%P in ('dir /s /b "%DESKTOP_DIR%\pg_ctl.exe" 2^>nul') do (
+    if not defined PG_HOME (
+      for %%D in ("%%~dpP..") do (
+        if exist "%%~fD\share\postgres.bki" set "PG_HOME=%%~fD"
+      )
+    )
+  )
+)
+if not defined PG_HOME set "PG_HOME=%RUNTIME_ROOT%\PostgreSQL\pgsql"
 set "PG_BIN=%PG_HOME%\bin"
 set "PGDATA=%RUNTIME_ROOT%\postgres-data"
-if /I "%PG_HOME%"=="%USERPROFILE%\Desktop\aplicacoes code\pgsql" set "PGDATA=%PG_HOME%\data"
+echo "%PG_HOME%" | find /I "%DESKTOP_DIR%" >nul && set "PGDATA=%PG_HOME%\data"
 set "APP_ROOT=%RUNTIME_ROOT%\Dark-Jutsu"
 set "LOGDIR=%RUNTIME_ROOT%\logs"
 set "PY_ROOT=%USERPROFILE%\Desktop\aplicacoes code\WPy64-3.13.12.0"
@@ -20,16 +34,24 @@ set "CANDIDATE_LIST=%TEMP%\darkjutsu_user_restore_%RANDOM%.lst"
 echo Dark-Jutsu - instalacao de servidor sem administrador
 echo Destino: %RUNTIME_ROOT%
 if not exist "%PG_SOURCE%\bin\pg_ctl.exe" echo ERRO: PostgreSQL portatil ausente em "%PG_SOURCE%". & exit /b 1
+if not exist "%PG_SOURCE%\share\postgres.bki" echo ERRO: PostgreSQL portatil incompleto em "%PG_SOURCE%" ^(faltou share\postgres.bki^). & exit /b 1
 if not exist "%PROJECT_SOURCE%\api\dark_jutsu_api.py" echo ERRO: pacote da API ausente. & exit /b 1
 mkdir "%LOGDIR%" 2>nul
 mkdir "%RUNTIME_ROOT%\PostgreSQL" 2>nul
 mkdir "%APP_ROOT%" 2>nul
 if not exist "%LOGDIR%" exit /b 1
 
-if not exist "%PG_BIN%\pg_ctl.exe" (
-  echo Copiando PostgreSQL portatil...
+if exist "%PG_BIN%\pg_ctl.exe" if exist "%PG_HOME%\share\postgres.bki" (
+  echo PostgreSQL portatil existente detectado: %PG_HOME%
+) else (
+  echo PostgreSQL local ausente ou incompleto em "%PG_HOME%".
+  echo Copiando/completando PostgreSQL portatil...
   robocopy "%PG_SOURCE%" "%PG_HOME%" /E /R:2 /W:2 /NFL /NDL /NP
   if errorlevel 8 exit /b 1
+)
+if not exist "%PG_HOME%\share\postgres.bki" (
+  echo ERRO: PostgreSQL continuou incompleto em "%PG_HOME%" ^(faltou share\postgres.bki^).
+  exit /b 1
 )
 if not exist "%PY_ROOT%\python\python.exe" (
   echo Copiando Python portatil...
@@ -44,16 +66,25 @@ if not exist "%PGDATA%\PG_VERSION" (
   echo Inicializando PostgreSQL local...
   "%PG_BIN%\initdb.exe" -D "%PGDATA%" -U postgres --auth=trust --encoding=UTF8
   if errorlevel 1 exit /b 1
-  >>"%PGDATA%\postgresql.conf" echo.
-  >>"%PGDATA%\postgresql.conf" echo port = 5433
-  >>"%PGDATA%\postgresql.conf" echo listen_addresses = '*'
   >>"%PGDATA%\pg_hba.conf" echo.
   >>"%PGDATA%\pg_hba.conf" echo host all all 192.168.0.0/16 md5
 )
+if exist "%PGDATA%\postgresql.conf" (
+  >>"%PGDATA%\postgresql.conf" echo.
+  >>"%PGDATA%\postgresql.conf" echo # Dark-Jutsu runtime config
+  >>"%PGDATA%\postgresql.conf" echo port = 5433
+  >>"%PGDATA%\postgresql.conf" echo listen_addresses = '*'
+)
 "%PG_BIN%\pg_isready.exe" -h 127.0.0.1 -p 5433 >nul 2>&1
 if errorlevel 1 (
+  "%PG_BIN%\pg_ctl.exe" -D "%PGDATA%" stop -m fast >nul 2>&1
   "%PG_BIN%\pg_ctl.exe" -D "%PGDATA%" -l "%LOGDIR%\postgres_runtime.log" start
   if errorlevel 1 exit /b 1
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$pg='%PG_BIN%\pg_isready.exe'; $deadline=(Get-Date).AddSeconds(45); do { & $pg -h 127.0.0.1 -p 5433 *> $null; if ($LASTEXITCODE -eq 0) { exit 0 }; Start-Sleep -Seconds 1 } while ((Get-Date) -lt $deadline); exit 1"
+  if errorlevel 1 (
+    echo ERRO: PostgreSQL iniciou, mas nao respondeu na porta 5433.
+    exit /b 1
+  )
 )
 
 "%PG_BIN%\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "do $$ begin if not exists (select 1 from pg_roles where rolname = 'dark_jutsu') then create role dark_jutsu login password 'dark_jutsu_dev'; end if; end $$;"

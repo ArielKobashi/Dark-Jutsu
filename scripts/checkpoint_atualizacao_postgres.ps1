@@ -52,6 +52,14 @@ function Invoke-Sql([string]$Sql) {
   return @($result)
 }
 
+function Get-SchemaHash([string]$Path) {
+  $normalizado = (Get-Content -LiteralPath $Path | Where-Object { $_ -notmatch '^\\(un)?restrict ' }) -join "`n"
+  $bytes = [Text.Encoding]::UTF8.GetBytes($normalizado)
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant() }
+  finally { $sha.Dispose() }
+}
+
 function Capture-State([string]$Dir, [string]$Label) {
   New-Item -ItemType Directory -Force -Path $Dir | Out-Null
   $log = Join-Path $Dir "erros.log"
@@ -92,7 +100,7 @@ function Capture-State([string]$Dir, [string]$Label) {
       host = $Db.Host
       porta = $Db.Port
       versao = (@(Invoke-Sql "select version()"))[0]
-      schema_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $schema).Hash.ToLowerInvariant()
+      schema_sha256 = Get-SchemaHash $schema
       backup = [IO.Path]::GetFileName($backup)
       backup_bytes = (Get-Item -LiteralPath $backup).Length
       tabelas = $resumo
@@ -106,7 +114,9 @@ function Capture-State([string]$Dir, [string]$Label) {
 }
 
 function Compare-State($Antes, $Depois, [string]$Dir) {
-  $nomes = @($Antes.tabelas.PSObject.Properties.Name + $Depois.tabelas.PSObject.Properties.Name | Sort-Object -Unique)
+  $nomesAntes = @($Antes.tabelas.PSObject.Properties | Where-Object MemberType -eq 'NoteProperty' | ForEach-Object Name)
+  $nomesDepois = @($Depois.tabelas.PSObject.Properties | Where-Object MemberType -eq 'NoteProperty' | ForEach-Object Name)
+  $nomes = @($nomesAntes + $nomesDepois | Sort-Object -Unique)
   $itens = foreach ($nome in $nomes) {
     $a = $Antes.tabelas.$nome
     $d = $Depois.tabelas.$nome
@@ -121,7 +131,9 @@ function Compare-State($Antes, $Depois, [string]$Dir) {
     }
   }
   $itens | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Dir "comparacao.json") -Encoding utf8
-  $md = @("# Comparacao da atualizacao PostgreSQL", "", "- Antes: $($Antes.capturado_em)", "- Depois: $($Depois.capturado_em)", "- Schema: $(if ($Antes.schema_sha256 -eq $Depois.schema_sha256) {'NAO_MUDOU'} else {'MUDOU'})", "", "| Tabela | Status | Antes | Depois | Diferenca |", "|---|---:|---:|---:|---:|")
+  $schemaAntes = Get-SchemaHash (Join-Path $Dir 'schema.sql')
+  $schemaDepois = Get-SchemaHash (Join-Path (Join-Path $Dir 'depois') 'schema.sql')
+  $md = @("# Comparacao da atualizacao PostgreSQL", "", "- Antes: $($Antes.capturado_em)", "- Depois: $($Depois.capturado_em)", "- Schema: $(if ($schemaAntes -eq $schemaDepois) {'NAO_MUDOU'} else {'MUDOU'})", "", "| Tabela | Status | Antes | Depois | Diferenca |", "|---|---:|---:|---:|---:|")
   foreach ($i in $itens) { $md += "| $($i.tabela) | $($i.status) | $($i.linhas_antes) | $($i.linhas_depois) | $($i.diferenca) |" }
   $md | Set-Content -LiteralPath (Join-Path $Dir "RELATORIO.md") -Encoding utf8
   return $itens
@@ -141,7 +153,8 @@ if ($Etapa -eq "antes") {
   $dir = Join-Path $Saida $id
   $antes = Get-Content -LiteralPath (Join-Path $dir "estado.json") -Raw | ConvertFrom-Json
   $depoisDir = Join-Path $dir "depois"
-  $depois = Capture-State $depoisDir "depois"
+  $depoisCapturado = Capture-State $depoisDir "depois"
+  $depois = $depoisCapturado | ConvertTo-Json -Depth 8 | ConvertFrom-Json
   $comparacao = Compare-State $antes $depois $dir
   $mudou = @($comparacao | Where-Object status -eq "MUDOU").Count
   $igual = @($comparacao | Where-Object status -eq "NAO_MUDOU").Count

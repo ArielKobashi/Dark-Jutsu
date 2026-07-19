@@ -1,5 +1,8 @@
 _backups/
 _db_update_checkpoints/
+_db_repair_artifacts/
+_recovery_work/
+_recovery_extract/
 _migration_runs/
 __pycache__/
 *.pyc

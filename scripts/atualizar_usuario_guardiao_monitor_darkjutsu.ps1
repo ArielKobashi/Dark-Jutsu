@@ -77,7 +77,8 @@ function Test-GuardianLock {
   try {
     if (-not (Test-Path -LiteralPath $lockFile)) { return $false }
     $lockPid = [int](Get-Content -LiteralPath $lockFile -Raw).Trim()
-    return [bool](Get-Process -Id $lockPid -ErrorAction Stop)
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$lockPid" -ErrorAction Stop
+    return [bool]($proc -and $proc.CommandLine -and $proc.CommandLine -match "guardiao_loop_python_darkjutsu.py")
   } catch {
     return $false
   }
@@ -88,7 +89,8 @@ function Test-MonitorMutex {
   try {
     if (Test-Path -LiteralPath $lockFile) {
       $lockPid = [int](Get-Content -LiteralPath $lockFile -Raw).Trim()
-      if (Get-Process -Id $lockPid -ErrorAction Stop) { return $true }
+      $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$lockPid" -ErrorAction Stop
+      if ($proc -and $proc.CommandLine -and $proc.CommandLine -match "monitor_reserva_python_darkjutsu.py") { return $true }
     }
   } catch {}
   $mutex = $null
@@ -103,6 +105,12 @@ function Test-MonitorMutex {
 }
 
 function Stop-OldProcesses {
+  $currentPid = $PID
+  $parentPid = $null
+  try {
+    $selfProc = Get-CimInstance Win32_Process -Filter "ProcessId=$currentPid" -ErrorAction Stop
+    $parentPid = $selfProc.ParentProcessId
+  } catch {}
   $patterns = @(
     "monitor_reserva_python_darkjutsu",
     "monitor_servidor_python_darkjutsu",
@@ -114,6 +122,7 @@ function Stop-OldProcesses {
   try {
     Get-CimInstance Win32_Process |
       Where-Object {
+        if ($_.ProcessId -eq $currentPid -or ($parentPid -and $_.ProcessId -eq $parentPid)) { return $false }
         $cmd = $_.CommandLine
         if (-not $cmd) { return $false }
         foreach ($p in $patterns) {
@@ -173,6 +182,9 @@ if (-not (Test-Path $PythonW) -or -not (Test-Path $Python)) {
   }
 }
 
+Stop-OldProcesses
+Start-Sleep -Seconds 1
+
 $role = "CANDIDATO"
 $monitorPrefix = "monitor_reserva_python_darkjutsu"
 Log "Papel detectado: $role"
@@ -180,14 +192,9 @@ Log "Papel detectado: $role"
 Copy-Required "status_compartilhado_servidores_darkjutsu.py" | Out-Null
 Copy-Required "abrir_status_darkjutsu.py" | Out-Null
 Copy-Required "servidores_config.json" | Out-Null
-Copy-Required "iniciar_automus_com_guardiao_darkjutsu.ps1" | Out-Null
-Copy-Required "watchdog_usuario_darkjutsu.ps1" | Out-Null
 
 & schtasks.exe /Delete /F /TN "Dark-Jutsu Restaurar Reserva" 2>$null | Out-Null
 Log "OK: tarefa antiga de restauracao recorrente removida."
-
-Stop-OldProcesses
-Start-Sleep -Seconds 1
 
 $startupDir = [Environment]::GetFolderPath("Startup")
 foreach ($legacyName in @(
@@ -217,7 +224,8 @@ foreach ($runtimeName in @(
   "servidor_eleicao_darkjutsu.py",
   "servidores_config.json",
   "monitor_reserva_python_darkjutsu.py",
-  "iniciar_automus_com_guardiao_darkjutsu.ps1"
+  "iniciar_automus_com_guardiao_darkjutsu.ps1",
+  "watchdog_usuario_darkjutsu.ps1"
 )) {
   if (-not (Copy-ToRuntime $runtimeName $runtimeDir)) { $runtimeOk = $false }
 }
@@ -238,7 +246,7 @@ $monitorLocal = Join-Path $runtimeDir "monitor_reserva_python_darkjutsu.py"
 $guardianLocal = Join-Path $runtimeDir "guardiao_loop_python_darkjutsu.py"
 $statusLauncher = Join-Path $runtimeDir "abrir_status_darkjutsu.py"
 $automusLauncher = Join-Path $runtimeDir "iniciar_automus_com_guardiao_darkjutsu.ps1"
-$watchdogLocal = Join-Path $LocalDir "watchdog_usuario_darkjutsu.ps1"
+$watchdogLocal = Join-Path $runtimeDir "watchdog_usuario_darkjutsu.ps1"
 
 $startupMonitorOk = Write-StartupVbs "Monitor Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$monitorLocal`""
 $startupGuardianOk = Write-StartupVbs "Guardiao Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$guardianLocal`""

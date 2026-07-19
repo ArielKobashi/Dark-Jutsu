@@ -1,5 +1,6 @@
 import ctypes
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -16,6 +17,8 @@ RESERVE_IP = "192.168.5.38"
 PORT = 8765
 HEALTH_TIMEOUT_SECONDS = 3
 OFFLINE_GRACE_SECONDS = 45
+STATUS_POLL_SECONDS = 3
+GUARDIAN_CHECK_SECONDS = 15
 SHARE_ROOT = r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 APP_PATH = os.path.join(SHARE_ROOT, "app", "index.html")
 SCRIPTS = os.path.join(SHARE_ROOT, "scripts")
@@ -41,6 +44,15 @@ ERROR_ALREADY_EXISTS = 183
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
 CREATE_NO_WINDOW = 0x08000000
+RUNTIME_SUPPORT_FILES = (
+    "guardiao_loop_python_darkjutsu.py",
+    "servidor_eleicao_darkjutsu.py",
+    "servidores_config.json",
+    "status_compartilhado_servidores_darkjutsu.py",
+    "abrir_status_darkjutsu.py",
+    "iniciar_automus_com_guardiao_darkjutsu.ps1",
+    "watchdog_usuario_darkjutsu.ps1",
+)
 
 WM_USER = 0x0400
 WM_TRAY = WM_USER + 20
@@ -199,6 +211,30 @@ def log(text):
                 fh.write(line + f" | {actor} | TESTE_ATIVO={session}\n")
     except Exception:
         pass
+
+
+def sync_runtime_support_files():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    copied = []
+    for name in RUNTIME_SUPPORT_FILES:
+        source = os.path.join(SCRIPTS, name)
+        target = os.path.join(base_dir, name)
+        try:
+            if not os.path.exists(source):
+                continue
+            should_copy = not os.path.exists(target)
+            if not should_copy:
+                source_stat = os.stat(source)
+                target_stat = os.stat(target)
+                should_copy = source_stat.st_size != target_stat.st_size or source_stat.st_mtime > target_stat.st_mtime + 1
+            if should_copy:
+                shutil.copy2(source, target)
+                copied.append(name)
+        except Exception as exc:
+            log(f"auto-reparo: falha ao copiar {name}: {type(exc).__name__}: {exc}")
+    if copied:
+        log("auto-reparo: runtime local recebeu " + ", ".join(copied))
+    return copied
 
 
 def boot_hint():
@@ -492,6 +528,7 @@ class Tray:
         self.local_ip = ""
         self.this_active = False
         self.offline_since = None
+        self.last_state_key = ""
         self.tip = "Dark-Jutsu: verificando..."
         self.icon_black = load_icon("dark-jutsu-black.ico", 0x202020)
         self.icon_red = load_icon("dark-jutsu-red.ico", 0x2D2DCD)
@@ -519,9 +556,13 @@ class Tray:
         threading.Thread(target=self.infinity.run, daemon=True).start()
 
     def loop_status(self):
+        next_guardian_check = 0
         while True:
-            time.sleep(15)
-            self.ensure_guardian_running()
+            time.sleep(STATUS_POLL_SECONDS)
+            now = time.time()
+            if now >= next_guardian_check:
+                self.ensure_guardian_running()
+                next_guardian_check = now + GUARDIAN_CHECK_SECONDS
             self.update_status()
 
     def ensure_guardian_running(self):
@@ -535,6 +576,8 @@ class Tray:
                 if handle:
                     kernel32.CloseHandle(handle)
                     return
+            if not os.path.exists(LOCAL_GUARDIAN):
+                sync_runtime_support_files()
             if not os.path.exists(LOCAL_GUARDIAN):
                 log(f"watchdog: guardiao local ausente em {LOCAL_GUARDIAN}")
                 return
@@ -568,9 +611,11 @@ class Tray:
             self.offline_since = None
             self.this_active = leader_name == computer_name()
             if self.this_active:
+                visual_state = "verde"
                 self.icon = self.icon_green
                 self.tip = f"Dark-Jutsu: este PC lidera a API ({leader_name})"
             else:
+                visual_state = "vermelho"
                 self.icon = self.icon_red
                 self.tip = f"Dark-Jutsu: API liderada por {leader_name} ({active_ip})"
         else:
@@ -579,11 +624,17 @@ class Tray:
             offline_seconds = time.time() - self.offline_since
             offline_text = format_duration(offline_seconds)
             self.this_active = False
+            visual_state = "preto"
             self.icon = self.icon_black
             self.tip = f"Dark-Jutsu: reconfirmando servidor - sem resposta ha {offline_text}"
             if offline_seconds >= OFFLINE_GRACE_SECONDS:
+                visual_state = "vermelho"
                 self.icon = self.icon_red
                 self.tip = f"Dark-Jutsu: nenhum servidor ligado - offline ha {offline_text}"
+        state_key = f"{visual_state}|{leader_name if leader_ok else '-'}|{active_ip if leader_ok else '-'}"
+        if state_key != self.last_state_key:
+            log(f"monitor: estado visual={visual_state} lider={leader_name or '-'} ip={active_ip or '-'} dica={self.tip}")
+            self.last_state_key = state_key
         self.update_icon()
 
     def popup_menu(self):

@@ -3,7 +3,14 @@ $ErrorActionPreference = "Stop"
 $ShareRoot = "\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 $ShareScripts = Join-Path $ShareRoot "scripts"
 $LocalDir = Join-Path $env:LOCALAPPDATA "DarkJutsu\monitor"
-$LogDir = "C:\DarkJutsu\logs"
+$PreferredLogDir = "C:\DarkJutsu\logs"
+$FallbackLogDir = Join-Path $env:LOCALAPPDATA "DarkJutsu\logs"
+$LogDir = $PreferredLogDir
+try {
+  New-Item -ItemType Directory -Force -Path $PreferredLogDir -ErrorAction Stop | Out-Null
+} catch {
+  $LogDir = $FallbackLogDir
+}
 $LogFile = Join-Path $LogDir "autoatualizacao_local.log"
 $StateFile = Join-Path $LocalDir "versao_instalada_guardiao_monitor.txt"
 $LockDir = Join-Path $LogDir "autoatualizacao_local.lock"
@@ -142,7 +149,7 @@ try {
 
     if ($exitCode -ne 0) {
       Write-Log "FALHOU: reinstalacao forcada retornou codigo $exitCode."
-      Write-Event "ERRO" "Reinstalacao forcada local falhou. Codigo=$exitCode. Veja C:\DarkJutsu\logs\autoatualizacao_local.log."
+      Write-Event "ERRO" "Reinstalacao forcada local falhou. Codigo=$exitCode. Veja $LogFile."
       exit $exitCode
     }
 
@@ -165,7 +172,7 @@ try {
 
     if ($exitCode -ne 0) {
       Write-Log "FALHOU: instalador de primeira verificacao retornou codigo $exitCode."
-      Write-Event "ERRO" "Autoatualizacao inicial falhou. Instalador retornou codigo $exitCode. Veja C:\DarkJutsu\logs\autoatualizacao_local.log."
+      Write-Event "ERRO" "Autoatualizacao inicial falhou. Instalador retornou codigo $exitCode. Veja $LogFile."
       exit $exitCode
     }
 
@@ -189,7 +196,7 @@ try {
 
   if ($exitCode -ne 0) {
     Write-Log "FALHOU: instalador retornou codigo $exitCode."
-    Write-Event "ERRO" "Autoatualizacao local falhou. Instalador retornou codigo $exitCode. Veja C:\DarkJutsu\logs\autoatualizacao_local.log."
+    Write-Event "ERRO" "Autoatualizacao local falhou. Instalador retornou codigo $exitCode. Veja $LogFile."
     exit $exitCode
   }
 

@@ -23,6 +23,7 @@ SERVER_SUPPORT_FILES = (
     "Configurar_Automus_neste_PC.bat",
     "Forcar_Atualizar_Automus_neste_PC.bat",
     "configurar_automus_servidor.ps1",
+    "Reenviar_Ultimos_Dados_Automus.bat",
 )
 
 
@@ -150,6 +151,14 @@ def copy_to_publish_dir(version: str, publish_dir: str, log=print):
         if not source.exists():
             raise RuntimeError(f"Arquivo de suporte do servidor ausente: {source}")
         shutil.copy2(source, target / filename)
+        shutil.copy2(source, server_app / filename)
+
+    python_libs = server_app / "_internal" / "python_libs"
+    python_libs.mkdir(parents=True, exist_ok=True)
+    for package_name in ("openpyxl", "et_xmlfile"):
+        module = __import__(package_name)
+        package_dir = Path(module.__file__).resolve().parent
+        shutil.copytree(package_dir, python_libs / package_name, dirs_exist_ok=True)
 
     pointer_tmp = target / "versao_atual.tmp"
     pointer_tmp.write_text(version + "\n", encoding="ascii")

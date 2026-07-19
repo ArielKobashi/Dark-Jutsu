@@ -1,12 +1,12 @@
 {
   "app": "Automus",
-  "version": "1.1.10",
+  "version": "1.1.11",
   "releasedAt": "2026-07-19",
   "updateManifestUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus\\latest.json",
   "updateBaseUrl": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "publishDir": "\\\\fileserver\\Almoxarifado\\0800\\automus",
   "notes": [
-    "Corrige login do Automus em PCs que nao hospedam a API local.",
-    "Descobre automaticamente o servidor lider pelo status compartilhado."
+    "Reenvia Automus ao servidor SQL ativo quando localhost ou principal nao respondem.",
+    "Tenta servidores SQL/API em ordem com fallback para 192.168.5.41."
   ]
 }

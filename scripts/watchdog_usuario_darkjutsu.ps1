@@ -33,7 +33,7 @@ function Get-ActiveRuntimeDir {
 function Sync-File([string]$name, [string]$targetDir) {
   $source = Join-Path $shareScripts $name
   $target = Join-Path $targetDir $name
-  if (-not (Test-Path -LiteralPath $source)) { return }
+  if (-not (Test-Path -LiteralPath $source)) { return $false }
   try {
     $copy = -not (Test-Path -LiteralPath $target)
     if (-not $copy) {
@@ -42,9 +42,29 @@ function Sync-File([string]$name, [string]$targetDir) {
     if ($copy) {
       Copy-Item -LiteralPath $source -Destination $target -Force
       Write-WatchdogLog "Atualizado: $name"
+      return $true
     }
+    return $false
   } catch {
     Write-WatchdogLog "Falha ao atualizar ${name}: $($_.Exception.Message)"
+    return $false
+  }
+}
+
+function Stop-ProcessesByPattern([string]$pattern) {
+  try {
+    Get-CimInstance Win32_Process -ErrorAction Stop |
+      Where-Object {
+        $_.CommandLine -and
+        $_.CommandLine -match [regex]::Escape($pattern) -and
+        $_.ProcessId -ne $PID
+      } |
+      ForEach-Object {
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        Write-WatchdogLog "Processo reiniciado por atualizacao: $pattern pid=$($_.ProcessId)"
+      }
+  } catch {
+    Write-WatchdogLog "Falha ao reiniciar processo ${pattern}: $($_.Exception.Message)"
   }
 }
 
@@ -63,7 +83,8 @@ function Process-Exists([string]$pattern) {
     try {
       if (Test-Path -LiteralPath $lockFile) {
         $lockPid = [int](Get-Content -LiteralPath $lockFile -Raw).Trim()
-        if (Get-Process -Id $lockPid -ErrorAction Stop) { return $true }
+        $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$lockPid" -ErrorAction Stop
+        if ($proc -and $proc.CommandLine -and $proc.CommandLine -match [regex]::Escape($pattern)) { return $true }
       }
     } catch {}
     $monitorMutex = $null
@@ -114,13 +135,25 @@ try {
   $lastSeenAutomusSignal = Get-LastSeenAutomusSignal
   while ($true) {
     $runtimeDir = Get-ActiveRuntimeDir
+    $updatedFiles = @{}
     foreach ($name in @(
       "guardiao_loop_python_darkjutsu.py",
       "servidor_eleicao_darkjutsu.py",
       "servidores_config.json",
       "monitor_reserva_python_darkjutsu.py",
       "iniciar_automus_com_guardiao_darkjutsu.ps1"
-    )) { Sync-File $name $runtimeDir }
+    )) {
+      if (Sync-File $name $runtimeDir) { $updatedFiles[$name] = $true }
+    }
+
+    if ($updatedFiles["guardiao_loop_python_darkjutsu.py"]) {
+      Stop-ProcessesByPattern "guardiao_loop_python_darkjutsu.py"
+      Start-Sleep -Seconds 1
+    }
+    if ($updatedFiles["monitor_reserva_python_darkjutsu.py"]) {
+      Stop-ProcessesByPattern "monitor_reserva_python_darkjutsu.py"
+      Start-Sleep -Seconds 1
+    }
 
     if (Test-Path $pythonw) {
       if (-not (Process-Exists "guardiao_loop_python_darkjutsu.py")) {

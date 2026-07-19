@@ -69,29 +69,57 @@ def _http_json(
         raise RuntimeError(f"Falha de rede em {url}: {exc}") from exc
 
 
+def _api_base_candidates() -> list[str]:
+    candidates = [
+        os.environ.get("DARK_JUTSU_API_BASE_URL", ""),
+        "http://127.0.0.1:8765",
+        "http://192.168.5.44:8765",
+        "http://192.168.5.41:8765",
+        "http://192.168.5.38:8765",
+    ]
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        base_url = str(candidate or "").strip().rstrip("/")
+        if not base_url or base_url in seen:
+            continue
+        seen.add(base_url)
+        unique.append(base_url)
+    return unique
+
+
 def _post_inventory_to_sql_api(payload: dict[str, Any], id_token: str, log: logging.Logger) -> dict[str, Any] | None:
-    base_url = os.environ.get("DARK_JUTSU_API_BASE_URL", "http://127.0.0.1:8765").rstrip("/")
     service_token = os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()
     bearer = service_token or id_token
     if not bearer:
         log.warning("AUTOMUS_SQL_IGNORADO | token ausente")
         return None
-    result = _http_json(
-        f"{base_url}/api/inventory/automus-update",
-        method="POST",
-        payload=payload,
-        timeout=120.0,
-        headers_extra={"Authorization": f"Bearer {bearer}"},
-    )
-    if not isinstance(result, dict) or not result.get("ok"):
-        raise RuntimeError(f"Resposta invalida da API SQL: {result}")
-    log.info(
-        "AUTOMUS_SQL_UPDATE_OK | snapshot=%s | itens=%s | enderecos=%s",
-        result.get("snapshot_id"),
-        result.get("items_loaded"),
-        result.get("addresses_loaded"),
-    )
-    return result
+
+    last_error: Exception | None = None
+    for base_url in _api_base_candidates():
+        try:
+            result = _http_json(
+                f"{base_url}/api/inventory/automus-update",
+                method="POST",
+                payload=payload,
+                timeout=120.0,
+                headers_extra={"Authorization": f"Bearer {bearer}"},
+            )
+            if not isinstance(result, dict) or not result.get("ok"):
+                raise RuntimeError(f"Resposta invalida da API SQL: {result}")
+            log.info(
+                "AUTOMUS_SQL_UPDATE_OK | base=%s | snapshot=%s | itens=%s | enderecos=%s",
+                base_url,
+                result.get("snapshot_id"),
+                result.get("items_loaded"),
+                result.get("addresses_loaded"),
+            )
+            return result
+        except Exception as exc:
+            last_error = exc
+            log.warning("AUTOMUS_SQL_TENTATIVA_FALHOU | base=%s | motivo=%s", base_url, exc)
+
+    raise RuntimeError(f"Nenhuma API SQL aceitou a carga Automus. Ultimo erro: {last_error}")
 
 
 def _decode_jwt_payload(token: str) -> dict[str, Any]:
