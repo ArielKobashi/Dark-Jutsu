@@ -1205,23 +1205,48 @@
         let mata111Cache = null;
         let mata112Cache = null;
         let historicoCooperatCache = null;
-        const SQL_API_PRIMARY_BASE = "http://192.168.5.44:8765";
-        const SQL_API_RESERVE_BASE = "http://192.168.5.41:8765";
+        const SQL_API_PRIMARY_BASE = "http://192.168.5.41:8765";
+        const SQL_API_RESERVE_BASE = "http://192.168.5.44:8765";
         const SQL_API_LEGACY_RESERVE_BASE = "http://192.168.5.38:8765";
         const DEFAULT_SQL_API_BASE = SQL_API_PRIMARY_BASE;
+        let sqlApiPreferredBase = localStorage.getItem("darkJutsuApiPreferredBase") || "";
         const SQL_API_BASE = (
             params.get("apiBase") ||
+            sqlApiPreferredBase ||
             localStorage.getItem("darkJutsuApiBase") ||
             window.DARK_JUTSU_API_BASE_URL ||
             DEFAULT_SQL_API_BASE
         ).replace(/\/+$/, "");
         const SQL_API_FALLBACK_BASES = [
-            SQL_API_PRIMARY_BASE,
             SQL_API_BASE,
+            SQL_API_PRIMARY_BASE,
             SQL_API_RESERVE_BASE,
             SQL_API_LEGACY_RESERVE_BASE
         ].filter((base, index, bases) => base && bases.indexOf(base) === index);
         const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
+
+        function registrarSqlApiBase(base){
+            if(!base || sqlApiPreferredBase === base) return;
+            sqlApiPreferredBase = base;
+            try{ localStorage.setItem("darkJutsuApiPreferredBase", base); }catch(e){}
+        }
+
+        async function fetchDashboardComTimeout(url, options = {}, timeoutPadraoMs = 4500){
+            const controller = typeof AbortController !== "undefined" && !options.signal
+                ? new AbortController()
+                : null;
+            const timeoutMs = Math.max(500, Number(options.timeoutMs || timeoutPadraoMs) || timeoutPadraoMs);
+            const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+            try{
+                const { timeoutMs: _timeoutIgnorado, ...fetchOptions } = options;
+                return await fetch(url, {
+                    ...fetchOptions,
+                    signal: options.signal || controller?.signal
+                });
+            }finally{
+                if(timeout) clearTimeout(timeout);
+            }
+        }
 
         async function resolveSqlAuthHeader(){
             const sessionToken = localStorage.getItem(SQL_AUTH_TOKEN_KEY) || "";
@@ -1238,13 +1263,16 @@
             const authHeader = await resolveSqlAuthHeader();
             if(authHeader) headers.Authorization = authHeader;
             let lastError = null;
-            for(const base of SQL_API_FALLBACK_BASES){
+            const bases = [sqlApiPreferredBase, ...SQL_API_FALLBACK_BASES]
+                .filter((base, index, lista) => base && lista.indexOf(base) === index);
+            for(const base of bases){
                 try{
-                    const response = await fetch(`${base}${path}`, { ...options, headers });
+                    const response = await fetchDashboardComTimeout(`${base}${path}`, { ...options, headers }, 7000);
                     const data = await response.json().catch(() => ({}));
                     if(!response.ok || data?.ok === false){
                         throw new Error(data?.error || `Falha HTTP ${response.status}`);
                     }
+                    registrarSqlApiBase(base);
                     return data;
                 } catch(error){
                     lastError = error;
@@ -1259,7 +1287,7 @@
             if(deveTentarRelativo){
                 for(const url of lista){
                     try{
-                        const response = await fetch(url, { cache: "no-store", ...options });
+                        const response = await fetchDashboardComTimeout(url, { cache: "no-store", ...options }, 3500);
                         if(response.ok) return response;
                     }catch(e){}
                 }
@@ -1267,7 +1295,9 @@
             const authHeader = await resolveSqlAuthHeader();
             const headers = { ...(options.headers || {}) };
             if(authHeader) headers.Authorization = authHeader;
-            for(const base of SQL_API_FALLBACK_BASES){
+            const bases = [sqlApiPreferredBase, ...SQL_API_FALLBACK_BASES]
+                .filter((base, index, listaBases) => base && listaBases.indexOf(base) === index);
+            for(const base of bases){
                 for(const url of lista){
                     const partes = String(url || "").replace(/^\.?\//, "").split("/");
                     if(partes.length < 2) continue;
@@ -1275,12 +1305,15 @@
                     const filename = partes.slice(1).join("/");
                     if(!["downloads", "data"].includes(folder) || filename.includes("/") || filename.includes("\\")) continue;
                     try{
-                        const response = await fetch(`${base}/api/files/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`, {
+                        const response = await fetchDashboardComTimeout(`${base}/api/files/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`, {
                             cache: "no-store",
                             ...options,
                             headers
-                        });
-                        if(response.ok) return response;
+                        }, 3500);
+                        if(response.ok){
+                            registrarSqlApiBase(base);
+                            return response;
+                        }
                     }catch(e){}
                 }
             }
@@ -1347,7 +1380,7 @@
             armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "04").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
             busca: (params.get("busca") || "").toLowerCase(),
-            limite: Math.max(1, Math.min(50000, Number(params.get("limite") || 50000) || 50000)),
+            limite: Math.max(1, Math.min(50000, Number(params.get("limite") || 1000) || 1000)),
             ordenar: parametroPermitido((params.get("ordenar") || "reposicao").toLowerCase(), ["reposicao","saldo","descricao","codigo","minimo","maximo","status","pedido","origem"], "reposicao"),
             direcao: parametroPermitido((params.get("direcao") || "desc").toLowerCase(), ["asc","desc"], "desc"),
             pedidoOrdenar: parametroPermitido((params.get("pedidoOrdenar") || "dias").toLowerCase(), ["rank","codigo","descricao","pedido","chegada","status","dias","quantidade"], "dias"),
@@ -3704,7 +3737,7 @@
                     }else if(nome === "armazens"){
                         cfg.armazens = el.value.split(/[,\s]+/).map(v => v.trim()).filter(Boolean);
                     }else if(nome === "limite"){
-                        cfg.limite = Math.max(1, Math.min(50000, Number(el.value) || 50000));
+                        cfg.limite = Math.max(1, Math.min(50000, Number(el.value) || 1000));
                     }else if(nome === "dataMovimentacao"){
                         cfg.dataMovimentacao = el.value;
                     }else if(nome === "maquinaMovimentacao"){
