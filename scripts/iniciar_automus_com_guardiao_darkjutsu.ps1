@@ -5,7 +5,9 @@ $manifestPath = Join-Path $releaseRoot "latest.json"
 $installRoot = Join-Path $env:LOCALAPPDATA "Automus\servidor"
 $appDir = Join-Path $installRoot "app"
 $versionPath = Join-Path $installRoot "installed-version.txt"
-$logDir = "C:\DarkJutsu\logs"
+$systemLogDir = "C:\DarkJutsu\logs"
+$userLogDir = Join-Path $env:LOCALAPPDATA "DarkJutsu\logs"
+$logDir = if (Test-Path "C:\DarkJutsu\PostgreSQL\pgsql\bin\pg_ctl.exe") { $systemLogDir } else { $userLogDir }
 $logPath = Join-Path $logDir "automus_guardiao.log"
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -61,6 +63,20 @@ try {
         Write-Log "Automus $version iniciado junto com o Guardiao."
     } else {
         Write-Log "Automus ja estava em execucao."
+    }
+    Start-Sleep -Seconds 4
+    $startupDir = [Environment]::GetFolderPath("Startup")
+    foreach ($legacyName in @(
+        "Automus_Controlador_Atualizacoes.bat",
+        "Automus_Atualizacoes.bat",
+        "Automus.bat",
+        "Dark-Jutsu Cluster Usuario.cmd"
+    )) {
+        $legacyPath = Join-Path $startupDir $legacyName
+        if (Test-Path -LiteralPath $legacyPath) {
+            Remove-Item -LiteralPath $legacyPath -Force -ErrorAction SilentlyContinue
+            Write-Log "Inicializacao direta antiga removida: $legacyName"
+        }
     }
 } catch {
     Write-Log "ERRO: $($_.Exception.Message)"

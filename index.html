@@ -11738,7 +11738,7 @@ window.sqlApi = async function(path, options = {}){
     const method = String(options.method || "GET").toUpperCase();
     const isWrite = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
     if(isWrite && servidorSqlOnline === false){
-        const message = "Servidor offline: salvamentos bloqueados ate a API voltar.";
+        const message = "Servidor offline. Tente novamente em instantes.";
         if(typeof mostrarNotificacao === "function") mostrarNotificacao(message);
         throw new Error(message);
     }
@@ -11794,6 +11794,29 @@ let servidorSqlCheckInFlight = false;
 let servidorSqlFalhasConsecutivas = 0;
 const SERVIDOR_SQL_OFFLINE_MIN_FALHAS = 2;
 const SERVIDOR_SQL_OFFLINE_GRACE_MS = 7000;
+const SERVIDOR_SQL_ULTIMA_ATUALIZACAO_KEY = "darkJutsuUltimaAtualizacaoSistema";
+
+function obterUltimaAtualizacaoSistema(){
+    if(window.__ultimaAtualizacaoSistema) return window.__ultimaAtualizacaoSistema;
+    try{
+        const salvo = JSON.parse(localStorage.getItem(SERVIDOR_SQL_ULTIMA_ATUALIZACAO_KEY) || "null");
+        if(salvo && Number(salvo.timestamp)) return salvo;
+    }catch(e){}
+    return null;
+}
+
+function atualizarUltimaAtualizacaoBannerServidor(){
+    const el = document.getElementById("servidorSqlUltimaAtualizacao");
+    if(!el) return;
+    const registro = obterUltimaAtualizacaoSistema();
+    if(!registro){
+        el.textContent = "Última atualização registrada: não disponível.";
+        return;
+    }
+    const data = new Date(Number(registro.timestamp)).toLocaleString("pt-BR");
+    const usuario = String(registro.usuario || "Sistema");
+    el.textContent = `Última atualização registrada: ${data} — ${usuario}`;
+}
 
 function ensureServidorSqlBanner(){
     let banner = document.getElementById("servidorSqlOfflineBanner");
@@ -11847,10 +11870,11 @@ function ensureServidorSqlBanner(){
     banner.setAttribute("aria-live", "polite");
     banner.innerHTML = `
         <strong>Servidor offline</strong>
-        <span>Modo somente leitura ativo. Salvamentos e alteracoes estao bloqueados.</span>
-        <em>Reconectando em segundo plano. A pagina nao sera reiniciada automaticamente.</em>
+        <span>O servidor está temporariamente indisponível.</span>
+        <em id="servidorSqlUltimaAtualizacao">Última atualização registrada: não disponível.</em>
     `;
     document.body.appendChild(banner);
+    atualizarUltimaAtualizacaoBannerServidor();
     return banner;
 }
 
@@ -11890,6 +11914,7 @@ function setServidorSqlOffline(offline){
         return;
     }
     if(!servidorSqlOfflineDesde) servidorSqlOfflineDesde = Date.now();
+    atualizarUltimaAtualizacaoBannerServidor();
 }
 
 function registrarFalhaMonitorServidorSql(){
@@ -13976,6 +14001,14 @@ function atualizarTextoUltimaAtualizacaoEstoque(val){
         : "Nunca";
     const usuario = val.atualizadoPor || "Sistema";
     el.innerHTML = formatarTextoUltimaAtualizacao(data, usuario);
+    if(timestamp){
+        const registro = { timestamp, usuario: String(usuario) };
+        window.__ultimaAtualizacaoSistema = registro;
+        try{
+            localStorage.setItem(SERVIDOR_SQL_ULTIMA_ATUALIZACAO_KEY, JSON.stringify(registro));
+        }catch(e){}
+        atualizarUltimaAtualizacaoBannerServidor();
+    }
 }
 
 function aplicarSnapshotEstoqueFirebase(val, opcoes = {}){

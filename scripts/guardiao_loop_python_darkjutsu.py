@@ -39,7 +39,7 @@ API_LOG = LOG_DIR / "api_runtime_python_guardiao.log"
 LOCK_FILE = LOG_DIR / "guardiao_loop_python.lock"
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-17.21"
+GUARDIAN_VERSION = "2026-07-18.22"
 MAINTENANCE_DIR = STATUS_DIR / "maintenance"
 SHARED_LOG = SHARE_ROOT / "logs" / "guardiao_python_eventos.txt"
 TEST_ACTIVE_FILE = SHARE_ROOT / "status" / "teste_inicializacao_ativo.txt"
@@ -366,6 +366,8 @@ def main():
         try:
             local_ok = health("127.0.0.1", timeout=2)
             sql_ok = pg_ready()
+            if not sql_ok:
+                sql_ok = ensure_postgres_ready()
             in_maintenance, maintenance = maintenance_active()
             if in_maintenance:
                 publish_heartbeat(

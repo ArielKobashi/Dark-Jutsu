@@ -68,7 +68,7 @@ LEGACY_CONTROLLER_CONFIG_PATHS = [
     SCRIPT_DIR / "controlador_config.json",
     BUNDLED_SCRIPT_DIR / "controlador_config.json",
 ]
-STARTUP_BAT_NAME = "Automus_Controlador_Atualizacoes.bat"
+STARTUP_BAT_NAME = "Automus_Controlador_Atualizacoes.vbs"
 LEGACY_STARTUP_BAT_NAMES = (
     "Automus_Controlador.bat",
     "Automus_Atualizacoes.bat",
@@ -329,7 +329,7 @@ def _cleanup_legacy_startup_entries(keep: Path | None = None):
         current = str(path.resolve()).lower()
         if keep_resolved and current == keep_resolved:
             continue
-        if path.name in names or (path.suffix.lower() in {".bat", ".cmd", ".lnk"} and "automus" in path.name.lower()):
+        if path.name in names or (path.suffix.lower() in {".bat", ".cmd", ".lnk", ".vbs"} and "automus" in path.name.lower()):
             try:
                 path.unlink()
             except Exception:
@@ -348,12 +348,13 @@ def _set_startup_enabled(enabled: bool):
             if candidate.exists():
                 launcher = candidate
         command = f'"{executable}" --background' if getattr(sys, "frozen", False) else f'"{launcher}" "{executable}" --background'
+        command_vbs = command.replace('"', '""')
+        project_vbs = str(PROJECT_ROOT).replace('"', '""')
         path.write_text(
-            "@echo off\r\n"
-            "setlocal\r\n"
-            f'cd /d "{PROJECT_ROOT}"\r\n'
-            f'start "Automus" /min {command}\r\n',
-            encoding="utf-8",
+            'Set shell = CreateObject("WScript.Shell")\r\n'
+            f'shell.CurrentDirectory = "{project_vbs}"\r\n'
+            f'shell.Run "{command_vbs}", 0, False\r\n',
+            encoding="ascii",
         )
     else:
         _cleanup_legacy_startup_entries()
