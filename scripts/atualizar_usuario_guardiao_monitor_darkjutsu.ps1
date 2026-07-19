@@ -19,10 +19,10 @@ New-Item -ItemType Directory -Force -Path $LocalDir | Out-Null
 function Log($Message) {
   $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
   try {
-    Add-Content -Path $LogFile -Encoding UTF8 -Value "$stamp | $Message"
+    Add-Content -Path $LogFile -Encoding UTF8 -Value "$stamp | $Message" -ErrorAction Stop
   } catch {
     Start-Sleep -Milliseconds 200
-    try { Add-Content -Path $LogFile -Encoding UTF8 -Value "$stamp | $Message" } catch {}
+    try { Add-Content -Path $LogFile -Encoding UTF8 -Value "$stamp | $Message" -ErrorAction Stop } catch {}
   }
   Write-Host $Message
 }
@@ -31,11 +31,24 @@ function Copy-Required($Name) {
   $src = Join-Path $Scripts $Name
   $dst = Join-Path $LocalDir $Name
   try {
-    Copy-Item $src $dst -Force
+    Copy-Item $src $dst -Force -ErrorAction Stop
     Log "OK: copiado $Name"
     return $dst
   } catch {
     Log "ERRO: nao consegui copiar $Name - $($_.Exception.Message)"
+    return $null
+  }
+}
+
+function Copy-ToRuntime($Name, $RuntimeDir) {
+  $src = Join-Path $Scripts $Name
+  $dst = Join-Path $RuntimeDir $Name
+  try {
+    Copy-Item $src $dst -Force -ErrorAction Stop
+    Log "OK: runtime recebeu $Name"
+    return $dst
+  } catch {
+    Log "ERRO: runtime nao recebeu $Name - $($_.Exception.Message)"
     return $null
   }
 }
@@ -49,13 +62,54 @@ function Has-Ip($Ip) {
   }
 }
 
+function Test-ProcessHandle($Process) {
+  if (-not $Process) { return $false }
+  try {
+    $Process.Refresh()
+    return -not $Process.HasExited
+  } catch {
+    return $false
+  }
+}
+
+function Test-GuardianLock {
+  $lockFile = Join-Path $LogDir "guardiao_loop_python.lock"
+  try {
+    if (-not (Test-Path -LiteralPath $lockFile)) { return $false }
+    $lockPid = [int](Get-Content -LiteralPath $lockFile -Raw).Trim()
+    return [bool](Get-Process -Id $lockPid -ErrorAction Stop)
+  } catch {
+    return $false
+  }
+}
+
+function Test-MonitorMutex {
+  $lockFile = Join-Path $LogDir "monitor_python.lock"
+  try {
+    if (Test-Path -LiteralPath $lockFile) {
+      $lockPid = [int](Get-Content -LiteralPath $lockFile -Raw).Trim()
+      if (Get-Process -Id $lockPid -ErrorAction Stop) { return $true }
+    }
+  } catch {}
+  $mutex = $null
+  try {
+    $mutex = [Threading.Mutex]::OpenExisting("Global\DarkJutsuMonitorReservaPython")
+    return $true
+  } catch {
+    return $false
+  } finally {
+    if ($mutex) { $mutex.Dispose() }
+  }
+}
+
 function Stop-OldProcesses {
   $patterns = @(
     "monitor_reserva_python_darkjutsu",
     "monitor_servidor_python_darkjutsu",
     "monitor_principal_powershell_darkjutsu",
     "guardiao_loop_python_darkjutsu",
-    "guardiao_loop_compartilhado_darkjutsu"
+    "guardiao_loop_compartilhado_darkjutsu",
+    "watchdog_usuario_darkjutsu"
   )
   try {
     Get-CimInstance Win32_Process |
@@ -125,37 +179,78 @@ Log "Papel detectado: $role"
 
 Copy-Required "status_compartilhado_servidores_darkjutsu.py" | Out-Null
 Copy-Required "abrir_status_darkjutsu.py" | Out-Null
-Copy-Required "guardiao_loop_python_darkjutsu.py" | Out-Null
-Copy-Required "servidor_eleicao_darkjutsu.py" | Out-Null
 Copy-Required "servidores_config.json" | Out-Null
 Copy-Required "iniciar_automus_com_guardiao_darkjutsu.ps1" | Out-Null
+Copy-Required "watchdog_usuario_darkjutsu.ps1" | Out-Null
+
+& schtasks.exe /Delete /F /TN "Dark-Jutsu Restaurar Reserva" 2>$null | Out-Null
+Log "OK: tarefa antiga de restauracao recorrente removida."
 
 Stop-OldProcesses
 Start-Sleep -Seconds 1
 
+$startupDir = [Environment]::GetFolderPath("Startup")
+foreach ($legacyName in @(
+  "Automus_Controlador_Atualizacoes.bat",
+  "Automus_Atualizacoes.bat",
+  "Automus.bat",
+  "Dark-Jutsu Cluster Usuario.cmd",
+  "Restaurar Reserva Dark-Jutsu.vbs",
+  "Restaurar Reserva Dark-Jutsu.lnk"
+)) {
+  $legacyPath = Join-Path $startupDir $legacyName
+  if (Test-Path -LiteralPath $legacyPath) {
+    Remove-Item -LiteralPath $legacyPath -Force -ErrorAction SilentlyContinue
+    Log "OK: inicializacao direta antiga removida: $legacyName"
+  }
+}
+
 $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$monitorLocal = Join-Path $LocalDir "$monitorPrefix`_$stamp.py"
-try {
-  Copy-Item (Join-Path $Scripts "monitor_reserva_python_darkjutsu.py") $monitorLocal -Force
-  Log "OK: monitor atualizado em arquivo versionado: $monitorLocal"
-} catch {
-  Log "ERRO: nao consegui criar monitor versionado - $($_.Exception.Message)"
+$runtimeDir = Join-Path $LocalDir "runtime_$stamp"
+New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+
+$runtimeOk = $true
+foreach ($runtimeName in @(
+  "status_compartilhado_servidores_darkjutsu.py",
+  "abrir_status_darkjutsu.py",
+  "guardiao_loop_python_darkjutsu.py",
+  "servidor_eleicao_darkjutsu.py",
+  "servidores_config.json",
+  "monitor_reserva_python_darkjutsu.py",
+  "iniciar_automus_com_guardiao_darkjutsu.ps1"
+)) {
+  if (-not (Copy-ToRuntime $runtimeName $runtimeDir)) { $runtimeOk = $false }
+}
+
+if (-not $runtimeOk) {
+  Log "ERRO: runtime novo ficou incompleto em $runtimeDir"
   exit 1
 }
 
-$guardianLocal = Join-Path $LocalDir "guardiao_loop_python_darkjutsu.py"
-$statusLauncher = Join-Path $LocalDir "abrir_status_darkjutsu.py"
-$automusLauncher = Join-Path $LocalDir "iniciar_automus_com_guardiao_darkjutsu.ps1"
+try {
+  Set-Content -LiteralPath (Join-Path $LocalDir "active_runtime.txt") -Encoding ASCII -Value $runtimeDir -ErrorAction Stop
+  Log "OK: runtime ativo apontando para $runtimeDir"
+} catch {
+  Log "AVISO: nao consegui gravar active_runtime.txt - $($_.Exception.Message)"
+}
+
+$monitorLocal = Join-Path $runtimeDir "monitor_reserva_python_darkjutsu.py"
+$guardianLocal = Join-Path $runtimeDir "guardiao_loop_python_darkjutsu.py"
+$statusLauncher = Join-Path $runtimeDir "abrir_status_darkjutsu.py"
+$automusLauncher = Join-Path $runtimeDir "iniciar_automus_com_guardiao_darkjutsu.ps1"
+$watchdogLocal = Join-Path $LocalDir "watchdog_usuario_darkjutsu.ps1"
 
 $startupMonitorOk = Write-StartupVbs "Monitor Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$monitorLocal`""
 $startupGuardianOk = Write-StartupVbs "Guardiao Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$guardianLocal`""
 $startupAutomusOk = Write-StartupVbs "Automus com Guardiao Dark-Jutsu.vbs" "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$automusLauncher`""
+$startupWatchdogOk = Write-StartupVbs "Watchdog Usuario Dark-Jutsu.vbs" "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$watchdogLocal`""
 
 try {
   New-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Force -ErrorAction Stop | Out-Null
   Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Dark-Jutsu Monitor Servidor" -Value "`"$PythonW`" `"$monitorLocal`"" -ErrorAction Stop
   Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Dark-Jutsu Guardiao Servidor" -Value "`"$PythonW`" `"$guardianLocal`"" -ErrorAction Stop
   Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Dark-Jutsu Automus" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$automusLauncher`"" -ErrorAction Stop
+  Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Dark-Jutsu Watchdog" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$watchdogLocal`"" -ErrorAction Stop
   Log "OK: inicializacao tambem registrada em HKCU Run."
   $registryOk = $true
 } catch {
@@ -163,20 +258,14 @@ try {
   $registryOk = $false
 }
 
-Start-Process -FilePath $PythonW -ArgumentList "`"$monitorLocal`""
-Start-Process -FilePath $PythonW -ArgumentList "`"$guardianLocal`""
+$monitorProcess = Start-Process -FilePath $PythonW -ArgumentList "`"$monitorLocal`"" -PassThru
+$guardianProcess = Start-Process -FilePath $PythonW -ArgumentList "`"$guardianLocal`"" -PassThru
 Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$automusLauncher`""
+Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$watchdogLocal`""
 Start-Sleep -Seconds 5
 
-$procs = Get-CimInstance Win32_Process | Where-Object {
-  $_.CommandLine -match "monitor_reserva_python_darkjutsu|monitor_servidor_python_darkjutsu|guardiao_loop_python_darkjutsu"
-}
-$monitorOk = $false
-$guardianOk = $false
-foreach ($p in $procs) {
-  if ($p.CommandLine -match "monitor_reserva_python_darkjutsu|monitor_servidor_python_darkjutsu") { $monitorOk = $true }
-  if ($p.CommandLine -match "guardiao_loop_python_darkjutsu") { $guardianOk = $true }
-}
+$monitorOk = (Test-ProcessHandle $monitorProcess) -or (Test-MonitorMutex)
+$guardianOk = (Test-ProcessHandle $guardianProcess) -or (Test-GuardianLock)
 
 if ($monitorOk) { Log "OK: monitor rodando." } else { Log "ERRO: monitor nao apareceu nos processos." }
 if ($guardianOk) { Log "OK: guardiao rodando." } else { Log "ERRO: guardiao nao apareceu nos processos." }
@@ -186,13 +275,13 @@ if ((-not $NoStatus) -and (Test-Path $statusLauncher)) {
   & $Python $statusLauncher
 }
 
-if ($monitorOk -and $guardianOk -and (($startupMonitorOk -and $startupGuardianOk -and $startupAutomusOk) -or $registryOk)) {
+if ($monitorOk -and $guardianOk -and (($startupMonitorOk -and $startupGuardianOk -and $startupAutomusOk -and $startupWatchdogOk) -or $registryOk)) {
   Log "RESULTADO: OK"
   exit 0
 }
 
 Log "RESULTADO: ATENCAO"
-if (-not (($startupMonitorOk -and $startupGuardianOk -and $startupAutomusOk) -or $registryOk)) {
+if (-not (($startupMonitorOk -and $startupGuardianOk -and $startupAutomusOk -and $startupWatchdogOk) -or $registryOk)) {
   Log "ATENCAO: monitor/guardiao estao rodando agora, mas inicializacao automatica foi bloqueada pelo Windows."
 }
 exit 2

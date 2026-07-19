@@ -140,6 +140,15 @@ def main():
         ],
         cwd=ROOT,
     )
+    output_dir = DIST / "Automus"
+    for installer_name in (
+        "Iniciar_Automus_Servidor.vbs",
+        "Configurar_Automus_neste_PC.bat",
+        "configurar_automus_servidor.ps1",
+    ):
+        installer = ROOT / installer_name
+        if installer.exists():
+            shutil.copy2(installer, output_dir / installer.name)
     print(f"Automus pronto: {DIST / 'Automus' / 'Automus.exe'}")
     print(r"Copie a pasta dist\Automus inteira. Os complementos ficam em %APPDATA%\Automus\complemento.")
 

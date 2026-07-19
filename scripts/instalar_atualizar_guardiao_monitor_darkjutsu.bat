@@ -62,7 +62,7 @@ if exist "%SHARE_SCRIPTS%\guardiao_servidor_tick_darkjutsu.bat" (
 
 echo.
 echo [2. Arquivos obrigatorios]
-set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat guardiao_loop_compartilhado_darkjutsu.vbs guardiao_loop_python_darkjutsu.py servidor_eleicao_darkjutsu.py servidores_config.json atualizar_usuario_guardiao_monitor_darkjutsu.ps1 registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py abrir_status_darkjutsu.py status_compartilhado_servidores_darkjutsu.py atualizar_darkjutsu_do_github.bat corrigir_python_tkinter_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.ps1 iniciar_automus_com_guardiao_darkjutsu.ps1"
+set "REQUIRED=guardiao_servidor_tick_darkjutsu.bat guardiao_loop_compartilhado_darkjutsu.vbs guardiao_loop_python_darkjutsu.py servidor_eleicao_darkjutsu.py servidores_config.json atualizar_usuario_guardiao_monitor_darkjutsu.ps1 registrar_evento_servidor_darkjutsu.bat limpar_log_72h_darkjutsu.py assumir_servidor_darkjutsu.bat parar_api_darkjutsu.bat abrir_painel_servidor_darkjutsu.bat painel_servidor_darkjutsu.py abrir_status_darkjutsu.py status_compartilhado_servidores_darkjutsu.py atualizar_darkjutsu_do_github.bat corrigir_python_tkinter_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.bat verificar_atualizar_instalacao_local_darkjutsu.ps1 iniciar_automus_com_guardiao_darkjutsu.ps1 watchdog_usuario_darkjutsu.ps1"
 if "%MONITOR_KIND%"=="PYTHON" (
   set "REQUIRED=%REQUIRED% monitor_reserva_python_darkjutsu.py iniciar_monitor_reserva_python_darkjutsu.bat diagnosticar_monitor_reserva_python_darkjutsu.bat"
 ) else (
@@ -161,6 +161,7 @@ copy /Y "%SHARE_SCRIPTS%\guardiao_loop_python_darkjutsu.py" "%LOCAL_SCRIPTS%\gua
 copy /Y "%SHARE_SCRIPTS%\servidor_eleicao_darkjutsu.py" "%LOCAL_SCRIPTS%\servidor_eleicao_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
 copy /Y "%SHARE_SCRIPTS%\servidores_config.json" "%LOCAL_SCRIPTS%\servidores_config.json" >> "%INSTALL_LOG%" 2>&1
 copy /Y "%SHARE_SCRIPTS%\iniciar_automus_com_guardiao_darkjutsu.ps1" "%LOCAL_SCRIPTS%\iniciar_automus_com_guardiao_darkjutsu.ps1" >> "%INSTALL_LOG%" 2>&1
+copy /Y "%SHARE_SCRIPTS%\watchdog_usuario_darkjutsu.ps1" "%LOCAL_SCRIPTS%\watchdog_usuario_darkjutsu.ps1" >> "%INSTALL_LOG%" 2>&1
 if "%MONITOR_KIND%"=="PYTHON" (
   copy /Y "%SHARE_SCRIPTS%\monitor_reserva_python_darkjutsu.py" "%LOCAL_SCRIPTS%\monitor_reserva_python_darkjutsu.py" >> "%INSTALL_LOG%" 2>&1
   copy /Y "%SHARE_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat" "%LOCAL_SCRIPTS%\iniciar_monitor_reserva_python_darkjutsu.bat" >> "%INSTALL_LOG%" 2>&1

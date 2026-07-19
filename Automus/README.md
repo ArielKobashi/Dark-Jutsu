@@ -76,3 +76,29 @@ Com `updateManifestUrl` configurado, o Automus verifica automaticamente depois d
 - `scripts\automus_self_update.py`: verifica, baixa e instala novas versoes do Automus.exe.
 - `downloads\`: planilhas base copiadas para o pacote isolado.
 - `requirements.txt`: dependencias Python do Automus.
+
+## Ensaio do ambiente da macro
+
+Depois do login, use **Testar ambiente da macro**. O ensaio nao clica nem
+digita: ele confere resolucao, escala/DPI, localiza o TOTVS e ajusta sua janela
+para `1366x768` na posicao `0,0`. O resultado tambem informa o tamanho real da
+area cliente e se o TOTVS estava em foco. Nesta primeira fase o diagnostico nao
+bloqueia as macros existentes.
+
+Para abrir o navegador com o perfil separado e a geometria do ensaio, execute
+`scripts\abrir_protheus_controlado.ps1`.
+
+## Execucao centralizada pelo servidor
+
+Ao publicar, o Automus envia a aplicacao descompactada para
+`<publishDir>\Aplicacao\<versao>` e atualiza `versao_atual.txt`. As versoes sao
+separadas para nao sobrescrever um executavel que esteja aberto pela rede.
+
+Em cada computador, execute uma unica vez
+`Configurar_Automus_neste_PC.bat`, diretamente na pasta publicada do servidor.
+Ele cria somente o atalho da Area de Trabalho e a inicializacao automatica. O
+programa e suas dependencias permanecem no servidor; configuracoes por usuario
+continuam em `%APPDATA%\Automus`.
+
+A inicializacao e registrada em `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
+sem depender de permissao de escrita na pasta Startup e sem exigir administrador.

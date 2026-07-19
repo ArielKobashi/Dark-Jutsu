@@ -1,84 +1,74 @@
+param(
+    [switch]$ForceStart
+)
+
 $ErrorActionPreference = "Stop"
 
 $releaseRoot = "\\fileserver\Almoxarifado\0800\automus"
-$manifestPath = Join-Path $releaseRoot "latest.json"
-$installRoot = Join-Path $env:LOCALAPPDATA "Automus\servidor"
-$appDir = Join-Path $installRoot "app"
-$versionPath = Join-Path $installRoot "installed-version.txt"
-$systemLogDir = "C:\DarkJutsu\logs"
-$userLogDir = Join-Path $env:LOCALAPPDATA "DarkJutsu\logs"
-$logDir = if (Test-Path "C:\DarkJutsu\PostgreSQL\pgsql\bin\pg_ctl.exe") { $systemLogDir } else { $userLogDir }
+$pointerPath = Join-Path $releaseRoot "versao_atual.txt"
+$serverLauncher = Join-Path $releaseRoot "Iniciar_Automus_Servidor.vbs"
+$logDir = Join-Path $env:LOCALAPPDATA "DarkJutsu\logs"
 $logPath = Join-Path $logDir "automus_guardiao.log"
+$stateDir = Join-Path $env:LOCALAPPDATA "Automus"
+$versionState = Join-Path $stateDir "guardiao-versao-ativa.txt"
 
-New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $logDir,$stateDir | Out-Null
 
 function Write-Log([string]$Message) {
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $Message"
 }
 
+function Normalize-Path([string]$PathValue) {
+    if ([string]::IsNullOrWhiteSpace($PathValue)) { return "" }
+    try { return [IO.Path]::GetFullPath($PathValue).TrimEnd('\').ToLowerInvariant() }
+    catch { return $PathValue.TrimEnd('\').ToLowerInvariant() }
+}
+
 try {
-    if (-not (Test-Path -LiteralPath $manifestPath)) {
-        throw "Manifesto do Automus nao encontrado em $manifestPath"
+    if (-not (Test-Path -LiteralPath $pointerPath)) {
+        throw "Ponteiro central nao encontrado: $pointerPath"
     }
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    $version = [string]$manifest.version
-    $packageName = [string]$manifest.package
-    if ([string]::IsNullOrWhiteSpace($version) -or [string]::IsNullOrWhiteSpace($packageName)) {
-        throw "Manifesto do Automus incompleto."
+    $version = (Get-Content -LiteralPath $pointerPath -Raw).Trim()
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        throw "Ponteiro central sem versao."
     }
 
+    $appDir = Join-Path (Join-Path $releaseRoot "Aplicacao") $version
     $exePath = Join-Path $appDir "Automus.exe"
-    $installedVersion = if (Test-Path -LiteralPath $versionPath) {
-        (Get-Content -LiteralPath $versionPath -Raw).Trim()
-    } else { "" }
-
-    if ($installedVersion -ne $version -or -not (Test-Path -LiteralPath $exePath)) {
-        $packagePath = Join-Path $releaseRoot $packageName
-        if (-not (Test-Path -LiteralPath $packagePath)) {
-            throw "Pacote do Automus nao encontrado em $packagePath"
-        }
-        $stage = Join-Path $installRoot ("stage-" + [guid]::NewGuid().ToString("N"))
-        New-Item -ItemType Directory -Force -Path $stage | Out-Null
-        try {
-            Expand-Archive -LiteralPath $packagePath -DestinationPath $stage -Force
-            if (-not (Test-Path -LiteralPath (Join-Path $stage "Automus.exe"))) {
-                throw "Pacote extraido sem Automus.exe."
-            }
-            if (Test-Path -LiteralPath $appDir) {
-                Remove-Item -LiteralPath $appDir -Recurse -Force
-            }
-            Move-Item -LiteralPath $stage -Destination $appDir
-            Set-Content -LiteralPath $versionPath -Encoding ASCII -NoNewline -Value $version
-            Write-Log "Automus atualizado para $version."
-        } finally {
-            if (Test-Path -LiteralPath $stage) {
-                Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
-            }
-        }
+    if (-not (Test-Path -LiteralPath $exePath)) {
+        throw "Versao $version ainda nao esta completa no servidor: $exePath"
     }
 
-    if (-not (Get-Process -Name "Automus" -ErrorAction SilentlyContinue)) {
-        Start-Process -FilePath $exePath -ArgumentList "--background" -WorkingDirectory $appDir -WindowStyle Hidden
-        Write-Log "Automus $version iniciado junto com o Guardiao."
-    } else {
-        Write-Log "Automus ja estava em execucao."
+    $expectedExe = Normalize-Path $exePath
+    $automusProcesses = @(Get-CimInstance Win32_Process -Filter "Name='Automus.exe'" -ErrorAction SilentlyContinue)
+    $currentProcesses = @($automusProcesses | Where-Object {
+        (Normalize-Path ([string]$_.ExecutablePath)) -eq $expectedExe
+    })
+
+    if ($currentProcesses.Count -gt 0 -and -not $ForceStart) {
+        Set-Content -LiteralPath $versionState -Encoding ASCII -NoNewline -Value $version
+        exit 0
     }
-    Start-Sleep -Seconds 4
-    $startupDir = [Environment]::GetFolderPath("Startup")
-    foreach ($legacyName in @(
-        "Automus_Controlador_Atualizacoes.bat",
-        "Automus_Atualizacoes.bat",
-        "Automus.bat",
-        "Dark-Jutsu Cluster Usuario.cmd"
-    )) {
-        $legacyPath = Join-Path $startupDir $legacyName
-        if (Test-Path -LiteralPath $legacyPath) {
-            Remove-Item -LiteralPath $legacyPath -Force -ErrorAction SilentlyContinue
-            Write-Log "Inicializacao direta antiga removida: $legacyName"
+
+    if ($automusProcesses.Count -gt 0) {
+        foreach ($proc in $automusProcesses) {
+            try {
+                Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
+                Write-Log "Automus anterior encerrado para atualizar. PID=$($proc.ProcessId) Path=$($proc.ExecutablePath)"
+            } catch {
+                Write-Log "AVISO: falha ao encerrar PID=$($proc.ProcessId): $($_.Exception.Message)"
+            }
         }
+        Start-Sleep -Seconds 2
     }
+
+    # A variavel faz o Automus manter a inicializacao apontando para o launcher
+    # estavel do servidor, nunca para uma pasta de versao especifica.
+    $env:AUTOMUS_SERVER_LAUNCHER = $serverLauncher
+    Start-Process -FilePath $exePath -WorkingDirectory $appDir -ArgumentList "--background" -WindowStyle Hidden
+    Set-Content -LiteralPath $versionState -Encoding ASCII -NoNewline -Value $version
+    Write-Log "Automus central $version iniciado oculto. Origem=$exePath"
 } catch {
-    Write-Log "ERRO: $($_.Exception.Message)"
+    Write-Log "ERRO ao verificar/atualizar Automus central: $($_.Exception.Message)"
     exit 1
 }

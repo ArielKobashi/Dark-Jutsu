@@ -28,7 +28,11 @@ try {
     Start-Process -FilePath $chrome -ArgumentList @(
         "--remote-debugging-port=$Port",
         "--user-data-dir=$profileDir",
-        "--start-maximized",
+        "--window-size=1366,768",
+        "--window-position=0,0",
+        "--force-device-scale-factor=1",
+        "--disable-session-crashed-bubble",
+        "--no-first-run",
         "--new-window",
         $Url
     )

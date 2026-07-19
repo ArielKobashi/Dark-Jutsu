@@ -14,6 +14,7 @@ from servidor_eleicao_darkjutsu import candidate_settings, computer_name, load_c
 
 SHARE_ROOT = Path(r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu")
 STATUS_DIR = SHARE_ROOT / "status"
+NODES_DIR = STATUS_DIR / "nodes"
 REQUEST_DIR = STATUS_DIR / "requests"
 BACKUP_DIR = SHARE_ROOT / "backups"
 PRIMARY_IP = "192.168.5.44"
@@ -270,7 +271,13 @@ def self_heal_guardian(local_role):
         runtime_version = LOCAL_GUARDIAN_RUNTIME_VERSION.read_text(encoding="ascii").strip()
     except Exception:
         runtime_version = ""
-    if local_version == share_version and runtime_version == share_version:
+    heartbeat_version = ""
+    try:
+        heartbeat = json.loads((NODES_DIR / f"{computer_name()}.json").read_text(encoding="utf-8"))
+        heartbeat_version = str((heartbeat.get("details") or {}).get("guardianVersion") or "")
+    except Exception:
+        pass
+    if local_version == share_version and runtime_version == share_version and heartbeat_version == share_version:
         return
     try:
         LOCAL_MONITOR_DIR.mkdir(parents=True, exist_ok=True)
@@ -286,7 +293,7 @@ def self_heal_guardian(local_role):
         pyw = local_pythonw()
         subprocess.Popen([str(pyw), str(LOCAL_GUARDIAN)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=CREATE_NO_WINDOW)
         LOCAL_GUARDIAN_RUNTIME_VERSION.write_text(share_version, encoding="ascii")
-        progress(f"Guardiao local atualizado automaticamente: {local_version} -> {share_version}")
+        progress(f"Guardiao local atualizado automaticamente: arquivo={local_version}, processo={heartbeat_version or '?'} -> {share_version}")
     except Exception as exc:
         progress(f"AVISO: nao consegui autoatualizar guardiao local: {type(exc).__name__}: {exc}")
 

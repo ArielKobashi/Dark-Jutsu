@@ -29,6 +29,9 @@ USER_RUNTIME_ROOT = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expandus
 RUNTIME_ROOT = SYSTEM_RUNTIME_ROOT if os.path.isdir(SYSTEM_RUNTIME_ROOT) else USER_RUNTIME_ROOT
 LOG_DIR = os.path.join(RUNTIME_ROOT, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "monitor_python.log")
+MONITOR_LOCK_FILE = os.path.join(LOG_DIR, "monitor_python.lock")
+GUARDIAN_LOCK_FILE = os.path.join(LOG_DIR, "guardiao_loop_python.lock")
+LOCAL_GUARDIAN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "guardiao_loop_python_darkjutsu.py")
 ANTI_SLEEP_STATUS_FILE = os.path.join(LOG_DIR, "anti_sleep_darkjutsu.status")
 SHARED_MONITOR_LOG = os.path.join(SHARE_ROOT, "logs", "monitor_python_eventos.txt")
 TEST_ACTIVE_FILE = os.path.join(SHARE_ROOT, "status", "teste_inicializacao_ativo.txt")
@@ -37,6 +40,7 @@ MUTEX_NAME = "Global\\DarkJutsuMonitorReservaPython"
 ERROR_ALREADY_EXISTS = 183
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
+CREATE_NO_WINDOW = 0x08000000
 
 WM_USER = 0x0400
 WM_TRAY = WM_USER + 20
@@ -237,6 +241,9 @@ def acquire_single_instance():
         if _mutex_handle and kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
             log("monitor ja estava aberto; encerrando instancia duplicada")
             return False
+        os.makedirs(LOG_DIR, exist_ok=True)
+        with open(MONITOR_LOCK_FILE, "w", encoding="ascii") as fh:
+            fh.write(str(os.getpid()))
     except Exception as exc:
         log(f"AVISO: nao consegui criar mutex do monitor: {type(exc).__name__}: {exc}")
     return True
@@ -514,7 +521,32 @@ class Tray:
     def loop_status(self):
         while True:
             time.sleep(15)
+            self.ensure_guardian_running()
             self.update_status()
+
+    def ensure_guardian_running(self):
+        try:
+            guardian_pid = 0
+            if os.path.exists(GUARDIAN_LOCK_FILE):
+                with open(GUARDIAN_LOCK_FILE, "r", encoding="ascii") as fh:
+                    guardian_pid = int((fh.read() or "0").strip())
+            if guardian_pid:
+                handle = kernel32.OpenProcess(0x1000, False, guardian_pid)
+                if handle:
+                    kernel32.CloseHandle(handle)
+                    return
+            if not os.path.exists(LOCAL_GUARDIAN):
+                log(f"watchdog: guardiao local ausente em {LOCAL_GUARDIAN}")
+                return
+            subprocess.Popen(
+                [PYTHON_EXE, LOCAL_GUARDIAN],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            log("watchdog: guardiao reiniciado automaticamente pelo monitor")
+        except Exception as exc:
+            log(f"watchdog: falha ao verificar guardiao: {type(exc).__name__}: {exc}")
 
     def update_icon(self):
         self.nid.hIcon = self.icon
@@ -637,3 +669,12 @@ if __name__ == "__main__":
         except Exception:
             pass
         raise
+    finally:
+        try:
+            if os.path.exists(MONITOR_LOCK_FILE):
+                with open(MONITOR_LOCK_FILE, "r", encoding="ascii") as fh:
+                    lock_pid = int((fh.read() or "0").strip())
+                if lock_pid == os.getpid():
+                    os.remove(MONITOR_LOCK_FILE)
+        except Exception:
+            pass

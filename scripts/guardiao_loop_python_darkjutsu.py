@@ -1,3 +1,4 @@
+import ctypes
 import os
 import json
 import shutil
@@ -27,6 +28,7 @@ LOCAL_API = RUNTIME_ROOT / "Dark-Jutsu" / "api" / "dark_jutsu_api.py"
 SHARE_API_DIR = SHARE_ROOT / "pacote" / "Dark-Jutsu" / "api"
 LOCAL_API_DIR = LOCAL_API.parent
 LOG_DIR = RUNTIME_ROOT / "logs"
+LOCAL_MONITOR_DIR = RUNTIME_ROOT / "monitor"
 USER_PG_HOME = Path.home() / "Desktop" / "aplicacoes code" / "pgsql"
 PG_HOME = USER_PG_HOME if not SYSTEM_RUNTIME_ROOT.exists() and (USER_PG_HOME / "bin" / "pg_ctl.exe").exists() else RUNTIME_ROOT / "PostgreSQL" / "pgsql"
 PG_BIN = PG_HOME / "bin"
@@ -39,8 +41,10 @@ API_LOG = LOG_DIR / "api_runtime_python_guardiao.log"
 LOCK_FILE = LOG_DIR / "guardiao_loop_python.lock"
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-18.22"
+GUARDIAN_VERSION = "2026-07-18.24"
 MAINTENANCE_DIR = STATUS_DIR / "maintenance"
+STARTUP_VBS_SOURCE = SCRIPTS / "iniciar_cluster_usuario_darkjutsu.vbs"
+WATCHDOG_SOURCE = SCRIPTS / "watchdog_usuario_darkjutsu.ps1"
 SHARED_LOG = SHARE_ROOT / "logs" / "guardiao_python_eventos.txt"
 TEST_ACTIVE_FILE = SHARE_ROOT / "status" / "teste_inicializacao_ativo.txt"
 TEST_LOG = SHARE_ROOT / "logs" / "teste_inicializacao_manual_darkjutsu.txt"
@@ -91,12 +95,9 @@ def acquire_lock():
                 old_pid = 0
             if old_pid:
                 try:
-                    ps = (
-                        f"Get-CimInstance Win32_Process -Filter \"ProcessId={old_pid}\" | "
-                        "Select-Object -ExpandProperty CommandLine"
-                    )
-                    out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=8, creationflags=CREATE_NO_WINDOW).stdout
-                    if "guardiao_loop_python_darkjutsu.py" in out:
+                    handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, old_pid)
+                    if handle:
+                        ctypes.windll.kernel32.CloseHandle(handle)
                         log(f"Guardiao Python ja esta rodando no PID {old_pid}. Encerrando duplicado.")
                         return False
                     log(f"Lock antigo ignorado: PID {old_pid} nao e guardiao ativo.")
@@ -231,10 +232,10 @@ def start_local_api(reason):
         if health("127.0.0.1", timeout=2):
             log("API local respondeu depois da limpeza.")
             return
+    sync_local_api()
     if not LOCAL_API.exists():
         log(f"ERRO: API local nao encontrada em {LOCAL_API}")
         return
-    sync_local_api()
     if not ensure_postgres_ready():
         log(f"ERRO: PostgreSQL local nao ficou pronto; API nao sera iniciada. Motivo={reason}")
         return
@@ -356,18 +357,64 @@ def maintenance_active():
     return False, {}
 
 
+def ensure_hidden_user_startup():
+    startup = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    if not os.environ.get("APPDATA") or not STARTUP_VBS_SOURCE.exists():
+        return False
+    try:
+        startup.mkdir(parents=True, exist_ok=True)
+        target = startup / "Dark-Jutsu Cluster Usuario.vbs"
+        source_bytes = STARTUP_VBS_SOURCE.read_bytes()
+        if not target.exists() or target.read_bytes() != source_bytes:
+            target.write_bytes(source_bytes)
+            log(f"Inicializacao oculta do usuario atualizada: {target}")
+        local_watchdog = LOCAL_MONITOR_DIR / "watchdog_usuario_darkjutsu.ps1"
+        if WATCHDOG_SOURCE.exists():
+            watchdog_bytes = WATCHDOG_SOURCE.read_bytes()
+            if not local_watchdog.exists() or local_watchdog.read_bytes() != watchdog_bytes:
+                local_watchdog.write_bytes(watchdog_bytes)
+                log(f"Watchdog do usuario atualizado: {local_watchdog}")
+            subprocess.Popen(
+                ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", str(local_watchdog)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=CREATE_NO_WINDOW,
+            )
+        for name in (
+            "Automus_Controlador_Atualizacoes.bat",
+            "Automus_Atualizacoes.bat",
+            "Automus.bat",
+            "Dark-Jutsu Cluster Usuario.cmd",
+        ):
+            legacy = startup / name
+            if legacy.exists():
+                legacy.unlink()
+                log(f"Inicializacao direta antiga removida: {legacy.name}")
+        return True
+    except Exception as exc:
+        log(f"AVISO: falha ao ajustar inicializacao oculta do usuario: {type(exc).__name__}: {exc}")
+        return False
+
+
 def main():
     if not acquire_lock():
         return
     last_full_cycle = 0
+    last_startup_check = 0
     last_leader = None
     log(f"Guardiao Python dinamico iniciado. Versao={GUARDIAN_VERSION} Usuario={os.environ.get('USERNAME')} Maquina={os.environ.get('COMPUTERNAME')} IPs={sorted(local_ips())} BootWindows={boot_hint()} PID={os.getpid()}")
     while True:
         try:
+            if time.time() - last_startup_check >= 60:
+                ensure_hidden_user_startup()
+                last_startup_check = time.time()
             local_ok = health("127.0.0.1", timeout=2)
             sql_ok = pg_ready()
             if not sql_ok:
                 sql_ok = ensure_postgres_ready()
+            if sql_ok and not LOCAL_API.exists():
+                sync_local_api()
+            can_serve_api = bool(sql_ok and LOCAL_API.exists())
             in_maintenance, maintenance = maintenance_active()
             if in_maintenance:
                 publish_heartbeat(
@@ -382,7 +429,7 @@ def main():
                 time.sleep(5)
                 continue
             heartbeat = publish_heartbeat(
-                ready=sql_ok,
+                ready=can_serve_api,
                 api_healthy=local_ok,
                 ips=sorted(local_ips()),
                 details={"guardianVersion": GUARDIAN_VERSION, "pid": os.getpid()},
@@ -400,7 +447,7 @@ def main():
             if time.time() - last_full_cycle >= 15:
                 log(
                     f"ciclo dinamico lider={leader or 'nenhum'} self_leader={decision.get('isLeader')} "
-                    f"epoch={decision.get('epoch')} sql={sql_ok} api_local={local_ok} prioridade={heartbeat.get('priority')}"
+                    f"epoch={decision.get('epoch')} sql={sql_ok} api_preparada={can_serve_api} api_local={local_ok} prioridade={heartbeat.get('priority')}"
                 )
                 publish_status()
                 last_full_cycle = time.time()

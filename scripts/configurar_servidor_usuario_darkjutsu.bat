@@ -74,6 +74,13 @@ if defined LATEST_BACKUP (
 ) else echo AVISO: nenhum backup valido encontrado.
 del "%CANDIDATE_LIST%" 2>nul
 
+rem O pg_dump nao inclui associacoes globais de roles. Reaplica o acesso usado pela API
+rem para que o login continue funcionando depois de restaurar ou trocar o servidor.
+"%PG_BIN%\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d dark_jutsu -v ON_ERROR_STOP=1 -c "grant usage on schema public to dark_jutsu; grant select, insert, update, delete on all tables in schema public to dark_jutsu; grant usage, select, update on all sequences in schema public to dark_jutsu; grant execute on all functions in schema public to dark_jutsu;"
+if errorlevel 1 exit /b 1
+"%PG_BIN%\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d dark_jutsu -v ON_ERROR_STOP=1 -c "do $$ begin if exists (select 1 from pg_roles where rolname='dark_jutsu_service') then grant dark_jutsu_service to dark_jutsu; alter role dark_jutsu inherit; end if; end $$;"
+if errorlevel 1 exit /b 1
+
 call "%~dp0instalar_atualizar_guardiao_monitor_darkjutsu.bat"
 if errorlevel 1 exit /b 1
 echo OK: servidor instalado sem administrador em "%RUNTIME_ROOT%".

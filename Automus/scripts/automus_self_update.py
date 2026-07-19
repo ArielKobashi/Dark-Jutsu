@@ -209,7 +209,13 @@ def install_downloaded_update(new_exe: Path) -> None:
 
     current_exe = Path(sys.executable).resolve()
     network_install = _is_network_path(current_exe)
-    install_dir = _local_install_dir() if network_install else current_exe.parent
+    if network_install:
+        raise RuntimeError(
+            "Automus executado pelo servidor nao instala atualizacao local. "
+            "Atualize a pasta central do servidor."
+        )
+
+    install_dir = current_exe.parent
     target_exe = install_dir / "Automus.exe"
     helper = new_exe.parent / "instalar_automus_update.bat"
     pid = os.getpid()
@@ -218,7 +224,10 @@ def install_downloaded_update(new_exe: Path) -> None:
     helper.write_text(
         "@echo off\r\n"
         "setlocal\r\n"
-        "title Atualizando Automus\r\n"
+        'set "LOG_DIR=%LOCALAPPDATA%\\Automus\\logs"\r\n'
+        'if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" >nul 2>nul\r\n'
+        'set "LOG_FILE=%LOG_DIR%\\automus_self_update.log"\r\n'
+        'echo [%DATE% %TIME%] Atualizando Automus. > "%LOG_FILE%"\r\n'
         f'set "NEW_EXE={new_exe}"\r\n'
         f'set "NEW_DIR={new_dir}"\r\n'
         f'set "CURRENT_EXE={target_exe}"\r\n'
@@ -226,13 +235,12 @@ def install_downloaded_update(new_exe: Path) -> None:
         f'set "SOURCE_EXE={current_exe}"\r\n'
         f'set "PID={pid}"\r\n'
         'set "AUTOMUS_RUNTIME_TEMP=%APPDATA%\\Automus\\complemento\\RuntimeTemp"\r\n'
-        "echo Atualizando Automus. Aguarde...\r\n"
-        "echo Novo EXE: %NEW_EXE%\r\n"
-        "echo Origem atual: %SOURCE_EXE%\r\n"
-        "echo Instalando em: %CURRENT_EXE%\r\n"
+        'echo Novo EXE: %NEW_EXE% >> "%LOG_FILE%"\r\n'
+        'echo Origem atual: %SOURCE_EXE% >> "%LOG_FILE%"\r\n'
+        'echo Instalando em: %CURRENT_EXE% >> "%LOG_FILE%"\r\n'
         'if not exist "%CURRENT_DIR%" mkdir "%CURRENT_DIR%" >nul 2>nul\r\n'
         ":wait_process\r\n"
-        "echo Aguardando Automus atual encerrar...\r\n"
+        'echo Aguardando Automus atual encerrar... >> "%LOG_FILE%"\r\n'
         'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul\r\n'
         "if not errorlevel 1 (\r\n"
         "  timeout /t 1 /nobreak >nul\r\n"
@@ -244,34 +252,29 @@ def install_downloaded_update(new_exe: Path) -> None:
         "set /a TRY=0\r\n"
         ":copy_retry\r\n"
         "set /a TRY+=1\r\n"
-        "echo Copiando arquivos do Automus... tentativa %TRY%/30\r\n"
+        'echo Copiando arquivos do Automus... tentativa %TRY%/30 >> "%LOG_FILE%"\r\n'
         'robocopy "%NEW_DIR%" "%CURRENT_DIR%" /E /XD "__pycache__" /XF "instalar_automus_update.bat" >nul\r\n'
         "if %ERRORLEVEL% LEQ 7 goto start_app\r\n"
         'copy /Y "%NEW_EXE%" "%CURRENT_EXE%" >nul 2>nul\r\n'
         "if not errorlevel 1 goto start_app\r\n"
         "if %TRY% GEQ 30 goto fail\r\n"
-        "echo Aguardando o Windows liberar o Automus.exe...\r\n"
+        'echo Aguardando o Windows liberar o Automus.exe... >> "%LOG_FILE%"\r\n'
         "timeout /t 1 /nobreak >nul\r\n"
         "goto copy_retry\r\n"
         ":start_app\r\n"
-        "echo Atualizacao concluida.\r\n"
-        "echo Abrindo Automus atualizado...\r\n"
+        'echo Atualizacao concluida. >> "%LOG_FILE%"\r\n'
+        'echo Abrindo Automus atualizado... >> "%LOG_FILE%"\r\n'
         "timeout /t 2 /nobreak >nul\r\n"
-        'echo Abrindo "%CURRENT_EXE%"\r\n'
+        'echo Abrindo "%CURRENT_EXE%" >> "%LOG_FILE%"\r\n'
         'start "" "%CURRENT_EXE%"\r\n'
         "goto done\r\n"
         ":done\r\n"
-        "echo.\r\n"
-        "echo Pronto. Se o Automus nao abriu sozinho, abra pelo Automus.exe atualizado.\r\n"
-        "echo Esta janela vai fechar em 8 segundos.\r\n"
-        "timeout /t 8 /nobreak >nul\r\n"
+        'echo Pronto. >> "%LOG_FILE%"\r\n'
         "exit /b 0\r\n"
         ":fail\r\n"
-        "echo.\r\n"
-        "echo ERRO: nao foi possivel substituir o Automus.exe.\r\n"
-        "echo Feche qualquer Automus aberto e tente atualizar novamente.\r\n"
-        "pause\r\n"
+        'echo ERRO: nao foi possivel substituir o Automus.exe. >> "%LOG_FILE%"\r\n'
         "exit /b 1\r\n",
         encoding="utf-8",
     )
-    subprocess.Popen(["cmd.exe", "/c", "start", "Atualizando Automus", "cmd.exe", "/c", str(helper)], shell=False)
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    subprocess.Popen(["cmd.exe", "/c", str(helper)], shell=False, creationflags=creationflags)

@@ -17,6 +17,12 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
 VERSION_PATH = SCRIPTS / "version.json"
 RELEASES = ROOT / "releases"
+DIST_APP = ROOT / "dist" / "Automus"
+SERVER_SUPPORT_FILES = (
+    "Iniciar_Automus_Servidor.vbs",
+    "Configurar_Automus_neste_PC.bat",
+    "configurar_automus_servidor.ps1",
+)
 
 
 def python_console_executable() -> str:
@@ -131,7 +137,28 @@ def copy_to_publish_dir(version: str, publish_dir: str, log=print):
         source = RELEASES / filename
         if source.exists():
             shutil.copy2(source, target / filename)
-    log(f"Arquivos copiados para: {target}")
+    if not (DIST_APP / "Automus.exe").exists():
+        raise RuntimeError(f"Build central nao encontrado: {DIST_APP}")
+
+    # Cada versao tem sua propria pasta. Assim uma publicacao nova nao tenta
+    # sobrescrever DLLs ou o EXE que podem estar abertos pela rede.
+    server_app = target / "Aplicacao" / version
+    shutil.copytree(DIST_APP, server_app, dirs_exist_ok=True)
+    for filename in SERVER_SUPPORT_FILES:
+        source = ROOT / filename
+        if not source.exists():
+            raise RuntimeError(f"Arquivo de suporte do servidor ausente: {source}")
+        shutil.copy2(source, target / filename)
+
+    pointer_tmp = target / "versao_atual.tmp"
+    pointer_tmp.write_text(version + "\n", encoding="ascii")
+    pointer_tmp.replace(target / "versao_atual.txt")
+    signal_tmp = target / "sinal_atualizacao.tmp"
+    signal_tmp.write_text(f"{version}|{datetime.now().isoformat(timespec='seconds')}\n", encoding="ascii")
+    signal_tmp.replace(target / "sinal_atualizacao.txt")
+    log(f"Aplicacao central publicada em: {server_app}")
+    log(f"Ponteiro do servidor atualizado para a versao {version}.")
+    log("Sinal de atualizacao imediata enviado aos Guardioes.")
 
 
 def open_releases_folder():

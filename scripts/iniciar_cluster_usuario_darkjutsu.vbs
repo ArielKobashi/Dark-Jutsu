@@ -15,3 +15,8 @@ End If
 
 automusLauncher = monitor & "\iniciar_automus_com_guardiao_darkjutsu.ps1"
 shell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & automusLauncher & Chr(34), 0, False
+
+watchdog = monitor & "\watchdog_usuario_darkjutsu.ps1"
+If fso.FileExists(watchdog) Then
+  shell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & watchdog & Chr(34), 0, False
+End If

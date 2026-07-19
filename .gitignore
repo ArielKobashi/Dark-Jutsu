@@ -1,4 +1,5 @@
 _backups/
+_db_update_checkpoints/
 _migration_runs/
 __pycache__/
 *.pyc

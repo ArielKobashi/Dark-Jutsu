@@ -120,6 +120,12 @@ if "%LATEST_BACKUP%"=="" (
     if errorlevel 1 exit /b 1
 )
 
+rem O backup contem tabelas e dados, mas nao conserva associacoes globais de roles.
+"%PG_BIN%\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d dark_jutsu -v ON_ERROR_STOP=1 -c "grant usage on schema public to dark_jutsu; grant select, insert, update, delete on all tables in schema public to dark_jutsu; grant usage, select, update on all sequences in schema public to dark_jutsu; grant execute on all functions in schema public to dark_jutsu;"
+if errorlevel 1 exit /b 1
+"%PG_BIN%\psql.exe" -h 127.0.0.1 -p 5433 -U postgres -d dark_jutsu -v ON_ERROR_STOP=1 -c "do $$ begin if exists (select 1 from pg_roles where rolname='dark_jutsu_service') then grant dark_jutsu_service to dark_jutsu; alter role dark_jutsu inherit; end if; end $$;"
+if errorlevel 1 exit /b 1
+
 echo Instalando atalhos de inicializacao para este usuario...
 call "%SHARE_ROOT%\scripts\instalar_atualizar_guardiao_monitor_darkjutsu.bat"
 

@@ -28,6 +28,9 @@ from automus_self_update import (
     install_downloaded_update,
     load_local_version,
 )
+from automus_environment import enable_per_monitor_dpi_awareness, run_preflight
+
+enable_per_monitor_dpi_awareness()
 
 
 # Evita carga duplicada quando o arquivo roda como script (__main__) e tambem
@@ -189,35 +192,95 @@ def _usuario_pode_usar_automus(usuario: object) -> bool:
     return nivel in {"admin", "adm", "mod", "moderador"}
 
 
+def _candidate_api_base_urls() -> list[str]:
+    seen: set[str] = set()
+    candidates: list[str] = []
+
+    def add(value: str):
+        base = str(value or "").strip().rstrip("/")
+        if not base:
+            return
+        if not re.match(r"^https?://", base, flags=re.I):
+            base = f"http://{base}"
+        if ":" not in base.rsplit("/", 1)[-1]:
+            base = f"{base}:8765"
+        key = base.lower()
+        if key not in seen:
+            seen.add(key)
+            candidates.append(base)
+
+    add(os.environ.get("DARK_JUTSU_API_BASE_URL", ""))
+
+    status_dir = Path(r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\status")
+    try:
+        lease = json.loads((status_dir / "leader_lease.json").read_text(encoding="utf-8"))
+        leader = str(lease.get("leader") or "").strip().upper()
+        if leader:
+            node_path = status_dir / "nodes" / f"{leader}.json"
+            node = json.loads(node_path.read_text(encoding="utf-8"))
+            for ip in node.get("ips") or []:
+                if str(ip).strip() and not str(ip).startswith("127."):
+                    add(f"http://{ip}:8765")
+    except Exception:
+        pass
+
+    try:
+        nodes_dir = status_dir / "nodes"
+        nodes = []
+        for path in nodes_dir.glob("*.json"):
+            try:
+                node = json.loads(path.read_text(encoding="utf-8"))
+                nodes.append(node)
+            except Exception:
+                continue
+        nodes.sort(key=lambda item: (0 if item.get("apiHealthy") else 1, int(item.get("priority") or 1000)))
+        for node in nodes:
+            for ip in node.get("ips") or []:
+                if str(ip).strip() and not str(ip).startswith("127."):
+                    add(f"http://{ip}:8765")
+    except Exception:
+        pass
+
+    add("http://127.0.0.1:8765")
+    return candidates
+
+
 def _auth_admin_dark_jutsu(login: str, senha: str) -> dict:
     login = (login or "").strip()
     senha = senha or ""
     if not login or not senha:
         raise RuntimeError("Login e senha obrigatorios.")
 
-    base_url = os.environ.get("DARK_JUTSU_API_BASE_URL", "http://127.0.0.1:8765").rstrip("/")
     payload = json.dumps({"login": login, "senha": senha}).encode("utf-8")
-    req = Request(
-        f"{base_url}/api/auth/login",
-        data=payload,
-        method="POST",
-        headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        with urlopen(req, timeout=12) as resp:
-            data = json.loads(resp.read().decode("utf-8-sig"))
-    except HTTPError as exc:
+    last_connection_error = ""
+    data = None
+    for base_url in _candidate_api_base_urls():
+        req = Request(
+            f"{base_url}/api/auth/login",
+            data=payload,
+            method="POST",
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+        )
         try:
-            body = json.loads(exc.read().decode("utf-8-sig"))
-            message = body.get("error") or body.get("message") or str(exc)
-        except Exception:
-            message = str(exc)
-        raise RuntimeError(message) from exc
-    except URLError as exc:
-        raise RuntimeError(f"Nao consegui conectar ao Dark-Jutsu em {base_url}.") from exc
+            with urlopen(req, timeout=12) as resp:
+                data = json.loads(resp.read().decode("utf-8-sig"))
+                break
+        except HTTPError as exc:
+            try:
+                body = json.loads(exc.read().decode("utf-8-sig"))
+                message = body.get("error") or body.get("message") or str(exc)
+            except Exception:
+                message = str(exc)
+            raise RuntimeError(message) from exc
+        except URLError as exc:
+            last_connection_error = f"Nao consegui conectar ao Dark-Jutsu em {base_url}."
+            continue
+
+    if data is None:
+        raise RuntimeError(last_connection_error or "Nao consegui conectar ao Dark-Jutsu.")
 
     usuario = data.get("user") if isinstance(data, dict) else None
     if not _usuario_pode_usar_automus(usuario):
@@ -341,6 +404,15 @@ def _set_startup_enabled(enabled: bool):
     if enabled:
         path.parent.mkdir(parents=True, exist_ok=True)
         _cleanup_legacy_startup_entries(keep=path)
+        server_launcher = os.environ.get("AUTOMUS_SERVER_LAUNCHER", "").strip()
+        if server_launcher:
+            launcher_vbs = server_launcher.replace('"', '""')
+            path.write_text(
+                'Set shell = CreateObject("WScript.Shell")\r\n'
+                f'shell.Run "wscript.exe ""{launcher_vbs}""", 0, False\r\n',
+                encoding="ascii",
+            )
+            return
         executable = Path(sys.executable).resolve() if getattr(sys, "frozen", False) else Path(__file__).resolve()
         launcher = Path(sys.executable).resolve()
         if not getattr(sys, "frozen", False) and launcher.name.lower() == "python.exe":
@@ -1125,15 +1197,35 @@ class _ControlWindow:
         )
         totvs_capture_btn.pack(fill="x", padx=14, pady=(2, 3))
 
+        test_buttons = tk.Frame(main_frame, bg=palette["bg"])
+        test_buttons.pack(fill="x", padx=14, pady=(2, 3))
+
         totvs_test_btn = make_button(
-            main_frame,
+            test_buttons,
             text="Verificar TOTVS (F7)",
             command=self._state.start_totvs_news_test,
-            width=26,
+            width=24,
             height=1,
             bg="#334155",
         )
-        totvs_test_btn.pack(fill="x", padx=14, pady=(2, 3))
+        totvs_test_btn.pack(side="left", fill="x", expand=True, padx=(0, 3))
+
+        environment_test_btn = make_button(
+            test_buttons,
+            text="Testar ambiente",
+            command=self._state.start_environment_test,
+            width=24,
+            height=1,
+            bg="#334155",
+        )
+        environment_test_btn.pack(side="left", fill="x", expand=True, padx=(3, 0))
+
+        environment_test_var = tk.StringVar(value="AMBIENTE | aguardando teste")
+        environment_test_label = tk.Label(
+            main_frame, textvariable=environment_test_var, anchor="w", justify="left",
+            padx=8, pady=4, fg="white", bg="#666666", wraplength=520,
+        )
+        environment_test_label.pack(fill="x", padx=14, pady=(0, 6))
 
         totvs_test_var = tk.StringVar(value="TOTVS News | aguardando teste")
         totvs_test_label = tk.Label(
@@ -1357,6 +1449,10 @@ class _ControlWindow:
             totvs_test_var.set(test_text)
             totvs_test_label.configure(bg=test_bg)
 
+            environment_text, environment_bg = self._state.get_environment_test_status()
+            environment_test_var.set(environment_text)
+            environment_test_label.configure(bg=environment_bg)
+
             live_text = self._state.get_live_pixel_status_text()
             if live_text is None:
                 live_pixel_var.set("PIXEL AO VIVO | desativado")
@@ -1408,6 +1504,7 @@ class _SharedState:
         self.listener = None
         self.mouse_listener = None
         self.window: Optional[_ControlWindow] = None
+        self.environment_test_status = ("AMBIENTE | aguardando teste", "#666666")
         self.macro_name: Optional[str] = None
         self.macro_display_name: Optional[str] = None
         self.total_events: int = 0
@@ -2359,6 +2456,32 @@ class _SharedState:
                 emit_status(f"Falha ao verificar TOTVS News: {exc}", level="ERROR")
 
         threading.Thread(target=worker, name="totvs-news-test", daemon=True).start()
+
+    def start_environment_test(self):
+        """Executa somente o pre-flight; nao envia mouse, teclado ou credenciais."""
+        with self.lock:
+            self.environment_test_status = ("AMBIENTE | verificando...", "#b38f00")
+        emit_status("Testando resolucao, escala e geometria da janela TOTVS...", level="INFO")
+
+        def worker():
+            try:
+                result = run_preflight(autocorrect=True)
+                color = "#1f8a3b" if result.ok else "#a33a3a"
+                text = result.summary()
+                with self.lock:
+                    self.environment_test_status = (text, color)
+                emit_status(text, level="INFO" if result.ok else "WARNING")
+            except Exception as exc:
+                text = f"AMBIENTE | falha no teste: {exc}"
+                with self.lock:
+                    self.environment_test_status = (text, "#a33a3a")
+                emit_status(text, level="ERROR")
+
+        threading.Thread(target=worker, name="automus-environment-test", daemon=True).start()
+
+    def get_environment_test_status(self) -> tuple[str, str]:
+        with self.lock:
+            return self.environment_test_status
 
     def get_totvs_news_status(self) -> tuple[str, str]:
         with self.lock:
