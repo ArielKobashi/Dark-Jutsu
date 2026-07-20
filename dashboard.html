@@ -1374,7 +1374,7 @@
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
             kanbanGestao: parametroPermitido((params.get("kanbanGestao") || params.get("gestaoKanban") || "todos").toLowerCase(), ["todos","avaliador","sem_avaliador","sem-avaliador"], "todos").replace("-", "_"),
             kanbanOrdem: parametroPermitido((params.get("kanbanOrdem") || "recente").toLowerCase(), ["antigo","recente"], "recente"),
-            kanbanEntradasDias: parametroPermitido((params.get("kanbanEntradasDias") || "7").toLowerCase(), ["7","15","30"], "7"),
+            kanbanEntradasDias: parametroPermitido((params.get("kanbanEntradasDias") || "todos").toLowerCase(), ["7","15","30","todos"], "todos"),
             kanbanExpandido: boolParam("kanbanExpandido", "verMaisKanban"),
             origem: (params.get("origem") || "").toLowerCase(),
             armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "04").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
@@ -1623,9 +1623,24 @@
             return abertoMata111 ? "MATA111: aguardando recebimento" : "Sem solicitacao";
         }
         function pedidoItem(item, pedidos){
-            const codigo = key(item);
-            const b64 = btoa(unescape(encodeURIComponent(codigo))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
-            return pedidos?.[b64] || pedidos?.[codigo] || null;
+            const candidatos = [
+                key(item),
+                item?.protheus,
+                item?.protheusKey,
+                item?.cooperat,
+                item?.codigoCooperat,
+                item?.codCooperat,
+                item?.codigoAntigo
+            ].map(normalizarCodigo).filter(Boolean);
+            for(const codigo of candidatos){
+                const pedido = pedidos?.[ajusteKey(codigo)] || pedidos?.[codigo];
+                if(pedido) return pedido;
+            }
+            for(const [chave, pedido] of Object.entries(pedidos || {})){
+                const decodificada = decodeAjusteKey(chave);
+                if(decodificada && candidatos.includes(decodificada)) return pedido;
+            }
+            return null;
         }
         function rotuloPedido(pedido){
             if(!pedidoAtivo(pedido)) return "Sem solicitacao";
@@ -1803,13 +1818,21 @@
                 key(item),
                 item?.protheus,
                 item?.protheusKey,
-                item?.cooperat
+                item?.cooperat,
+                item?.codigoCooperat,
+                item?.codCooperat,
+                item?.codigoAntigo
             ].map(normalizarCodigo).filter(Boolean);
             for(const candidato of candidatos){
                 const direto = historico[candidato];
                 if(Array.isArray(direto)) return direto;
                 const codificado = historico[ajusteKey(candidato)];
                 if(Array.isArray(codificado)) return codificado;
+            }
+            for(const [chave, lista] of Object.entries(historico)){
+                if(!Array.isArray(lista)) continue;
+                const decodificada = decodeAjusteKey(chave);
+                if(decodificada && candidatos.includes(decodificada)) return lista;
             }
             return [];
         }
@@ -2357,6 +2380,7 @@
                 .join("\n");
         }
         function janelaEntradasKanban(){
+            if(cfg.kanbanEntradasDias === "todos") return Infinity;
             return Number(cfg.kanbanEntradasDias || 7) || 7;
         }
         function entradaHistoricoKanban(linha){
@@ -3243,6 +3267,7 @@
                     <div class="filter">
                         <label for="fKanbanEntradasDias">Entradas</label>
                         <select id="fKanbanEntradasDias" data-filter="kanbanEntradasDias">
+                            <option value="todos" ${cfg.kanbanEntradasDias === "todos" ? "selected" : ""}>Todas as entradas</option>
                             <option value="7" ${cfg.kanbanEntradasDias === "7" ? "selected" : ""}>Ultimos 7 dias</option>
                             <option value="15" ${cfg.kanbanEntradasDias === "15" ? "selected" : ""}>Ultimos 15 dias</option>
                             <option value="30" ${cfg.kanbanEntradasDias === "30" ? "selected" : ""}>Ultimos 30 dias</option>
@@ -3494,6 +3519,29 @@
             const entradas = lista.filter(e => Number(e.delta || 0) > 0);
             const saidas = lista.filter(e => Number(e.delta || 0) < 0);
             return { faixa, lista, zeraram, entradas, saidas };
+        }
+        function agruparSaidasHistoricoParaMata185(saidas){
+            const mapa = new Map();
+            (Array.isArray(saidas) ? saidas : []).forEach(ev => {
+                const item = ev?.item || {};
+                const codigo = normalizarCodigo(item.protheus || item.protheusKey || item.cooperat || "");
+                if(!codigo) return;
+                const atual = mapa.get(codigo) || {
+                    codigo,
+                    descricao:item.descricao || "",
+                    unidade:item.unidadeMedida || "",
+                    atendido:0,
+                    requisicoes:0,
+                    parciais:0,
+                    maquinas:maquinasItem(item),
+                    endereco:item.enderecoPrincipal || "",
+                    saldoAtual:num(item.saldoAtual ?? item.saldo) || 0
+                };
+                atual.atendido += Math.abs(Number(ev.delta || 0));
+                atual.requisicoes += 1;
+                mapa.set(codigo, atual);
+            });
+            return [...mapa.values()].sort((a,b) => Number(b.atendido || 0) - Number(a.atendido || 0));
         }
         function lotesMata185(banco){
             return (Array.isArray(banco?.movimentacoesMata185?.lotes) ? banco.movimentacoesMata185.lotes : [])
@@ -4127,10 +4175,15 @@
             const totalEntradas = movimentacao.entradas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
             const loteLabel = movMata185.lote?.timestamp ? new Date(Number(movMata185.lote.timestamp)).toLocaleString("pt-BR") : "sem lote MATA185";
             const maquinaLabel = cfg.maquinaMovimentacao || "Todas";
-            const itensPorUnidadeMata185 = [...(movMata185.itens || [])]
+            const fallbackSaidasHistorico = agruparSaidasHistoricoParaMata185(movimentacao.saidas || []);
+            const itensMovimentacaoBase = (movMata185.itens && movMata185.itens.length)
+                ? movMata185.itens
+                : filtrarPorMaquina(fallbackSaidasHistorico, cfg.maquinaMovimentacao);
+            const origemMovimentacaoLabel = movMata185.itens.length ? "MATA185" : "historico de saldo";
+            const itensPorUnidadeMata185 = [...(itensMovimentacaoBase || [])]
                 .map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", atendido:Number(i.atendido || 0)}))
                 .sort((a,b) => Number(b.atendido || 0) - Number(a.atendido || 0));
-            const itensPorRegistrosMata185 = [...(movMata185.itens || [])]
+            const itensPorRegistrosMata185 = [...(itensMovimentacaoBase || [])]
                 .map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", requisicoes:Number(i.requisicoes || 0)}))
                 .sort((a,b) => Number(b.requisicoes || 0) - Number(a.requisicoes || 0));
             document.getElementById("subtitulo").textContent = `Movimentacao da ${movimentacao.faixa.nome}: ${movimentacao.faixa.label} | MATA185: ${loteLabel}`;
@@ -4138,7 +4191,7 @@
                 <section class="cards">
                     <article class="card blue"><span>Movimentos</span><strong>${movimentacao.lista.length}</strong></article>
                     <article class="card red"><span>Zeraram</span><strong>${zeraram.length}</strong></article>
-                    <article class="card"><span>Saidas MATA185</span><strong>${fmt(movMata185.itens.reduce((s,l) => s + Number(l.atendido || 0), 0))}</strong></article>
+                    <article class="card"><span>Saidas</span><strong>${fmt(itensMovimentacaoBase.reduce((s,l) => s + Number(l.atendido || 0), 0))}</strong></article>
                     <article class="card"><span>Encerradas</span><strong>${movMata185.encerradas.length}</strong></article>
                     <article class="card green"><span>Entradas pendentes</span><strong>${movMata185.entradasPendentes.length}</strong></article>
                 </section>
@@ -4146,7 +4199,8 @@
                 ${renderFiltros([], dados.length)}
                 <div class="toolbar">
                     <span class="chip">Maquina: ${esc(maquinaLabel)}</span>
-                    <span class="chip">Itens na selecao: ${esc(fmt(movMata185.itens.length))}</span>
+                    <span class="chip">Origem saidas: ${esc(origemMovimentacaoLabel)}</span>
+                    <span class="chip">Itens na selecao: ${esc(fmt(itensMovimentacaoBase.length))}</span>
                     <button class="primaryBtn" type="button" data-action="relatorio-contagem-mata185">Gerar relatorio de contagem</button>
                 </div>
                 <section class="vizGrid">

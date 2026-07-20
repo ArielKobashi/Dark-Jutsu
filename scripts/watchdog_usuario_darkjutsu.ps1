@@ -129,6 +129,57 @@ function Set-LastSeenAutomusSignal([string]$signal) {
   }
 }
 
+function Test-NeedsUpdate([string]$name, [string]$targetDir) {
+  $source = Join-Path $shareScripts $name
+  $target = Join-Path $targetDir $name
+  if (-not (Test-Path -LiteralPath $source)) { return $false }
+  if (-not (Test-Path -LiteralPath $target)) { return $true }
+  try {
+    return (Get-Item $source).LastWriteTimeUtc -gt (Get-Item $target).LastWriteTimeUtc -or (Get-Item $source).Length -ne (Get-Item $target).Length
+  } catch {
+    return $true
+  }
+}
+
+function New-RuntimeDir {
+  $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
+  $runtimeDir = Join-Path $localDir "runtime_$stamp"
+  New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
+  $ok = $true
+  foreach ($name in @(
+    "guardiao_loop_python_darkjutsu.py",
+    "servidor_eleicao_darkjutsu.py",
+    "servidores_config.json",
+    "status_compartilhado_servidores_darkjutsu.py",
+    "abrir_status_darkjutsu.py",
+    "monitor_reserva_python_darkjutsu.py",
+    "iniciar_automus_com_guardiao_darkjutsu.ps1",
+    "watchdog_usuario_darkjutsu.ps1"
+  )) {
+    $source = Join-Path $shareScripts $name
+    $target = Join-Path $runtimeDir $name
+    if (-not (Test-Path -LiteralPath $source)) {
+      Write-WatchdogLog "Runtime novo incompleto: fonte ausente $name"
+      $ok = $false
+      continue
+    }
+    try {
+      Copy-Item -LiteralPath $source -Destination $target -Force -ErrorAction Stop
+    } catch {
+      Write-WatchdogLog "Runtime novo falhou ao copiar ${name}: $($_.Exception.Message)"
+      $ok = $false
+    }
+  }
+  if (-not $ok) { return $null }
+  try {
+    Set-Content -LiteralPath $activeRuntimeFile -Encoding ASCII -NoNewline -Value $runtimeDir
+    Write-WatchdogLog "Runtime ativo trocado para $runtimeDir"
+  } catch {
+    Write-WatchdogLog "Aviso: nao foi possivel salvar runtime ativo $runtimeDir - $($_.Exception.Message)"
+  }
+  return $runtimeDir
+}
+
 try {
   Write-WatchdogLog "Watchdog iniciado. Usuario=$env:USERNAME Maquina=$env:COMPUTERNAME"
   $lastAutomusUpdateCheck = [datetime]::MinValue
@@ -136,6 +187,15 @@ try {
   while ($true) {
     $runtimeDir = Get-ActiveRuntimeDir
     $updatedFiles = @{}
+    $needsRuntimeSwitch = (Test-NeedsUpdate "guardiao_loop_python_darkjutsu.py" $runtimeDir) -or (Test-NeedsUpdate "monitor_reserva_python_darkjutsu.py" $runtimeDir)
+    if ($needsRuntimeSwitch -and (Split-Path $runtimeDir -Leaf) -like "runtime_*") {
+      $newRuntime = New-RuntimeDir
+      if ($newRuntime) {
+        $runtimeDir = $newRuntime
+        $updatedFiles["guardiao_loop_python_darkjutsu.py"] = $true
+        $updatedFiles["monitor_reserva_python_darkjutsu.py"] = $true
+      }
+    }
     foreach ($name in @(
       "guardiao_loop_python_darkjutsu.py",
       "servidor_eleicao_darkjutsu.py",

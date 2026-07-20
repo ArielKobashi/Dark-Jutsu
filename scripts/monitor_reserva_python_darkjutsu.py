@@ -628,8 +628,8 @@ class Tray:
             self.icon = self.icon_black
             self.tip = f"Dark-Jutsu: reconfirmando servidor - sem resposta ha {offline_text}"
             if offline_seconds >= OFFLINE_GRACE_SECONDS:
-                visual_state = "vermelho"
-                self.icon = self.icon_red
+                visual_state = "preto"
+                self.icon = self.icon_black
                 self.tip = f"Dark-Jutsu: nenhum servidor ligado - offline ha {offline_text}"
         state_key = f"{visual_state}|{leader_name if leader_ok else '-'}|{active_ip if leader_ok else '-'}"
         if state_key != self.last_state_key:

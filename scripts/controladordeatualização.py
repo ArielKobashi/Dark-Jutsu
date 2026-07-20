@@ -151,12 +151,26 @@ def _load_controller_config() -> dict:
 
 def _save_controller_config(config: dict):
     CONTROLLER_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = CONTROLLER_CONFIG_PATH.with_suffix(".tmp")
-    tmp_path.write_text(
-        json.dumps(config, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    tmp_path = CONTROLLER_CONFIG_PATH.with_name(
+        f"{CONTROLLER_CONFIG_PATH.stem}.{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.tmp"
     )
-    tmp_path.replace(CONTROLLER_CONFIG_PATH)
+    try:
+        tmp_path.write_text(
+            json.dumps(config, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        for _ in range(12):
+            try:
+                tmp_path.replace(CONTROLLER_CONFIG_PATH)
+                return
+            except PermissionError:
+                time.sleep(0.15)
+        tmp_path.replace(CONTROLLER_CONFIG_PATH)
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def _startup_bat_path() -> Path:

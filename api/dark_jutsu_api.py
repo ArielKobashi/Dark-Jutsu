@@ -2910,8 +2910,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> int:
     server = ThreadingHTTPServer((API_HOST, API_PORT), Handler)
-    print(f"Dark-Jutsu SQL API em http://{API_HOST}:{API_PORT}")
-    print(f"Banco: {DATABASE_URL}")
+    print(f"Dark-Jutsu SQL API em http://{API_HOST}:{API_PORT}", flush=True)
+    print(f"Banco: {DATABASE_URL}", flush=True)
     DETAIL_LOG.info(
         "START pid=%s host=%s port=%s require_auth=%s public_tunnel=%s allowed_origins=%s",
         os.getpid(),

@@ -16,6 +16,7 @@ PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
 API_PORT = 8765
 FAILOVER_BLACKOUT_SECONDS = 180
+API_STARTUP_WAIT_SECONDS = 45
 SHARE_ROOT = Path(r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu")
 SCRIPTS = SHARE_ROOT / "scripts"
 STATUS_DIR = SHARE_ROOT / "status"
@@ -98,13 +99,20 @@ PG_BIN = PG_HOME / "bin"
 PGDATA = (PG_HOME / "data") if PG_HOME == USER_PG_HOME else RUNTIME_ROOT / "postgres-data"
 PG_CTL = PG_BIN / "pg_ctl.exe"
 PG_ISREADY = PG_BIN / "pg_isready.exe"
+PG_PSQL = PG_BIN / "psql.exe"
+PG_RESTORE = PG_BIN / "pg_restore.exe"
+PG_DROPDB = PG_BIN / "dropdb.exe"
+PG_CREATEDB = PG_BIN / "createdb.exe"
 PG_RUNTIME_LOG = LOG_DIR / "postgres_runtime.log"
 LOG_FILE = LOG_DIR / "guardiao_loop_python.log"
 API_LOG = LOG_DIR / "api_runtime_python_guardiao.log"
 LOCK_FILE = LOG_DIR / "guardiao_loop_python.lock"
+SCHEMA_RESTORE_MARKER = LOG_DIR / "schema_restore_darkjutsu_v2.marker"
+LOCK_HANDLE = None
+ERROR_ALREADY_EXISTS = 183
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-19.05"
+GUARDIAN_VERSION = "2026-07-20.04"
 MAINTENANCE_DIR = STATUS_DIR / "maintenance"
 STARTUP_VBS_SOURCE = SCRIPTS / "iniciar_cluster_usuario_darkjutsu.vbs"
 WATCHDOG_SOURCE = SCRIPTS / "watchdog_usuario_darkjutsu.ps1"
@@ -195,33 +203,23 @@ def boot_hint():
 
 
 def acquire_lock():
+    global LOCK_HANDLE
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
-        if LOCK_FILE.exists():
+        kernel32 = ctypes.windll.kernel32
+        kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p]
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        kernel32.GetLastError.argtypes = []
+        kernel32.GetLastError.restype = ctypes.c_ulong
+        handle = kernel32.CreateMutexW(None, True, "Global\\DarkJutsuGuardiaoLoopPython")
+        if handle and kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
             try:
-                old_pid = int(LOCK_FILE.read_text(encoding="ascii").strip() or "0")
+                old_pid = LOCK_FILE.read_text(encoding="ascii").strip() or "desconhecido"
             except Exception:
-                old_pid = 0
-            if old_pid:
-                try:
-                    ps = (
-                        "$p=Get-CimInstance Win32_Process -Filter 'ProcessId=%s' -ErrorAction SilentlyContinue; "
-                        "if($p -and $p.CommandLine -match 'guardiao_loop_python_darkjutsu.py'){ 'guardiao' }"
-                    ) % old_pid
-                    out = subprocess.run(
-                        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
-                        capture_output=True,
-                        text=True,
-                        errors="ignore",
-                        timeout=8,
-                        creationflags=CREATE_NO_WINDOW,
-                    ).stdout.strip()
-                    if out == "guardiao":
-                        log(f"Guardiao Python ja esta rodando no PID {old_pid}. Encerrando duplicado.")
-                        return False
-                    log(f"Lock antigo ignorado: PID {old_pid} nao e guardiao ativo.")
-                except Exception:
-                    pass
+                old_pid = "desconhecido"
+            log(f"Guardiao Python ja esta rodando ou iniciando no PID {old_pid}. Encerrando duplicado.")
+            return False
+        LOCK_HANDLE = handle
         LOCK_FILE.write_text(str(os.getpid()), encoding="ascii")
         return True
     except Exception as exc:
@@ -258,6 +256,15 @@ def role():
 def health(ip, timeout=4):
     try:
         with urllib.request.urlopen(f"http://{ip}:{API_PORT}/health", timeout=timeout) as resp:
+            body = resp.read(2000).replace(b" ", b"").lower()
+            return resp.status == 200 and b'"ok":true' in body
+    except Exception:
+        return False
+
+
+def live(ip, timeout=2):
+    try:
+        with urllib.request.urlopen(f"http://{ip}:{API_PORT}/live", timeout=timeout) as resp:
             body = resp.read(2000).replace(b" ", b"").lower()
             return resp.status == 200 and b'"ok":true' in body
     except Exception:
@@ -366,26 +373,36 @@ def start_local_api(reason):
     env["DARK_JUTSU_API_PORT"] = str(API_PORT)
     env["DARK_JUTSU_DATABASE_URL"] = DB_URL
     env["DATABASE_URL"] = DB_URL
+    env["PYTHONUNBUFFERED"] = "1"
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
-        shared_api_log = SHARE_ROOT / "logs" / f"api_runtime_{os.environ.get('COMPUTERNAME', 'desconhecido')}.log"
+        computer = os.environ.get("COMPUTERNAME", "desconhecido")
+        shared_api_log = SHARE_ROOT / "logs" / f"api_runtime_{computer}.log"
+        shared_detail_log = SHARE_ROOT / "logs" / f"api_detalhado_{computer}.log"
+        env["DARK_JUTSU_API_DETAIL_LOG"] = str(shared_detail_log)
         shared_api_log.parent.mkdir(parents=True, exist_ok=True)
         fh = shared_api_log.open("a", encoding="utf-8")
         fh.write("\n" + "=" * 60 + "\n")
         fh.write(time.strftime("%Y-%m-%d %H:%M:%S") + f" | Inicio API por guardiao. Motivo={reason}\n")
         fh.flush()
-        proc = subprocess.Popen([str(py), str(LOCAL_API)], cwd=str(LOCAL_API.parent), stdout=fh, stderr=subprocess.STDOUT, env=env, creationflags=CREATE_NO_WINDOW)
+        proc = subprocess.Popen([str(py), "-u", str(LOCAL_API)], cwd=str(LOCAL_API.parent), stdout=fh, stderr=subprocess.STDOUT, env=env, creationflags=CREATE_NO_WINDOW)
         log(f"Solicitei inicio da API local. Motivo={reason}. Python={py} API={LOCAL_API}")
-        for _ in range(12):
+        live_seen = False
+        for attempt in range(1, API_STARTUP_WAIT_SECONDS + 1):
             time.sleep(1)
             if health("127.0.0.1", timeout=2):
                 log("OK: API local iniciou e respondeu /health.")
                 return
+            if not live_seen and live("127.0.0.1", timeout=1):
+                live_seen = True
+                log("API local ja abriu /live; aguardando /health com SQL.")
             code = proc.poll()
             if code is not None:
                 log(f"ERRO: processo da API encerrou antes de responder /health. Codigo={code}. Log compartilhado={shared_api_log}")
                 return
-        log(f"ERRO: API local foi solicitada, mas nao respondeu /health em 12s. Log compartilhado={shared_api_log}")
+            if attempt in {12, 25, 40}:
+                log(f"API ainda iniciando: tentativa={attempt}s live={live_seen} health=False log={shared_api_log} detalhe={shared_detail_log}")
+        log(f"ERRO: API local foi solicitada, mas nao respondeu /health em {API_STARTUP_WAIT_SECONDS}s. Log compartilhado={shared_api_log} detalhe={shared_detail_log}")
     except Exception as exc:
         log(f"ERRO ao iniciar API local: {type(exc).__name__}: {exc}")
 
@@ -458,6 +475,194 @@ def pg_ready():
             creationflags=CREATE_NO_WINDOW,
         ).returncode == 0
     except Exception:
+        return False
+
+
+def schema_ready():
+    if not PG_PSQL.exists():
+        return False
+    sql = (
+        "select case when "
+        "current_setting('server_encoding') = 'UTF8' and "
+        "to_regclass('public.users') is not null and "
+        "to_regclass('public.inventory_items') is not null and "
+        "to_regclass('public.chat_messages') is not null and "
+        "to_regclass('public.app_settings') is not null "
+        "then 'OK' else 'MISSING' end"
+    )
+    env = os.environ.copy()
+    env.setdefault("PGPASSWORD", "dark_jutsu_dev")
+    try:
+        proc = subprocess.run(
+            [str(PG_PSQL), "-h", "127.0.0.1", "-p", "5433", "-U", "dark_jutsu", "-d", "dark_jutsu", "-Atq", "-c", sql],
+            capture_output=True,
+            text=True,
+            errors="ignore",
+            timeout=10,
+            env=env,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        return proc.returncode == 0 and proc.stdout.strip().upper() == "OK"
+    except Exception:
+        return False
+
+
+def latest_valid_backup():
+    if not PG_RESTORE.exists():
+        log(f"ERRO: pg_restore.exe nao encontrado para validar backup: {PG_RESTORE}")
+        return None
+    backup_dir = SHARE_ROOT / "backups"
+    try:
+        backups = sorted(
+            (p for p in backup_dir.glob("darkjutsu_backup_*.backup") if p.is_file() and p.stat().st_size >= 1_000_000),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )[:20]
+    except Exception as exc:
+        log(f"ERRO: nao consegui listar backups em {backup_dir}: {type(exc).__name__}: {exc}")
+        return None
+    for backup in backups:
+        try:
+            proc = subprocess.run(
+                [str(PG_RESTORE), "-l", str(backup)],
+                capture_output=True,
+                text=True,
+                errors="ignore",
+                timeout=30,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            listing = proc.stdout
+            if proc.returncode == 0 and "TABLE DATA public users" in listing and "TABLE DATA public inventory_items" in listing:
+                return backup
+            log(f"Backup ignorado por validacao incompleta: {backup.name}")
+        except Exception as exc:
+            log(f"AVISO: falha ao validar backup {backup.name}: {type(exc).__name__}: {exc}")
+    return None
+
+
+def schema_restore_recent(cooldown_seconds=3600):
+    try:
+        if not SCHEMA_RESTORE_MARKER.exists():
+            return False
+        return (time.time() - SCHEMA_RESTORE_MARKER.stat().st_mtime) < cooldown_seconds
+    except Exception:
+        return False
+
+
+def restore_schema_from_backup():
+    if schema_restore_recent():
+        log("Restore de schema ignorado: tentativa recente ainda em cooldown.")
+        return False
+    if not PG_RESTORE.exists() or not PG_PSQL.exists() or not PG_DROPDB.exists() or not PG_CREATEDB.exists():
+        log(
+            "ERRO: ferramentas de restore ausentes. "
+            f"pg_restore={PG_RESTORE.exists()} psql={PG_PSQL.exists()} dropdb={PG_DROPDB.exists()} createdb={PG_CREATEDB.exists()}"
+        )
+        return False
+    backup = latest_valid_backup()
+    if not backup:
+        log("ERRO: nenhum backup valido encontrado para restaurar schema local.")
+        return False
+    try:
+        SCHEMA_RESTORE_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        SCHEMA_RESTORE_MARKER.write_text(f"{time.time()}|{backup}\n", encoding="ascii")
+    except Exception:
+        pass
+    env = os.environ.copy()
+    env.setdefault("PGPASSWORD", "dark_jutsu_dev")
+    log(f"Restaurando banco local incompleto a partir do backup valido: {backup}")
+    try:
+        terminate = subprocess.run(
+            [
+                str(PG_PSQL),
+                "-h",
+                "127.0.0.1",
+                "-p",
+                "5433",
+                "-U",
+                "postgres",
+                "-d",
+                "postgres",
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-c",
+                "select pg_terminate_backend(pid) from pg_stat_activity where datname='dark_jutsu' and pid <> pg_backend_pid();",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="ignore",
+            timeout=60,
+            env=env,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        if terminate.returncode != 0:
+            log(f"AVISO: nao consegui encerrar conexoes antes do restore codigo={terminate.returncode} erro={terminate.stderr[-500:]}")
+        drop = subprocess.run(
+            [str(PG_DROPDB), "-h", "127.0.0.1", "-p", "5433", "-U", "postgres", "--if-exists", "dark_jutsu"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="ignore",
+            timeout=60,
+            env=env,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        if drop.returncode != 0:
+            log(f"ERRO: dropdb antes do restore falhou codigo={drop.returncode} erro={drop.stderr[-700:]}")
+            return False
+        create = subprocess.run(
+            [str(PG_CREATEDB), "-h", "127.0.0.1", "-p", "5433", "-U", "postgres", "-O", "dark_jutsu", "-E", "UTF8", "-T", "template0", "dark_jutsu"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="ignore",
+            timeout=60,
+            env=env,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        if create.returncode != 0:
+            log(f"ERRO: createdb UTF8 antes do restore falhou codigo={create.returncode} erro={create.stderr[-700:]}")
+            return False
+        restore = subprocess.run(
+            [str(PG_RESTORE), "--exit-on-error", "-h", "127.0.0.1", "-p", "5433", "-U", "postgres", "-d", "dark_jutsu", "--no-owner", str(backup)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="ignore",
+            timeout=300,
+            env=env,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        if restore.returncode != 0:
+            log(f"ERRO: restore do backup falhou codigo={restore.returncode} erro={restore.stderr[-700:]}")
+            return False
+        grants = [
+            "grant usage on schema public to dark_jutsu; grant select, insert, update, delete on all tables in schema public to dark_jutsu; grant usage, select, update on all sequences in schema public to dark_jutsu; grant execute on all functions in schema public to dark_jutsu;",
+            "do $$ begin if exists (select 1 from pg_roles where rolname='dark_jutsu_service') then grant dark_jutsu_service to dark_jutsu; alter role dark_jutsu inherit; end if; end $$;",
+        ]
+        for sql in grants:
+            proc = subprocess.run(
+                [str(PG_PSQL), "-h", "127.0.0.1", "-p", "5433", "-U", "postgres", "-d", "dark_jutsu", "-v", "ON_ERROR_STOP=1", "-c", sql],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                errors="ignore",
+                timeout=60,
+                env=env,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            if proc.returncode != 0:
+                log(f"ERRO: grant apos restore falhou codigo={proc.returncode} erro={proc.stderr[-700:]}")
+                return False
+        ok = schema_ready()
+        log(f"Restore de schema concluido. schema_ok={ok} backup={backup.name}")
+        return ok
+    except subprocess.TimeoutExpired:
+        log("ERRO: restore do backup excedeu 300s.")
+        return False
+    except Exception as exc:
+        log(f"ERRO: restore automatico falhou: {type(exc).__name__}: {exc}")
         return False
 
 
@@ -565,16 +770,19 @@ def main():
             sql_ok = pg_ready()
             if not sql_ok:
                 sql_ok = ensure_postgres_ready()
+            schema_ok = schema_ready() if sql_ok else False
+            if sql_ok and not schema_ok:
+                schema_ok = restore_schema_from_backup()
             if sql_ok and not LOCAL_API.exists():
                 sync_local_api()
-            can_serve_api = bool(sql_ok and LOCAL_API.exists())
+            can_serve_api = bool(sql_ok and schema_ok and LOCAL_API.exists())
             in_maintenance, maintenance = maintenance_active()
             if in_maintenance:
                 publish_heartbeat(
                     ready=False,
                     api_healthy=False,
                     ips=sorted(local_ips()),
-                    details={"guardianVersion": GUARDIAN_VERSION, "pid": os.getpid(), "maintenance": maintenance},
+                    details={"guardianVersion": GUARDIAN_VERSION, "pid": os.getpid(), "maintenance": maintenance, "schemaReady": schema_ok},
                 )
                 if local_ok or api_process_running():
                     stop_local_api("teste de queda controlado")
@@ -585,7 +793,7 @@ def main():
                 ready=can_serve_api,
                 api_healthy=local_ok,
                 ips=sorted(local_ips()),
-                details={"guardianVersion": GUARDIAN_VERSION, "pid": os.getpid()},
+                details={"guardianVersion": GUARDIAN_VERSION, "pid": os.getpid(), "schemaReady": schema_ok},
             )
             decision = election_tick()
             leader = decision.get("leader")
@@ -600,7 +808,7 @@ def main():
             if time.time() - last_full_cycle >= 15:
                 log(
                     f"ciclo dinamico lider={leader or 'nenhum'} self_leader={decision.get('isLeader')} "
-                    f"epoch={decision.get('epoch')} sql={sql_ok} api_preparada={can_serve_api} api_local={local_ok} prioridade={heartbeat.get('priority')}"
+                    f"epoch={decision.get('epoch')} sql={sql_ok} schema={schema_ok} api_preparada={can_serve_api} api_local={local_ok} prioridade={heartbeat.get('priority')}"
                 )
                 publish_status()
                 last_full_cycle = time.time()

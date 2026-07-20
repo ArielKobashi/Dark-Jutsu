@@ -30,6 +30,7 @@ COLORS = {
     "ok": "#1f9d55",
     "warn": "#c47f00",
     "bad": "#d64545",
+    "offline": "#111827",
     "line": "#dbe3ef",
 }
 
@@ -280,7 +281,7 @@ def state_text(data: dict) -> tuple[str, str, str]:
         return "Contingencia ativa: reserva esta atendendo.", "warn", "Principal nao respondeu; quando voltar deve reassumir."
     if reserve_ready:
         return "Queda total detectada, mas reserva parece pronta.", "warn", "O guardiao deve assumir no proximo ciclo."
-    return "Queda total e reserva nao confirmada.", "bad", "Verifique PostgreSQL, porta 5433 e API local."
+    return "Nenhum servidor ligado.", "offline", "Nenhuma API respondeu agora. O guardiao deve iniciar um candidato pronto."
 
 
 def render_html(data: dict) -> str:
@@ -289,7 +290,7 @@ def render_html(data: dict) -> str:
     lines = "\n".join(html.escape(friendly_event(line)) for line in data["events"][-24:])
     problems = "".join(f"<li><b>{html.escape(title)}</b><br>{html.escape(detail)}</li>" for title, detail in problem_messages(data))
     return f"""<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Dark-Jutsu - Teste</title>
-<style>body{{font-family:Segoe UI,Arial;background:#f4f7fb;color:#152033;margin:20px}}.box{{background:white;border:1px solid #dbe3ef;padding:14px;margin:10px 0;max-width:760px}}.ok{{color:#1f9d55}}.warn{{color:#c47f00}}.bad{{color:#d64545}}pre{{white-space:pre-wrap;background:#f8fafd;padding:10px;max-height:260px;overflow:auto}}</style>
+<style>body{{font-family:Segoe UI,Arial;background:#f4f7fb;color:#152033;margin:20px}}.box{{background:white;border:1px solid #dbe3ef;padding:14px;margin:10px 0;max-width:760px}}.ok{{color:#1f9d55}}.warn{{color:#c47f00}}.bad{{color:#d64545}}.offline{{color:#111827}}pre{{white-space:pre-wrap;background:#f8fafd;padding:10px;max-height:260px;overflow:auto}}</style>
 <h1>Dark-Jutsu</h1><div class="box"><h2 class="{klass}">{html.escape(summary)}</h2><p>{html.escape(detail)}</p></div>
 <div class="box"><b>Principal:</b> {data["principal"][0]} - {html.escape(data["principal"][1])}<br><b>Reserva:</b> {data["reserva"][0]} - {html.escape(data["reserva"][1])}</div>
 <div class="box"><b>Local:</b> {html.escape(socket.gethostname())}<br><b>IPs:</b> {html.escape(", ".join(sorted(data["ips"])))}<br><b>API 8765:</b> {data["api_port"][0]} | <b>Postgres 5433:</b> {data["pg_port"][0]} | <b>PostgreSQL:</b> {data["pg"][0]}</div>
@@ -388,11 +389,13 @@ class TkPanel:
     def _render(self, data: dict) -> None:
         summary, klass, detail = state_text(data)
         color = COLORS[klass]
+        no_api_online = not data["principal"][0] and not data["reserva"][0]
         self.summary_label.config(text=summary, fg=color)
         self.detail_label.config(text=detail)
         for key, label, ip in (("principal", "Principal", PRIMARY_IP), ("reserva", "Reserva", RESERVE_IP)):
             ok, msg = data[key]
-            self.cards[key]["state"].config(text="Online" if ok else "Offline", fg=COLORS["ok"] if ok else COLORS["bad"])
+            offline_color = COLORS["offline"] if no_api_online else COLORS["bad"]
+            self.cards[key]["state"].config(text="Online" if ok else "Offline", fg=COLORS["ok"] if ok else offline_color)
             self.cards[key]["detail"].config(text=f"{label} em {ip}\n{msg}")
         ips = ", ".join(sorted(data["ips"])) or "nao detectado"
         reserve_ready = RESERVE_IP in data["ips"] and data["pg_port"][0] and data["pg"][0]

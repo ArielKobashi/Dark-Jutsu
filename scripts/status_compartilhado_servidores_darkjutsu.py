@@ -15,18 +15,20 @@ from servidor_eleicao_darkjutsu import candidate_settings, computer_name, load_c
 SHARE_ROOT = Path(r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu")
 STATUS_DIR = SHARE_ROOT / "status"
 NODES_DIR = STATUS_DIR / "nodes"
+NODES_DETAIL_DIR = STATUS_DIR / "nodes-detail"
 REQUEST_DIR = STATUS_DIR / "requests"
 BACKUP_DIR = SHARE_ROOT / "backups"
 PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
 API_PORT = 8765
 PG_PORT = 5433
-STATUS_VERSION = "2026-07-17.20"
+STATUS_VERSION = "2026-07-20.01"
 SYSTEM_RUNTIME_ROOT = Path(r"C:\DarkJutsu")
 USER_RUNTIME_ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "DarkJutsu"
 RUNTIME_ROOT = Path(os.environ.get("DARK_JUTSU_RUNTIME_ROOT") or (SYSTEM_RUNTIME_ROOT if SYSTEM_RUNTIME_ROOT.exists() else USER_RUNTIME_ROOT))
 USER_PG_ISREADY = Path.home() / "Desktop" / "aplicacoes code" / "pgsql" / "bin" / "pg_isready.exe"
 PG_ISREADY = USER_PG_ISREADY if not SYSTEM_RUNTIME_ROOT.exists() and USER_PG_ISREADY.exists() else RUNTIME_ROOT / "PostgreSQL" / "pgsql" / "bin" / "pg_isready.exe"
+PG_PSQL = PG_ISREADY.with_name("psql.exe")
 ANTI_SLEEP_STATUS_FILE = RUNTIME_ROOT / "logs" / "anti_sleep_darkjutsu.status"
 LOCAL_MONITOR_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "DarkJutsu" / "monitor"
 LOCAL_GUARDIAN = LOCAL_MONITOR_DIR / "guardiao_loop_python_darkjutsu.py"
@@ -120,6 +122,34 @@ def pg_ready():
         return False
 
 
+def schema_ready():
+    if not PG_PSQL.exists():
+        return False
+    sql = (
+        "select case when "
+        "to_regclass('public.users') is not null and "
+        "to_regclass('public.inventory_items') is not null and "
+        "to_regclass('public.chat_messages') is not null and "
+        "to_regclass('public.app_settings') is not null "
+        "then 'OK' else 'MISSING' end"
+    )
+    env = os.environ.copy()
+    env.setdefault("PGPASSWORD", "dark_jutsu_dev")
+    try:
+        proc = subprocess.run(
+            [str(PG_PSQL), "-h", "127.0.0.1", "-p", str(PG_PORT), "-U", "dark_jutsu", "-d", "dark_jutsu", "-Atq", "-c", sql],
+            capture_output=True,
+            text=True,
+            errors="ignore",
+            timeout=10,
+            env=env,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        return proc.returncode == 0 and proc.stdout.strip().upper() == "OK"
+    except Exception:
+        return False
+
+
 def latest_backup():
     try:
         backups = sorted(
@@ -206,6 +236,8 @@ def collect_local_status():
     health = http_probe("127.0.0.1", "/health", 4)
     live = http_probe("127.0.0.1", "/live", 3)
     backup = latest_backup()
+    pg_port_ready = pg_ready()
+    pg_schema_ready = schema_ready() if pg_port_ready else False
     status = {
         "schema": 1,
         "status_version": STATUS_VERSION,
@@ -220,7 +252,9 @@ def collect_local_status():
         "api_local_health": health["ok"],
         "api_local_live": live["ok"],
         "api_local_ms": health["ms"] if health["ok"] else live["ms"],
-        "sql_local": pg_ready(),
+        "sql_local": bool(pg_port_ready and pg_schema_ready),
+        "sql_port_ready": pg_port_ready,
+        "sql_schema_ready": pg_schema_ready,
         "api_port_listening": port_listening(API_PORT),
         "pg_port_listening": port_listening(PG_PORT),
         "guardiao_active": proc_exists("guardiao_loop", "guardiao_servidor_tick_darkjutsu", "guardiao_loop_python_darkjutsu"),
@@ -315,9 +349,8 @@ def write_local_status(status):
     progress("Publicando status local no servidor de arquivos...")
     STATUS_DIR.mkdir(parents=True, exist_ok=True)
     name = str(status.get("computer") or "desconhecido").upper()
-    detail_dir = STATUS_DIR / "nodes-detail"
-    detail_dir.mkdir(parents=True, exist_ok=True)
-    path = detail_dir / f"{name}.json"
+    NODES_DETAIL_DIR.mkdir(parents=True, exist_ok=True)
+    path = NODES_DETAIL_DIR / f"{name}.json"
     tmp = path.with_name(f"{path.stem}.{os.getpid()}.{int(time.time() * 1000)}.tmp")
     tmp.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
     for _ in range(5):
@@ -329,29 +362,66 @@ def write_local_status(status):
     path.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def read_node_detail(name):
+    path = NODES_DETAIL_DIR / f"{name}.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        ts = datetime.fromisoformat(data.get("updated_at", "2000-01-01T00:00:00"))
+        data["_age_sec"] = int((datetime.now() - ts).total_seconds())
+        return data
+    except Exception:
+        return {"_age_sec": None}
+
+
+def detail_flag(detail, key):
+    age = detail.get("_age_sec")
+    if age is None:
+        return "?"
+    if age > 180:
+        return "VELHO"
+    return yes_no(detail.get(key))
+
+
+def sql_label(node, detail):
+    age = detail.get("_age_sec")
+    if age is not None and age <= 180:
+        if detail.get("sql_local"):
+            return "SIM"
+        if detail.get("sql_port_ready") and detail.get("sql_schema_ready") is False:
+            return "SEM_TAB"
+        return "NAO"
+    return "SIM" if node.get("ready") else "NAO"
+
+
 def print_dynamic_cluster():
     config = load_config()
     lease = read_lease()
     nodes = read_nodes(config)
     leader = str(lease.get("leader") or "").upper()
     print("")
-    print("=" * 104)
+    print("=" * 128)
     print("DARK-JUTSU - CLUSTER DINAMICO DE SERVIDORES")
     print(f"Lider atual: {leader or 'NENHUM'} | epoch={lease.get('epoch', 0)}")
-    print("=" * 104)
-    print(f"{'COMPUTADOR':<22} {'PRIORIDADE':<11} {'ESTADO':<14} {'API':<8} {'SQL':<8} {'IPS'}")
-    print("-" * 104)
+    print("=" * 128)
+    print(
+        f"{'COMPUTADOR':<22} {'PRIORIDADE':<11} {'ESTADO':<14} "
+        f"{'API':<8} {'SQL':<8} {'GUARDIAO':<10} {'MONITOR':<10} {'IPS'}"
+    )
+    print("-" * 128)
     for name, node in sorted(nodes.items(), key=lambda item: (int(item[1].get('priority', 1000)), item[0])):
         state = "LIDER" if name == leader else "PRONTO" if node.get("eligible") else "INDISPONIVEL"
-        details = node.get("details") if isinstance(node.get("details"), dict) else {}
+        detail = read_node_detail(name)
         print(
             f"{name:<22} {int(node.get('priority', 1000)):<11} {state:<14} "
             f"{'SIM' if node.get('apiHealthy') else 'NAO':<8} "
-            f"{'SIM' if node.get('ready') else 'NAO':<8} {', '.join(node.get('ips') or [])}"
+            f"{sql_label(node, detail):<8} "
+            f"{detail_flag(detail, 'guardiao_active'):<10} "
+            f"{detail_flag(detail, 'monitor_active'):<10} "
+            f"{', '.join(node.get('ips') or [])}"
         )
     if not nodes:
         print("Nenhum candidato publicou heartbeat ainda.")
-    print("=" * 104)
+    print("=" * 128)
 
 
 def read_status(role):

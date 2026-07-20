@@ -949,6 +949,29 @@ function normalizarCodigoItem(valor){
     return texto ? texto.toLowerCase() : "";
 }
 
+function decodificarChaveAjusteItem(valor){
+    try{
+        const texto = String(valor || "").replace(/-/g, "+").replace(/_/g, "/");
+        const padded = texto + "=".repeat((4 - texto.length % 4) % 4);
+        return decodeURIComponent(escape(atob(padded))).trim().toLowerCase();
+    }catch(e){
+        return "";
+    }
+}
+
+function codigosPossiveisItem(itemOrKey){
+    const origem = typeof itemOrKey === "string" ? { protheusKey:itemOrKey } : (itemOrKey || {});
+    return [
+        getItemKey(origem),
+        origem.protheusKey,
+        origem.protheus,
+        origem.cooperat,
+        origem.codigoCooperat,
+        origem.codCooperat,
+        origem.codigoAntigo
+    ].map(normalizarCodigoItem).filter(Boolean);
+}
+
 function normalizarChaveCodigoPlanilha(valor){
     const texto = (valor ?? "").toString().trim();
     if(!texto) return "";
@@ -1134,9 +1157,19 @@ function selecionarGuiaWorkbook(workbook, guia = null){
 }
 
 function getHistoricoSaldoItem(itemOrKey){
-    const key = typeof itemOrKey === "string" ? itemOrKey : getItemKey(itemOrKey);
-    const chave = chaveAjusteItem(key);
-    return Array.isArray(historicoSaldoEstoque?.[chave]) ? historicoSaldoEstoque[chave] : [];
+    const historico = historicoSaldoEstoque || {};
+    const candidatos = codigosPossiveisItem(itemOrKey);
+    for(const codigo of candidatos){
+        if(Array.isArray(historico[codigo])) return historico[codigo];
+        const chave = chaveAjusteItem(codigo);
+        if(Array.isArray(historico[chave])) return historico[chave];
+    }
+    for(const [chave, lista] of Object.entries(historico)){
+        if(!Array.isArray(lista)) continue;
+        const decodificada = decodificarChaveAjusteItem(chave);
+        if(decodificada && candidatos.includes(decodificada)) return lista;
+    }
+    return [];
 }
 
 function ultimaEntradaSaldoDepois(itemOrKey, timestamp){
@@ -9728,7 +9761,7 @@ function abrirModalSaldos(item){
             : "Este item não possui faixa configurada na planilha de estoque mínimo.";
         const itemKey = getItemKey(itemSeguro);
         const etiquetaTamanhoMemorizado = getTamanhoEtiquetaItem(itemSeguro);
-        const historicoSaldo = getHistoricoSaldoItem(itemKey).slice(-20).reverse();
+        const historicoSaldo = getHistoricoSaldoItem(itemSeguro).slice(-20).reverse();
         const itemKeyEncoded = encodeURIComponent(itemKey);
         const minimoInputValor = minimoValor === null ? "" : String(minimoValor).replace(".", ",");
         const maximoInputValor = maximoValor === null ? "" : String(maximoValor).replace(".", ",");
