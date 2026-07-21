@@ -196,6 +196,30 @@ Observacao: o navegador gera PNGs via Canvas, enquanto o app `.exe` usa Pillow. 
 
 O Dark-Jutsu roda como sistema local na rede privada. O app fica no servidor de arquivos e a API SQL fica ativa em apenas um dos computadores de servidor por vez.
 
+### Acesso pelo celular sem assinatura paga
+
+Para usar no celular sem contratar hospedagem, mantenha o PC servidor e o celular na mesma rede Wi-Fi e execute:
+
+```bat
+iniciar_darkjutsu_celular.bat
+```
+
+O script mostra um ou mais enderecos no formato:
+
+```text
+http://IP_DO_PC:8765
+```
+
+Abra esse endereco no navegador do celular. A propria API tambem serve o `index.html`, `dashboard.html`, `medidores.html` e arquivos publicos do app, entao nao precisa instalar servidor web separado.
+
+Se o celular estiver na mesma rede e mesmo assim nao abrir, libere a porta no Firewall do Windows executando como administrador:
+
+```bat
+scripts\liberar_firewall_darkjutsu.bat
+```
+
+Para acesso fora da rede da empresa/casa sem abrir porta no roteador, use um tunel gratuito/protegido conforme `scripts\iniciar_cloudflare_tunnel_darkjutsu.bat`. Evite publicar o sistema em tunel publico sem controle de acesso.
+
 ### Candidatos e prioridade
 
 - Todo PC instalado pode hospedar a API e funciona como candidato.

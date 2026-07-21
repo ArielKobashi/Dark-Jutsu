@@ -9,7 +9,39 @@ $DbDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RootDir = Split-Path -Parent $DbDir
 $DataDir = Join-Path $DbDir "data"
 $LogFile = Join-Path $DbDir "postgres.log"
-$PgHome = if ($env:PGSQL_HOME) { $env:PGSQL_HOME } else { "C:\Users\Davi.souza\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql" }
+
+function Find-PostgresHome {
+  if ($env:PGSQL_HOME -and (Test-Path -LiteralPath (Join-Path $env:PGSQL_HOME "bin\pg_ctl.exe"))) {
+    return $env:PGSQL_HOME
+  }
+
+  $desktop = [Environment]::GetFolderPath("Desktop")
+  $candidates = @(
+    "C:\DarkJutsu\PostgreSQL\pgsql",
+    "$env:LOCALAPPDATA\DarkJutsu\PostgreSQL\pgsql",
+    (Join-Path $desktop "aplicacoes code\pgsql"),
+    (Join-Path $desktop "aplicações code\pgsql"),
+    (Join-Path $desktop "pgsql"),
+    (Join-Path $desktop "PostgreSQL\pgsql"),
+    (Join-Path $desktop "postgresql-18.4-2-windows-x64-binaries\pgsql")
+  )
+
+  foreach ($candidate in $candidates) {
+    if ($candidate -and (Test-Path -LiteralPath (Join-Path $candidate "bin\pg_ctl.exe"))) {
+      return $candidate
+    }
+  }
+
+  $found = Get-ChildItem -LiteralPath $desktop -Recurse -Filter "pg_ctl.exe" -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($found) {
+    return (Split-Path -Parent (Split-Path -Parent $found.FullName))
+  }
+
+  return if ($env:PGSQL_HOME) { $env:PGSQL_HOME } else { Join-Path $desktop "postgresql-18.4-2-windows-x64-binaries\pgsql" }
+}
+
+$PgHome = Find-PostgresHome
 $PgBin = Join-Path $PgHome "bin"
 $PgCtl = Join-Path $PgBin "pg_ctl.exe"
 $PgIsReady = Join-Path $PgBin "pg_isready.exe"

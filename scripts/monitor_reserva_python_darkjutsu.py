@@ -20,7 +20,6 @@ OFFLINE_GRACE_SECONDS = 45
 STATUS_POLL_SECONDS = 3
 GUARDIAN_CHECK_SECONDS = 15
 SHARE_ROOT = r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
-APP_PATH = os.path.join(SHARE_ROOT, "app", "index.html")
 SCRIPTS = os.path.join(SHARE_ROOT, "scripts")
 CMD_EXE = r"C:\Windows\SysWOW64\cmd.exe" if os.path.exists(r"C:\Windows\SysWOW64\cmd.exe") else "cmd.exe"
 PYTHON_EXE = os.path.join(os.path.dirname(sys.executable), "python.exe")
@@ -405,6 +404,24 @@ def health(ip):
         return False
 
 
+def active_app_url():
+    try:
+        config = load_config()
+        lease = read_lease()
+        nodes = read_nodes(config)
+        leader_name = str(lease.get("leader") or "").strip().upper()
+        leader_node = nodes.get(leader_name, {})
+        for ip in leader_node.get("ips") or []:
+            if ip and not str(ip).startswith("127.") and health(ip):
+                return f"http://{ip}:{PORT}/app/index.html"
+    except Exception as exc:
+        log(f"AVISO: falha ao resolver URL pelo lider: {type(exc).__name__}: {exc}")
+    for ip in (PRIMARY_IP, RESERVE_IP, "127.0.0.1"):
+        if health(ip):
+            return f"http://{ip}:{PORT}/app/index.html"
+    return f"http://{PRIMARY_IP}:{PORT}/app/index.html"
+
+
 def local_script(name):
     local = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
     if os.path.exists(local):
@@ -661,7 +678,9 @@ class Tray:
     def command(self, ident):
         log(f"menu command: {ident}")
         if ident == ID_OPEN:
-            os.startfile(APP_PATH)
+            url = active_app_url()
+            log(f"Abrir Dark-Jutsu em {url}")
+            os.startfile(url)
         elif ident == ID_TEST:
             if ask_password("testar servidor"):
                 run_visible(test_args())

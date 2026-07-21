@@ -10,6 +10,7 @@ import mimetypes
 import re
 import os
 import secrets
+import socket
 import subprocess
 import threading
 import time
@@ -35,7 +36,7 @@ def _env(name: str, default: str = "") -> str:
 
 
 DATABASE_URL = _env("DATABASE_URL", DEFAULT_DATABASE_URL)
-API_HOST = _env("DARK_JUTSU_API_HOST", "127.0.0.1")
+API_HOST = _env("DARK_JUTSU_API_HOST", "0.0.0.0")
 API_PORT = int(_env("DARK_JUTSU_API_PORT", "8765"))
 API_TOKEN = _env("DARK_JUTSU_API_TOKEN")
 AUTH_SECRET = _env("DARK_JUTSU_AUTH_SECRET") or API_TOKEN or hashlib.sha256(DATABASE_URL.encode("utf-8")).hexdigest()
@@ -194,6 +195,18 @@ def _inventory_legacy_key(item: dict[str, Any], dead: bool = False) -> str:
 def _json_hash(payload: Any) -> str:
     body = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=_json_default).encode("utf-8")
     return hashlib.sha256(body).hexdigest()
+
+
+def _local_ipv4_addresses() -> list[str]:
+    addresses: list[str] = []
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip and not ip.startswith("127.") and ip not in addresses:
+                addresses.append(ip)
+    except Exception:
+        pass
+    return addresses
 
 
 def _chat_password_hash(room_id: str, password: Any) -> str | None:
@@ -3081,6 +3094,9 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> int:
     server = ThreadingHTTPServer((API_HOST, API_PORT), Handler)
     print(f"Dark-Jutsu SQL API em http://{API_HOST}:{API_PORT}", flush=True)
+    if API_HOST in {"0.0.0.0", "::"}:
+        for lan_ip in _local_ipv4_addresses():
+            print(f"Acesso pelo celular: http://{lan_ip}:{API_PORT}", flush=True)
     print(f"Banco: {DATABASE_URL}", flush=True)
     DETAIL_LOG.info(
         "START pid=%s host=%s port=%s require_auth=%s public_tunnel=%s allowed_origins=%s",

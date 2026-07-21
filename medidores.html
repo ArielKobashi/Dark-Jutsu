@@ -475,9 +475,13 @@
     const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
     const SQL_API_BASE_URL = (() => {
       const params = new URLSearchParams(location.search);
+      const sameHostBase = location.protocol.startsWith("http") && location.hostname
+        ? `${location.protocol}//${location.hostname}:8765`
+        : "";
       const explicit = params.get("apiBase") ||
         localStorage.getItem("darkJutsuApiBase") ||
         window.DARK_JUTSU_API_BASE_URL ||
+        sameHostBase ||
         "http://127.0.0.1:8765";
       return String(explicit).replace(/\/+$/, "");
     })();

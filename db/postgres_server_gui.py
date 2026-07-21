@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import threading
@@ -7,13 +8,16 @@ import tkinter as tk
 import webbrowser
 from pathlib import Path
 from tkinter import messagebox, scrolledtext
+from urllib.request import urlopen
 
 
 DB_DIR = Path(__file__).resolve().parent
 ROOT_DIR = DB_DIR.parent
 SHARE_ROOT = r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 SCRIPTS_DIR = Path(SHARE_ROOT) / "scripts"
-APP_INDEX = Path(SHARE_ROOT) / "app" / "index.html"
+PRIMARY_IP = "192.168.5.44"
+RESERVE_IP = "192.168.5.38"
+API_PORT = 8765
 
 
 class ServerControlApp(tk.Tk):
@@ -69,7 +73,7 @@ class ServerControlApp(tk.Tk):
         footer = tk.Label(
             self,
             text=(
-                r"Sistema: \\fileserver\Almoxarifado\0800\servidor\dark-jutsu\app\index.html"
+                f"Sistema: http://{PRIMARY_IP}:{API_PORT}/app/index.html ou reserva ativa"
                 " | API local: http://127.0.0.1:8765/health"
             ),
             anchor="w",
@@ -111,7 +115,7 @@ class ServerControlApp(tk.Tk):
 
     def run_action(self, action: str) -> None:
         if action == "open_app":
-            webbrowser.open(str(APP_INDEX))
+            webbrowser.open(self.active_app_url())
             return
         if action == "health_local":
             webbrowser.open("http://127.0.0.1:8765/health")
@@ -131,7 +135,7 @@ class ServerControlApp(tk.Tk):
             "assume": SCRIPTS_DIR / "assumir_servidor_darkjutsu.bat",
         }
         if action == "start_api":
-            return ["cmd", "/c", "start", "Dark-Jutsu API", str(SCRIPTS_DIR / "iniciar_api_darkjutsu.bat")]
+            return ["cmd", "/c", "start", "Dark-Jutsu API", str(ROOT_DIR / "api" / "iniciar_api_servidor.bat")]
         if action == "status":
             return [
                 "powershell",
@@ -153,6 +157,17 @@ class ServerControlApp(tk.Tk):
             ]
         script = script_map[action]
         return ["cmd", "/c", str(script)]
+
+    def active_app_url(self) -> str:
+        for ip in (PRIMARY_IP, RESERVE_IP, "127.0.0.1"):
+            try:
+                with urlopen(f"http://{ip}:{API_PORT}/health", timeout=3) as response:
+                    data = json.loads(response.read().decode("utf-8", errors="ignore"))
+                    if data.get("ok") is True:
+                        return f"http://{ip}:{API_PORT}/app/index.html"
+            except Exception:
+                continue
+        return f"http://{PRIMARY_IP}:{API_PORT}/app/index.html"
 
     def _run_action_worker(self, action: str) -> None:
         try:

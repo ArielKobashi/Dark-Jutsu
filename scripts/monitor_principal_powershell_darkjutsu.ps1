@@ -23,7 +23,6 @@ $PrimaryIp = "192.168.5.44"
 $ReserveIp = "192.168.5.38"
 $Port = 8765
 $ShareRoot = "\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
-$AppPath = Join-Path $ShareRoot "app\index.html"
 $TestScript = Join-Path $ShareRoot "scripts\testar_servidor_darkjutsu.bat"
 $PanelScript = Join-Path $ShareRoot "scripts\abrir_painel_servidor_darkjutsu.bat"
 $GuardScript = Join-Path $ShareRoot "scripts\guardiao_servidor_tick_darkjutsu.bat"
@@ -61,6 +60,15 @@ function Test-Health($ip) {
   } catch {
     return $false
   }
+}
+
+function Get-DarkJutsuAppUrl {
+  foreach ($ip in @($PrimaryIp, $ReserveIp, "127.0.0.1")) {
+    if (Test-Health $ip) {
+      return "http://${ip}:${Port}/app/index.html"
+    }
+  }
+  return "http://${PrimaryIp}:${Port}/app/index.html"
 }
 
 function New-StatusIcon([System.Drawing.Color]$color, [string]$letter) {
@@ -175,8 +183,9 @@ $statusItem.Enabled = $false
 $openItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $openItem.Text = "Abrir Dark-Jutsu"
 $openItem.Add_Click({
-  Write-MonitorLog "Abrir Dark-Jutsu"
-  Start-Process $AppPath
+  $url = Get-DarkJutsuAppUrl
+  Write-MonitorLog "Abrir Dark-Jutsu em $url"
+  Start-Process $url
 })
 [void]$menu.Items.Add($openItem)
 
@@ -283,7 +292,11 @@ $closeItem.Add_Click({
 [void]$menu.Items.Add($closeItem)
 
 $notify.ContextMenuStrip = $menu
-$notify.Add_DoubleClick({ Start-Process $AppPath })
+$notify.Add_DoubleClick({
+  $url = Get-DarkJutsuAppUrl
+  Write-MonitorLog "Abrir Dark-Jutsu por duplo clique em $url"
+  Start-Process $url
+})
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 15000
