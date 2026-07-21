@@ -1718,26 +1718,27 @@ display:none;
 }
 
 .ocorrenciasBody{
-    grid-template-columns:minmax(0, .95fr) minmax(330px, 1.05fr);
-    gap:9px;
-    padding:9px;
+    grid-template-columns:minmax(0, 1fr) 206px;
+    gap:12px;
+    padding:12px;
 }
 
 .ocorrenciaForm{
     counter-reset:ocorrencia-etapa;
     grid-template-columns:repeat(6, minmax(0, 1fr));
-    gap:7px 9px;
+    gap:10px 12px;
+    padding:14px;
     border-radius:8px;
     background:rgba(7,13,24,0.88);
 }
 
-.ocorrenciaFormTitle,
-.ocorrenciasConsultaHeader{
+.ocorrenciaFormTitle{
     background:linear-gradient(180deg,rgba(15,23,42,0.94),rgba(8,13,24,0.94));
+    margin:-14px -14px 2px;
+    padding:14px 16px;
 }
 
-.ocorrenciaFormTitle strong,
-.ocorrenciasConsultaHeader strong{
+.ocorrenciaFormTitle strong{
     font-size:15px;
 }
 
@@ -1778,19 +1779,62 @@ display:none;
 .ocorrenciaForm input,
 .ocorrenciaForm select,
 .ocorrenciaForm textarea{
-    min-height:34px;
+    min-height:38px;
+}
+
+.ocorrenciaForm > label{
+    grid-column:span 3;
+}
+
+.ocorrenciaForm > label:nth-of-type(3),
+.ocorrenciaForm > label:nth-of-type(4),
+.ocorrenciaForm > label:nth-of-type(5),
+.ocorrenciaForm > label:nth-of-type(6),
+.ocorrenciaForm > label:nth-of-type(7){
+    grid-column:span 2;
+}
+
+.ocorrenciaFull,
+.ocorrenciaActions{
+    grid-column:1 / -1;
 }
 
 .ocorrenciasConsulta{
     display:grid;
-    grid-template-rows:auto auto auto minmax(0, 1fr) auto;
-    gap:8px;
-    padding:0;
-    overflow:hidden;
+    grid-template-rows:auto 1fr;
+    align-content:start;
+    gap:10px;
+    padding:12px;
+    overflow:visible;
     border-radius:8px;
     background:
         linear-gradient(180deg,rgba(8,47,73,0.22),rgba(2,6,23,0.58)),
         rgba(7,13,24,0.9);
+}
+
+.ocorrenciasConsultaHeader{
+    display:block;
+    border:0;
+    border-bottom:1px solid rgba(125,211,252,0.12);
+    border-radius:0;
+    padding:0 0 10px;
+    background:transparent;
+}
+
+.ocorrenciasConsultaHeader strong{
+    display:block;
+    font-size:14px;
+}
+
+.ocorrenciasConsultaHeader span{
+    display:block;
+    margin-top:5px;
+    font-size:10px;
+    line-height:1.3;
+}
+
+.ocorrenciasInterno{
+    display:none !important;
 }
 
 .ocorrenciasStats{
@@ -1841,11 +1885,14 @@ display:none;
 }
 
 .ocorrenciasResumoPainel{
-    margin:0 10px 10px;
-    grid-template-columns:minmax(96px, .7fr) minmax(130px, 1fr) auto;
-    border:1px solid rgba(125,211,252,0.14);
+    margin:0;
+    grid-template-columns:1fr;
+    align-content:start;
+    gap:8px;
+    padding:10px;
+    border:1px solid rgba(125,211,252,0.16);
     border-radius:8px;
-    background:rgba(2,6,23,0.38);
+    background:rgba(2,6,23,0.42);
 }
 
 .ocorrenciasResumoPainel::before{
@@ -1854,22 +1901,29 @@ display:none;
 
 .ocorrenciasResumoPainel strong{
     grid-column:1;
-    grid-row:1;
+    grid-row:auto;
+    font-size:12px;
 }
 
 .ocorrenciasResumoPainel label{
-    grid-column:2;
-    grid-row:1;
+    grid-column:1;
+    grid-row:auto;
+    gap:5px;
+    font-size:10px;
 }
 
 .ocorrenciasResumoPainel button{
-    grid-column:3;
-    grid-row:1;
+    grid-column:1;
+    grid-row:auto;
+    width:100%;
+    min-height:34px;
 }
 
 .ocorrenciasResumoPainel span{
-    grid-column:1 / -1;
-    grid-row:2;
+    grid-column:1;
+    grid-row:auto;
+    font-size:10px;
+    line-height:1.35;
 }
 
 .ocorrenciasAvaliadorStats{
@@ -1932,7 +1986,7 @@ display:none;
     }
 
     .ocorrenciasConsulta{
-        min-height:360px;
+        min-height:0;
     }
 
     .ocorrenciasConsulta > .ocorrenciasFiltros{

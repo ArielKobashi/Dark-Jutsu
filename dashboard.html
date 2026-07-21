@@ -289,6 +289,60 @@
             width:auto;
         }
         .vizPanelControls button{cursor:pointer}
+        .lazyDashStack{
+            display:grid;
+            gap:10px;
+            margin-bottom:12px;
+        }
+        .lazyDashPanel{
+            background:rgba(21,21,29,.82);
+            border:1px solid rgba(122,60,255,.28);
+            border-radius:8px;
+            overflow:hidden;
+        }
+        .lazyDashPanel summary{
+            min-height:48px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            padding:12px 14px;
+            cursor:pointer;
+            color:#EDE9FE;
+            font-weight:900;
+            list-style:none;
+        }
+        .lazyDashPanel summary::-webkit-details-marker{display:none}
+        .lazyDashPanel summary::after{
+            content:"+";
+            width:26px;
+            height:26px;
+            display:grid;
+            place-items:center;
+            border:1px solid var(--line);
+            border-radius:6px;
+            color:var(--cyan);
+            background:#1F1F2A;
+            flex:0 0 auto;
+        }
+        .lazyDashPanel[open] summary::after{content:"-"}
+        .lazyDashPanel summary small{
+            color:var(--muted);
+            font-size:11px;
+            font-weight:800;
+            text-align:right;
+        }
+        .lazyDashBody{
+            padding:0 12px 12px;
+        }
+        .lazyDashPlaceholder{
+            border:1px dashed rgba(148,163,184,.24);
+            border-radius:8px;
+            color:var(--muted);
+            padding:14px;
+            text-align:center;
+            font-size:13px;
+        }
         .bars{display:grid;gap:7px}
         .barRow{display:grid;grid-template-columns:auto minmax(120px,1fr) 3fr auto;gap:8px;align-items:center;font-size:12px}
         .barRank{color:var(--muted);font-weight:800;min-width:26px;text-align:right}
@@ -1384,7 +1438,7 @@
             armazens: (params.get("armazens") || params.get("armazem") || params.get("almox") || "04").split(/[,\s]+/).map(v => v.trim()).filter(Boolean),
             itens: (params.get("itens") || params.get("codigos") || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean),
             busca: (params.get("busca") || "").toLowerCase(),
-            limite: Math.max(1, Math.min(50000, Number(params.get("limite") || 1000) || 1000)),
+            limite: 0,
             ordenar: parametroPermitido((params.get("ordenar") || "reposicao").toLowerCase(), ["reposicao","saldo","descricao","codigo","minimo","maximo","status","pedido","origem"], "reposicao"),
             direcao: parametroPermitido((params.get("direcao") || "desc").toLowerCase(), ["asc","desc"], "desc"),
             pedidoOrdenar: parametroPermitido((params.get("pedidoOrdenar") || "dias").toLowerCase(), ["rank","codigo","descricao","pedido","chegada","status","dias","quantidade"], "dias"),
@@ -1421,6 +1475,9 @@
         let extrasAtual = {};
         let dashboardPanelConfig = {};
         let avaliadorPedidosConfig = {};
+        let dashboardLazySeq = 0;
+        let dashboardLazyRenderers = {};
+        let dashboardLazyRendered = {};
         document.getElementById("titulo").textContent = cfg.titulo;
         btnAtualizar.addEventListener("click", () => carregar());
 
@@ -1479,6 +1536,54 @@
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
+        }
+        function resetLazyDashboard(){
+            dashboardLazySeq = 0;
+            dashboardLazyRenderers = {};
+            dashboardLazyRendered = {};
+        }
+        function renderLazyDashboardPanel(titulo, renderFn, meta = ""){
+            const id = painelDashboardId(titulo);
+            const lazyId = `lazy_${++dashboardLazySeq}_${id}`;
+            dashboardLazyRenderers[lazyId] = renderFn;
+            dashboardLazyRendered[lazyId] = false;
+            return `
+                <details class="lazyDashPanel" data-panel-key="${esc(id)}" data-lazy-dashboard="${esc(lazyId)}">
+                    <summary>
+                        <span>${esc(titulo)}</span>
+                        <small>${esc(meta || "Clique para carregar")}</small>
+                    </summary>
+                    <div class="lazyDashBody" data-lazy-body="${esc(lazyId)}">
+                        <div class="lazyDashPlaceholder">Clique para carregar este bloco.</div>
+                    </div>
+                </details>
+            `;
+        }
+        function materializarLazyDashboardPanel(panel){
+            const lazyId = panel?.dataset?.lazyDashboard;
+            if(!lazyId || dashboardLazyRendered[lazyId]) return;
+            const body = root.querySelector(`[data-lazy-body="${CSS.escape(lazyId)}"]`);
+            const renderFn = dashboardLazyRenderers[lazyId];
+            if(!body || typeof renderFn !== "function") return;
+            dashboardLazyRendered[lazyId] = true;
+            body.innerHTML = `<div class="lazyDashPlaceholder">Carregando...</div>`;
+            requestAnimationFrame(() => {
+                body.innerHTML = renderFn();
+                bindFiltros();
+                aplicarModoEmbed();
+            });
+        }
+        function bindLazyDashboardPanels(){
+            const alvoEmbed = cfg.embed ? painelDashboardId(cfg.painel || "") : "";
+            root.querySelectorAll("[data-lazy-dashboard]").forEach(panel => {
+                if(alvoEmbed && panel.dataset.panelKey === alvoEmbed){
+                    panel.open = true;
+                    materializarLazyDashboardPanel(panel);
+                }
+                panel.addEventListener("toggle", () => {
+                    if(panel.open) materializarLazyDashboardPanel(panel);
+                });
+            });
         }
         function aplicarModoEmbed(){
             if(!cfg.embed) return;
@@ -3694,7 +3799,7 @@
             root.innerHTML = `<section class="erro"><h2>Nao foi possivel carregar</h2><p>${esc(msg)}</p></section>`;
         }
         async function carregarDashboardSnapshotSql(){
-            const data = await sqlApi("/api/dashboard/snapshot?limit=1000&counting_limit=1000");
+            const data = await sqlApi("/api/dashboard/snapshot");
             return {
                 banco: data?.inventory || {},
                 dashboardPanelConfig: data?.dashboardConfig?.paineis || {},
@@ -3781,6 +3886,8 @@
         }
         function bindFiltros(){
             root.querySelectorAll("[data-filter]").forEach(el => {
+                if(el.dataset.boundFilter === "1") return;
+                el.dataset.boundFilter = "1";
                 const aplicarFiltro = () => {
                     const foco = { id: el.id, pos: el.selectionStart };
                     const nome = el.dataset.filter;
@@ -3788,8 +3895,6 @@
                         cfg.semSolicitacao = el.value === "1";
                     }else if(nome === "armazens"){
                         cfg.armazens = el.value.split(/[,\s]+/).map(v => v.trim()).filter(Boolean);
-                    }else if(nome === "limite"){
-                        cfg.limite = Math.max(1, Math.min(50000, Number(el.value) || 1000));
                     }else if(nome === "dataMovimentacao"){
                         cfg.dataMovimentacao = el.value;
                     }else if(nome === "maquinaMovimentacao"){
@@ -3806,6 +3911,8 @@
                 el.addEventListener("change", aplicarFiltro);
             });
             root.querySelectorAll("[data-sort]").forEach(el => {
+                if(el.dataset.boundSort === "1") return;
+                el.dataset.boundSort = "1";
                 el.addEventListener("click", () => {
                     const grupo = el.dataset.sortGroup || "estoque";
                     const campo = el.dataset.sort;
@@ -3835,9 +3942,13 @@
                 });
             });
             root.querySelectorAll("[data-action='relatorio-contagem-mata185']").forEach(btn => {
+                if(btn.dataset.boundAction === "1") return;
+                btn.dataset.boundAction = "1";
                 btn.addEventListener("click", () => gerarRelatorioContagemMata185(window.__movMata185Atual));
             });
             root.querySelectorAll("[data-panel-limit]").forEach(el => {
+                if(el.dataset.boundPanelLimit === "1") return;
+                el.dataset.boundPanelLimit = "1";
                 el.addEventListener("change", async () => {
                     const id = el.dataset.panelLimit;
                     const conf = configPainelDashboard(id);
@@ -3846,6 +3957,8 @@
                 });
             });
             root.querySelectorAll("[data-panel-hide-code]").forEach(btn => {
+                if(btn.dataset.boundPanelHide === "1") return;
+                btn.dataset.boundPanelHide = "1";
                 btn.addEventListener("click", async () => {
                     const id = btn.dataset.panelHideCode;
                     const entrada = prompt("Codigo que nao deve aparecer neste dashboard:");
@@ -3859,6 +3972,8 @@
                 });
             });
             root.querySelectorAll("[data-panel-clear-hidden]").forEach(btn => {
+                if(btn.dataset.boundPanelClear === "1") return;
+                btn.dataset.boundPanelClear = "1";
                 btn.addEventListener("click", async () => {
                     const id = btn.dataset.panelClearHidden;
                     const conf = configPainelDashboard(id);
@@ -4175,8 +4290,6 @@
             window.__movMata185Atual = movMata185;
             const zeraram = movimentacao.zeraram
                 .sort((a,b) => Math.abs(Number(b.delta || 0)) - Math.abs(Number(a.delta || 0)));
-            const totalSaidas = movimentacao.saidas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
-            const totalEntradas = movimentacao.entradas.reduce((s,e) => s + Math.abs(Number(e.delta || 0)), 0);
             const loteLabel = movMata185.lote?.timestamp ? new Date(Number(movMata185.lote.timestamp)).toLocaleString("pt-BR") : "sem lote MATA185";
             const maquinaLabel = cfg.maquinaMovimentacao || "Todas";
             const fallbackSaidasHistorico = agruparSaidasHistoricoParaMata185(movimentacao.saidas || []);
@@ -4205,48 +4318,52 @@
                     <span class="chip">Maquina: ${esc(maquinaLabel)}</span>
                     <span class="chip">Origem saidas: ${esc(origemMovimentacaoLabel)}</span>
                     <span class="chip">Itens na selecao: ${esc(fmt(itensMovimentacaoBase.length))}</span>
+                    <span class="chip">sem limite de dados</span>
                     <button class="primaryBtn" type="button" data-action="relatorio-contagem-mata185">Gerar relatorio de contagem</button>
                 </div>
-                <section class="vizGrid">
-                    ${renderBarras("Itens com mais saida em unidades - armazem 04 MATA185", itensPorUnidadeMata185, "atendido")}
-                    ${renderBarras("Itens com mais registros de saida - armazem 04 MATA185", itensPorRegistrosMata185, "requisicoes")}
-                    ${renderBarras("Maiores faltas em entregas parciais", (movMata185.parciais || []).map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", faltante:i.faltante || 0})), "faltante")}
+                <section class="lazyDashStack">
+                    ${renderLazyDashboardPanel("Graficos de saidas MATA185", () => `
+                        <section class="vizGrid">
+                            ${renderBarras("Itens com mais saida em unidades - armazem 04 MATA185", itensPorUnidadeMata185, "atendido")}
+                            ${renderBarras("Itens com mais registros de saida - armazem 04 MATA185", itensPorRegistrosMata185, "requisicoes")}
+                            ${renderBarras("Maiores faltas em entregas parciais", (movMata185.parciais || []).map(i => ({...i, codigo:i.codigo, descricao:i.descricao || "", faltante:i.faltante || 0})), "faltante")}
+                        </section>
+                    `, `${fmt(itensMovimentacaoBase.length)} itens`)}
+                    ${renderLazyDashboardPanel("Requisicoes encerradas", () => renderEncerradasMata185Tabela(movMata185.encerradas), `${fmt(movMata185.encerradas.length)} registros`)}
+                    ${renderLazyDashboardPanel("Requisicoes entregues parcialmente - MATA185", () => renderParciaisMata185Tabela(movMata185.parciais), `${fmt(movMata185.parciais.length)} registros`)}
+                    ${renderLazyDashboardPanel("Entradas pendentes de enderecamento - armazem 04", () => renderEntradasPendentesTabela(movMata185.entradasPendentes), `${fmt(movMata185.entradasPendentes.length)} registros`)}
+                    ${renderLazyDashboardPanel("Zerados e lead times", () => `
+                        <section class="vizGrid">
+                            ${renderBarras(`Itens que zeraram apos movimentacao - ${movimentacao.faixa.nome}`, zeraram.map(e => ({...e, codigo:e.item.protheus || e.item.cooperat, descricao:e.item.descricao || "", dias:Math.abs(Number(e.delta || 0))})), "dias")}
+                            ${renderBarras("Pedidos mais demorados ou em aberto", leadTimes, "dias")}
+                        </section>
+                    `, `${fmt(zeraram.length)} zerados`)}
+                    ${renderLazyDashboardPanel("Rankings de operacao", () => renderRankingsOperacao({...rankings, leadTimes}), "rankings e usuarios")}
+                    ${renderLazyDashboardPanel(`Relatorio de zerados - ${movimentacao.faixa.nome}`, () => `
+                        <div class="tableWrap">
+                            <table>
+                                <thead><tr><th>Codigo</th><th>Descricao</th><th class="num">Anterior</th><th class="num">Atual</th><th class="num">Mov.</th><th>Data</th></tr></thead>
+                                <tbody>
+                                    ${zeraram.length ? zeraram.map(e => `
+                                        <tr>
+                                            <td class="codigo">${esc(e.item.protheus || e.item.cooperat)}</td>
+                                            <td class="descricao">${esc(e.item.descricao || "")}</td>
+                                            <td class="num">${fmt(e.saldoAnterior)}</td>
+                                            <td class="num">${fmt(e.saldoAtual)}</td>
+                                            <td class="num">${fmt(e.delta)}</td>
+                                            <td>${esc(e.data || new Date(e.timestamp).toLocaleDateString("pt-BR"))}</td>
+                                        </tr>
+                                    `).join("") : `<tr><td colspan="6">Nenhum item zerou no periodo encontrado.</td></tr>`}
+                                </tbody>
+                            </table>
+                        </div>
+                    `, `${fmt(zeraram.length)} registros`)}
+                    ${renderLazyDashboardPanel(`Historico de movimentacao - ${movimentacao.faixa.nome}`, () => renderMovimentacaoTabela(movimentacao.lista), `${fmt(movimentacao.lista.length)} registros`)}
+                    ${renderLazyDashboardPanel("Pedidos com maior tempo ate chegada ou ainda em aberto", () => renderLeadTimesTabela(leadTimes), `${fmt(leadTimes.length)} registros`)}
                 </section>
-                <h2 class="sectionTitle">Requisições encerradas</h2>
-                ${renderEncerradasMata185Tabela(movMata185.encerradas)}
-                <h2 class="sectionTitle">Requisicoes entregues parcialmente - MATA185</h2>
-                ${renderParciaisMata185Tabela(movMata185.parciais)}
-                <h2 class="sectionTitle">Entradas pendentes de enderecamento - armazem 04</h2>
-                ${renderEntradasPendentesTabela(movMata185.entradasPendentes)}
-                <section class="vizGrid">
-                    ${renderBarras(`Itens que zeraram apos movimentacao - ${movimentacao.faixa.nome}`, zeraram.map(e => ({...e, codigo:e.item.protheus || e.item.cooperat, descricao:e.item.descricao || "", dias:Math.abs(Number(e.delta || 0))})), "dias")}
-                    ${renderBarras("Pedidos mais demorados ou em aberto", leadTimes, "dias")}
-                </section>
-                ${renderRankingsOperacao({...rankings, leadTimes})}
-                <h2 class="sectionTitle">Relatorio de zerados - ${esc(movimentacao.faixa.nome)}</h2>
-                <div class="tableWrap">
-                    <table>
-                        <thead><tr><th>Codigo</th><th>Descricao</th><th class="num">Anterior</th><th class="num">Atual</th><th class="num">Mov.</th><th>Data</th></tr></thead>
-                        <tbody>
-                            ${zeraram.length ? zeraram.map(e => `
-                                <tr>
-                                    <td class="codigo">${esc(e.item.protheus || e.item.cooperat)}</td>
-                                    <td class="descricao">${esc(e.item.descricao || "")}</td>
-                                    <td class="num">${fmt(e.saldoAnterior)}</td>
-                                    <td class="num">${fmt(e.saldoAtual)}</td>
-                                    <td class="num">${fmt(e.delta)}</td>
-                                    <td>${esc(e.data || new Date(e.timestamp).toLocaleDateString("pt-BR"))}</td>
-                                </tr>
-                            `).join("") : `<tr><td colspan="6">Nenhum item zerou no periodo encontrado.</td></tr>`}
-                        </tbody>
-                    </table>
-                </div>
-                <h2 class="sectionTitle">Historico de movimentacao - ${esc(movimentacao.faixa.nome)}</h2>
-                ${renderMovimentacaoTabela(movimentacao.lista)}
-                <h2 class="sectionTitle">Pedidos com maior tempo ate chegada ou ainda em aberto</h2>
-                ${renderLeadTimesTabela(leadTimes)}
             `;
             bindFiltros();
+            bindLazyDashboardPanels();
             aplicarModoEmbed();
         }
         function movimentoValor(e, campo, idx){
@@ -4423,14 +4540,48 @@
                             <option value="asc" ${cfg.direcao === "asc" ? "selected" : ""}>Menor primeiro</option>
                         </select>
                     </div>
-                    <div class="filter">
-                        <label for="fLimite">Limite</label>
-                        <input id="fLimite" data-filter="limite" type="number" min="1" max="${Math.max(1,totalDados)}" value="${Math.min(cfg.limite, Math.max(1,totalDados))}">
-                    </div>
                 </section>
             `;
         }
+        function renderTabelaEstoque(linhas){
+            if(!linhas.length) return `<section class="empty">Nenhum item encontrado com estes parametros.</section>`;
+            return `
+                <div class="tableWrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                ${thOrdenavel("Codigo","estoque","codigo")}
+                                ${thOrdenavel("Descricao","estoque","descricao")}
+                                ${thOrdenavel("Saldo","estoque","saldo","num")}
+                                ${thOrdenavel("Min.","estoque","minimo","num")}
+                                ${thOrdenavel("Max.","estoque","maximo","num")}
+                                ${thOrdenavel("Reposicao","estoque","reposicao","num")}
+                                ${thOrdenavel("Status","estoque","status")}
+                                ${thOrdenavel("Pedido","estoque","pedido")}
+                                ${thOrdenavel("Origem","estoque","origem")}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${linhas.map(({item,pedido,status,reposicao,origem}) => `
+                                <tr>
+                                    <td class="codigo">${esc(item.protheus || item.cooperat || "-")}</td>
+                                    <td class="descricao">${esc(item.descricao || "-")}</td>
+                                    <td class="num">${fmt(item.saldo)}</td>
+                                    <td class="num">${fmt(item.minimo)}</td>
+                                    <td class="num">${fmt(item.maximo)}</td>
+                                    <td class="num">${fmt(reposicao)}</td>
+                                    <td><span class="status ${esc(status)}">${esc(statusRotulo(status))}</span></td>
+                                    <td class="pedido ${pedidoAtivo(pedido) ? "" : "semPedido"}">${esc(rotuloPedido(pedido))}</td>
+                                    <td class="origem">${esc(origem || "-")}</td>
+                                </tr>
+                            `).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
         function renderDashboard(banco, mapaMinimo = estoqueMinimoCache || new Map(), mata111 = mata111Cache || [], mata112 = mata112Cache || [], extras = {}){
+            resetLazyDashboard();
             bancoAtual = banco;
             extrasAtual = extras || {};
             const ajustes = banco?.ajustesItens || {};
@@ -4485,7 +4636,6 @@
                 return compararValores(a.reposicao || 0, b.reposicao || 0, cfg.direcao);
             });
             const totalFiltrado = linhas.length;
-            linhas = linhas.slice(0, Math.min(cfg.limite, linhas.length));
 
             const abaixo = linhas.filter(l => l.status === "abaixo").length;
             const acima = linhas.filter(l => l.status === "acima").length;
@@ -4517,7 +4667,7 @@
                     <span class="chip">semSolicitacao=${cfg.semSolicitacao ? "1" : "0"}</span>
                     <span class="chip">suposicao=${esc(cfg.suposicao)}</span>
                     <span class="chip">ordenar=${esc(cfg.ordenar)} ${esc(cfg.direcao)}</span>
-                    <span class="chip">limite=${cfg.limite}</span>
+                    <span class="chip">sem limite de dados</span>
                     ${cfg.armazens.length ? `<span class="chip">armazem=${esc(cfg.armazens.join(","))}</span>` : ""}
                     <span class="chip">sem solicitacao na lista: ${semPedido}</span>
                     <span class="chip">base carregada: ${dadosEscopo.length}${cfg.armazens.length ? ` de ${dados.length}` : ""}</span>
@@ -4530,46 +4680,12 @@
                     ${renderBarras("Pedidos que mais demoraram ou ainda estao em aberto", leadTimes, "dias")}
                     ${renderPizza(abaixo, acima, Math.max(0, linhas.length - abaixo - acima))}
                 </section>
-                ${renderRankingsOperacao({...rankings, leadTimes})}
-                <h2 class="sectionTitle">Itens em estoque</h2>
-                ${linhas.length ? `
-                    <div class="tableWrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    ${thOrdenavel("Codigo","estoque","codigo")}
-                                    ${thOrdenavel("Descricao","estoque","descricao")}
-                                    ${thOrdenavel("Saldo","estoque","saldo","num")}
-                                    ${thOrdenavel("Min.","estoque","minimo","num")}
-                                    ${thOrdenavel("Max.","estoque","maximo","num")}
-                                    ${thOrdenavel("Reposicao","estoque","reposicao","num")}
-                                    ${thOrdenavel("Status","estoque","status")}
-                                    ${thOrdenavel("Pedido","estoque","pedido")}
-                                    ${thOrdenavel("Origem","estoque","origem")}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${linhas.map(({item,pedido,status,reposicao,origem}) => `
-                                    <tr>
-                                        <td class="codigo">${esc(item.protheus || item.cooperat || "-")}</td>
-                                        <td class="descricao">${esc(item.descricao || "-")}</td>
-                                        <td class="num">${fmt(item.saldo)}</td>
-                                        <td class="num">${fmt(item.minimo)}</td>
-                                        <td class="num">${fmt(item.maximo)}</td>
-                                        <td class="num">${fmt(reposicao)}</td>
-                                        <td><span class="status ${esc(status)}">${esc(statusRotulo(status))}</span></td>
-                                        <td class="pedido ${pedidoAtivo(pedido) ? "" : "semPedido"}">${esc(rotuloPedido(pedido))}</td>
-                                        <td class="origem">${esc(origem || "-")}</td>
-                                    </tr>
-                                `).join("")}
-                            </tbody>
-                        </table>
-                    </div>
-                ` : `<section class="empty">Nenhum item encontrado com estes parametros.</section>`}
-                <h2 class="sectionTitle">Pedidos com maior tempo ate chegada ou ainda em aberto</h2>
-                ${renderLeadTimesTabela(leadTimes)}
+                ${renderLazyDashboardPanel("Rankings de operacao", () => renderRankingsOperacao({...rankings, leadTimes}), "rankings e usuarios")}
+                ${renderLazyDashboardPanel("Itens em estoque", () => renderTabelaEstoque(linhas), `${fmt(linhas.length)} itens`)}
+                ${renderLazyDashboardPanel("Pedidos com maior tempo ate chegada ou ainda em aberto", () => renderLeadTimesTabela(leadTimes), `${fmt(leadTimes.length)} registros`)}
             `;
             bindFiltros();
+            bindLazyDashboardPanels();
             aplicarModoEmbed();
         }
 

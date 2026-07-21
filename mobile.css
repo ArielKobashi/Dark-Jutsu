@@ -963,10 +963,11 @@
     }
 
     .ocorrenciaFormTitle {
-        margin: -10px -10px 4px;
+        margin: -14px -14px 4px;
     }
 
     .ocorrenciasConsulta {
+        min-height: 0;
         overflow: visible;
     }
 

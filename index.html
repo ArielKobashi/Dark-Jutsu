@@ -251,7 +251,7 @@ xmlns="http://www.w3.org/2000/svg">
             <div>
                 <span class="ocorrenciasKicker">Almoxarifado</span>
                 <h2>Ocorrencias do Almoxarifado</h2>
-                <p>Registro, acompanhamento e consulta de desvios operacionais.</p>
+                <p>Registre o desvio com clareza; a tratativa fica com o avaliador.</p>
             </div>
             <button type="button" class="ocorrenciasClose" onclick="fecharOcorrencias()" title="Fechar" aria-label="Fechar ocorrencias">&times;</button>
         </header>
@@ -261,7 +261,7 @@ xmlns="http://www.w3.org/2000/svg">
                 <div class="ocorrenciaFormTitle">
                     <div>
                         <strong>Nova ocorrencia</strong>
-                        <small>Registro formal com rastreio por operador, data e status.</small>
+                        <small>Preencha apenas o necessario para o avaliador entender e tratar depois.</small>
                     </div>
                     <span id="ocorrenciaOperadorResumo">Operador automatico</span>
                 </div>
@@ -328,19 +328,19 @@ xmlns="http://www.w3.org/2000/svg">
             <div class="ocorrenciasConsulta">
                 <div class="ocorrenciasConsultaHeader">
                     <div>
-                        <strong>Painel de acompanhamento</strong>
-                        <span id="ocorrenciasStorageAviso">Aguardando Firebase...</span>
+                        <strong>Acompanhamento do avaliador</strong>
+                        <span id="ocorrenciasStorageAviso">Verificando conexao...</span>
                     </div>
                 </div>
 
-                <div class="ocorrenciasStats">
+                <div class="ocorrenciasStats ocorrenciasInterno">
                     <div class="stat-abertas"><span>Abertas</span><strong id="ocorrenciasAbertas">0</strong></div>
                     <div class="stat-criticas"><span>Criticas</span><strong id="ocorrenciasCriticas">0</strong></div>
                     <div class="stat-filtradas"><span>Sem tratativa</span><strong id="ocorrenciasFiltradas">0</strong></div>
                     <div class="stat-total"><span>Total</span><strong id="ocorrenciasTotal">0</strong></div>
                 </div>
 
-                <div class="ocorrenciasFiltros">
+                <div class="ocorrenciasFiltros ocorrenciasInterno">
                     <input id="ocorrenciaFiltroBusca" type="search" placeholder="Buscar por pessoa, item, descricao ou operador" oninput="renderizarOcorrencias()">
                     <select id="ocorrenciaFiltroTipo" onchange="renderizarOcorrencias()"></select>
                     <select id="ocorrenciaFiltroGravidade" onchange="renderizarOcorrencias()"></select>
@@ -349,17 +349,17 @@ xmlns="http://www.w3.org/2000/svg">
                     <button type="button" onclick="limparFiltrosOcorrencia()">Limpar</button>
                 </div>
 
-                <div id="ocorrenciasLista" class="ocorrenciasLista">
+                <div id="ocorrenciasLista" class="ocorrenciasLista ocorrenciasInterno">
                     <p class="ocorrenciasEmpty">As ocorrencias registradas aparecem aqui.</p>
                 </div>
 
                 <div class="ocorrenciasResumoPainel">
-                    <strong>Acesso ao avaliador</strong>
+                    <strong>Area restrita</strong>
                     <label>
                         Senha do avaliador
                         <input id="ocorrenciaAvaliadorSenha" type="password" autocomplete="current-password" placeholder="Digite a senha" onkeydown="if(event.key==='Enter'){event.preventDefault();abrirAvaliadorOcorrencias();}">
                     </label>
-                    <span id="ocorrenciaAvaliadorSenhaStatus">Acesso restrito para tratativas.</span>
+                    <span id="ocorrenciaAvaliadorSenhaStatus">Somente o avaliador acompanha, filtra e registra tratativas.</span>
                     <button type="button" onclick="abrirAvaliadorOcorrencias()">Entrar no avaliador</button>
                 </div>
             </div>
