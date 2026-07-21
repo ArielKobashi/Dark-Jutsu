@@ -5,6 +5,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 ## Estrutura
 
 - `index.html` - aplicacao principal SQL-first, tabela de estoque, chat, painel admin, relatorios, contagem, editor de limites e gerador de etiquetas.
+- `abrir_darkjutsu_rede.bat` - atalho para PCs clientes da rede que nao hospedam servidor local.
 - `dashboard.html` - dashboard de estoque com filtros por parametros de URL.
 - `label-editor.html` - mini editor visual para simular e ajustar a formatacao das etiquetas.
 - `dark-jutsu-config.js` - configuracao unica dos enderecos da API principal/reserva usados pelo app.
