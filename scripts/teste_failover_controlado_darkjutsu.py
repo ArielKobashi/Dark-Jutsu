@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 from servidor_eleicao_darkjutsu import computer_name, load_config, read_lease, read_nodes
@@ -64,8 +65,13 @@ def health(ip, timeout=4):
 
 def snapshot_signature(payload):
     snapshot = (payload or {}).get("latest_inventory_snapshot") or {}
+    saved_at = str(snapshot.get("saved_at") or "")
+    try:
+        saved_at = datetime.fromisoformat(saved_at.replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
+    except (TypeError, ValueError):
+        pass
     return {
-        "saved_at": str(snapshot.get("saved_at") or ""),
+        "saved_at": saved_at,
         "updated_by": str(snapshot.get("updated_by") or ""),
     }
 
@@ -242,13 +248,11 @@ def node_backup_name(name, config):
 def run_candidate_test(me, target, followers, baseline_signature, expected_backup, hold_seconds, config):
     target_name = str(target.get("computer") or "").upper()
     target_ip = node_ip(target)
-    target_priority = int(target.get("priority") or 1000)
-    better_followers = [
+    blocked_followers = [
         node for node in followers
         if str(node.get("computer") or "").upper() != target_name
-        and int(node.get("priority") or 1000) < target_priority
     ]
-    blockers = [str(node.get("computer") or "").upper() for node in better_followers] + [me]
+    blockers = [str(node.get("computer") or "").upper() for node in blocked_followers] + [me]
     maintenance_seconds = max(180, hold_seconds + 240)
     log(f"ETAPA {target_name}: bloqueios temporarios={blockers} backup={expected_backup}.")
     for name in blockers:
@@ -266,7 +270,7 @@ def run_candidate_test(me, target, followers, baseline_signature, expected_backu
         if not local_stopped:
             log(f"FALHOU: API local nao pausou para testar {target_name}.")
             return False
-        for node in better_followers:
+        for node in blocked_followers:
             ip = node_ip(node)
             if ip and not wait_until(
                 f"{node.get('computer')} permaneceu em manutencao",
@@ -351,7 +355,7 @@ def main():
             f"Candidato previsto: {target_name} prioridade={target.get('priority')} ip={node_ip(target)} "
             f"backup={node_backup_name(target_name, config) or 'nenhum'} esperado={expected_backup or 'nenhum'}."
         )
-        if node_backup_name(target_name, config) != expected_backup:
+        if not execute and node_backup_name(target_name, config) != expected_backup:
             log(f"ABORTADO: {target_name} ainda nao confirmou o backup mais recente.")
             return 1
     if not execute:
@@ -360,13 +364,22 @@ def main():
 
     results = []
     for target in targets:
+        target_name = str(target.get("computer") or "").upper()
+        stage_backup = latest_backup_name()
+        if not wait_until(
+            f"{target_name} sincronizou o backup vigente {stage_backup}",
+            lambda name=target_name, expected=stage_backup: node_backup_name(name, config) == expected,
+            240,
+        ):
+            results.append(False)
+            break
         results.append(
             run_candidate_test(
                 me,
                 target,
                 followers,
                 baseline_signature,
-                expected_backup,
+                stage_backup,
                 hold_seconds,
                 config,
             )

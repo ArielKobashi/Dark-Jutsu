@@ -116,7 +116,7 @@ LOCK_HANDLE = None
 ERROR_ALREADY_EXISTS = 183
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-21.03"
+GUARDIAN_VERSION = "2026-07-21.05"
 MAINTENANCE_DIR = STATUS_DIR / "maintenance"
 STARTUP_VBS_SOURCE = SCRIPTS / "iniciar_cluster_usuario_darkjutsu.vbs"
 WATCHDOG_SOURCE = SCRIPTS / "watchdog_usuario_darkjutsu.ps1"
@@ -606,6 +606,24 @@ def mobile_api_running() -> bool:
     return health_port("127.0.0.1", MOBILE_API_PORT, timeout=2)
 
 
+def stop_legacy_mobile_launchers():
+    try:
+        ps = (
+            "Get-CimInstance Win32_Process -Filter \"Name = 'cmd.exe'\" | "
+            "Where-Object { $_.CommandLine -and $_.CommandLine -match 'iniciar_api_celular_8766_oculta\\.bat' } | "
+            "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+        )
+        subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=8,
+            creationflags=CREATE_NO_WINDOW,
+        )
+    except Exception:
+        pass
+
+
 def stop_mobile_api(reason: str):
     if port_process_running(MOBILE_API_PORT):
         stop_port_processes(MOBILE_API_PORT, reason)
@@ -618,6 +636,7 @@ def stop_mobile_services(reason: str):
 
 
 def start_mobile_api(reason: str) -> bool:
+    stop_legacy_mobile_launchers()
     if mobile_api_running():
         return True
     if port_process_running(MOBILE_API_PORT):
@@ -719,7 +738,6 @@ def ensure_mobile_tunnel(reason: str):
                     str(root),
                     "-Url",
                     MOBILE_TUNNEL_URL,
-                    "-KeepAlive",
                 ],
                 cwd=str(root),
                 stdout=fh,

@@ -82,6 +82,8 @@ do {
     }
     if (-not $tail) { $tail = "Cloudflared encerrou sem escrever detalhes no log." }
     Write-MobileState "offline" "" "Tunnel falhou antes de gerar link. $tail"
+  } elseif ($currentUrl -and -not $KeepAlive) {
+    return
   } elseif (-not $process.HasExited) {
     $process.WaitForExit()
   }

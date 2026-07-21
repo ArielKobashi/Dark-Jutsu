@@ -1,5 +1,9 @@
 @echo off
 setlocal EnableExtensions
+if /I not "%~1"=="--hidden" (
+  wscript.exe //B "%~dp0iniciar_api_celular_8766_oculta.vbs"
+  exit
+)
 set "ROOT=%~dp0.."
 set "DATABASE_URL=postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 set "DARK_JUTSU_API_HOST=127.0.0.1"
