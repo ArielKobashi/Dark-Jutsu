@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Dark-Jutsu">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 <link rel="stylesheet" href="mobile.css?v=11">
 <script src="dashboard-nav.js" defer></script>
 <!-- /SPLIT: head.html -->
@@ -14472,8 +14472,8 @@ async function carregarEstoqueInicial() {
     if (typeof iniciarProgresso === "function") iniciarProgresso(); 
     if (typeof window.sqlApi === "function") {
         try {
-            const data = await window.sqlApi("/api/dashboard/snapshot?limit=1000", { timeoutMs: 20000 });
-            const banco = normalizarSnapshotDashboardSql(data);
+            const data = await window.sqlApi("/api/inventory", { timeoutMs: 5000 });
+            const banco = data?.inventory || normalizarSnapshotDashboardSql(data);
             if (banco && (Array.isArray(banco.dados) || Array.isArray(banco.dadosMortos))) {
                 aplicarSnapshotEstoqueFirebase(banco, { forcarFiltros:true });
                 console.log("Dados de estoque carregados do SQL.");

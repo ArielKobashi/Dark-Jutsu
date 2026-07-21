@@ -23,7 +23,7 @@ body {
     display: flex;
     box-shadow: 0 0 20px #7A3CFF;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     
 }
 
@@ -2170,9 +2170,9 @@ body.contagem-focus-mode #chatWrap{
 
 .historicoContagemPanel{
     position:absolute;
-    top:0;
-    left:50%;
-    transform:translateX(-50%);
+    top:8px;
+    left:-126px;
+    transform:none;
     width:min(420px, calc(100% - 18px));
     margin:0;
     flex-shrink:0;
@@ -2183,7 +2183,7 @@ body.contagem-focus-mode #chatWrap{
     box-shadow:0 0 8px rgba(34,211,238,0.05);
     backdrop-filter:blur(6px);
     -webkit-backdrop-filter:blur(6px);
-    z-index:12;
+    z-index:30;
     transition:transform 0.18s ease, width 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -2192,16 +2192,16 @@ body:not(.app-ready) .historicoContagemPanel{
 }
 
 .historicoContagemPanel:not(.aberto){
-    width:min(118px, calc(100% - 18px));
+    width:112px;
     background:rgba(17,24,39,0.08);
     border-color:rgba(103,232,249,0.06);
     box-shadow:0 0 6px rgba(34,211,238,0.03);
-    transform:translate(-50%, -90%);
+    transform:none;
 }
 
 .historicoContagemPanel:not(.aberto):hover,
 .historicoContagemPanel:not(.aberto):focus-within{
-    transform:translate(-50%, 0);
+    transform:none;
 }
 
 #historicoContagemToggle{
@@ -2383,7 +2383,7 @@ body:not(.app-ready) .historicoContagemPanel{
 }
 
 .historicoContagemPanel.aberto{
-    width:min(620px, calc(100% - 18px));
+    width:min(520px, calc(100vw - 20px));
     background:rgba(11,17,32,0.96);
     border-color:rgba(103,232,249,0.22);
     box-shadow:0 12px 34px rgba(0,0,0,0.32), 0 0 18px rgba(34,211,238,0.08);
@@ -2396,17 +2396,17 @@ body:not(.app-ready) .historicoContagemPanel{
 .mobileAccessPanel{
     position:absolute;
     top:44px;
-    right:0;
+    left:-126px;
     width:min(300px, calc(100% - 18px));
     margin:0;
     border:1px solid rgba(147,197,253,0.16);
-    border-radius:7px 0 0 7px;
+    border-radius:0 7px 7px 0;
     background:rgba(17,24,39,0.18);
     overflow:hidden;
     box-shadow:0 0 8px rgba(59,130,246,0.05);
     backdrop-filter:blur(6px);
     -webkit-backdrop-filter:blur(6px);
-    z-index:13;
+    z-index:31;
     transition:transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -2415,16 +2415,16 @@ body:not(.app-ready) .mobileAccessPanel{
 }
 
 .mobileAccessPanel:not(.aberto){
-    width:92px;
+    width:112px;
     background:rgba(17,24,39,0.08);
     border-color:rgba(147,197,253,0.08);
     box-shadow:0 0 6px rgba(59,130,246,0.03);
-    transform:translateX(calc(100% - 92px));
+    transform:none;
 }
 
 .mobileAccessPanel:not(.aberto):hover,
 .mobileAccessPanel:not(.aberto):focus-within{
-    transform:translateX(0);
+    transform:none;
 }
 
 #mobileAccessToggle{
@@ -2475,7 +2475,7 @@ body:not(.app-ready) .mobileAccessPanel{
     background:rgba(11,17,32,0.96);
     border-color:rgba(147,197,253,0.28);
     box-shadow:0 12px 34px rgba(0,0,0,0.32), 0 0 18px rgba(59,130,246,0.08);
-    transform:translateX(0);
+    transform:none;
 }
 
 .mobileAccessPanel.aberto #mobileAccessConteudo{

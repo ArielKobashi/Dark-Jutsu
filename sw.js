@@ -1,4 +1,4 @@
-const CACHE_NAME = "dark-jutsu-app-v5";
+const CACHE_NAME = "dark-jutsu-app-v6";
 const APP_SHELL = [
   "./style.css",
   "./mobile.css",
