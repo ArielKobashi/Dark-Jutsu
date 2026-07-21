@@ -116,7 +116,7 @@ LOCK_HANDLE = None
 ERROR_ALREADY_EXISTS = 183
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-21.02"
+GUARDIAN_VERSION = "2026-07-21.03"
 MAINTENANCE_DIR = STATUS_DIR / "maintenance"
 STARTUP_VBS_SOURCE = SCRIPTS / "iniciar_cluster_usuario_darkjutsu.vbs"
 WATCHDOG_SOURCE = SCRIPTS / "watchdog_usuario_darkjutsu.ps1"
@@ -1010,7 +1010,21 @@ def restore_schema_from_backup(*, backup=None, force=False, reason="schema local
             log(f"ERRO: createdb UTF8 antes do restore falhou codigo={create.returncode} erro={create.stderr[-700:]}")
             return False
         restore = subprocess.run(
-            [str(PG_RESTORE), "--exit-on-error", "-h", "127.0.0.1", "-p", "5433", "-U", "postgres", "-d", "dark_jutsu", "--no-owner", str(backup)],
+            [
+                str(PG_RESTORE),
+                "--exit-on-error",
+                "--no-owner",
+                "--no-privileges",
+                "-h",
+                "127.0.0.1",
+                "-p",
+                "5433",
+                "-U",
+                "postgres",
+                "-d",
+                "dark_jutsu",
+                str(backup),
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
@@ -1023,8 +1037,9 @@ def restore_schema_from_backup(*, backup=None, force=False, reason="schema local
             log(f"ERRO: restore do backup falhou codigo={restore.returncode} erro={restore.stderr[-700:]}")
             return False
         grants = [
-            "grant usage on schema public to dark_jutsu; grant select, insert, update, delete on all tables in schema public to dark_jutsu; grant usage, select, update on all sequences in schema public to dark_jutsu; grant execute on all functions in schema public to dark_jutsu;",
-            "do $$ begin if exists (select 1 from pg_roles where rolname='dark_jutsu_service') then grant dark_jutsu_service to dark_jutsu; alter role dark_jutsu inherit; end if; end $$;",
+            "do $$ begin if not exists (select 1 from pg_roles where rolname='dark_jutsu_readonly') then create role dark_jutsu_readonly nologin; end if; if not exists (select 1 from pg_roles where rolname='dark_jutsu_app') then create role dark_jutsu_app nologin; end if; if not exists (select 1 from pg_roles where rolname='dark_jutsu_service') then create role dark_jutsu_service nologin; end if; end $$;",
+            "grant usage on schema public to dark_jutsu, dark_jutsu_readonly, dark_jutsu_app, dark_jutsu_service; grant select on all tables in schema public to dark_jutsu_readonly; grant select, insert, update, delete on all tables in schema public to dark_jutsu, dark_jutsu_app, dark_jutsu_service; grant usage, select, update on all sequences in schema public to dark_jutsu, dark_jutsu_app, dark_jutsu_service; grant execute on all functions in schema public to dark_jutsu, dark_jutsu_app, dark_jutsu_service;",
+            "grant dark_jutsu_service to dark_jutsu; alter role dark_jutsu inherit;",
         ]
         for sql in grants:
             proc = subprocess.run(

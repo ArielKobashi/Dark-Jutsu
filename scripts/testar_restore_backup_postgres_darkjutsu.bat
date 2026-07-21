@@ -51,7 +51,7 @@ if errorlevel 1 exit /b 1
 "%PG_BIN%\createdb.exe" -h "%PGHOST%" -p "%PGPORT%" -U postgres -O "%DB_OWNER%" -E UTF8 -T template0 "%TEST_DB%" >> "%LOGFILE%" 2>&1
 if errorlevel 1 exit /b 1
 
-"%PG_BIN%\pg_restore.exe" --exit-on-error -h "%PGHOST%" -p "%PGPORT%" -U postgres -d "%TEST_DB%" --no-owner "%LATEST_BACKUP%" >> "%LOGFILE%" 2>&1
+"%PG_BIN%\pg_restore.exe" --exit-on-error --no-owner --no-privileges -h "%PGHOST%" -p "%PGPORT%" -U postgres -d "%TEST_DB%" "%LATEST_BACKUP%" >> "%LOGFILE%" 2>&1
 if errorlevel 1 (
   echo ERRO: restore de teste falhou. Veja %LOGFILE%.
   exit /b 1

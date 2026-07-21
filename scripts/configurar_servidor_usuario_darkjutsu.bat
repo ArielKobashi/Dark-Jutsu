@@ -100,7 +100,7 @@ for /f "usebackq delims=" %%B in (`powershell -NoProfile -ExecutionPolicy Bypass
 )
 if defined LATEST_BACKUP (
   echo Restaurando backup: !LATEST_BACKUP!
-  "%PG_BIN%\pg_restore.exe" --exit-on-error -h 127.0.0.1 -p 5433 -U postgres -d dark_jutsu --clean --if-exists --no-owner "!LATEST_BACKUP!"
+  "%PG_BIN%\pg_restore.exe" --exit-on-error --no-owner --no-privileges -h 127.0.0.1 -p 5433 -U postgres -d dark_jutsu --clean --if-exists "!LATEST_BACKUP!"
   if errorlevel 1 exit /b 1
 ) else echo AVISO: nenhum backup valido encontrado.
 del "%CANDIDATE_LIST%" 2>nul
