@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Dark-Jutsu">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 <link rel="stylesheet" href="mobile.css?v=11">
 <script src="dashboard-nav.js" defer></script>
 <!-- /SPLIT: head.html -->
@@ -108,7 +108,7 @@
     <input type="text" id="searchInput" name="buscaEstoqueDarkJutsu" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" placeholder="Pesquisar cooperat / protheus / descrição" oninput="if(['/dashboard','dashboard','dash'].includes(this.value.toLowerCase().trim())){this.value='';location.href='dashboard.html?armazem=04';}">
 
     <div id="contagemHomePopup" aria-live="polite">
-        <button type="button" id="contagemHomeTrigger" aria-label="Mostrar progresso da contagem"></button>
+        <button type="button" id="contagemHomeTrigger" aria-label="Mostrar progresso da contagem" onclick="toggleContagemHomePopup()"></button>
         <div>
             <span>Contagem geral</span>
             <strong id="contagemHomePct">0%</strong>
@@ -12298,6 +12298,12 @@ function toggleMobileAccessPanel(){
 
 window.atualizarMobileAccess = atualizarMobileAccess;
 window.toggleMobileAccessPanel = toggleMobileAccessPanel;
+function toggleContagemHomePopup(){
+    const panel = document.getElementById("contagemHomePopup");
+    if(!panel) return;
+    panel.classList.toggle("aberto");
+}
+window.toggleContagemHomePopup = toggleContagemHomePopup;
 setTimeout(() => atualizarMobileAccess(false), 800);
 setInterval(() => atualizarMobileAccess(false), 30000);
 
