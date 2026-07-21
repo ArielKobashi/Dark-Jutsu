@@ -963,7 +963,7 @@
     }
 
     .ocorrenciaFormTitle {
-        margin: -14px -14px 4px;
+        margin: -10px -10px 4px;
     }
 
     .ocorrenciasConsulta {
@@ -999,8 +999,20 @@
         align-items: stretch;
     }
 
+    .ocorrenciasResumoPainel strong,
+    .ocorrenciasResumoPainel label,
+    .ocorrenciasResumoPainel span,
+    .ocorrenciasResumoPainel button {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
     .ocorrenciasResumoPainel button {
         width: 100%;
+    }
+
+    .ocorrenciasAvaliadorStats {
+        padding: 0;
     }
 
     .ocorrenciasLista {

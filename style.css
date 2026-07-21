@@ -1693,6 +1693,7 @@ display:none;
 }
 
 .ocorrenciasShell{
+    font-family:"Segoe UI", Arial, sans-serif;
     background:
         radial-gradient(circle at 18% 0%, rgba(34,211,238,0.10), transparent 34%),
         linear-gradient(180deg,#07111A 0%,#08101A 48%,#050A12 100%);
@@ -1723,6 +1724,7 @@ display:none;
 }
 
 .ocorrenciaForm{
+    counter-reset:ocorrencia-etapa;
     grid-template-columns:repeat(6, minmax(0, 1fr));
     gap:7px 9px;
     border-radius:8px;
@@ -1748,6 +1750,22 @@ display:none;
     align-items:center;
     gap:8px;
     color:#7DD3FC;
+}
+
+.ocorrenciaSectionTitle::before{
+    counter-increment:ocorrencia-etapa;
+    content:counter(ocorrencia-etapa, decimal-leading-zero);
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:22px;
+    height:22px;
+    flex:0 0 22px;
+    border:1px solid rgba(125,211,252,0.28);
+    border-radius:6px;
+    background:rgba(8,47,73,0.42);
+    color:#BAE6FD;
+    font-size:9px;
 }
 
 .ocorrenciaSectionTitle::after{
@@ -1793,14 +1811,18 @@ display:none;
     font-size:19px;
 }
 
-.ocorrenciasFiltros{
-    grid-template-columns:repeat(2, minmax(0, 1fr));
+.ocorrenciasConsulta > .ocorrenciasFiltros{
+    grid-template-columns:repeat(3, minmax(0, 1fr));
     margin:0 10px;
     padding:7px;
 }
 
-.ocorrenciasFiltros input:first-child{
+.ocorrenciasConsulta > .ocorrenciasFiltros input:first-child{
     grid-column:1 / -1;
+}
+
+.ocorrenciasConsulta > .ocorrenciasFiltros input[type="date"]{
+    grid-column:span 2;
 }
 
 .ocorrenciasFiltros button{
@@ -1828,6 +1850,39 @@ display:none;
 
 .ocorrenciasResumoPainel::before{
     display:none;
+}
+
+.ocorrenciasResumoPainel strong{
+    grid-column:1;
+    grid-row:1;
+}
+
+.ocorrenciasResumoPainel label{
+    grid-column:2;
+    grid-row:1;
+}
+
+.ocorrenciasResumoPainel button{
+    grid-column:3;
+    grid-row:1;
+}
+
+.ocorrenciasResumoPainel span{
+    grid-column:1 / -1;
+    grid-row:2;
+}
+
+.ocorrenciasAvaliadorStats{
+    padding:0;
+}
+
+.ocorrenciasAvaliadorFiltros{
+    margin:0;
+}
+
+.ocorrenciasAvaliadorLista{
+    padding:2px 4px 2px 2px;
+    scrollbar-width:thin;
 }
 
 .ocorrenciaCard{
@@ -1880,13 +1935,17 @@ display:none;
         min-height:360px;
     }
 
-    .ocorrenciasFiltros{
+    .ocorrenciasConsulta > .ocorrenciasFiltros{
         grid-template-columns:1fr 1fr;
     }
 
-    .ocorrenciasFiltros input:first-child,
-    .ocorrenciasFiltros button{
+    .ocorrenciasConsulta > .ocorrenciasFiltros input:first-child,
+    .ocorrenciasConsulta > .ocorrenciasFiltros button{
         grid-column:1 / -1;
+    }
+
+    .ocorrenciasConsulta > .ocorrenciasFiltros input[type="date"]{
+        grid-column:auto;
     }
 }
 
