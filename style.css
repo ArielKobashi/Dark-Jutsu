@@ -2006,8 +2006,8 @@ display:none;
 
 #contagemHomePopup{
     position:fixed;
-    top:47px;
-    left:12px;
+    top:max(12px, calc(50vh - 300px + 52px));
+    left:max(12px, calc(50vw - 400px - 28px));
     z-index:120;
     width:18px;
     height:18px;
@@ -2043,7 +2043,7 @@ display:none;
 
 #contagemHomePopup > div{
     position:absolute;
-    left:0;
+    right:0;
     top:22px;
     width:128px;
     padding:6px 7px;
@@ -2053,7 +2053,7 @@ display:none;
     box-shadow:0 0 14px rgba(34,211,238,0.22);
     opacity:0;
     transform:translateY(-4px) scale(0.96);
-    transform-origin:top left;
+    transform-origin:top right;
     pointer-events:none;
     transition:opacity 0.16s ease, transform 0.16s ease;
     min-width:0;
@@ -2394,8 +2394,8 @@ body:not(.app-ready) .historicoContagemPanel{
 
 .mobileAccessPanel{
     position:fixed;
-    top:12px;
-    left:12px;
+    top:max(12px, calc(50vh - 300px + 12px));
+    left:max(12px, calc(50vw - 400px - 122px));
     width:min(300px, calc(100% - 18px));
     margin:0;
     border:1px solid rgba(147,197,253,0.16);
@@ -2471,6 +2471,8 @@ body:not(.app-ready) .mobileAccessPanel{
 }
 
 .mobileAccessPanel.aberto{
+    left:max(12px, calc(50vw - 400px - 308px));
+    width:min(300px, calc(100vw - 24px));
     background:rgba(11,17,32,0.96);
     border-color:rgba(147,197,253,0.28);
     box-shadow:0 12px 34px rgba(0,0,0,0.32), 0 0 18px rgba(59,130,246,0.08);
