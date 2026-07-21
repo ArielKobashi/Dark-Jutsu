@@ -636,12 +636,12 @@ document.addEventListener("keydown", function(e){
 <div id="contagemRelatorioModal" style="display:none;">
     <div id="contagemRelatorioBox">
         <div id="contagemRelatorioHeader">
-            <span>Relatorio de Divergencia</span>
+            <span>Relatorio de Contagem</span>
             <button onclick="fecharRelatorioContagem()" title="Fechar">x</button>
         </div>
         <div id="contagemRelatorioFiltros">
             <label>
-                <input type="checkbox" id="contagemFiltroSoDivergentes" checked>
+                <input type="checkbox" id="contagemFiltroSoDivergentes">
                 So divergentes
             </label>
             <label>
@@ -8945,7 +8945,7 @@ async function abrirRelatorioContagem(){
     const header = document.querySelector("#contagemRelatorioHeader span");
     const filtros = document.getElementById("contagemRelatorioFiltros");
     const rodape = document.getElementById("contagemRelatorioRodape");
-    if(header) header.textContent = "Relatorio de Divergencia";
+    if(header) header.textContent = "Relatorio de Contagem";
     if(filtros) filtros.style.display = "";
     if(rodape) rodape.style.display = "";
     document.getElementById("contagemRelatorioModal").style.display = "flex";
@@ -8998,7 +8998,6 @@ function linhasFiltradasRelatorioContagem(){
     const dataFiltro = document.getElementById("contagemFiltroData").value;
     const usuarioFiltro = document.getElementById("contagemFiltroUsuario").value;
     return ordenarLinhasRelatorioContagem(coletarLinhasRelatorioContagem().filter(l => {
-        if(!linhaEhDaMaquinaContagemAtual(l)) return false;
         if(soDivergentes && !l.diverge && !l.verificacao) return false;
         if(dataFiltro && l.data !== dataFiltro) return false;
         if(usuarioFiltro && l.usuario !== usuarioFiltro) return false;
@@ -9009,7 +9008,12 @@ function linhasFiltradasRelatorioContagem(){
 function renderizarRelatorioContagem(){
     const linhas = linhasFiltradasRelatorioContagem();
     if(!linhas.length){
-        document.getElementById("contagemRelatorioTabela").innerHTML = "<p class='contagemEmpty'>Nenhum registro encontrado.</p>";
+        const totalSemFiltros = coletarLinhasRelatorioContagem().length;
+        const soDivergentes = document.getElementById("contagemFiltroSoDivergentes")?.checked;
+        const mensagem = totalSemFiltros && soDivergentes
+            ? "Nenhuma divergencia encontrada. Desmarque \"So divergentes\" para ver os itens contados."
+            : "Nenhum registro encontrado.";
+        document.getElementById("contagemRelatorioTabela").innerHTML = `<p class='contagemEmpty'>${escapeHtml(mensagem)}</p>`;
         return;
     }
     const html = `
@@ -9033,7 +9037,7 @@ function exportarLinhasRelatorioContagemXlsx(linhasOrigem, dataArquivo = "", opc
         mostrarNotificacao("Biblioteca XLSX nao encontrada.");
         return false;
     }
-    const filtrarMaquina = opcoes.filtrarMaquina !== false;
+    const filtrarMaquina = opcoes.filtrarMaquina === true;
     const linhas = ordenarLinhasRelatorioContagem((linhasOrigem || []).filter(l => !filtrarMaquina || linhaEhDaMaquinaContagemAtual(l))).map(l => {
         const enderecoInfo = parsearEnderecoContagem(l.item.endereco || "");
         return {
