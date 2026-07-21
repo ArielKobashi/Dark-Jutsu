@@ -9837,19 +9837,21 @@ function abrirModalSaldos(item){
         const enderecosOriginais = Array.isArray(itemSeguro.enderecos) ? itemSeguro.enderecos : [];
         const listaEnderecos = [];
         const chavesEnderecos = new Set();
+        const normalizarOrigemEnderecoPerfil = origem => String(origem || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase();
         const adicionarEndereco = (info, origemPadrao) => {
             const obj = (info && typeof info === "object") ? info : {};
             const endereco = (obj.endereco ?? "").toString().trim();
             if(!isEnderecoValido(endereco)) return;
             const saldoEndereco = parsePlanilhaNumero(obj.saldo);
             const origemOriginal = (obj.origem ?? origemPadrao ?? "Item").toString().trim() || "Item";
-            const origemNorm = origemOriginal
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .toLowerCase();
+            const origemNorm = normalizarOrigemEnderecoPerfil(origemOriginal);
             const historicoEndereco = (saldoEndereco !== null && saldoEndereco <= 0)
                 || origemNorm.includes("historico")
-                || origemNorm.includes("dados mortos");
+                || origemNorm.includes("dados mortos")
+                || origemNorm.includes("cooperat");
             const chave = normalizarEndereco(endereco) + "|" + normalizarEndereco(obj.armazem || "");
             if(!chavesEnderecos.has(chave)){
                 chavesEnderecos.add(chave);
@@ -9857,7 +9859,7 @@ function abrirModalSaldos(item){
                     endereco,
                     armazem: (obj.armazem ?? "").toString().trim() || "ND",
                     saldo: obj.saldo,
-                    origem: historicoEndereco ? "Historico" : origemOriginal,
+                    origem: origemNorm.includes("cooperat") ? "Cooperat antigo" : (historicoEndereco ? "Historico" : origemOriginal),
                     historico: historicoEndereco
                 });
             }
@@ -9870,13 +9872,33 @@ function abrirModalSaldos(item){
             saldo: itemSeguro.saldo,
             origem: "Principal"
         }, "Principal");
+        const enderecosProtheusComSaldo = listaEnderecos.filter(info => {
+            const origemNorm = normalizarOrigemEnderecoPerfil(info.origem);
+            const saldoEndereco = parsePlanilhaNumero(info.saldo);
+            return !origemNorm.includes("historico")
+                && !origemNorm.includes("cooperat")
+                && !origemNorm.includes("dados mortos")
+                && saldoEndereco !== null
+                && saldoEndereco > 0;
+        });
+        const enderecoFallbackCooperat = listaEnderecos.find(info => normalizarOrigemEnderecoPerfil(info.origem).includes("cooperat"))
+            || listaEnderecos.find(info => info.historico);
+        const enderecoExibidoPerfil = enderecosProtheusComSaldo[0]?.endereco
+            || enderecoFallbackCooperat?.endereco
+            || itemSeguro.enderecoPrincipal
+            || "Sem endereco";
+        const ajudaEnderecoPerfil = enderecosProtheusComSaldo.length
+            ? "Endereco vindo do saldo por endereco Protheus."
+            : enderecoFallbackCooperat
+                ? "Sem endereco Protheus com saldo; exibindo endereco antigo Cooperat/historico."
+                : "Nenhum endereco novo ou antigo localizado.";
 
         const cards = [
             { titulo: "Protheus", valor: itemSeguro.protheus || "-", ajuda: "Código principal do item", classe: "cardCodigo" },
             { titulo: "Cooperat", valor: itemSeguro.cooperat || "-", ajuda: "Código usado para cruzar com a planilha de estoque mínimo", classe: "cardCodigo" },
             { titulo: "Descrição", valor: itemSeguro.descricao || "-", ajuda: "Descrição do item selecionado", classe: "cardDescricao" },
             { titulo: "Armazém principal", valor: itemSeguro.armazemPrincipal || "-", ajuda: "Primeiro armazém encontrado para o item", classe: "cardArmazem" },
-            { titulo: "Endereço principal", valor: itemSeguro.enderecoPrincipal || "Sem endereço", ajuda: "Endereço mostrado na tabela principal", classe: "cardEndereco" },
+            { titulo: "Endereço principal", valor: enderecoExibidoPerfil, ajuda: ajudaEnderecoPerfil, classe: "cardEndereco" },
             { titulo: "Saldo atual", valor: formatarNumeroPlanilha(itemSeguro.saldo), ajuda: "Saldo consolidado", classe: "cardSaldo" },
             { titulo: "Mínimo ativo", valor: valorLimite(minimoValor, "Sem mínimo"), ajuda: textoOrigem(origemMinimo), classe: `cardMinimo origem-${origemMinimo || "indefinida"}` },
             { titulo: "Máximo ativo", valor: valorLimite(maximoValor, "Sem máximo"), ajuda: textoOrigem(origemMaximo), classe: `cardMaximo origem-${origemMaximo || "indefinida"}` },
@@ -10932,7 +10954,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             if(enderecoMorto){
                 item.enderecoPrincipal = enderecoMorto;
                 item.armazemPrincipal = "ND";
-                adicionarEnderecoHistoricoItem(enderecoMorto, "ND", "Dados mortos");
+                adicionarEnderecoHistoricoItem(enderecoMorto, "ND", "Cooperat antigo");
             }
         }
 
@@ -10946,7 +10968,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
             if(anterior && isEnderecoValido(anterior.enderecoPrincipal)){
                 item.enderecoPrincipal = anterior.enderecoPrincipal;
                 item.armazemPrincipal = anterior.armazemPrincipal || "ND";
-                adicionarEnderecoHistoricoItem(anterior.enderecoPrincipal, anterior.armazemPrincipal || "ND", "Historico");
+                adicionarEnderecoHistoricoItem(anterior.enderecoPrincipal, anterior.armazemPrincipal || "ND", "Cooperat antigo");
             }
         }
 

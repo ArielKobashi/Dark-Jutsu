@@ -2720,12 +2720,41 @@
         }
         function tituloEnderecosItem(item){
             const enderecos = Array.isArray(item?.enderecos) ? item.enderecos : [];
-            if(!enderecos.length) return item?.enderecoPrincipal || "sem endereço";
+            if(!enderecos.length) return item?.enderecoPrincipal || "sem endereco";
             return enderecos
-                .map(end => `${end?.endereco || "sem endereço"}: ${fmt(end?.saldo)}${end?.armazem ? ` (${end.armazem})` : ""}`)
+                .map(end => `${end?.endereco || "sem endereco"}: ${fmt(end?.saldo)}${end?.armazem ? ` (${end.armazem})` : ""}${end?.origem ? ` - ${end.origem}` : ""}`)
                 .join("\n");
         }
-        function janelaEntradasKanban(){
+        function origemEnderecoDashboard(endereco){
+            return normalizarTexto(endereco?.origem || "");
+        }
+        function enderecoProtheusComSaldoDashboard(item){
+            return (Array.isArray(item?.enderecos) ? item.enderecos : []).find(end => {
+                const origem = origemEnderecoDashboard(end);
+                const saldo = num(end?.saldo);
+                return enderecoValidoItem(end?.endereco)
+                    && saldo !== null
+                    && saldo > 0
+                    && !origem.includes("historico")
+                    && !origem.includes("cooperat")
+                    && !origem.includes("dados mortos");
+            }) || null;
+        }
+        function enderecoFallbackCooperatDashboard(item){
+            const enderecos = Array.isArray(item?.enderecos) ? item.enderecos : [];
+            return enderecos.find(end => enderecoValidoItem(end?.endereco) && origemEnderecoDashboard(end).includes("cooperat"))
+                || enderecos.find(end => {
+                    const origem = origemEnderecoDashboard(end);
+                    return enderecoValidoItem(end?.endereco) && (origem.includes("historico") || origem.includes("dados mortos"));
+                })
+                || null;
+        }
+        function enderecoVisivelDashboard(item){
+            return enderecoProtheusComSaldoDashboard(item)?.endereco
+                || enderecoFallbackCooperatDashboard(item)?.endereco
+                || item?.enderecoPrincipal
+                || "-";
+        }        function janelaEntradasKanban(){
             if(cfg.kanbanEntradasDias === "todos") return Infinity;
             return Number(cfg.kanbanEntradasDias || 7) || 7;
         }
@@ -3006,7 +3035,7 @@
                         <span class="avaliadorTag">Saldo ${esc(fmt(item.saldo))}</span>
                         <span class="avaliadorTag" title="${esc(origemLimiteTitulo(item.minimoOrigem || item.limitesOrigem))}">Min. ${esc(fmt(item.minimo))}</span>
                         <span class="avaliadorTag" title="${esc(origemLimiteTitulo(item.reposicaoOrigem || item.limitesOrigem))}">Reposicao ${esc(fmt(reposicao))}</span>
-                        <span class="avaliadorTag" title="${esc(tituloEnderecosItem(item))}">Endereco ${esc(item.enderecoPrincipal || "-")}</span>
+                        <span class="avaliadorTag" title="${esc(tituloEnderecosItem(item))}">Endereco ${esc(enderecoVisivelDashboard(item))}</span>
                         <span class="avaliadorTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
                     </div>
                     <div class="avaliadorStats">
@@ -3339,7 +3368,7 @@
                         <span class="avaliadorTag">Pedido: ${esc(rotuloPedido(pedido))}</span>
                         <span class="avaliadorTag">Protheus ${esc(fmt(stats.totalPedidos || 0))}</span>
                         <span class="avaliadorTag">Antigas ${esc(fmt(statsCooperat.totalEventos || 0))}</span>
-                        <span class="avaliadorTag" title="${esc(tituloEnderecosItem(item))}">Endereco ${esc(item.enderecoPrincipal || "-")}</span>
+                        <span class="avaliadorTag" title="${esc(tituloEnderecosItem(item))}">Endereco ${esc(enderecoVisivelDashboard(item))}</span>
                     </div>
                     <div class="triageActions avaliadorActions">
                         ${renderBotaoCriterioGerenciador(item)}
@@ -3441,7 +3470,7 @@
                                 <span><strong>Solicitou:</strong> ${esc(nomeSolicitante || "-")}</span>
                                 <span><strong>Aprovou:</strong> ${esc(nomeAprovador || "-")}</span>
                                 <span><strong>Pediu:</strong> ${esc(nomeComprador || "-")}</span>
-                                <span><strong>Endereço:</strong> ${esc(item.enderecoPrincipal || "-")}</span>
+                                <span><strong>Endereço:</strong> ${esc(enderecoVisivelDashboard(item))}</span>
                                 <span><strong>Gestão:</strong> ${semAvaliador ? "Sem avaliador" : "Com avaliador"}</span>
                                 <span><strong>Reposição:</strong> ${esc(fmt(reposicao(item)))}</span>
                                 <span><strong>Prazo médio:</strong> ${stats.mediaDias === null ? "-" : `${esc(fmt(stats.mediaDias))} dias`}</span>

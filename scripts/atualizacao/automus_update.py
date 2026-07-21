@@ -751,11 +751,23 @@ def _build_items(
             if endereco_morto:
                 item["enderecoPrincipal"] = endereco_morto
                 item["armazemPrincipal"] = "ND"
+                item["enderecos"].append({
+                    "endereco": endereco_morto,
+                    "armazem": "ND",
+                    "saldo": 0.0,
+                    "origem": "Cooperat antigo",
+                })
 
         if not tem_endereco_com_saldo and not _is_endereco_valido(item["enderecoPrincipal"]):
             anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key) or prev_by_descricao.get(_ascii_lower(descricao))
             if anterior and _is_endereco_valido(anterior.get("enderecoPrincipal")):
                 item["enderecoPrincipal"] = _safe_text(anterior.get("enderecoPrincipal"))
+                item["enderecos"].append({
+                    "endereco": _safe_text(anterior.get("enderecoPrincipal")),
+                    "armazem": _safe_text(anterior.get("armazemPrincipal")) or "ND",
+                    "saldo": 0.0,
+                    "origem": "Cooperat antigo",
+                })
 
         anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key) or prev_by_descricao.get(_ascii_lower(descricao))
         if anterior and isinstance(anterior.get("enderecos"), list):
