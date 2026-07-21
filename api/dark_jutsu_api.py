@@ -1155,19 +1155,35 @@ class Handler(BaseHTTPRequestHandler):
         }
 
     def _mobile_link(self) -> dict[str, Any]:
+        def lan_fallback(message: str = "Tunnel publico indisponivel; use este QR na mesma rede Wi-Fi.") -> dict[str, Any]:
+            addresses = _local_ipv4_addresses()
+            lan_port = 8765 if API_PORT != 8765 else API_PORT
+            if addresses:
+                return {
+                    "ok": True,
+                    "status": "lan",
+                    "url": f"http://{addresses[0]}:{lan_port}",
+                    "message": message,
+                    "updatedAt": "",
+                }
+            return {"ok": False, "status": "offline", "url": "", "message": message}
+
         path = ROOT / "data" / "mobile_tunnel_url.json"
         if not path.is_file():
-            return {"ok": False, "status": "offline", "url": "", "message": "Tunnel de celular ainda nao iniciado."}
+            return lan_fallback("Tunnel de celular ainda nao iniciado; QR local para mesma rede Wi-Fi.")
         try:
             payload = json.loads(path.read_text(encoding="utf-8-sig"))
         except Exception as exc:
             return {"ok": False, "status": "error", "url": "", "message": str(exc)}
         if not isinstance(payload, dict):
             return {"ok": False, "status": "error", "url": "", "message": "Arquivo de tunnel invalido."}
+        url = _clean_text(payload.get("url")) or ""
+        if not url:
+            return lan_fallback(_clean_text(payload.get("message")) or "Tunnel publico indisponivel; QR local para mesma rede Wi-Fi.")
         return {
             "ok": bool(payload.get("ok")),
             "status": _clean_text(payload.get("status")) or "unknown",
-            "url": _clean_text(payload.get("url")) or "",
+            "url": url,
             "message": _clean_text(payload.get("message")) or "",
             "updatedAt": _clean_text(payload.get("updatedAt")) or "",
         }

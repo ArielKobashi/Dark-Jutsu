@@ -15,6 +15,7 @@ if ($Root -match '^(.*)"\s+-KeepAlive$') {
 }
 $stateDir = Join-Path $Root "data"
 $stateFile = Join-Path $stateDir "mobile_tunnel_url.json"
+$logFile = Join-Path $stateDir "mobile_tunnel_cloudflared.log"
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 
 function Write-MobileState([string]$status, [string]$publicUrl = "", [string]$message = "") {
@@ -30,46 +31,56 @@ function Write-MobileState([string]$status, [string]$publicUrl = "", [string]$me
 
 do {
   Write-MobileState "starting" "" "Iniciando tunnel para celular."
+  Set-Content -LiteralPath $logFile -Value "" -Encoding UTF8
 
-  $psi = [System.Diagnostics.ProcessStartInfo]::new()
-  $psi.FileName = $Cloudflared
-  $psi.Arguments = "tunnel --url `"$Url`""
-  $psi.WorkingDirectory = $Root
-  $psi.UseShellExecute = $false
-  $psi.RedirectStandardOutput = $true
-  $psi.RedirectStandardError = $true
-  $psi.CreateNoWindow = $true
-
-  $process = [System.Diagnostics.Process]::new()
-  $process.StartInfo = $psi
-  $script:currentUrl = ""
-
-  $handler = {
-    param($sender, $eventArgs)
-    if (-not $eventArgs.Data) { return }
-    Write-Host $eventArgs.Data
-    $match = [regex]::Match($eventArgs.Data, "https://[a-z0-9-]+\.trycloudflare\.com")
-    if ($match.Success) {
-      $script:currentUrl = $match.Value
-      Write-MobileState "online" $script:currentUrl "Tunnel ativo."
-      Write-Host ""
-      Write-Host "QR/Link atualizado no Dark-Jutsu: $script:currentUrl"
-      Write-Host ""
-    }
+  Get-Process -Name cloudflared -ErrorAction SilentlyContinue | ForEach-Object {
+    try { Stop-Process -Id $_.Id -Force -ErrorAction Stop } catch {}
   }
 
-  Register-ObjectEvent -InputObject $process -EventName OutputDataReceived -Action $handler | Out-Null
-  Register-ObjectEvent -InputObject $process -EventName ErrorDataReceived -Action $handler | Out-Null
+  $process = Start-Process -FilePath $Cloudflared -ArgumentList @(
+    "tunnel",
+    "--no-autoupdate",
+    "--logfile", $logFile,
+    "--loglevel", "info",
+    "--url", $Url
+  ) -WorkingDirectory $Root -WindowStyle Hidden -PassThru
+  $currentUrl = ""
+  $deadline = (Get-Date).AddSeconds(45)
+  while (-not $process.HasExited) {
+    if (Test-Path -LiteralPath $logFile) {
+      $text = Get-Content -LiteralPath $logFile -Raw -ErrorAction SilentlyContinue
+      $match = [regex]::Match($text, "https://[a-z0-9-]+\.trycloudflare\.com")
+      if ($match.Success) {
+        $currentUrl = $match.Value
+        Write-MobileState "online" $currentUrl "Tunnel ativo."
+        Write-Host ""
+        Write-Host "QR/Link atualizado no Dark-Jutsu: $currentUrl"
+        Write-Host ""
+        break
+      }
+    }
+    if ((Get-Date) -gt $deadline) {
+      Write-MobileState "starting" "" "Tunnel ainda iniciando; confira $logFile."
+      $deadline = (Get-Date).AddSeconds(45)
+    }
+    Start-Sleep -Seconds 1
+  }
 
-  [void]$process.Start()
-  $process.BeginOutputReadLine()
-  $process.BeginErrorReadLine()
-  $process.WaitForExit()
+  if ($process.HasExited -and -not $currentUrl) {
+    $tail = ""
+    if (Test-Path -LiteralPath $logFile) {
+      $tail = ((Get-Content -LiteralPath $logFile -Tail 12 -ErrorAction SilentlyContinue) -join " ")
+    }
+    if (-not $tail) { $tail = "Cloudflared encerrou sem escrever detalhes no log." }
+    Write-MobileState "offline" "" "Tunnel falhou antes de gerar link. $tail"
+  } elseif (-not $process.HasExited) {
+    $process.WaitForExit()
+  }
 
-  if ($script:currentUrl) {
-    Write-MobileState "offline" $script:currentUrl "Tunnel encerrado."
-  } else {
-    Write-MobileState "offline" "" "Tunnel encerrado antes de gerar link."
+  if ($currentUrl) {
+    Write-MobileState "offline" $currentUrl "Tunnel encerrado."
+  } elseif (-not $process.HasExited) {
+    Write-MobileState "offline" "" "Tunnel encerrado antes de gerar link. Confira data\mobile_tunnel_cloudflared.log."
   }
 
   if ($KeepAlive) {

@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Dark-Jutsu">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 <link rel="stylesheet" href="mobile.css?v=11">
 <script src="dashboard-nav.js" defer></script>
 <!-- /SPLIT: head.html -->
@@ -35,12 +35,6 @@
         <button type="submit">Entrar</button>
         <button type="button" onclick="abrirCadastro()">Cadastrar</button>
         <button type="button" id="installAppBtn" class="installAppBtn" onclick="instalarDarkJutsuApp()">Instalar app web</button>
-        <div id="mobileAccessLogin" class="mobileAccessBox" style="display:none;">
-            <strong>Usar no celular</strong>
-            <img id="mobileAccessQrLogin" alt="QR Code do link do celular">
-            <a id="mobileAccessLinkLogin" target="_blank" rel="noopener">Abrir link atual</a>
-            <small id="mobileAccessStatusLogin"></small>
-        </div>
     </form>
 </div>
 <!-- /SPLIT: auth.html -->
@@ -249,19 +243,6 @@ xmlns="http://www.w3.org/2000/svg">
     </button>
     <a id="btnDashboard" class="btnMainLink" href="dashboard.html?armazem=04" title="Abrir dashboard de estoque">Dashboard</a>
     <a id="btnMedidores" class="btnMainLink" href="medidores.html" title="Abrir medidores operacionais">Medidores</a>
-    <button id="btnCelular" type="button" onclick="toggleMobileAccessPanel()">Celular</button>
-</div>
-
-<div id="mobileAccessPanel" class="mobileAccessPanel" style="display:none;">
-    <div>
-        <strong>Acesso pelo celular</strong>
-        <small id="mobileAccessStatus">Verificando link atual...</small>
-    </div>
-    <img id="mobileAccessQr" alt="QR Code do link do celular">
-    <div class="mobileAccessActions">
-        <a id="mobileAccessLink" target="_blank" rel="noopener">Abrir link</a>
-        <button type="button" onclick="atualizarMobileAccess(true)">Atualizar</button>
-    </div>
 </div>
 
 <section id="ocorrenciasScreen" aria-hidden="true">
@@ -493,6 +474,26 @@ xmlns="http://www.w3.org/2000/svg">
         </div>
         <div id="historicoContagemLista">
             <p>Abra para carregar as contagens salvas.</p>
+        </div>
+    </div>
+</section>
+
+<section id="mobileAccessPanel" class="mobileAccessPanel" aria-label="Acesso pelo celular">
+    <button type="button" id="mobileAccessToggle" onclick="toggleMobileAccessPanel()" aria-expanded="false">
+        <span>Celular</span>
+        <strong id="mobileAccessResumo">QR</strong>
+    </button>
+    <div id="mobileAccessConteudo">
+        <div class="mobileAccessHeader">
+            <div>
+                <strong>Acesso pelo celular</strong>
+                <span id="mobileAccessStatus">Verificando link atual...</span>
+            </div>
+            <button type="button" onclick="atualizarMobileAccess(true)">Atualizar</button>
+        </div>
+        <div class="mobileAccessQrWrap">
+            <img id="mobileAccessQr" alt="QR Code do link do celular">
+            <a id="mobileAccessLink" target="_blank" rel="noopener">Abrir link</a>
         </div>
     </div>
 </section>
@@ -12012,6 +12013,10 @@ if(SQL_API_IS_PUBLIC_ORIGIN && sqlApiPreferredBase && sqlApiPreferredBase !== lo
     sqlApiPreferredBase = "";
     try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
 }
+if(!SQL_API_IS_PUBLIC_ORIGIN && location.protocol.startsWith("http") && location.origin && sqlApiPreferredBase && sqlApiPreferredBase !== location.origin){
+    sqlApiPreferredBase = "";
+    try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
+}
 if(!SQL_API_HOST_IS_LOCAL && /^http:\/\/(127\.0\.0\.1|localhost):8765/i.test(sqlApiPreferredBase)){
     sqlApiPreferredBase = "";
     try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
@@ -12067,7 +12072,7 @@ window.sqlApi = async function(path, options = {}){
     ].filter((base, index, list) => base && list.indexOf(base) === index);
     for(const base of bases){
         const controller = typeof AbortController !== "undefined" && !options.signal ? new AbortController() : null;
-        const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 12000)) : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 3500)) : null;
         try{
             const { timeoutMs, ...fetchOptions } = options;
             const response = await fetch(`${base}${path}`, { ...fetchOptions, headers, signal: options.signal || controller?.signal });
@@ -12196,7 +12201,7 @@ async function testarServidorSqlAtivo(){
     const bases = [sqlApiPreferredBase, ...SQL_API_FALLBACK_BASES].filter((base, index, list) => base && list.indexOf(base) === index);
     for(const base of bases){
         const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-        const timeout = controller ? setTimeout(() => controller.abort(), 4500) : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), 1800) : null;
         try{
             const response = await fetch(`${base}/health?ts=${Date.now()}`, {
                 cache: "no-store",
@@ -12258,8 +12263,8 @@ function preencherMobileAccess(prefix, data){
     const status = document.getElementById(prefix ? `mobileAccessStatus${prefix}` : "mobileAccessStatus");
     const url = data?.url || "";
     if(!box || !qr || !link || !status) return;
+    box.style.display = "";
     if(url){
-        box.style.display = "";
         qr.style.display = "";
         qr.src = qrCodeUrlDarkJutsu(url);
         link.href = url;
@@ -12275,17 +12280,20 @@ function preencherMobileAccess(prefix, data){
 
 async function atualizarMobileAccess(forceOpen = false){
     const data = await obterMobileAccessLink();
-    preencherMobileAccess("Login", data);
     preencherMobileAccess("", data);
     const panel = document.getElementById("mobileAccessPanel");
-    if(forceOpen && panel) panel.style.display = "";
+    const toggle = document.getElementById("mobileAccessToggle");
+    if(forceOpen && panel) panel.classList.add("aberto");
+    if(toggle) toggle.setAttribute("aria-expanded", panel?.classList.contains("aberto") ? "true" : "false");
 }
 
 function toggleMobileAccessPanel(){
     const panel = document.getElementById("mobileAccessPanel");
     if(!panel) return;
-    panel.style.display = panel.style.display === "none" ? "" : "none";
-    if(panel.style.display !== "none") atualizarMobileAccess(false);
+    panel.classList.toggle("aberto");
+    const toggle = document.getElementById("mobileAccessToggle");
+    if(toggle) toggle.setAttribute("aria-expanded", panel.classList.contains("aberto") ? "true" : "false");
+    if(panel.classList.contains("aberto")) atualizarMobileAccess(false);
 }
 
 window.atualizarMobileAccess = atualizarMobileAccess;

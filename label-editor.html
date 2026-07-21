@@ -998,7 +998,13 @@
             (location.protocol === "https:" ? "" : window.DARK_JUTSU_API_BASE_URL) ||
             DEFAULT_SQL_API_BASE
         ).replace(/\/+$/, "");
+        let sqlApiPreferredBase = localStorage.getItem("darkJutsuApiPreferredBase") || "";
+        if(location.protocol.startsWith("http") && location.origin && sqlApiPreferredBase && sqlApiPreferredBase !== location.origin){
+            sqlApiPreferredBase = "";
+            try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
+        }
         const SQL_API_FALLBACK_BASES = [
+            sqlApiPreferredBase,
             SQL_API_BASE,
             "http://127.0.0.1:8765",
             "http://localhost:8765",
@@ -1024,8 +1030,11 @@
             if(authHeader) headers.Authorization = authHeader;
             let lastError = null;
             for(const base of SQL_API_FALLBACK_BASES){
+                const controller = typeof AbortController !== "undefined" && !options.signal ? new AbortController() : null;
+                const timeout = controller ? setTimeout(() => controller.abort(), Number(options.timeoutMs || 3500)) : null;
                 try{
-                    const response = await fetch(`${base}${path}`, { ...options, headers });
+                    const { timeoutMs, ...fetchOptions } = options;
+                    const response = await fetch(`${base}${path}`, { ...fetchOptions, headers, signal: options.signal || controller?.signal });
                     const data = await response.json().catch(() => ({}));
                     if(!response.ok || data?.ok === false){
                         throw new Error(data?.error || `Falha HTTP ${response.status}`);
@@ -1033,6 +1042,8 @@
                     return data;
                 } catch(error){
                     lastError = error;
+                } finally {
+                    if(timeout) clearTimeout(timeout);
                 }
             }
             throw lastError || new Error("API SQL indisponivel.");

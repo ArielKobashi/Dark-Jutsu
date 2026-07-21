@@ -159,15 +159,7 @@ class ServerControlApp(tk.Tk):
         return ["cmd", "/c", str(script)]
 
     def active_app_url(self) -> str:
-        for ip in (PRIMARY_IP, RESERVE_IP, "127.0.0.1"):
-            try:
-                with urlopen(f"http://{ip}:{API_PORT}/health", timeout=3) as response:
-                    data = json.loads(response.read().decode("utf-8", errors="ignore"))
-                    if data.get("ok") is True:
-                        return f"http://{ip}:{API_PORT}/app/index.html"
-            except Exception:
-                continue
-        return f"http://{PRIMARY_IP}:{API_PORT}/app/index.html"
+        return f"http://127.0.0.1:{API_PORT}/app/index.html"
 
     def _run_action_worker(self, action: str) -> None:
         try:

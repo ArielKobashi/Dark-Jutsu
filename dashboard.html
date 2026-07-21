@@ -1483,6 +1483,10 @@
             sqlApiPreferredBase = "";
             try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
         }
+        if(!SQL_API_IS_PUBLIC_ORIGIN && location.protocol.startsWith("http") && location.origin && sqlApiPreferredBase && sqlApiPreferredBase !== location.origin){
+            sqlApiPreferredBase = "";
+            try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
+        }
         const SQL_API_BASE = (
             params.get("apiBase") ||
             sqlApiPreferredBase ||
@@ -1543,7 +1547,7 @@
                 .filter((base, index, lista) => base && lista.indexOf(base) === index);
             for(const base of bases){
                 try{
-                    const response = await fetchDashboardComTimeout(`${base}${path}`, { ...options, headers }, 7000);
+                    const response = await fetchDashboardComTimeout(`${base}${path}`, { ...options, headers }, 3500);
                     const data = await response.json().catch(() => ({}));
                     if(!response.ok || data?.ok === false){
                         throw new Error(data?.error || `Falha HTTP ${response.status}`);

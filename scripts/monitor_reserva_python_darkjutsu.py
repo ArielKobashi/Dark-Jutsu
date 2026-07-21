@@ -405,6 +405,8 @@ def health(ip):
 
 
 def active_app_url():
+    if health("127.0.0.1"):
+        return f"http://127.0.0.1:{PORT}/app/index.html"
     try:
         config = load_config()
         lease = read_lease()
