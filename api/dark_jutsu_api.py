@@ -46,6 +46,20 @@ LOGIN_RATE_LIMIT_MAX = int(_env("DARK_JUTSU_LOGIN_RATE_LIMIT_MAX", "8"))
 LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(_env("DARK_JUTSU_LOGIN_RATE_LIMIT_WINDOW_SECONDS", "600"))
 SYSTEM_UPDATE_LOG = Path(_env("DARK_JUTSU_SYSTEM_UPDATE_LOG", r"C:\DarkJutsu\logs\atualizacao_github.log"))
 SYSTEM_UPDATE_VERSION_FILE = Path(_env("DARK_JUTSU_SYSTEM_VERSION_FILE", r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\versao_github_atual.txt"))
+APP_WEB_ROOT = Path(_env("DARK_JUTSU_APP_WEB_ROOT", r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\app"))
+APP_PUBLIC_FILES = {
+    "index.html",
+    "dashboard.html",
+    "label-editor.html",
+    "medidores.html",
+    "style.css",
+    "mobile.css",
+    "dashboard-nav.js",
+    "sw.js",
+    "site.webmanifest",
+    "logo.png",
+    "logo-tab.png",
+}
 SYSTEM_UPDATE_LOCK = threading.Lock()
 SYSTEM_UPDATE_RUNNING = False
 SYSTEM_UPDATE_LAST: dict[str, Any] = {}
@@ -411,6 +425,30 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
+    def _send_app_file(self, parts: list[str]) -> None:
+        filename = "index.html"
+        if parts and parts != ["app"]:
+            filename = parts[-1] or "index.html"
+        if filename in {"", ".", ".."}:
+            filename = "index.html"
+        if "/" in filename or "\\" in filename or filename not in APP_PUBLIC_FILES:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Arquivo do app nao encontrado.")
+        roots = [
+            APP_WEB_ROOT,
+            ROOT,
+            ROOT.parent / "app",
+        ]
+        for root in roots:
+            path = (root / filename).resolve()
+            try:
+                base = root.resolve()
+            except Exception:
+                base = root
+            if path.is_file() and (path == base / filename or base in path.parents):
+                self._send_file(path)
+                return
+        raise ApiError(HTTPStatus.NOT_FOUND, "Arquivo do app nao encontrado.")
+
     def do_OPTIONS(self) -> None:
         if not self._request_origin_allowed():
             self._send_json({"ok": False, "error": "Origem nao autorizada."}, HTTPStatus.FORBIDDEN)
@@ -422,10 +460,14 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self._request_origin_allowed():
                 raise ApiError(HTTPStatus.FORBIDDEN, "Origem nao autorizada.")
-            self.auth_context = self._authenticate()
             parsed = urlparse(self.path)
             query = parse_qs(parsed.query)
             parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
+            if not parts or parts[:1] == ["app"]:
+                self._send_app_file(parts)
+                self._request_log_context(started, HTTPStatus.OK)
+                return
+            self.auth_context = self._authenticate()
             if len(parts) == 4 and parts[:2] == ["api", "files"]:
                 self._send_project_file(parts[2], parts[3])
                 self._request_log_context(started, HTTPStatus.OK)
