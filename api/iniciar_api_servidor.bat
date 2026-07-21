@@ -30,7 +30,7 @@ if "%DARK_JUTSU_API_HOST%"=="" set "DARK_JUTSU_API_HOST=0.0.0.0"
 if "%DARK_JUTSU_API_PORT%"=="" set "DARK_JUTSU_API_PORT=8765"
 
 cd /d "%ROOT%"
-curl -fsS --max-time 2 "http://127.0.0.1:%DARK_JUTSU_API_PORT%/health" >nul 2>&1
+curl.exe -fsS --max-time 2 "http://127.0.0.1:%DARK_JUTSU_API_PORT%/health" >nul 2>&1
 if %errorlevel%==0 (
   echo API SQL ja esta respondendo em http://127.0.0.1:%DARK_JUTSU_API_PORT%
   exit /b 0

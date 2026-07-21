@@ -21,6 +21,7 @@ if (-not $createdNew) {
 
 $PrimaryIp = "192.168.5.44"
 $ReserveIp = "192.168.5.38"
+$LocalTunnelIp = "127.0.0.1"
 $Port = 8765
 $ShareRoot = "\\fileserver\Almoxarifado\0800\servidor\dark-jutsu"
 $TestScript = Join-Path $ShareRoot "scripts\testar_servidor_darkjutsu.bat"
@@ -48,7 +49,7 @@ function Write-MonitorLog([string]$message) {
 
 function Get-LocalServerIp {
   $ips = Get-NetIPAddress -AddressFamily IPv4 |
-    Where-Object { $_.IPAddress -in @($PrimaryIp, $ReserveIp) } |
+    Where-Object { $_.IPAddress -in @($PrimaryIp, $ReserveIp, "192.168.5.41") } |
     Select-Object -ExpandProperty IPAddress -First 1
   return $ips
 }
@@ -63,7 +64,7 @@ function Test-Health($ip) {
 }
 
 function Get-DarkJutsuAppUrl {
-  foreach ($ip in @($PrimaryIp, $ReserveIp, "127.0.0.1")) {
+  foreach ($ip in @($PrimaryIp, $ReserveIp, $LocalTunnelIp)) {
     if (Test-Health $ip) {
       return "http://${ip}:${Port}/app/index.html"
     }
@@ -309,15 +310,28 @@ function Update-Status {
   $localIp = Get-LocalServerIp
   $primaryOk = Test-Health $PrimaryIp
   $reserveOk = Test-Health $ReserveIp
+  $localTunnelOk = Test-Health $LocalTunnelIp
 
   if (-not $localIp) {
-    $assumeItem.Text = "Este PC nao e servidor"
-    $assumeItem.Enabled = $false
+    if ($localTunnelOk) {
+      $assumeItem.Text = "Servidor local via tunel"
+      $assumeItem.Enabled = $false
+    } else {
+      $assumeItem.Text = "Este PC nao e servidor"
+      $assumeItem.Enabled = $false
+    }
   } else {
     $assumeItem.Enabled = $true
   }
 
-  if ($primaryOk -or $reserveOk) {
+  if ($localTunnelOk -and -not ($primaryOk -or $reserveOk)) {
+    $script:ServerOfflineSince = $null
+    $script:thisPcIsActiveServer = $true
+    $notify.Icon = $iconGreen
+    $text = "Dark-Jutsu: servidor local ativo para celular/tunel ($LocalTunnelIp)"
+    $assumeItem.Text = "Servidor local via tunel"
+    $assumeItem.Enabled = $false
+  } elseif ($primaryOk -or $reserveOk) {
     $script:ServerOfflineSince = $null
     $activeIp = if ($primaryOk) { $PrimaryIp } else { $ReserveIp }
     $activeName = if ($primaryOk) { "principal" } else { "reserva" }

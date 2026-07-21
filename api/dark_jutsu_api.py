@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import gzip
 import hmac
 import hashlib
@@ -57,6 +58,7 @@ APP_PUBLIC_FILES = {
     "style.css",
     "mobile.css",
     "dashboard-nav.js",
+    "critical-stock-manager.js",
     "sw.js",
     "site.webmanifest",
     "logo.png",
@@ -190,6 +192,140 @@ def _inventory_legacy_key(item: dict[str, Any], dead: bool = False) -> str:
         return key
     fallback = _clean_text(item.get("descricao")) or "unknown"
     return ("MORTO|" if dead else "ITEM|") + fallback
+
+
+def _encode_legacy_key(value: str) -> str:
+    return base64.urlsafe_b64encode(value.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _inventory_aliases(item: dict[str, Any]) -> set[str]:
+    aliases = {
+        _clean_text(item.get("protheusKey")),
+        _clean_text(item.get("protheus")),
+        _clean_text(item.get("cooperat")),
+    }
+    return {alias for alias in aliases if alias}
+
+
+def _strip_legacy_automatic_policy(item: dict[str, Any]) -> None:
+    item.pop("sugestaoEstoque", None)
+    item.pop("sugestaoEstoqueLegada", None)
+    origins = {
+        str(item.get("limitesOrigem") or "").strip().lower(),
+        str(item.get("minimoOrigem") or "").strip().lower(),
+        str(item.get("maximoOrigem") or "").strip().lower(),
+        str(item.get("reposicaoOrigem") or "").strip().lower(),
+    }
+    if "manual" in origins or "cooperat" in origins:
+        return
+    if origins.intersection({"automatico", "calculada", "gerenciador_critico"}):
+        for field in ("minimo", "maximo", "reposicao", "minimoOrigem", "maximoOrigem", "reposicaoOrigem", "limitesOrigem"):
+            item.pop(field, None)
+
+
+def _merge_automus_payload(incoming: dict[str, Any], previous: dict[str, Any], imported_at: datetime) -> dict[str, Any]:
+    merged = copy.deepcopy(incoming)
+
+    previous_adjustments = previous.get("ajustesItens") if isinstance(previous.get("ajustesItens"), dict) else {}
+    incoming_adjustments = merged.get("ajustesItens") if isinstance(merged.get("ajustesItens"), dict) else {}
+    adjustments = {**previous_adjustments, **incoming_adjustments}
+    merged["ajustesItens"] = adjustments
+
+    previous_history = previous.get("historicoSaldo") if isinstance(previous.get("historicoSaldo"), dict) else {}
+    incoming_history = merged.get("historicoSaldo") if isinstance(merged.get("historicoSaldo"), dict) else {}
+    history: dict[str, list[dict[str, Any]]] = {}
+    for source in (previous_history, incoming_history):
+        for raw_key, raw_events in source.items():
+            if not isinstance(raw_events, list):
+                continue
+            item_key = _decode_legacy_key(str(raw_key))
+            encoded_key = _encode_legacy_key(item_key)
+            events = history.setdefault(encoded_key, [])
+            known = {
+                (event.get("timestamp"), event.get("delta"), event.get("saldoAnterior"), event.get("saldoAtual"))
+                for event in events
+                if isinstance(event, dict)
+            }
+            for raw_event in raw_events:
+                if not isinstance(raw_event, dict):
+                    continue
+                signature = (
+                    raw_event.get("timestamp"),
+                    raw_event.get("delta"),
+                    raw_event.get("saldoAnterior"),
+                    raw_event.get("saldoAtual"),
+                )
+                if signature not in known:
+                    events.append(copy.deepcopy(raw_event))
+                    known.add(signature)
+
+    previous_items = previous.get("dados") if isinstance(previous.get("dados"), list) else []
+    previous_by_alias: dict[str, dict[str, Any]] = {}
+    for item in previous_items:
+        if not isinstance(item, dict):
+            continue
+        for alias in _inventory_aliases(item):
+            previous_by_alias.setdefault(alias, item)
+
+    current_items = merged.get("dados") if isinstance(merged.get("dados"), list) else []
+    current_by_alias: dict[str, dict[str, Any]] = {}
+    for item in current_items:
+        if not isinstance(item, dict):
+            continue
+        _strip_legacy_automatic_policy(item)
+        aliases = _inventory_aliases(item)
+        for alias in aliases:
+            current_by_alias.setdefault(alias, item)
+        previous_item = next((previous_by_alias[alias] for alias in aliases if alias in previous_by_alias), None)
+        if not previous_item:
+            continue
+        previous_balance = _decimal_value(previous_item.get("saldo"))
+        current_balance = _decimal_value(item.get("saldo"))
+        if previous_balance is None or current_balance is None or previous_balance == current_balance:
+            continue
+        item_key = _inventory_legacy_key(item)
+        encoded_key = _encode_legacy_key(item_key)
+        delta = current_balance - previous_balance
+        event = {
+            "data": imported_at.strftime("%d/%m/%Y %H:%M"),
+            "timestamp": int(imported_at.timestamp() * 1000),
+            "delta": float(delta),
+            "tipo": "entrada" if delta > 0 else "saida",
+            "saldoAnterior": float(previous_balance),
+            "saldoAtual": float(current_balance),
+        }
+        events = history.setdefault(encoded_key, [])
+        signature = (event["timestamp"], event["delta"], event["saldoAnterior"], event["saldoAtual"])
+        if not any(
+            isinstance(existing, dict)
+            and (existing.get("timestamp"), existing.get("delta"), existing.get("saldoAnterior"), existing.get("saldoAtual")) == signature
+            for existing in events
+        ):
+            events.append(event)
+
+    merged["historicoSaldo"] = {key: events[-300:] for key, events in history.items()}
+
+    for legacy_key, adjustment in adjustments.items():
+        if not isinstance(adjustment, dict):
+            continue
+        item_key = _clean_text(adjustment.get("itemKey")) or _decode_legacy_key(str(legacy_key))
+        item = current_by_alias.get(item_key or "")
+        if not item:
+            continue
+        changed = False
+        for field, origin_field in (("minimo", "minimoOrigem"), ("maximo", "maximoOrigem"), ("reposicao", "reposicaoOrigem")):
+            if field in adjustment and adjustment.get(field) is not None:
+                item[field] = adjustment[field]
+                item[origin_field] = "manual"
+                changed = True
+        if changed:
+            item["limitesOrigem"] = "manual"
+
+    if not isinstance(merged.get("movimentacoesMata185"), dict) or not merged.get("movimentacoesMata185"):
+        previous_movements = previous.get("movimentacoesMata185")
+        if isinstance(previous_movements, dict):
+            merged["movimentacoesMata185"] = copy.deepcopy(previous_movements)
+    return merged
 
 
 def _json_hash(payload: Any) -> str:
@@ -513,8 +649,16 @@ class Handler(BaseHTTPRequestHandler):
             parsed = urlparse(self.path)
             query = parse_qs(parsed.query)
             parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
-            if not parts or parts[:1] == ["app"]:
+            if not parts or parts[:1] == ["app"] or (len(parts) == 1 and parts[0] in APP_PUBLIC_FILES):
                 self._send_app_file(parts)
+                self._request_log_context(started, HTTPStatus.OK)
+                return
+            if len(parts) == 2 and parts[0] in {"downloads", "data"}:
+                self._send_project_file(parts[0], parts[1])
+                self._request_log_context(started, HTTPStatus.OK)
+                return
+            if parts == ["api", "mobile-link"]:
+                self._send_json(self._mobile_link())
                 self._request_log_context(started, HTTPStatus.OK)
                 return
             self.auth_context = self._authenticate()
@@ -673,6 +817,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._system_update_status()
         if parts == ["api", "inventory"]:
             return self._inventory(query)
+        if parts == ["api", "inventory", "automus-state"]:
+            self._require_admin()
+            return {"ok": True, "inventory": self._inventory_legacy_snapshot()}
         if len(parts) == 3 and parts[:2] == ["api", "inventory"]:
             return self._inventory_item(parts[2])
         if parts == ["api", "users"]:
@@ -1007,6 +1154,24 @@ class Handler(BaseHTTPRequestHandler):
             "user": user,
         }
 
+    def _mobile_link(self) -> dict[str, Any]:
+        path = ROOT / "data" / "mobile_tunnel_url.json"
+        if not path.is_file():
+            return {"ok": False, "status": "offline", "url": "", "message": "Tunnel de celular ainda nao iniciado."}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except Exception as exc:
+            return {"ok": False, "status": "error", "url": "", "message": str(exc)}
+        if not isinstance(payload, dict):
+            return {"ok": False, "status": "error", "url": "", "message": "Arquivo de tunnel invalido."}
+        return {
+            "ok": bool(payload.get("ok")),
+            "status": _clean_text(payload.get("status")) or "unknown",
+            "url": _clean_text(payload.get("url")) or "",
+            "message": _clean_text(payload.get("message")) or "",
+            "updatedAt": _clean_text(payload.get("updatedAt")) or "",
+        }
+
     def _make_auth_response(self, row: dict[str, Any]) -> dict[str, Any]:
         now = int(time.time())
         user = _public_user(row)
@@ -1304,11 +1469,14 @@ class Handler(BaseHTTPRequestHandler):
         return {"ok": True, "adjustment": row}
 
     def _post_inventory_automus_update(self, payload: dict[str, Any]) -> dict[str, Any]:
+        incoming_payload = payload
+        previous_payload = self._inventory_legacy_snapshot()
+        imported_at = _timestamp(incoming_payload.get("ultimaAtualizacao")) or datetime.now(timezone.utc)
+        payload = _merge_automus_payload(incoming_payload, previous_payload, imported_at)
         dados = payload.get("dados") if isinstance(payload.get("dados"), list) else []
         dados_mortos = payload.get("dadosMortos") if isinstance(payload.get("dadosMortos"), list) else []
         if not dados:
             raise ApiError(HTTPStatus.BAD_REQUEST, "`dados` nao pode estar vazio.")
-        imported_at = _timestamp(payload.get("ultimaAtualizacao")) or datetime.now(timezone.utc)
         hash_after = _json_hash(payload)
         updated_by = _clean_text(payload.get("atualizadoPor") or payload.get("updated_by"))
         auth = getattr(self, "auth_context", AuthContext(role="service", service=True))

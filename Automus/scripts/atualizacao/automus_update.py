@@ -193,6 +193,36 @@ def _post_inventory_to_sql_api(payload: dict[str, Any], id_token: str, log: logg
     raise RuntimeError(f"Nenhuma API SQL aceitou a carga Automus. Ultimo erro: {last_error}")
 
 
+def _load_inventory_from_sql_api(id_token: str, log: logging.Logger) -> dict[str, Any]:
+    service_token = os.environ.get("DARK_JUTSU_API_TOKEN", "").strip()
+    bearer = service_token or id_token
+    if not bearer:
+        raise RuntimeError("Token ausente para carregar o estado atual do estoque.")
+    last_error: Exception | None = None
+    for base_url in _api_base_candidates():
+        try:
+            result = _http_json(
+                f"{base_url}/api/inventory/automus-state",
+                timeout=120.0,
+                headers_extra={"Authorization": f"Bearer {bearer}"},
+            )
+            inventory = result.get("inventory") if isinstance(result, dict) else None
+            if not isinstance(inventory, dict):
+                raise RuntimeError(f"Resposta sem inventario valido: {result}")
+            log.info(
+                "AUTOMUS_SQL_STATE_OK | base=%s | ativos=%s | mortos=%s | historicos=%s",
+                base_url,
+                len(inventory.get("dados") or []),
+                len(inventory.get("dadosMortos") or []),
+                len(inventory.get("historicoSaldo") or {}),
+            )
+            return inventory
+        except Exception as exc:
+            last_error = exc
+            log.warning("AUTOMUS_SQL_STATE_FALHOU | base=%s | motivo=%s", base_url, exc)
+    raise RuntimeError(f"Atualizacao cancelada para preservar o estado SQL. Ultimo erro: {last_error}")
+
+
 def _automus_sql_only_enabled() -> bool:
     return True
 
@@ -436,128 +466,23 @@ def _reposicao_media(minimo: Any, maximo: Any) -> float | None:
     return max_num - min_num
 
 
-def _ceil_positive(value: Any) -> int | None:
-    num = _optional_num(value)
-    if num is None or num <= 0:
-        return None
-    return max(1, int(math.ceil(num)))
-
-
-def _historico_consumo_stats(item: dict[str, Any], historico: dict[str, Any]) -> dict[str, float]:
-    hist = historico.get(_ajuste_key(_item_key(item)))
-    saidas: list[float] = []
-    if isinstance(hist, list):
-        for ent in hist[-12:]:
-            if not isinstance(ent, dict):
-                continue
-            delta = _optional_num(ent.get("delta"))
-            if delta is not None and delta < 0:
-                saidas.append(abs(delta))
-    if not saidas:
-        return {"media": 0.0, "pico": 0.0, "desvio": 0.0, "eventos": 0.0}
-    media = sum(saidas) / len(saidas)
-    variancia = sum((v - media) ** 2 for v in saidas) / len(saidas)
-    return {
-        "media": media,
-        "pico": max(saidas),
-        "desvio": math.sqrt(variancia),
-        "eventos": float(len(saidas)),
-    }
-
-
-def _sugerir_limites_estoque(
-    item: dict[str, Any],
-    historico: dict[str, Any],
-    pedidos_compra: dict[str, Any],
-) -> dict[str, Any] | None:
-    consumo = _historico_consumo_stats(item, historico)
-    saldo_atual = _optional_num(item.get("saldo")) or 0.0
-    limites_cooperat = item.get("limitesCooperat") if isinstance(item.get("limitesCooperat"), dict) else {}
-    saldo_anterior = _optional_num(limites_cooperat.get("saldoAnterior") if isinstance(limites_cooperat, dict) else None)
-    consumo_entre_planilhas = max(0.0, (saldo_anterior or 0.0) - saldo_atual) if saldo_anterior is not None else 0.0
-
-    codigo = _ascii_lower(item.get("protheus") or item.get("protheusKey") or item.get("cooperat"))
-    pedido = pedidos_compra.get(_ajuste_key(codigo)) if codigo else None
-    if not isinstance(pedido, dict) and codigo:
-        pedido = pedidos_compra.get(codigo)
-    media_pedido = _optional_num(pedido.get("mediaPedido")) if isinstance(pedido, dict) else None
-    media_pedido = media_pedido or 0.0
-    ultimo_pedido = pedido.get("ultimoPedido") if isinstance(pedido, dict) and isinstance(pedido.get("ultimoPedido"), dict) else {}
-    ultimo_pedido_base = max(
-        _optional_num(ultimo_pedido.get("quantidadeRecebida")) or 0.0,
-        _optional_num(ultimo_pedido.get("quantidadePedida")) or 0.0,
-    )
-    base_pedido_compra = media_pedido if media_pedido > 0 else ultimo_pedido_base
-    minimo_por_compra = base_pedido_compra * 0.35 if base_pedido_compra > 0 else 0.0
-
-    candidatos_consumo = [
-        consumo["media"],
-        consumo["pico"] * 0.65,
-        consumo_entre_planilhas,
-    ]
-    candidatos_consumo = [v for v in candidatos_consumo if math.isfinite(v) and v > 0]
-    candidatos = [
-        *candidatos_consumo,
-        minimo_por_compra,
-    ]
-    candidatos = [v for v in candidatos if math.isfinite(v) and v > 0]
-    if not candidatos:
-        return None
-
-    demanda_base = max(candidatos)
-    estoque_seguranca = max(consumo["desvio"], demanda_base * 0.35, consumo["pico"] * 0.25, minimo_por_compra)
-    minimo_estimado = max(demanda_base + estoque_seguranca, minimo_por_compra) if candidatos_consumo else minimo_por_compra
-    minimo = _ceil_positive(minimo_estimado)
-    if minimo is None:
-        return None
-    lote = _ceil_positive(max(base_pedido_compra, demanda_base * 1.5, minimo * 0.8)) or minimo
-    maximo = max(minimo + lote, minimo + 1)
-    return {
-        "minimo": minimo,
-        "maximo": maximo,
-        "reposicao": maximo - minimo,
-        "criterio": {
-            "demandaBase": demanda_base,
-            "estoqueSeguranca": estoque_seguranca,
-            "consumoMedio": consumo["media"],
-            "consumoPico": consumo["pico"],
-            "eventosConsumo": int(consumo["eventos"]),
-            "consumoEntrePlanilhas": consumo_entre_planilhas,
-            "mediaPedido": media_pedido,
-            "ultimoPedidoQuantidade": ultimo_pedido_base,
-            "basePedidoCompra": base_pedido_compra,
-            "minimoPorCompra": minimo_por_compra,
-            "fontePrincipal": "pedido_compra" if base_pedido_compra > 0 and not candidatos_consumo else "consumo",
-        },
-    }
-
-
-def _aplicar_sugestoes_estoque(
-    itens: list[dict[str, Any]],
-    historico: dict[str, Any],
-    pedidos_compra: dict[str, Any],
-) -> None:
+def _remover_politica_automatica_legada(itens: list[dict[str, Any]]) -> None:
     for item in itens:
         if not isinstance(item, dict):
             continue
-        if item.get("limitesOrigem") in {"manual", "cooperat"}:
-            item.pop("sugestaoEstoque", None)
+        item.pop("sugestaoEstoque", None)
+        item.pop("sugestaoEstoqueLegada", None)
+        origins = {
+            _ascii_lower(item.get("limitesOrigem")),
+            _ascii_lower(item.get("minimoOrigem")),
+            _ascii_lower(item.get("maximoOrigem")),
+            _ascii_lower(item.get("reposicaoOrigem")),
+        }
+        if "manual" in origins or "cooperat" in origins:
             continue
-        sugestao = _sugerir_limites_estoque(item, historico, pedidos_compra)
-        if not sugestao:
-            item.pop("sugestaoEstoque", None)
-            continue
-        if item.get("minimo") in (None, ""):
-            item["minimo"] = sugestao["minimo"]
-            item["minimoOrigem"] = "automatico"
-        if item.get("maximo") in (None, ""):
-            item["maximo"] = sugestao["maximo"]
-            item["maximoOrigem"] = "automatico"
-        if item.get("minimoOrigem") == "automatico" or item.get("maximoOrigem") == "automatico":
-            item["limitesOrigem"] = item.get("limitesOrigem") or "automatico"
-            item["reposicao"] = _reposicao_media(item.get("minimo"), item.get("maximo"))
-            item["reposicaoOrigem"] = "automatico"
-            item["sugestaoEstoque"] = sugestao["criterio"]
+        if origins.intersection({"automatico", "calculada", "gerenciador_critico"}):
+            for field in ("minimo", "maximo", "reposicao", "minimoOrigem", "maximoOrigem", "reposicaoOrigem", "limitesOrigem"):
+                item.pop(field, None)
 
 
 def _ajuste_key(item_key: str) -> str:
@@ -1426,9 +1351,9 @@ def run_automus_update(
 
     id_token = service_token
     safe_email = _safe_text(auth_email or email) or "automus-sql-only"
-    banco = {}
+    banco = _load_inventory_from_sql_api(id_token, log)
     hash_banco_antes = _json_hash(banco)
-    log.info("AUTOMUS_SQL_ONLY: pulando autenticacao e leitura do banco legado.")
+    log.info("AUTOMUS_SQL_ONLY: estado anterior carregado da API SQL.")
 
     dados_anteriores = banco.get("dados") if isinstance(banco.get("dados"), list) else []
     dados_mortos = banco.get("dadosMortos") if isinstance(banco.get("dadosMortos"), list) else []
@@ -1498,7 +1423,7 @@ def run_automus_update(
         movimentacoes_mata185_anteriores,
         agora_ms,
     )
-    _aplicar_sugestoes_estoque(novos_dados, historico_saldo, pedidos_compra)
+    _remover_politica_automatica_legada(novos_dados)
 
     payload = {
         "dados": novos_dados,

@@ -1470,27 +1470,34 @@
         let historicoCooperatCache = null;
         const SQL_API_SAME_HOST_BASE = (
             location.protocol.startsWith("http") && location.hostname
-                ? `${location.protocol}//${location.hostname}:8765`
+                ? location.origin
                 : ""
         );
         const SQL_API_PRIMARY_BASE = SQL_API_SAME_HOST_BASE || "http://192.168.5.41:8765";
         const SQL_API_RESERVE_BASE = "http://192.168.5.44:8765";
         const SQL_API_LEGACY_RESERVE_BASE = "http://192.168.5.38:8765";
+        const SQL_API_IS_PUBLIC_ORIGIN = location.protocol === "https:" && !["127.0.0.1", "localhost"].includes(location.hostname);
         const DEFAULT_SQL_API_BASE = SQL_API_PRIMARY_BASE;
         let sqlApiPreferredBase = localStorage.getItem("darkJutsuApiPreferredBase") || "";
+        if(SQL_API_IS_PUBLIC_ORIGIN && sqlApiPreferredBase && sqlApiPreferredBase !== location.origin){
+            sqlApiPreferredBase = "";
+            try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
+        }
         const SQL_API_BASE = (
             params.get("apiBase") ||
             sqlApiPreferredBase ||
-            localStorage.getItem("darkJutsuApiBase") ||
-            window.DARK_JUTSU_API_BASE_URL ||
+            (SQL_API_IS_PUBLIC_ORIGIN ? "" : localStorage.getItem("darkJutsuApiBase")) ||
+            (SQL_API_IS_PUBLIC_ORIGIN ? "" : window.DARK_JUTSU_API_BASE_URL) ||
             DEFAULT_SQL_API_BASE
         ).replace(/\/+$/, "");
         const SQL_API_FALLBACK_BASES = [
             SQL_API_BASE,
             SQL_API_SAME_HOST_BASE,
-            SQL_API_PRIMARY_BASE,
-            SQL_API_RESERVE_BASE,
-            SQL_API_LEGACY_RESERVE_BASE
+            ...(SQL_API_IS_PUBLIC_ORIGIN ? [] : [
+                SQL_API_PRIMARY_BASE,
+                SQL_API_RESERVE_BASE,
+                SQL_API_LEGACY_RESERVE_BASE
+            ])
         ].filter((base, index, bases) => base && bases.indexOf(base) === index);
         const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
 
@@ -1644,7 +1651,7 @@
             ambiente: parametroPermitido((params.get("ambiente") || "estoque").toLowerCase(), ["estoque","movimentacao","avaliador","gerenciador"], "estoque"),
             status: parametroPermitido((params.get("status") || "todos").toLowerCase(), ["todos","all","fora","abaixo","acima","ok","sem","sem-faixa"], "todos"),
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
-            suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
+            suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem","gerenciador","cooperat_sem_gerenciador"], "todos"),
             kanbanGestao: parametroPermitido((params.get("kanbanGestao") || params.get("gestaoKanban") || "todos").toLowerCase(), ["todos","avaliador","sem_avaliador","sem-avaliador"], "todos").replace("-", "_"),
             kanbanOrdem: parametroPermitido((params.get("kanbanOrdem") || "recente").toLowerCase(), ["antigo","recente"], "recente"),
             kanbanEntradasDias: parametroPermitido((params.get("kanbanEntradasDias") || "todos").toLowerCase(), ["7","15","30","todos"], "todos"),
@@ -1872,12 +1879,16 @@
                 minEventsToApply: Math.round(numeroConfigGerenciador(cfgMotor.minEventsToApply, 8, 1, 100)),
                 defaultLeadTimeDays: Math.round(numeroConfigGerenciador(cfgMotor.defaultLeadTimeDays, 30, 1, 365)),
                 maxLeadTimeDays: Math.round(numeroConfigGerenciador(cfgMotor.maxLeadTimeDays, 120, 1, 730)),
+                confidenceToSuggest: numeroConfigGerenciador(cfgMotor.confidenceToSuggest, .55, 0, 1),
                 confidenceToApply: numeroConfigGerenciador(cfgMotor.confidenceToApply, .85, 0, 1),
                 highIncreaseMultiplier: numeroConfigGerenciador(cfgMotor.highIncreaseMultiplier, 3, 1, 20),
                 highReductionMultiplier: numeroConfigGerenciador(cfgMotor.highReductionMultiplier, .4, 0, 1),
                 elevatedEntryMultiplier: numeroConfigGerenciador(cfgMotor.elevatedEntryMultiplier, 3, 1, 20),
                 regularIntervalDays: Math.round(numeroConfigGerenciador(cfgMotor.regularIntervalDays, 45, 1, 365)),
-                minStockFloor: Math.round(numeroConfigGerenciador(cfgMotor.minStockFloor, 1, 0, 100000))
+                minStockFloor: Math.round(numeroConfigGerenciador(cfgMotor.minStockFloor, 1, 0, 100000)),
+                modoAplicacao: cfgMotor.modoAplicacao || "sombra",
+                bloquearComPedidoAberto: cfgMotor.bloquearComPedidoAberto !== false,
+                tratarEntradaElevadaComoPreventiva: cfgMotor.tratarEntradaElevadaComoPreventiva !== false
             };
         }
         function normalizarCodigo(valor){
@@ -1956,6 +1967,18 @@
             if(saldo !== null && max !== null && saldo > max) return "acima";
             if(min !== null || max !== null) return "ok";
             return "sem";
+        }
+        function statusEstoqueAvaliador(item){
+            if(cfg.suposicao === "com" || cfg.suposicao === "gerenciador"){
+                const criterio = criterioGerenciadorItem(item);
+                const saldo = num(item?.saldo);
+                const min = num(criterio?.pontoReposicao ?? criterio?.minimoSugerido);
+                const max = num(criterio?.maximoSugerido);
+                if(saldo !== null && min !== null && saldo <= min) return "abaixo";
+                if(saldo !== null && max !== null && saldo > max) return "acima";
+                if(min !== null || max !== null) return "ok";
+            }
+            return statusEstoque(item);
         }
         function statusRotulo(status){
             return { abaixo:"Abaixo", acima:"Acima", ok:"Ok", sem:"Sem faixa" }[status] || status;
@@ -2226,14 +2249,8 @@
         }
         function aplicarLimitesDashboard(item, mapaMinimo, ajustes, banco, pedidos){
             const novo = {...(item || {})};
-            let temSuposicao = !!novo.sugestaoEstoque
-                || [
-                    novo.limitesOrigem,
-                    novo.minimoOrigem,
-                    novo.maximoOrigem,
-                    novo.reposicaoOrigem,
-                    novo.origem
-                ].some(origemTemSuposicao);
+            window.DarkCriticalStockManager?.clearLegacyAutomaticPolicy?.(novo);
+            let temSuposicao = false;
             const codigoCooperat = normalizarCodigo(novo.cooperat);
             const extra = mapaMinimo.get(codigoCooperat);
             if(extra){
@@ -2293,18 +2310,21 @@
             const sugestao = calcularSugestaoLimitesDashboard(novo, banco, pedidos);
             if(sugestao){
                 novo.gerenciadorEstoqueCritico = sugestao.criterio;
-                novo.sugestaoEstoque = sugestao.criterio;
+                novo.sugestaoEstoqueGerenciador = sugestao.criterio;
+                temSuposicao = true;
                 if(novo.minimo === undefined || novo.minimo === null || novo.minimo === ""){
                     novo.minimo = sugestao.minimo;
                     novo.minimoOrigem = "gerenciador_critico";
                     novo.limitesOrigem = novo.limitesOrigem || "gerenciador_critico";
-                    temSuposicao = true;
                 }
                 if(novo.maximo === undefined || novo.maximo === null || novo.maximo === ""){
                     novo.maximo = sugestao.maximo;
                     novo.maximoOrigem = "gerenciador_critico";
                     novo.limitesOrigem = novo.limitesOrigem || "gerenciador_critico";
-                    temSuposicao = true;
+                }
+                if(novo.reposicao === undefined || novo.reposicao === null || novo.reposicao === ""){
+                    novo.reposicao = sugestao.reposicao;
+                    novo.reposicaoOrigem = "gerenciador_critico";
                 }
             }
             const reposicaoInformada = limite(novo.reposicao);
@@ -2312,8 +2332,8 @@
             if(repo !== null){
                 novo.reposicao = repo;
                 if(reposicaoInformada === null){
-                    temSuposicao = true;
-                    novo.reposicaoOrigem = novo.reposicaoOrigem || "gerenciador_critico";
+                    const origemProtegida = itemTemLimiteConfiavel(novo);
+                    novo.reposicaoOrigem = novo.reposicaoOrigem || (origemProtegida ? novo.limitesOrigem : "gerenciador_critico");
                 }else{
                     novo.reposicaoOrigem = novo.reposicaoOrigem || novo.limitesOrigem || "gerenciador_critico";
                 }
@@ -2325,20 +2345,22 @@
             return String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         }
         function itemTemSuposicao(item){
-            if(item?.temSuposicaoEstoque) return true;
-            const origens = [
-                item?.limitesOrigem,
-                item?.minimoOrigem,
-                item?.maximoOrigem,
-                item?.reposicaoOrigem,
-                item?.origem
-            ].map(v => normalizarTexto(v));
-            const origemSugestiva = origens.some(origemTemSuposicao);
-            return origemSugestiva || !!item?.sugestaoEstoque;
+            return itemTemSugestaoGerenciador(item);
+        }
+        function itemTemSugestaoGerenciador(item){
+            const criterio = item?.gerenciadorEstoqueCritico || item?.sugestaoEstoqueGerenciador;
+            return !!criterio?.algoritmoVersao;
         }
         function itemTemLimiteConfiavel(item){
             const origemMin = normalizarTexto(item?.minimoOrigem || item?.limitesOrigem);
             return origemMin.includes("cooperat") || origemMin.includes("manual");
+        }
+        function passaFiltroPoliticaEstoque(item){
+            if(cfg.suposicao === "com" || cfg.suposicao === "gerenciador") return itemTemSugestaoGerenciador(item);
+            if(cfg.suposicao === "sem" || cfg.suposicao === "cooperat_sem_gerenciador"){
+                return itemTemLimiteConfiavel(item) && !itemTemSugestaoGerenciador(item);
+            }
+            return true;
         }
         function codigoArmazem(valor){
             const texto = String(valor ?? "").trim().toLowerCase();
@@ -3299,7 +3321,8 @@
             }[codigo] || codigo;
         }
         function criterioGerenciadorItem(item){
-            return item?.gerenciadorEstoqueCritico || item?.sugestaoEstoque || null;
+            const criterio = item?.gerenciadorEstoqueCritico || item?.sugestaoEstoqueGerenciador || null;
+            return criterio?.algoritmoVersao ? criterio : null;
         }
         function renderBotaoCriterioGerenciador(item){
             const criterio = criterioGerenciadorItem(item);
@@ -3642,11 +3665,13 @@
                     const statsCooperat = estatisticasHistoricoCooperat(histCooperat);
                     const pedido = pedidoKanbanSintetico(pedidoItem(item, pedidos), historico, entradasMata112, solicitacoes);
                     const historicoSaldo = historicoSaldoItemDashboard(item, banco);
-                    return { item, solicitacoes, historico, entradasMata112, historicoSaldo, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
+                    return { item, solicitacoes, historico, entradasMata112, historicoSaldo, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoqueAvaliador(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
                 })
                 .filter(linha => {
-                    if(cfg.suposicao === "com" && !itemTemSuposicao(linha.item)) return false;
-                    if(cfg.suposicao === "sem" && !itemTemLimiteConfiavel(linha.item)) return false;
+                    const codigo = key(linha.item);
+                    if(cfg.itens.length && !cfg.itens.includes(codigo) && !cfg.itens.includes(String(linha.item.cooperat || "").toLowerCase())) return false;
+                    if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
+                    if(!passaFiltroPoliticaEstoque(linha.item)) return false;
                     if(cfg.origem && !origemItem(linha.item).includes(cfg.origem)) return false;
                     if(cfg.busca){
                         const texto = normalizarTexto([
@@ -5017,11 +5042,11 @@
                         </select>
                     </div>
                     <div class="filter">
-                        <label for="fSuposicao">Suposicao</label>
+                        <label for="fSuposicao">Politica de estoque</label>
                         <select id="fSuposicao" data-filter="suposicao">
                             <option value="todos" ${cfg.suposicao === "todos" ? "selected" : ""}>Todos</option>
-                            <option value="com" ${cfg.suposicao === "com" ? "selected" : ""}>Com suposicao</option>
-                            <option value="sem" ${cfg.suposicao === "sem" ? "selected" : ""}>Sem suposicao</option>
+                            <option value="gerenciador" ${["gerenciador","com"].includes(cfg.suposicao) ? "selected" : ""}>Sugestao do gerenciador</option>
+                            <option value="cooperat_sem_gerenciador" ${["cooperat_sem_gerenciador","sem"].includes(cfg.suposicao) ? "selected" : ""}>Minimo Cooperat sem gerenciador</option>
                         </select>
                     </div>
                     ${cfg.ambiente === "gerenciador" ? `
@@ -5490,9 +5515,7 @@
                 if(cfg.itens.length && !cfg.itens.includes(codigo) && !cfg.itens.includes(String(linha.item.cooperat || "").toLowerCase())) return false;
                 if(!passaStatus(linha.status)) return false;
                 if(cfg.semSolicitacao && pedidoAtivo(linha.pedido)) return false;
-                if(cfg.suposicao === "com" && !itemTemSuposicao(linha.item)) return false;
-                if(cfg.suposicao === "sem" && itemTemSuposicao(linha.item)) return false;
-                if(cfg.ambiente === "avaliador" && cfg.suposicao === "sem" && !itemTemLimiteConfiavel(linha.item)) return false;
+                if(!passaFiltroPoliticaEstoque(linha.item)) return false;
                 if(cfg.origem && linha.origem !== cfg.origem) return false;
                 if(cfg.busca){
                     const texto = normalizarTexto([

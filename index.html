@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Dark-Jutsu">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <link rel="stylesheet" href="mobile.css?v=11">
 <script src="dashboard-nav.js" defer></script>
 <!-- /SPLIT: head.html -->
@@ -35,6 +35,12 @@
         <button type="submit">Entrar</button>
         <button type="button" onclick="abrirCadastro()">Cadastrar</button>
         <button type="button" id="installAppBtn" class="installAppBtn" onclick="instalarDarkJutsuApp()">Instalar app web</button>
+        <div id="mobileAccessLogin" class="mobileAccessBox" style="display:none;">
+            <strong>Usar no celular</strong>
+            <img id="mobileAccessQrLogin" alt="QR Code do link do celular">
+            <a id="mobileAccessLinkLogin" target="_blank" rel="noopener">Abrir link atual</a>
+            <small id="mobileAccessStatusLogin"></small>
+        </div>
     </form>
 </div>
 <!-- /SPLIT: auth.html -->
@@ -243,6 +249,19 @@ xmlns="http://www.w3.org/2000/svg">
     </button>
     <a id="btnDashboard" class="btnMainLink" href="dashboard.html?armazem=04" title="Abrir dashboard de estoque">Dashboard</a>
     <a id="btnMedidores" class="btnMainLink" href="medidores.html" title="Abrir medidores operacionais">Medidores</a>
+    <button id="btnCelular" type="button" onclick="toggleMobileAccessPanel()">Celular</button>
+</div>
+
+<div id="mobileAccessPanel" class="mobileAccessPanel" style="display:none;">
+    <div>
+        <strong>Acesso pelo celular</strong>
+        <small id="mobileAccessStatus">Verificando link atual...</small>
+    </div>
+    <img id="mobileAccessQr" alt="QR Code do link do celular">
+    <div class="mobileAccessActions">
+        <a id="mobileAccessLink" target="_blank" rel="noopener">Abrir link</a>
+        <button type="button" onclick="atualizarMobileAccess(true)">Atualizar</button>
+    </div>
 </div>
 
 <section id="ocorrenciasScreen" aria-hidden="true">
@@ -11966,26 +11985,33 @@ function pararChecagemAutomaticaSistemaGithub(){
     sistemaGithubUpdateTimer = null;
 }
 const db = null;
+const SQL_API_HOST_IS_LOCAL = ["127.0.0.1", "localhost"].includes(location.hostname);
+const SQL_API_IS_PUBLIC_ORIGIN = location.protocol === "https:" && !SQL_API_HOST_IS_LOCAL;
 const DEFAULT_SQL_API_BASE = (
     location.protocol.startsWith("http") && location.hostname
-        ? `${location.protocol}//${location.hostname}:8765`
+        ? location.origin
         : "http://192.168.5.44:8765"
 );
 const SQL_API_BASE = (
     new URLSearchParams(location.search).get("apiBase") ||
-    localStorage.getItem("darkJutsuApiBase") ||
-    window.DARK_JUTSU_API_BASE_URL ||
+    (SQL_API_IS_PUBLIC_ORIGIN ? "" : localStorage.getItem("darkJutsuApiBase")) ||
+    (SQL_API_IS_PUBLIC_ORIGIN ? "" : window.DARK_JUTSU_API_BASE_URL) ||
     DEFAULT_SQL_API_BASE
 ).replace(/\/+$/, "");
-const SQL_API_HOST_IS_LOCAL = ["127.0.0.1", "localhost"].includes(location.hostname);
 const SQL_API_FALLBACK_BASES = [
     SQL_API_BASE,
-    ...(SQL_API_HOST_IS_LOCAL ? ["http://127.0.0.1:8765", "http://localhost:8765"] : []),
-    "http://192.168.5.44:8765",
-    "http://192.168.5.41:8765",
-    "http://192.168.5.38:8765"
+    ...(SQL_API_IS_PUBLIC_ORIGIN ? [] : [
+        ...(SQL_API_HOST_IS_LOCAL ? ["http://127.0.0.1:8765", "http://localhost:8765"] : []),
+        "http://192.168.5.44:8765",
+        "http://192.168.5.41:8765",
+        "http://192.168.5.38:8765"
+    ])
 ].filter((base, index, bases) => base && bases.indexOf(base) === index);
 let sqlApiPreferredBase = localStorage.getItem("darkJutsuApiPreferredBase") || "";
+if(SQL_API_IS_PUBLIC_ORIGIN && sqlApiPreferredBase && sqlApiPreferredBase !== location.origin){
+    sqlApiPreferredBase = "";
+    try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
+}
 if(!SQL_API_HOST_IS_LOCAL && /^http:\/\/(127\.0\.0\.1|localhost):8765/i.test(sqlApiPreferredBase)){
     sqlApiPreferredBase = "";
     try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
@@ -12207,6 +12233,65 @@ async function testarServidorSqlAtivo(){
     }
     return false;
 }
+
+function qrCodeUrlDarkJutsu(url){
+    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(url)}`;
+}
+
+async function obterMobileAccessLink(){
+    if(location.protocol === "https:" && location.hostname.includes("trycloudflare.com")){
+        return { ok:true, status:"online", url:location.origin, message:"Tunnel atual aberto neste navegador." };
+    }
+    try{
+        const response = await fetch(`${location.origin}/api/mobile-link`, { cache:"no-store" });
+        const data = await response.json().catch(() => ({}));
+        return data || {};
+    }catch(e){
+        return { ok:false, status:"offline", url:"", message:"Link do celular indisponivel." };
+    }
+}
+
+function preencherMobileAccess(prefix, data){
+    const box = document.getElementById(prefix ? `mobileAccess${prefix}` : "mobileAccessPanel");
+    const qr = document.getElementById(prefix ? `mobileAccessQr${prefix}` : "mobileAccessQr");
+    const link = document.getElementById(prefix ? `mobileAccessLink${prefix}` : "mobileAccessLink");
+    const status = document.getElementById(prefix ? `mobileAccessStatus${prefix}` : "mobileAccessStatus");
+    const url = data?.url || "";
+    if(!box || !qr || !link || !status) return;
+    if(url){
+        box.style.display = "";
+        qr.style.display = "";
+        qr.src = qrCodeUrlDarkJutsu(url);
+        link.href = url;
+        link.textContent = url.replace(/^https?:\/\//, "");
+        status.textContent = data?.ok === false ? "Link encontrado, mas o tunnel pode estar offline." : "Aponte a camera do celular para o QR.";
+    }else{
+        qr.style.display = "none";
+        link.removeAttribute("href");
+        link.textContent = "Rode iniciar_darkjutsu_celular_sem_admin.bat";
+        status.textContent = data?.message || "Tunnel de celular ainda nao iniciado.";
+    }
+}
+
+async function atualizarMobileAccess(forceOpen = false){
+    const data = await obterMobileAccessLink();
+    preencherMobileAccess("Login", data);
+    preencherMobileAccess("", data);
+    const panel = document.getElementById("mobileAccessPanel");
+    if(forceOpen && panel) panel.style.display = "";
+}
+
+function toggleMobileAccessPanel(){
+    const panel = document.getElementById("mobileAccessPanel");
+    if(!panel) return;
+    panel.style.display = panel.style.display === "none" ? "" : "none";
+    if(panel.style.display !== "none") atualizarMobileAccess(false);
+}
+
+window.atualizarMobileAccess = atualizarMobileAccess;
+window.toggleMobileAccessPanel = toggleMobileAccessPanel;
+setTimeout(() => atualizarMobileAccess(false), 800);
+setInterval(() => atualizarMobileAccess(false), 30000);
 
 function setServidorSqlOffline(offline){
     const banner = offline ? ensureServidorSqlBanner() : document.getElementById("servidorSqlOfflineBanner");

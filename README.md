@@ -218,6 +218,22 @@ Se o celular estiver na mesma rede e mesmo assim nao abrir, libere a porta no Fi
 scripts\liberar_firewall_darkjutsu.bat
 ```
 
+Se voce nao tiver permissao de administrador, use o modo por tunel temporario gratuito:
+
+```bat
+iniciar_darkjutsu_celular_sem_admin.bat
+```
+
+Quando aparecer uma URL `https://...trycloudflare.com`, abra essa URL no celular. Esse modo nao abre porta no roteador e nao altera o Firewall, mas depende de internet no PC e o link muda a cada execucao. O proprio Dark-Jutsu mostra o link atual e um QR Code na tela de login e no botao `Celular`.
+
+Para iniciar o modo celular automaticamente ao entrar neste usuario do Windows, execute uma vez:
+
+```bat
+ativar_celular_ao_ligar_darkjutsu.bat
+```
+
+Sem permissao de administrador, o link gratuito do `trycloudflare.com` nao e fixo. Para ter sempre o mesmo endereco externo, use um tunnel nomeado/protegido em uma conta Cloudflare conforme `scripts\iniciar_cloudflare_tunnel_darkjutsu.bat`.
+
 Para acesso fora da rede da empresa/casa sem abrir porta no roteador, use um tunel gratuito/protegido conforme `scripts\iniciar_cloudflare_tunnel_darkjutsu.bat`. Evite publicar o sistema em tunel publico sem controle de acesso.
 
 ### Candidatos e prioridade

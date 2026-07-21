@@ -2,17 +2,21 @@
     "use strict";
 
     const DEFAULT_CONFIG = {
-        algorithmVersion: "critical_stock_v1_front_test",
+        algorithmVersion: "critical_stock_v2_history_only",
+        modoAplicacao: "sombra",
         minEventsToSuggest: 3,
         minEventsToApply: 8,
         defaultLeadTimeDays: 30,
         maxLeadTimeDays: 120,
+        confidenceToSuggest: 0.55,
         confidenceToApply: 0.85,
         highIncreaseMultiplier: 3,
         highReductionMultiplier: 0.4,
         elevatedEntryMultiplier: 3,
         regularIntervalDays: 45,
-        minStockFloor: 1
+        minStockFloor: 1,
+        bloquearComPedidoAberto: true,
+        tratarEntradaElevadaComoPreventiva: true
     };
 
     function numberValue(value){
@@ -106,14 +110,14 @@
         );
     }
 
-    function detectElevatedEntries(entries, demandQuantities, purchaseQty){
+    function detectElevatedEntries(entries, demandQuantities, purchaseQty, config){
         const entryQuantities = entries.map(event => event.quantity).filter(value => value > 0);
         if(!entryQuantities.length) return { detected:false, maxEntry:0, threshold:null };
         const entryMedian = median(entryQuantities) || 0;
         const demandMedian = median(demandQuantities) || 0;
         const p90 = percentile(entryQuantities, 0.9) || 0;
         const base = Math.max(entryMedian, demandMedian, purchaseQty || 0, 1);
-        const threshold = Math.max(base * DEFAULT_CONFIG.elevatedEntryMultiplier, p90);
+        const threshold = Math.max(base * config.elevatedEntryMultiplier, p90);
         const maxEntry = Math.max(...entryQuantities);
         return {
             detected: maxEntry >= threshold && entryQuantities.length >= 3,
@@ -136,12 +140,8 @@
         const reasonCodes = ["saldo_inicial_ignorado"];
         const locks = [];
 
-        if(!quantities.length && purchaseQty > 0){
-            quantities.push(purchaseQty);
-            reasonCodes.push("lote_compra_recente");
-        }
-
-        if(quantities.length < config.minEventsToSuggest && !purchaseQty){
+        if(purchaseQty > 0) reasonCodes.push("lote_compra_referencia");
+        if(quantities.length < config.minEventsToSuggest){
             return null;
         }
 
@@ -175,8 +175,8 @@
         const point = ceilPositive(Math.max(leadDemand + safety, demandClass === "regular" ? avg : med, config.minStockFloor));
         if(point === null) return null;
 
-        const elevatedEntry = detectElevatedEntries(entries, quantities, purchaseQty);
-        if(elevatedEntry.detected){
+        const elevatedEntry = detectElevatedEntries(entries, quantities, purchaseQty, config);
+        if(elevatedEntry.detected && config.tratarEntradaElevadaComoPreventiva){
             reasonCodes.push("entrada_elevada_fora_padrao", "entrada_preventiva_possivel");
             locks.push("entrada_elevada_fora_padrao");
         }
@@ -189,11 +189,12 @@
         const balance = numberValue(item?.saldo) ?? 0;
         const suggestedOrderQty = balance <= point ? Math.max(0, max - balance) : 0;
         const confidence = Math.min(0.95,
-            0.2 +
-            Math.min(0.25, quantities.length / 10 * 0.25) +
-            (purchaseQty ? 0.15 : 0) +
+            0.25 +
+            Math.min(0.3, quantities.length / Math.max(1, config.minEventsToApply) * 0.3) +
+            (purchaseQty ? 0.1 : 0) +
             (Array.isArray(purchaseOrder?.temposRecebimento) && purchaseOrder.temposRecebimento.length ? 0.15 : 0) +
-            (timestamps.length ? 0.1 : 0)
+            (timestamps.length >= 2 ? 0.1 : 0) +
+            (intervals.length >= 2 ? 0.1 : 0)
         );
 
         if(quantities.length >= config.minEventsToApply){
@@ -207,16 +208,23 @@
         if(balance <= point) reasonCodes.push("saldo_abaixo_ponto_reposicao");
         if(currentMin !== null && point > currentMin * config.highIncreaseMultiplier) locks.push("aumento_acima_limite");
         if(currentMin !== null && point < currentMin * config.highReductionMultiplier) locks.push("reducao_acima_limite");
-        if(openPurchase) locks.push("pedido_aberto_detectado");
-        if(confidence < config.confidenceToApply) locks.push("confianca_baixa");
+        if(openPurchase && config.bloquearComPedidoAberto) locks.push("pedido_aberto_detectado");
+        if(confidence < config.confidenceToSuggest) locks.push("dados_insuficientes");
+        else if(confidence < config.confidenceToApply) locks.push("confianca_baixa");
 
-        const decision = openPurchase
+        const canApply = ["semi_auto", "auto_controlado"].includes(config.modoAplicacao)
+            && quantities.length >= config.minEventsToApply
+            && confidence >= config.confidenceToApply
+            && locks.length === 0;
+        const decision = openPurchase && config.bloquearComPedidoAberto
             ? "aguardar_pedido_aberto"
+            : confidence < config.confidenceToSuggest
+                ? "dados_insuficientes"
             : balance <= point
-                ? (confidence >= 0.75 ? "critico_solicitar_agora" : "sugerir_politica")
+                ? (canApply ? "critico_solicitar_agora" : "revisar_politica")
                 : balance > max
                     ? "excesso_estoque"
-                    : "monitorar";
+                    : (canApply ? "aplicar_politica" : "sugerir_politica");
 
         return {
             minimo: point,
@@ -254,12 +262,35 @@
     }
 
     function protectedSource(item){
-        const source = String(item?.limitesOrigem || item?.minimoOrigem || item?.maximoOrigem || item?.reposicaoOrigem || "").toLowerCase();
-        return source.includes("manual") || source.includes("cooperat");
+        return [item?.limitesOrigem, item?.minimoOrigem, item?.maximoOrigem, item?.reposicaoOrigem]
+            .map(source => String(source || "").toLowerCase())
+            .some(source => source.includes("manual") || source.includes("cooperat"));
+    }
+
+    function clearLegacyAutomaticPolicy(item){
+        if(!item) return item;
+        if(!item?.sugestaoEstoque?.algoritmoVersao) delete item.sugestaoEstoque;
+        if(protectedSource(item)) return item;
+        const origins = [item.limitesOrigem, item.minimoOrigem, item.maximoOrigem, item.reposicaoOrigem]
+            .map(value => String(value || "").toLowerCase());
+        const legacyAutomatic = origins.some(source => source === "automatico" || source === "calculada");
+        const versionedSuggestion = item?.gerenciadorEstoqueCritico?.algoritmoVersao;
+        if(!legacyAutomatic && versionedSuggestion) return item;
+        if(legacyAutomatic){
+            delete item.minimo;
+            delete item.maximo;
+            delete item.reposicao;
+            delete item.minimoOrigem;
+            delete item.maximoOrigem;
+            delete item.reposicaoOrigem;
+            delete item.limitesOrigem;
+        }
+        return item;
     }
 
     function applyPolicy(item, options = {}){
         if(!item) return item;
+        clearLegacyAutomaticPolicy(item);
         const policy = calculateItemPolicy(item, options);
         delete item.sugestaoEstoqueLegada;
         if(!policy){
@@ -278,15 +309,21 @@
         }
 
         item.gerenciadorEstoqueCritico = policy.criterio;
-        item.sugestaoEstoque = policy.criterio;
+        item.sugestaoEstoqueGerenciador = policy.criterio;
 
         if(protectedSource(item)){
             policy.criterio.reasonCodes = [...new Set([...(policy.criterio.reasonCodes || []), "manual_ou_cooperat_tem_prioridade"])];
             return item;
         }
 
-        const shouldApplyMin = item.minimo === undefined || item.minimo === null || item.minimo === "" || item.minimoOrigem === "automatico" || item.limitesOrigem === "automatico" || item.limitesOrigem === "gerenciador_critico";
-        const shouldApplyMax = item.maximo === undefined || item.maximo === null || item.maximo === "" || item.maximoOrigem === "automatico" || item.limitesOrigem === "automatico" || item.limitesOrigem === "gerenciador_critico";
+        const canApply = ["semi_auto", "auto_controlado"].includes(configValue(options, "modoAplicacao"))
+            && policy.criterio.eventosConsumo >= configNumber(options, "minEventsToApply")
+            && policy.criterio.confianca >= configNumber(options, "confidenceToApply")
+            && policy.criterio.travas.length === 0;
+        if(!canApply) return item;
+
+        const shouldApplyMin = item.minimo === undefined || item.minimo === null || item.minimo === "" || item.limitesOrigem === "gerenciador_critico";
+        const shouldApplyMax = item.maximo === undefined || item.maximo === null || item.maximo === "" || item.limitesOrigem === "gerenciador_critico";
         if(shouldApplyMin){
             item.minimo = policy.minimo;
             item.minimoOrigem = "gerenciador_critico";
@@ -302,10 +339,20 @@
         return item;
     }
 
+    function configValue(options, field){
+        return options?.config?.[field] ?? DEFAULT_CONFIG[field];
+    }
+
+    function configNumber(options, field){
+        const value = Number(configValue(options, field));
+        return Number.isFinite(value) ? value : DEFAULT_CONFIG[field];
+    }
+
     window.DarkCriticalStockManager = {
         DEFAULT_CONFIG,
         calculateItemPolicy,
         applyPolicy,
+        clearLegacyAutomaticPolicy,
         numberValue,
         ceilPositive
     };
