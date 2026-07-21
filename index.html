@@ -328,9 +328,29 @@ xmlns="http://www.w3.org/2000/svg">
             <div class="ocorrenciasConsulta">
                 <div class="ocorrenciasConsultaHeader">
                     <div>
-                        <strong>Avaliador de ocorrencias</strong>
+                        <strong>Painel de acompanhamento</strong>
                         <span id="ocorrenciasStorageAviso">Aguardando Firebase...</span>
                     </div>
+                </div>
+
+                <div class="ocorrenciasStats">
+                    <div class="stat-abertas"><span>Abertas</span><strong id="ocorrenciasAbertas">0</strong></div>
+                    <div class="stat-criticas"><span>Criticas</span><strong id="ocorrenciasCriticas">0</strong></div>
+                    <div class="stat-filtradas"><span>Sem tratativa</span><strong id="ocorrenciasFiltradas">0</strong></div>
+                    <div class="stat-total"><span>Total</span><strong id="ocorrenciasTotal">0</strong></div>
+                </div>
+
+                <div class="ocorrenciasFiltros">
+                    <input id="ocorrenciaFiltroBusca" type="search" placeholder="Buscar por pessoa, item, descricao ou operador" oninput="renderizarOcorrencias()">
+                    <select id="ocorrenciaFiltroTipo" onchange="renderizarOcorrencias()"></select>
+                    <select id="ocorrenciaFiltroGravidade" onchange="renderizarOcorrencias()"></select>
+                    <select id="ocorrenciaFiltroStatus" onchange="renderizarOcorrencias()"></select>
+                    <input id="ocorrenciaFiltroData" type="date" onchange="renderizarOcorrencias()">
+                    <button type="button" onclick="limparFiltrosOcorrencia()">Limpar</button>
+                </div>
+
+                <div id="ocorrenciasLista" class="ocorrenciasLista">
+                    <p class="ocorrenciasEmpty">As ocorrencias registradas aparecem aqui.</p>
                 </div>
 
                 <div class="ocorrenciasResumoPainel">
@@ -687,6 +707,21 @@ Usuários do Sistema
 </div>
 
 <div id="listaUsuarios"></div>
+
+</div>
+
+<div class="adminSection fbPanel">
+
+<div class="adminTitle fbPanelHeader">
+AtualizaÃ§Ã£o do Sistema
+<span id="sistemaUpdateBadge">-</span>
+</div>
+
+<div class="automusUpdateActions">
+    <button type="button" onclick="atualizarSistemaGithubAgora(this)">Atualizar sistema agora</button>
+    <button type="button" onclick="checarAtualizacaoSistemaGithub(true)">Checar e aplicar</button>
+</div>
+<div id="sistemaUpdateStatus" class="fbMeta">Checagem automÃ¡tica a cada 5 minutos quando admin estiver logado.</div>
 
 </div>
 
@@ -5312,6 +5347,7 @@ function limparRascunhoContagemMaquina(maquina){
 function aplicarResetGlobalContagem(resetInfo, avisar = true){
     const resetAt = Number(resetInfo?.resetAt || 0);
     if(!resetAt) return;
+    contagemResetGlobalAtivo = Math.max(Number(contagemResetGlobalAtivo || 0), resetAt);
     const aplicado = Number(localStorage.getItem(chaveResetGlobalContagemAplicado()) || 0);
     if(aplicado >= resetAt) return;
     const por = resetInfo?.resetPor ? ` por ${resetInfo.resetPor}` : "";
@@ -5330,6 +5366,13 @@ function aplicarResetGlobalContagem(resetInfo, avisar = true){
         contagemItensMaquina = [];
         contagemIndice = 0;
         contagemStatusMaquinas = {};
+        contagemHomeRegistros = {};
+        contagemHistoricoProgressoGrupos = {};
+        contagemHistoricoValores = {};
+        contagemHistoricoVerificacoesVazio = {};
+        contagemHistoricoAutoresGrupos = {};
+        contagemHistoricoResponsaveisValores = {};
+        contagemHistoricoResponsaveisVerificacoes = {};
         if(document.getElementById("contagemScreen")?.style.display !== "none"){
             renderizarMaquinasContagem();
             mostrarSelecaoMaquinaContagem();
@@ -6250,6 +6293,7 @@ let contagemHomeRegistros = {};
 let contagemHomeUnsub = null;
 let contagemHomeLeituraBloqueada = false;
 let contagemResetGlobalBloqueado = false;
+let contagemResetGlobalAtivo = 0;
 
 function criarLinhasContagemPermitidas(itens){
     const linhas = [];
@@ -6344,6 +6388,24 @@ function adicionarItemHistoricoProgressoContagem(saida, item, usuario = ""){
     }
 }
 
+function timestampRegistroHistoricoContagem(registro){
+    const bruto = registro?.timestamp || registro?.updatedAt || registro?.salvoEm || registro?.criadoEm || registro?.createdAt || registro?.dataHora;
+    const numero = Number(bruto || 0);
+    if(Number.isFinite(numero) && numero > 0) return numero;
+    if(typeof bruto === "string"){
+        const parsed = Date.parse(bruto);
+        if(Number.isFinite(parsed)) return parsed;
+    }
+    return 0;
+}
+
+function registroHistoricoContagemDepoisDoReset(registro){
+    const resetAt = Number(contagemResetGlobalAtivo || 0);
+    if(!resetAt) return true;
+    const ts = timestampRegistroHistoricoContagem(registro);
+    return ts > resetAt;
+}
+
 function reconstruirHistoricoProgressoContagem(registros){
     const saida = {};
     contagemHistoricoValores = {};
@@ -6356,6 +6418,7 @@ function reconstruirHistoricoProgressoContagem(registros){
         if(!registro || typeof registro !== "object") return;
         const usuarioRegistro = registro.usuario || usuario || "";
         if(registro.valores || (registro.verificacoesVazio && !registro.itens)){
+            if(!registroHistoricoContagemDepoisDoReset(registro)) return;
             const valores = normalizarRascunhoContagemFirebase(registro.valores || {});
             const verificacoes = normalizarRascunhoContagemFirebase(registro.verificacoesVazio || {});
             Object.entries(valores).forEach(([key, valor]) => {
@@ -6377,6 +6440,7 @@ function reconstruirHistoricoProgressoContagem(registros){
             return;
         }
         if(registro.itens || registro.verificacoesVazio){
+            if(!registroHistoricoContagemDepoisDoReset(registro)) return;
             Object.values(registro.itens || {}).forEach(item => {
                 const codigo = item?.protheus || item?.cooperat || "";
                 const chave = chaveProgressoContagemPrincipal(codigo, item?.armazem, item?.endereco);
@@ -7204,6 +7268,7 @@ function statusOutrosUsuariosMaquinaContagem(maquina, incluirHistorico = false){
             const usuario = registroUsuario?._rascunho_atual?.usuario || registroUsuario?.rascunho_atual?.usuario || usuarioKey;
             const progressos = coletarProgressosGrupoUsuarioContagem(registroUsuario, alvo);
             progressos.forEach(progresso => {
+                if(Number(contagemResetGlobalAtivo || 0) && Number(progresso.updatedAt || 0) <= Number(contagemResetGlobalAtivo || 0)) return;
                 adicionarStatus(usuarioKey, { ...progresso, usuario }, "historico");
             });
         });
@@ -11654,8 +11719,16 @@ window.instalarDarkJutsuApp = async function(){
         atualizarBotaoInstalarApp();
         return;
     }
+    if(location.protocol === "file:"){
+        alert("Para instalar como app, abra o Dark-Jutsu pelo endereco http do servidor, nao pelo arquivo direto.");
+        return;
+    }
+    const url = location.href;
+    try{ await navigator.clipboard?.writeText(url); }catch(e){}
     if(typeof mostrarNotificacao === "function"){
-        mostrarNotificacao("No Chrome, use o icone de instalar na barra de endereco ou menu > Instalar app.");
+        mostrarNotificacao("Instalacao nao liberada pelo navegador. Use menu do Chrome > Salvar e compartilhar > Instalar pagina como app.");
+    }else{
+        alert("Instalacao nao liberada pelo navegador. No Chrome, use o menu > Salvar e compartilhar > Instalar pagina como app.");
     }
 };
 
@@ -11709,6 +11782,99 @@ async function signOut(authRef){
     localStorage.removeItem(SQL_AUTH_TOKEN_KEY);
     localStorage.removeItem(SQL_AUTH_USER_KEY);
     authRef._setUser(null);
+}
+
+let sistemaGithubUpdateTimer = null;
+let sistemaGithubUpdateRodando = false;
+
+function formatarStatusAtualizacaoSistema(data){
+    const last = data?.last || {};
+    const commit = String(data?.commit || "").trim();
+    const badge = document.getElementById("sistemaUpdateBadge");
+    const status = document.getElementById("sistemaUpdateStatus");
+    if(badge) badge.textContent = data?.running ? "rodando" : (commit ? commit.slice(0, 7) : "-");
+    if(!status) return;
+    if(data?.running){
+        status.textContent = "Atualizacao em andamento...";
+        return;
+    }
+    if(last.finished_at){
+        const quando = new Date(last.finished_at).toLocaleString("pt-BR");
+        const ok = Number(last.returncode || 0) === 0;
+        status.textContent = `${ok ? "OK" : "Falhou"} em ${quando}${commit ? ` | commit ${commit.slice(0, 12)}` : ""}`;
+        return;
+    }
+    status.textContent = commit
+        ? `Versao publicada: ${commit.slice(0, 12)}. Checagem automatica a cada 5 minutos.`
+        : "Checagem automatica a cada 5 minutos quando admin estiver logado.";
+}
+
+async function checarAtualizacaoSistemaGithub(manual = false){
+    if(sistemaGithubUpdateRodando || window.nivelUsuario !== "admin" || typeof window.sqlApi !== "function") return null;
+    sistemaGithubUpdateRodando = true;
+    try{
+        const data = await window.sqlApi("/api/system/update-from-github", {
+            method: "POST",
+            body: JSON.stringify({ force:false, automatico:!manual, manual:!!manual }),
+            timeoutMs: 900000
+        });
+        formatarStatusAtualizacaoSistema(data);
+        if(manual && typeof mostrarNotificacao === "function") mostrarNotificacao(data?.ok ? "Checagem GitHub concluida." : "Checagem GitHub terminou com alerta.");
+        return data;
+    }catch(e){
+        const status = document.getElementById("sistemaUpdateStatus");
+        if(status) status.textContent = `Falha na checagem GitHub: ${e.message || e}`;
+        if(manual && typeof mostrarNotificacao === "function") mostrarNotificacao("Falha ao checar atualizacao do sistema. Se a API reiniciou, aguarde alguns segundos.");
+        return null;
+    }finally{
+        sistemaGithubUpdateRodando = false;
+    }
+}
+
+window.checarAtualizacaoSistemaGithub = checarAtualizacaoSistemaGithub;
+
+window.atualizarSistemaGithubAgora = async function(botao){
+    if(window.nivelUsuario !== "admin"){
+        if(typeof mostrarNotificacao === "function") mostrarNotificacao("Apenas admin pode atualizar o sistema.");
+        return;
+    }
+    if(!confirm("Atualizar o sistema pelo GitHub agora?\n\nIsso publica os arquivos no servidor e pode reiniciar a API se ela estiver ativa.")) return;
+    const textoOriginal = botao?.textContent;
+    if(botao){
+        botao.disabled = true;
+        botao.textContent = "Atualizando...";
+    }
+    try{
+        const data = await window.sqlApi("/api/system/update-from-github", {
+            method: "POST",
+            body: JSON.stringify({ force:true, manual:true }),
+            timeoutMs: 900000
+        });
+        formatarStatusAtualizacaoSistema(data);
+        if(typeof mostrarNotificacao === "function") mostrarNotificacao(data?.ok ? "Sistema atualizado pelo GitHub." : "Atualizacao terminou com alerta.");
+    }catch(e){
+        const status = document.getElementById("sistemaUpdateStatus");
+        if(status) status.textContent = `Erro ao atualizar: ${e.message || e}`;
+        if(typeof mostrarNotificacao === "function") mostrarNotificacao("Erro ao atualizar sistema pelo GitHub.");
+    }finally{
+        if(botao){
+            botao.disabled = false;
+            botao.textContent = textoOriginal || "Atualizar sistema agora";
+        }
+    }
+};
+
+function iniciarChecagemAutomaticaSistemaGithub(){
+    if(sistemaGithubUpdateTimer || window.nivelUsuario !== "admin") return;
+    window.sqlApi?.("/api/system/update-status", { timeoutMs: 8000 })
+        .then(formatarStatusAtualizacaoSistema)
+        .catch(() => {});
+    sistemaGithubUpdateTimer = setInterval(() => checarAtualizacaoSistemaGithub(false), 5 * 60 * 1000);
+}
+
+function pararChecagemAutomaticaSistemaGithub(){
+    if(sistemaGithubUpdateTimer) clearInterval(sistemaGithubUpdateTimer);
+    sistemaGithubUpdateTimer = null;
 }
 const db = null;
 const DEFAULT_SQL_API_BASE = (
@@ -12022,8 +12188,12 @@ async function restaurarSessaoSqlSalva(){
             await signOut(auth);
         }
     }catch(e){
-        console.warn("Sessao SQL salva invalida ou expirada:", e);
-        await signOut(auth);
+        if(e?.status === 401 || e?.status === 403){
+            console.warn("Sessao SQL salva invalida ou expirada:", e);
+            await signOut(auth);
+        }else{
+            console.warn("API SQL indisponivel ao validar sessao; mantendo usuario cacheado:", e);
+        }
     }
 }
 
@@ -12542,6 +12712,7 @@ onAuthStateChanged(auth, async (user) => {
             loginBtn.textContent = loginBtn.dataset.textoOriginal || "Entrar";
         }
         pararMonitoramentoChat();
+        pararChecagemAutomaticaSistemaGithub();
         if(contagemResetGlobalUnsub){
             if(typeof contagemResetGlobalUnsub === "function"){
                 try{ contagemResetGlobalUnsub(); }catch(e){}
@@ -12587,7 +12758,9 @@ onAuthStateChanged(auth, async (user) => {
                 usuarioFonteSql = !!dadosUsuario;
             }catch(sqlErr){
                 console.warn("Falha ao validar usuario no SQL:", sqlErr);
-                throw sqlErr;
+                if(sqlErr?.status === 401 || sqlErr?.status === 403) throw sqlErr;
+                dadosUsuario = user.sqlUser || null;
+                usuarioFonteSql = !!dadosUsuario;
             }
         }
 
@@ -12689,6 +12862,7 @@ onAuthStateChanged(auth, async (user) => {
             if (adminBtn) adminBtn.style.display = "flex";
             iniciarSolicitacoesAdmin(); // 🔥 AQUI
             iniciarListaUsuarios();
+            iniciarChecagemAutomaticaSistemaGithub();
             Promise.allSettled([
                 rebuildNicknamesSimple(),
                 rebuildNicknamesAuth(),
@@ -12696,6 +12870,7 @@ onAuthStateChanged(auth, async (user) => {
             ]).catch(e => console.warn("Falha ao reconstruir indices de nicknames:", e));
             if (adminPanel) adminPanel.style.display = "block";
         } else {
+            pararChecagemAutomaticaSistemaGithub();
             if (adminBtn) adminBtn.style.display = "none";
             if (adminPanel) adminPanel.style.display = "none";
         }
@@ -12731,7 +12906,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-let horasSessao = 2;
+let horasSessao = 24;
 let tempoLimite = horasSessao * 60 * 60 * 1000;
 let timerInatividade;
 

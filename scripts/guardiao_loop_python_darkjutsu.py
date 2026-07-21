@@ -22,6 +22,7 @@ SCRIPTS = SHARE_ROOT / "scripts"
 STATUS_DIR = SHARE_ROOT / "status"
 REQUEST_DIR = STATUS_DIR / "requests"
 STATUS_SCRIPT = SCRIPTS / "status_compartilhado_servidores_darkjutsu.py"
+GITHUB_UPDATE_SCRIPT = SCRIPTS / "atualizar_darkjutsu_do_github.bat"
 SYSTEM_RUNTIME_ROOT = Path(r"C:\DarkJutsu")
 USER_RUNTIME_ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "DarkJutsu"
 SYSTEM_PG_HOME = SYSTEM_RUNTIME_ROOT / "PostgreSQL" / "pgsql"
@@ -119,6 +120,7 @@ WATCHDOG_SOURCE = SCRIPTS / "watchdog_usuario_darkjutsu.ps1"
 SHARED_LOG = SHARE_ROOT / "logs" / "guardiao_python_eventos.txt"
 TEST_ACTIVE_FILE = SHARE_ROOT / "status" / "teste_inicializacao_ativo.txt"
 TEST_LOG = SHARE_ROOT / "logs" / "teste_inicializacao_manual_darkjutsu.txt"
+GITHUB_UPDATE_INTERVAL_SECONDS = 300
 
 
 def select_api_runtime_root():
@@ -175,6 +177,25 @@ def log(message):
             fh.write(line + "\n")
     except Exception:
         pass
+
+
+def trigger_github_update_check(reason: str = "intervalo"):
+    if not GITHUB_UPDATE_SCRIPT.exists():
+        log(f"AVISO: atualizador GitHub nao encontrado: {GITHUB_UPDATE_SCRIPT}")
+        return False
+    try:
+        subprocess.Popen(
+            ["cmd.exe", "/c", str(GITHUB_UPDATE_SCRIPT)],
+            cwd=str(GITHUB_UPDATE_SCRIPT.parent),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        log(f"Checagem GitHub disparada pelo guardiao. Motivo={reason}")
+        return True
+    except Exception as exc:
+        log(f"ERRO: falha ao disparar checagem GitHub: {type(exc).__name__}: {exc}")
+        return False
     try:
         SHARED_LOG.parent.mkdir(parents=True, exist_ok=True)
         actor = f"{os.environ.get('COMPUTERNAME', '?')}\\{os.environ.get('USERNAME', '?')}"
@@ -759,6 +780,7 @@ def main():
         return
     last_full_cycle = 0
     last_startup_check = 0
+    last_github_update_check = 0
     last_leader = None
     log(f"Guardiao Python dinamico iniciado. Versao={GUARDIAN_VERSION} Usuario={os.environ.get('USERNAME')} Maquina={os.environ.get('COMPUTERNAME')} IPs={sorted(local_ips())} BootWindows={boot_hint()} PID={os.getpid()}")
     while True:
@@ -801,6 +823,9 @@ def main():
                 log(f"Eleicao alterada: lider={leader or 'nenhum'} epoch={decision.get('epoch')} prioridade_local={heartbeat.get('priority')}")
                 last_leader = leader
             if decision.get("isLeader"):
+                if time.time() - last_github_update_check >= GITHUB_UPDATE_INTERVAL_SECONDS:
+                    trigger_github_update_check("lider ativo / intervalo de 5 minutos")
+                    last_github_update_check = time.time()
                 if not local_ok:
                     start_local_api(f"eleito lider dinamico epoch={decision.get('epoch')}")
             elif local_ok or api_process_running():

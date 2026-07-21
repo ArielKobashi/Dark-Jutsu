@@ -9,6 +9,7 @@ import mimetypes
 import re
 import os
 import secrets
+import subprocess
 import threading
 import time
 import traceback
@@ -37,12 +38,17 @@ API_HOST = _env("DARK_JUTSU_API_HOST", "127.0.0.1")
 API_PORT = int(_env("DARK_JUTSU_API_PORT", "8765"))
 API_TOKEN = _env("DARK_JUTSU_API_TOKEN")
 AUTH_SECRET = _env("DARK_JUTSU_AUTH_SECRET") or API_TOKEN or hashlib.sha256(DATABASE_URL.encode("utf-8")).hexdigest()
-AUTH_TOKEN_TTL_SECONDS = int(_env("DARK_JUTSU_AUTH_TOKEN_TTL_SECONDS", str(12 * 60 * 60)))
+AUTH_TOKEN_TTL_SECONDS = int(_env("DARK_JUTSU_AUTH_TOKEN_TTL_SECONDS", str(7 * 24 * 60 * 60)))
 REQUIRE_AUTH = _env("DARK_JUTSU_REQUIRE_AUTH", "1").lower() not in {"0", "false", "no", "nao"}
 ALLOWED_ORIGINS = [origin.strip().rstrip("/") for origin in _env("DARK_JUTSU_ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
 PUBLIC_TUNNEL_MODE = _env("DARK_JUTSU_PUBLIC_TUNNEL_MODE", "0").lower() in {"1", "true", "sim", "yes"}
 LOGIN_RATE_LIMIT_MAX = int(_env("DARK_JUTSU_LOGIN_RATE_LIMIT_MAX", "8"))
 LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(_env("DARK_JUTSU_LOGIN_RATE_LIMIT_WINDOW_SECONDS", "600"))
+SYSTEM_UPDATE_LOG = Path(_env("DARK_JUTSU_SYSTEM_UPDATE_LOG", r"C:\DarkJutsu\logs\atualizacao_github.log"))
+SYSTEM_UPDATE_VERSION_FILE = Path(_env("DARK_JUTSU_SYSTEM_VERSION_FILE", r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\versao_github_atual.txt"))
+SYSTEM_UPDATE_LOCK = threading.Lock()
+SYSTEM_UPDATE_RUNNING = False
+SYSTEM_UPDATE_LAST: dict[str, Any] = {}
 _RATE_LIMIT_LOCK = threading.Lock()
 _RATE_LIMIT_BUCKETS: dict[str, list[float]] = {}
 API_STARTED_AT = time.time()
@@ -570,6 +576,9 @@ class Handler(BaseHTTPRequestHandler):
         if parts == ["api", "ops", "status"]:
             self._require_staff()
             return self._ops_status()
+        if parts == ["api", "system", "update-status"]:
+            self._require_admin()
+            return self._system_update_status()
         if parts == ["api", "inventory"]:
             return self._inventory(query)
         if len(parts) == 3 and parts[:2] == ["api", "inventory"]:
@@ -647,6 +656,9 @@ class Handler(BaseHTTPRequestHandler):
         if method == "POST" and parts == ["api", "auth", "logout"]:
             self._require_auth()
             return {"ok": True}
+        if method == "POST" and parts == ["api", "system", "update-from-github"]:
+            self._require_admin()
+            return self._post_system_update_from_github(payload)
         if method == "PUT" and len(parts) == 4 and parts[:3] == ["api", "dashboard", "panels"]:
             self._require_staff()
             return self._put_dashboard_panel(parts[3], payload)
@@ -2439,7 +2451,86 @@ class Handler(BaseHTTPRequestHandler):
         reset_info = {**payload, "resetAt": payload.get("resetAt") or int(datetime.now(timezone.utc).timestamp() * 1000)}
         setting = self._put_setting("counting.resetGlobal", {"value": reset_info, "updated_by": payload.get("uid")})
         self._execute_one("delete from counting_machine_status returning id")
+        self._execute_one("delete from counting_drafts returning id")
         return {"ok": True, "reset": setting["setting"]}
+
+    def _system_update_script(self) -> Path:
+        candidates = [
+            Path(_env("DARK_JUTSU_UPDATE_SCRIPT")),
+            ROOT / "scripts" / "atualizar_darkjutsu_do_github.bat",
+            ROOT.parent / "scripts" / "atualizar_darkjutsu_do_github.bat",
+            ROOT.parent.parent / "scripts" / "atualizar_darkjutsu_do_github.bat",
+            Path(r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\scripts\atualizar_darkjutsu_do_github.bat"),
+        ]
+        for candidate in candidates:
+            if str(candidate) and candidate.is_file():
+                return candidate
+        raise ApiError(HTTPStatus.NOT_FOUND, "Script de atualizacao GitHub nao encontrado.")
+
+    def _system_update_status(self) -> dict[str, Any]:
+        commit = ""
+        log_tail = ""
+        try:
+            if SYSTEM_UPDATE_VERSION_FILE.is_file():
+                commit = SYSTEM_UPDATE_VERSION_FILE.read_text(encoding="utf-8", errors="ignore").strip()
+        except Exception:
+            commit = ""
+        try:
+            if SYSTEM_UPDATE_LOG.is_file():
+                lines = SYSTEM_UPDATE_LOG.read_text(encoding="utf-8", errors="ignore").splitlines()
+                log_tail = "\n".join(lines[-25:])
+        except Exception:
+            log_tail = ""
+        return {
+            "ok": True,
+            "running": SYSTEM_UPDATE_RUNNING,
+            "last": SYSTEM_UPDATE_LAST,
+            "commit": commit,
+            "log_tail": log_tail,
+        }
+
+    def _post_system_update_from_github(self, payload: dict[str, Any]) -> dict[str, Any]:
+        global SYSTEM_UPDATE_RUNNING, SYSTEM_UPDATE_LAST
+        with SYSTEM_UPDATE_LOCK:
+            if SYSTEM_UPDATE_RUNNING:
+                return self._system_update_status()
+            SYSTEM_UPDATE_RUNNING = True
+        started = datetime.now(timezone.utc)
+        script = self._system_update_script()
+        cmd = ["cmd.exe", "/c", str(script)]
+        if bool(payload.get("force") or payload.get("forcar")):
+            cmd.append("--force")
+        try:
+            completed = subprocess.run(
+                cmd,
+                cwd=str(script.parent),
+                capture_output=True,
+                text=True,
+                timeout=900,
+                check=False,
+            )
+            SYSTEM_UPDATE_LAST = {
+                "started_at": started.isoformat(),
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "returncode": completed.returncode,
+                "forced": bool(payload.get("force") or payload.get("forcar")),
+                "stdout": (completed.stdout or "")[-4000:],
+                "stderr": (completed.stderr or "")[-4000:],
+            }
+            return {**self._system_update_status(), "ok": completed.returncode == 0}
+        except subprocess.TimeoutExpired as exc:
+            SYSTEM_UPDATE_LAST = {
+                "started_at": started.isoformat(),
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "returncode": 124,
+                "forced": bool(payload.get("force") or payload.get("forcar")),
+                "stdout": (exc.stdout or "")[-4000:] if isinstance(exc.stdout, str) else "",
+                "stderr": "Tempo limite excedido ao atualizar pelo GitHub.",
+            }
+            raise ApiError(HTTPStatus.GATEWAY_TIMEOUT, "Atualizacao GitHub excedeu o tempo limite.")
+        finally:
+            with SYSTEM_UPDATE_LOCK:
+                SYSTEM_UPDATE_RUNNING = False
 
     def _label_jobs(self, query: dict[str, list[str]]) -> dict[str, Any]:
         limit = _limit(query, 100, 500)

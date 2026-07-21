@@ -1685,6 +1685,211 @@ display:none;
     }
 }
 
+/* Ocorrencias: painel operacional reimaginado */
+#ocorrenciasScreen{
+    inset:6px;
+    z-index:70;
+    background:rgba(2,6,23,0.78);
+}
+
+.ocorrenciasShell{
+    background:
+        radial-gradient(circle at 18% 0%, rgba(34,211,238,0.10), transparent 34%),
+        linear-gradient(180deg,#07111A 0%,#08101A 48%,#050A12 100%);
+    border-color:rgba(125,211,252,0.22);
+}
+
+.ocorrenciasHeader{
+    min-height:58px;
+    padding:10px 14px;
+    background:
+        linear-gradient(90deg,rgba(7,89,133,0.18),rgba(15,23,42,0.92) 42%,rgba(20,83,45,0.12)),
+        #08111C;
+}
+
+.ocorrenciasHeader h2{
+    font-size:18px;
+}
+
+.ocorrenciasHeader p{
+    font-size:10px;
+    color:#A8C2DD;
+}
+
+.ocorrenciasBody{
+    grid-template-columns:minmax(0, .95fr) minmax(330px, 1.05fr);
+    gap:9px;
+    padding:9px;
+}
+
+.ocorrenciaForm{
+    grid-template-columns:repeat(6, minmax(0, 1fr));
+    gap:7px 9px;
+    border-radius:8px;
+    background:rgba(7,13,24,0.88);
+}
+
+.ocorrenciaFormTitle,
+.ocorrenciasConsultaHeader{
+    background:linear-gradient(180deg,rgba(15,23,42,0.94),rgba(8,13,24,0.94));
+}
+
+.ocorrenciaFormTitle strong,
+.ocorrenciasConsultaHeader strong{
+    font-size:15px;
+}
+
+.ocorrenciaFormTitle small{
+    color:#9FB4CC;
+}
+
+.ocorrenciaSectionTitle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    color:#7DD3FC;
+}
+
+.ocorrenciaSectionTitle::after{
+    content:"";
+    height:1px;
+    flex:1;
+    background:linear-gradient(90deg,rgba(125,211,252,0.32),transparent);
+}
+
+.ocorrenciaForm input,
+.ocorrenciaForm select,
+.ocorrenciaForm textarea{
+    min-height:34px;
+}
+
+.ocorrenciasConsulta{
+    display:grid;
+    grid-template-rows:auto auto auto minmax(0, 1fr) auto;
+    gap:8px;
+    padding:0;
+    overflow:hidden;
+    border-radius:8px;
+    background:
+        linear-gradient(180deg,rgba(8,47,73,0.22),rgba(2,6,23,0.58)),
+        rgba(7,13,24,0.9);
+}
+
+.ocorrenciasStats{
+    padding:0 10px;
+}
+
+.ocorrenciasStats div{
+    min-height:44px;
+    padding:8px 9px 8px 12px;
+    background:rgba(2,6,23,0.48);
+}
+
+.ocorrenciasStats span{
+    font-size:9px;
+}
+
+.ocorrenciasStats strong{
+    font-size:19px;
+}
+
+.ocorrenciasFiltros{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    margin:0 10px;
+    padding:7px;
+}
+
+.ocorrenciasFiltros input:first-child{
+    grid-column:1 / -1;
+}
+
+.ocorrenciasFiltros button{
+    width:100%;
+}
+
+.ocorrenciasFiltros input,
+.ocorrenciasFiltros select{
+    min-height:32px;
+    padding:7px 8px;
+}
+
+.ocorrenciasLista{
+    padding:0 10px 2px;
+    scrollbar-width:thin;
+}
+
+.ocorrenciasResumoPainel{
+    margin:0 10px 10px;
+    grid-template-columns:minmax(96px, .7fr) minmax(130px, 1fr) auto;
+    border:1px solid rgba(125,211,252,0.14);
+    border-radius:8px;
+    background:rgba(2,6,23,0.38);
+}
+
+.ocorrenciasResumoPainel::before{
+    display:none;
+}
+
+.ocorrenciaCard{
+    position:relative;
+    overflow:hidden;
+    background:linear-gradient(180deg,rgba(15,23,42,0.86),rgba(8,13,24,0.9));
+}
+
+.ocorrenciaCard::before{
+    content:"";
+    position:absolute;
+    inset:0 0 auto;
+    height:1px;
+    background:linear-gradient(90deg,rgba(125,211,252,0.26),transparent 58%);
+}
+
+.ocorrenciaCardTop strong{
+    font-size:13px;
+}
+
+.ocorrenciaTipo{
+    align-items:flex-start;
+}
+
+.ocorrenciaTipo span{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.ocorrenciaCard p{
+    max-height:54px;
+    overflow:auto;
+}
+
+.ocorrenciaResumoLinha button,
+.ocorrenciasFiltros button{
+    border-color:rgba(125,211,252,0.28);
+    background:#082033;
+    color:#E0F2FE;
+}
+
+@media (max-width: 980px){
+    .ocorrenciasBody{
+        grid-template-columns:1fr;
+        overflow:auto;
+    }
+
+    .ocorrenciasConsulta{
+        min-height:360px;
+    }
+
+    .ocorrenciasFiltros{
+        grid-template-columns:1fr 1fr;
+    }
+
+    .ocorrenciasFiltros input:first-child,
+    .ocorrenciasFiltros button{
+        grid-column:1 / -1;
+    }
+}
+
 #contagemHomePopup{
     position:absolute;
     top:114px;
