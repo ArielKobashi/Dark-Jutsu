@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import hmac
 import hashlib
 import json
@@ -362,6 +363,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _send_json(self, payload: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, ensure_ascii=False, default=_json_default).encode("utf-8")
+        raw_len = len(body)
+        accept_encoding = self.headers.get("Accept-Encoding", "")
+        usar_gzip = "gzip" in accept_encoding.lower() and raw_len > 2048
+        if usar_gzip:
+            body = gzip.compress(body, compresslevel=5)
         origin = self.headers.get("Origin", "").rstrip("/")
         allow_origin = ""
         if ALLOWED_ORIGINS and ALLOWED_ORIGINS != ["*"]:
@@ -372,13 +378,24 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            if usar_gzip:
+                self.send_header("Content-Encoding", "gzip")
+                self.send_header("Vary", "Accept-Encoding")
             if allow_origin:
                 self.send_header("Access-Control-Allow-Origin", allow_origin)
-                self.send_header("Vary", "Origin")
+                self.send_header("Vary", "Origin, Accept-Encoding" if usar_gzip else "Origin")
             self.send_header("Access-Control-Allow-Headers", "authorization, content-type, x-api-token")
             self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE, OPTIONS")
             self.end_headers()
             self.wfile.write(body)
+            if raw_len > 100000:
+                DETAIL_LOG.info(
+                    "JSON_PAYLOAD path=%s raw_bytes=%s sent_bytes=%s gzip=%s",
+                    self.path,
+                    raw_len,
+                    len(body),
+                    usar_gzip,
+                )
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError) as exc:
             DETAIL_LOG.warning(
                 "SEND_ABORT method=%s path=%s client=%s status=%s error=%s",
@@ -399,13 +416,29 @@ class Handler(BaseHTTPRequestHandler):
             allow_origin = "*"
         content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
         try:
+            stat = path.stat()
+            etag = f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(HTTPStatus.NOT_MODIFIED)
+                self.send_header("ETag", etag)
+                if allow_origin:
+                    self.send_header("Access-Control-Allow-Origin", allow_origin)
+                    self.send_header("Vary", "Origin")
+                self.end_headers()
+                return
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(path.stat().st_size))
-            if path.suffix.lower() in {".html", ".js", ".css"}:
-                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-                self.send_header("Pragma", "no-cache")
-                self.send_header("Expires", "0")
+            self.send_header("Content-Length", str(stat.st_size))
+            self.send_header("ETag", etag)
+            suffix = path.suffix.lower()
+            if suffix == ".html":
+                self.send_header("Cache-Control", "no-cache, must-revalidate")
+            elif suffix in {".js", ".css"}:
+                self.send_header("Cache-Control", "public, max-age=300, must-revalidate")
+            elif suffix in {".png", ".ico", ".webmanifest", ".woff", ".woff2", ".ttf"}:
+                self.send_header("Cache-Control", "public, max-age=604800")
+            elif suffix in {".xlsx", ".json"}:
+                self.send_header("Cache-Control", "public, max-age=1800, must-revalidate")
             if allow_origin:
                 self.send_header("Access-Control-Allow-Origin", allow_origin)
                 self.send_header("Vary", "Origin")

@@ -1,8 +1,9 @@
-const CACHE_NAME = "dark-jutsu-app-v3";
+const CACHE_NAME = "dark-jutsu-app-v4";
 const APP_SHELL = [
   "./style.css",
   "./mobile.css",
   "./dashboard-nav.js",
+  "./critical-stock-manager.js",
   "./logo.png",
   "./logo-tab.png",
   "./site.webmanifest"

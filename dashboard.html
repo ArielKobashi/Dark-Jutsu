@@ -1462,6 +1462,7 @@
         }
         const root = document.getElementById("app");
         const btnAtualizar = document.getElementById("btnAtualizar");
+        let dashboardLoadSeq = 0;
         let estoqueMinimoCache = null;
         let mata110Cache = null;
         let mata111Cache = null;
@@ -1549,7 +1550,7 @@
             if(deveTentarRelativo){
                 for(const url of lista){
                     try{
-                        const response = await fetchDashboardComTimeout(url, { cache: "no-store", ...options }, 3500);
+                        const response = await fetchDashboardComTimeout(url, { cache: "default", ...options }, 3500);
                         if(response.ok) return response;
                     }catch(e){}
                 }
@@ -1568,7 +1569,7 @@
                     if(!["downloads", "data"].includes(folder) || filename.includes("/") || filename.includes("\\")) continue;
                     try{
                         const response = await fetchDashboardComTimeout(`${base}/api/files/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`, {
-                            cache: "no-store",
+                            cache: "default",
                             ...options,
                             headers
                         }, 3500);
@@ -4519,36 +4520,70 @@
                 renderLogin();
                 return;
             }
+            const loadSeq = ++dashboardLoadSeq;
+            const loadStartedAt = performance.now();
             renderLoading();
             try{
                 const deveCarregarHistoricoCooperat = cfg.ambiente === "avaliador";
+                const podeRenderizarAntesDasPlanilhas = !["avaliador", "movimentacao"].includes(cfg.ambiente);
                 let snapshotSql = null;
                 try{
+                    const snapshotStartedAt = performance.now();
                     snapshotSql = await carregarDashboardSnapshotSql();
+                    console.info(`[dashboard] snapshot carregado em ${Math.round(performance.now() - snapshotStartedAt)}ms`);
                 }catch(sqlError){
                     console.warn("Falha ao carregar dashboard no SQL:", sqlError);
                     throw sqlError;
                 }
+                if(loadSeq !== dashboardLoadSeq) return;
                 if(snapshotSql){
-                    const [mapaMinimo, mata110, mata111, mata112] = await Promise.all([
-                        carregarEstoqueMinimo(),
-                        carregarMata110(),
-                        carregarMata111(),
-                        carregarMata112(),
-                        carregarGerenciadorEstoqueConfig()
-                    ]);
                     dashboardPanelConfig = snapshotSql.dashboardPanelConfig || {};
                     avaliadorPedidosConfig = snapshotSql.avaliadorPedidosConfig || {};
-                    const historicoCooperat = deveCarregarHistoricoCooperat
-                        ? await carregarHistoricoCooperatLocal()
-                        : null;
+                    const baseStartedAt = performance.now();
+                    const [mapaMinimo] = await Promise.all([
+                        carregarEstoqueMinimo(),
+                        carregarGerenciadorEstoqueConfig()
+                    ]);
+                    console.info(`[dashboard] base local carregada em ${Math.round(performance.now() - baseStartedAt)}ms`);
+                    if(loadSeq !== dashboardLoadSeq) return;
+                    if(podeRenderizarAntesDasPlanilhas){
+                        renderDashboard(snapshotSql.banco || {}, mapaMinimo, mata111Cache || [], mata112Cache || [], {
+                            mata110: mata110Cache || [],
+                            contagens: snapshotSql.contagens || {},
+                            etiquetasGeradas: snapshotSql.etiquetasGeradas || {},
+                            rankingEtiquetas: snapshotSql.rankingEtiquetas || {},
+                            historicoCooperat: null
+                        });
+                    }
+                    const planilhasStartedAt = performance.now();
+                    const [mata110, mata111, mata112] = await Promise.all([
+                        carregarMata110(),
+                        carregarMata111(),
+                        carregarMata112()
+                    ]);
+                    console.info(`[dashboard] planilhas carregadas em ${Math.round(performance.now() - planilhasStartedAt)}ms`);
+                    if(loadSeq !== dashboardLoadSeq) return;
                     renderDashboard(snapshotSql.banco || {}, mapaMinimo, mata111, mata112, {
                         mata110,
                         contagens: snapshotSql.contagens || {},
                         etiquetasGeradas: snapshotSql.etiquetasGeradas || {},
                         rankingEtiquetas: snapshotSql.rankingEtiquetas || {},
-                        historicoCooperat
+                        historicoCooperat: null
                     });
+                    if(deveCarregarHistoricoCooperat){
+                        carregarHistoricoCooperatLocal().then(historicoCooperat => {
+                            if(loadSeq !== dashboardLoadSeq || !historicoCooperat) return;
+                            renderDashboard(snapshotSql.banco || {}, mapaMinimo, mata111, mata112, {
+                                mata110,
+                                contagens: snapshotSql.contagens || {},
+                                etiquetasGeradas: snapshotSql.etiquetasGeradas || {},
+                                rankingEtiquetas: snapshotSql.rankingEtiquetas || {},
+                                historicoCooperat
+                            });
+                            console.info(`[dashboard] historico Cooperat carregado apos ${Math.round(performance.now() - loadStartedAt)}ms`);
+                        }).catch(err => console.warn("Nao foi possivel carregar historico Cooperat em segundo plano:", err));
+                    }
+                    console.info(`[dashboard] primeira carga concluida em ${Math.round(performance.now() - loadStartedAt)}ms`);
                     return;
                 }
                 throw new Error("Snapshot SQL do dashboard indisponivel.");
