@@ -22,8 +22,8 @@ set "LOCAL_IP="
 
 if /I "%~1"=="--force" set "FORCE_UPDATE=1"
 
-if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
-if not exist "%WORK_ROOT%" mkdir "%WORK_ROOT%" 2>nul
+call :prepare_local_paths
+if errorlevel 1 exit /b 1
 
 call :log "=================================================="
 call :log "Inicio atualizacao GitHub. Usuario=%USERNAME% Maquina=%COMPUTERNAME%"
@@ -101,7 +101,13 @@ if not exist "%REPO_DIR%\.git" (
   )
 )
 
-for /f %%C in ('git -C "%REPO_DIR%" rev-parse HEAD') do set "NEW_COMMIT=%%C"
+for /f %%C in ('git -C "%REPO_DIR%" rev-parse HEAD 2^>nul') do set "NEW_COMMIT=%%C"
+if not defined NEW_COMMIT (
+  call :log "FALHOU: clone local nao possui commit valido em %REPO_DIR%."
+  call :event ERRO ATUALIZACAO "Clone local GitHub sem commit valido; atualizacao abortada."
+  call :unlock
+  exit /b 1
+)
 
 if /I "%NEW_COMMIT%"=="%OLD_COMMIT%" (
   call :log "Sem mudanca. Versao ja aplicada: %NEW_COMMIT%"
@@ -109,14 +115,8 @@ if /I "%NEW_COMMIT%"=="%OLD_COMMIT%" (
   exit /b 0
 )
 
-if "%OLD_COMMIT%"=="" if not "%FORCE_UPDATE%"=="1" (
-  >"%VERSION_FILE%" echo %NEW_COMMIT%
-  call :log "Primeira execucao: versao GitHub registrada sem publicar para nao sobrescrever o servidor atual. Use --force se quiser publicar agora."
-  call :unlock
-  exit /b 0
-)
-
 call :log "Nova versao detectada: %NEW_COMMIT%"
+if "%OLD_COMMIT%"=="" call :log "Arquivo de versao ausente; publicando commit atual do GitHub como base inicial."
 call :health_local
 if "%errorlevel%"=="0" set "LOCAL_API_WAS_ON=1"
 call :publish
@@ -149,6 +149,29 @@ if "%LOCAL_API_WAS_ON%"=="1" (
 )
 
 call :unlock
+exit /b 0
+
+:prepare_local_paths
+if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
+if not exist "%WORK_ROOT%" mkdir "%WORK_ROOT%" 2>nul
+if not exist "%LOGDIR%" (
+  set "LOGDIR=%LOCALAPPDATA%\DarkJutsu\logs"
+  set "LOGFILE=%LOCALAPPDATA%\DarkJutsu\logs\atualizacao_github.log"
+)
+if not exist "%WORK_ROOT%" (
+  set "WORK_ROOT=%LOCALAPPDATA%\DarkJutsu\github-sync"
+  set "REPO_DIR=%LOCALAPPDATA%\DarkJutsu\github-sync\Dark-Jutsu"
+)
+if not exist "%LOGDIR%" mkdir "%LOGDIR%" 2>nul
+if not exist "%WORK_ROOT%" mkdir "%WORK_ROOT%" 2>nul
+if not exist "%LOGDIR%" (
+  echo FALHOU: nao consegui criar pasta de logs em C:\DarkJutsu nem em %%LOCALAPPDATA%%\DarkJutsu.
+  exit /b 1
+)
+if not exist "%WORK_ROOT%" (
+  echo FALHOU: nao consegui criar pasta de clone em C:\DarkJutsu nem em %%LOCALAPPDATA%%\DarkJutsu.
+  exit /b 1
+)
 exit /b 0
 
 :publish
