@@ -602,7 +602,7 @@ def _separar_dados_mortos_por_descricao(
 
     for item in itens:
         key = _morto_key(item)
-        if _is_descricao_dado_morto(item.get("descricao")):
+        if item.get("morto") is True or _is_descricao_dado_morto(item.get("descricao")):
             morto = _preparar_item_morto(item)
             if key and key in codigos_mortos:
                 continue
@@ -814,6 +814,15 @@ def _build_items(
                 item["reposicaoOrigem"] = "cooperat"
             if tem_limite_planilha:
                 item["limitesOrigem"] = "cooperat"
+
+        if (
+            not tem_endereco_com_saldo
+            and estoque_minimo_item
+            and _optional_num(estoque_minimo_item.get("saldoAnterior")) == 0
+            and _num(item.get("saldo")) <= 0
+        ):
+            item["morto"] = True
+            item["comentarios"].append("Item sem endereco Protheus e com saldo Cooperat zerado; mantido como morto ate nova entrada.")
 
         anterior = prev_by_protheus.get(protheus_key) or prev_by_cooperat.get(cooperat_key) or prev_by_descricao.get(_ascii_lower(descricao))
         if anterior:

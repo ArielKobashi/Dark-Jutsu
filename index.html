@@ -4351,10 +4351,20 @@ function renderTabela(){
         row.appendChild(tdCheck);
 
         // PROTHEUS
-        criarTd(row, item.protheus || "");
+        const tdProtheus = criarTd(row, item.protheus || "");
+        tdProtheus.title = [tdProtheus.title, "Clique duas vezes para copiar o codigo."].filter(Boolean).join("\n");
+        tdProtheus.ondblclick = e => {
+            e.stopPropagation();
+            copiarTextoSimples(item.protheus || item.protheusKey || item.cooperat || "");
+        };
 
         // COOPERAT
-        criarTd(row, item.cooperat || "");
+        const tdCooperat = criarTd(row, item.cooperat || "");
+        tdCooperat.title = [tdCooperat.title, "Clique duas vezes para copiar o codigo Cooperat."].filter(Boolean).join("\n");
+        tdCooperat.ondblclick = e => {
+            e.stopPropagation();
+            copiarTextoSimples(item.cooperat || item.protheus || "");
+        };
 
         // ARMAZEM
         let tdArm = criarTd(row, item.armazemPrincipal || "");
@@ -4425,7 +4435,7 @@ function renderTabela(){
 
         row.ondblclick = ()=>{
             if(item.protheus){
-                navigator.clipboard.writeText(item.protheus);
+                copiarTextoSimples(item.protheus);
             }
         };
 
@@ -5032,6 +5042,32 @@ function gerarRelatorio(){
                     alert("Não foi possível copiar.");
                 }
                 document.body.removeChild(temp);
+            }
+        }
+        async function copiarTextoSimples(texto){
+            const valor = String(texto || "").trim();
+            if(!valor) return false;
+            try{
+                await navigator.clipboard.writeText(valor);
+                if(typeof mostrarNotificacao === "function") mostrarNotificacao("Copiado: " + valor);
+                return true;
+            }catch(e){
+                const temp = document.createElement("textarea");
+                temp.value = valor;
+                temp.style.position = "fixed";
+                temp.style.opacity = "0";
+                document.body.appendChild(temp);
+                temp.select();
+                try{
+                    document.execCommand("copy");
+                    if(typeof mostrarNotificacao === "function") mostrarNotificacao("Copiado: " + valor);
+                    return true;
+                }catch(err){
+                    console.warn("Falha ao copiar texto:", err);
+                    return false;
+                }finally{
+                    document.body.removeChild(temp);
+                }
             }
         }
 
@@ -15259,13 +15295,22 @@ const senhaInput = document.getElementById("authSenha");
 
 nickInput.addEventListener("keydown", e=>{
     if(e.key === "Enter"){
+        e.preventDefault();
         senhaInput.focus();
     }
 });
 
 senhaInput.addEventListener("keydown", e=>{
     if(e.key === "Enter"){
+        e.preventDefault();
         login();
+    }
+});
+window.addEventListener("DOMContentLoaded", () => {
+    const loginBoxVisivel = document.getElementById("authBox");
+    const nick = document.getElementById("authNickname");
+    if(loginBoxVisivel && nick && !nick.value){
+        setTimeout(() => nick.focus(), 0);
     }
 });
 

@@ -621,12 +621,41 @@
             background:rgba(26,26,37,.72);
             padding:10px;
         }
-        .gerenciadorTable input{
-            width:76px;
-            min-height:30px;
-            padding:5px 7px;
-            border-radius:6px;
-            text-align:right;
+        .gerenciadorConfigGrid{
+            display:grid;
+            grid-template-columns:repeat(4,minmax(130px,1fr));
+            gap:10px;
+            margin-top:12px;
+        }
+        .gerenciadorConfigField{
+            display:grid;
+            gap:5px;
+            min-width:0;
+        }
+        .gerenciadorConfigField label{
+            color:var(--muted);
+            font-size:10px;
+            font-weight:900;
+            text-transform:uppercase;
+        }
+        .gerenciadorConfigField input,
+        .gerenciadorConfigField select{
+            min-height:34px;
+            border-radius:7px;
+        }
+        .gerenciadorConfigChecks{
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px;
+            margin-top:12px;
+        }
+        .gerenciadorConfigChecks label{
+            display:inline-flex;
+            align-items:center;
+            gap:7px;
+            color:#dbeafe;
+            font-size:12px;
+            font-weight:800;
         }
         .gerenciadorTable .descricao{
             max-width:360px;
@@ -1313,7 +1342,8 @@
         @media (max-width:900px){
             .avaliadorLayout,
             .avaliadorMesa,
-            .gerenciadorHero{grid-template-columns:1fr}
+            .gerenciadorHero,
+            .gerenciadorConfigGrid{grid-template-columns:1fr}
         }
         @media (max-width:800px){
             .topbar{display:block;padding:17px 14px 12px}
@@ -1616,6 +1646,7 @@
         let extrasAtual = {};
         let dashboardPanelConfig = {};
         let avaliadorPedidosConfig = {};
+        let gerenciadorEstoqueConfig = {};
         let dashboardLazySeq = 0;
         let dashboardLazyRenderers = {};
         let dashboardLazyRendered = {};
@@ -1761,6 +1792,45 @@
             if(n === null) return null;
             const codigoNorm = normalizarCodigoCooperatHistorico(codigo);
             return codigoNorm === "104739" && n >= 1000 && n % 1000 === 0 ? n / 1000 : n;
+        }
+        const GERENCIADOR_ESTOQUE_DEFAULT_CONFIG = {
+            modoAplicacao: "sombra",
+            minEventsToSuggest: 3,
+            minEventsToApply: 8,
+            defaultLeadTimeDays: 30,
+            maxLeadTimeDays: 120,
+            confidenceToApply: 0.85,
+            confidenceToSuggest: 0.55,
+            highIncreaseMultiplier: 3,
+            highReductionMultiplier: 0.4,
+            elevatedEntryMultiplier: 3,
+            regularIntervalDays: 45,
+            minStockFloor: 1,
+            bloquearComPedidoAberto: true,
+            tratarEntradaElevadaComoPreventiva: true
+        };
+        function configGerenciadorEstoque(){
+            return { ...GERENCIADOR_ESTOQUE_DEFAULT_CONFIG, ...(gerenciadorEstoqueConfig || {}) };
+        }
+        function numeroConfigGerenciador(valor, padrao, minimo = 0, maximo = Infinity){
+            const n = num(valor);
+            if(n === null) return padrao;
+            return Math.max(minimo, Math.min(maximo, n));
+        }
+        function motorConfigGerenciador(){
+            const cfgMotor = configGerenciadorEstoque();
+            return {
+                minEventsToSuggest: Math.round(numeroConfigGerenciador(cfgMotor.minEventsToSuggest, 3, 1, 100)),
+                minEventsToApply: Math.round(numeroConfigGerenciador(cfgMotor.minEventsToApply, 8, 1, 100)),
+                defaultLeadTimeDays: Math.round(numeroConfigGerenciador(cfgMotor.defaultLeadTimeDays, 30, 1, 365)),
+                maxLeadTimeDays: Math.round(numeroConfigGerenciador(cfgMotor.maxLeadTimeDays, 120, 1, 730)),
+                confidenceToApply: numeroConfigGerenciador(cfgMotor.confidenceToApply, .85, 0, 1),
+                highIncreaseMultiplier: numeroConfigGerenciador(cfgMotor.highIncreaseMultiplier, 3, 1, 20),
+                highReductionMultiplier: numeroConfigGerenciador(cfgMotor.highReductionMultiplier, .4, 0, 1),
+                elevatedEntryMultiplier: numeroConfigGerenciador(cfgMotor.elevatedEntryMultiplier, 3, 1, 20),
+                regularIntervalDays: Math.round(numeroConfigGerenciador(cfgMotor.regularIntervalDays, 45, 1, 365)),
+                minStockFloor: Math.round(numeroConfigGerenciador(cfgMotor.minStockFloor, 1, 0, 100000))
+            };
         }
         function normalizarCodigo(valor){
             return String(valor ?? "").trim().toLowerCase();
@@ -2101,7 +2171,8 @@
             if(!window.DarkCriticalStockManager?.calculateItemPolicy) return null;
             return window.DarkCriticalStockManager.calculateItemPolicy(item, {
                 history: historicoSaldoItemDashboard(item, banco),
-                purchaseOrder: pedidoItem(item, pedidos)
+                purchaseOrder: pedidoItem(item, pedidos),
+                config: motorConfigGerenciador()
             });
         }
         function aplicarLimitesDashboard(item, mapaMinimo, ajustes, banco, pedidos){
@@ -4077,6 +4148,31 @@
                 rankingEtiquetas: data?.rankingEtiquetas || {}
             };
         }
+        async function carregarGerenciadorEstoqueConfig(){
+            try{
+                const data = await sqlApi("/api/settings/critical_stock.config");
+                gerenciadorEstoqueConfig = data?.setting?.value || {};
+            }catch(err){
+                gerenciadorEstoqueConfig = {};
+                if(!String(err?.message || err).includes("Configuracao nao encontrada")){
+                    console.warn("Falha ao carregar configuracao global do gerenciador:", err);
+                }
+            }
+            return configGerenciadorEstoque();
+        }
+        async function salvarGerenciadorEstoqueConfig(novaConfig){
+            gerenciadorEstoqueConfig = { ...configGerenciadorEstoque(), ...(novaConfig || {}) };
+            const data = await sqlApi("/api/settings/critical_stock.config", {
+                method: "PUT",
+                body: JSON.stringify({
+                    value: gerenciadorEstoqueConfig,
+                    atualizadoPorUid: auth.currentUser?.uid || auth.currentUser?.id || "",
+                    atualizadoPor: auth.currentUser?.email || auth.currentUser?.displayName || ""
+                })
+            });
+            gerenciadorEstoqueConfig = data?.setting?.value || gerenciadorEstoqueConfig;
+            return gerenciadorEstoqueConfig;
+        }
         function renderDashboardAtual(foco){
             if(bancoAtual) renderDashboard(bancoAtual, estoqueMinimoCache || new Map(), mata111Cache || [], mata112Cache || [], extrasAtual);
             if(foco?.id){
@@ -4322,59 +4418,52 @@
                     }
                 });
             });
-            root.querySelectorAll("[data-gerenciador-save]").forEach(btn => {
-                if(btn.dataset.boundGerenciadorSave === "1") return;
-                btn.dataset.boundGerenciadorSave = "1";
+            root.querySelectorAll("[data-gerenciador-config-save]").forEach(btn => {
+                if(btn.dataset.boundGerenciadorConfig === "1") return;
+                btn.dataset.boundGerenciadorConfig = "1";
                 btn.addEventListener("click", async () => {
-                    const codigo = normalizarCodigo(btn.dataset.gerenciadorSave);
-                    const row = btn.closest("[data-gerenciador-row]");
-                    if(!codigo || !row) return;
-                    const valores = {};
-                    row.querySelectorAll("[data-gerenciador-field]").forEach(input => {
-                        const valor = parseNumeroPrompt(input.value);
-                        if(valor !== null) valores[input.dataset.gerenciadorField] = valor;
+                    const form = btn.closest("[data-gerenciador-config]");
+                    if(!form) return;
+                    const atual = configGerenciadorEstoque();
+                    const novaConfig = { ...atual };
+                    form.querySelectorAll("[data-gerenciador-config-field]").forEach(input => {
+                        const campo = input.dataset.gerenciadorConfigField;
+                        if(!campo) return;
+                        if(input.type === "checkbox"){
+                            novaConfig[campo] = input.checked;
+                        }else if(campo === "modoAplicacao"){
+                            novaConfig[campo] = input.value;
+                        }else{
+                            const valor = parseNumeroPrompt(input.value);
+                            if(valor !== null){
+                                novaConfig[campo] = ["confidenceToApply","confidenceToSuggest"].includes(campo) && valor > 1
+                                    ? valor / 100
+                                    : valor;
+                            }
+                        }
                     });
-                    if(!Object.keys(valores).length){
-                        alert("Informe ao menos um parametro manual valido.");
-                        return;
-                    }
                     btn.disabled = true;
                     try{
-                        for(const [campo, valor] of Object.entries(valores)){
-                            await salvarAjusteLimiteItem(codigo, campo, valor);
-                        }
+                        await salvarGerenciadorEstoqueConfig(novaConfig);
                         renderDashboardAtualLogo();
                     }catch(err){
-                        alert("Nao foi possivel salvar os parametros manuais.");
-                        console.warn("Falha ao salvar parametros do gerenciador:", err);
+                        alert("Nao foi possivel salvar as regras globais do gerenciador.");
+                        console.warn("Falha ao salvar configuracao global do gerenciador:", err);
                         btn.disabled = false;
                     }
                 });
             });
-            root.querySelectorAll("[data-gerenciador-apply]").forEach(btn => {
-                if(btn.dataset.boundGerenciadorApply === "1") return;
-                btn.dataset.boundGerenciadorApply = "1";
+            root.querySelectorAll("[data-gerenciador-config-reset]").forEach(btn => {
+                if(btn.dataset.boundGerenciadorReset === "1") return;
+                btn.dataset.boundGerenciadorReset = "1";
                 btn.addEventListener("click", async () => {
-                    const codigo = normalizarCodigo(btn.dataset.gerenciadorApply);
-                    if(!codigo) return;
-                    const valores = {};
-                    ["minimo","maximo","reposicao"].forEach(campo => {
-                        const valor = parseNumeroPrompt(btn.dataset[campo]);
-                        if(valor !== null) valores[campo] = valor;
-                    });
-                    if(!Object.keys(valores).length){
-                        alert("O gerenciador nao trouxe politica sugerida para este item.");
-                        return;
-                    }
                     btn.disabled = true;
                     try{
-                        for(const [campo, valor] of Object.entries(valores)){
-                            await salvarAjusteLimiteItem(codigo, campo, valor);
-                        }
+                        await salvarGerenciadorEstoqueConfig(GERENCIADOR_ESTOQUE_DEFAULT_CONFIG);
                         renderDashboardAtualLogo();
                     }catch(err){
-                        alert("Nao foi possivel aplicar a politica sugerida.");
-                        console.warn("Falha ao aplicar sugestao do gerenciador:", err);
+                        alert("Nao foi possivel restaurar as regras padrao.");
+                        console.warn("Falha ao restaurar configuracao do gerenciador:", err);
                         btn.disabled = false;
                     }
                 });
@@ -4404,7 +4493,8 @@
                         carregarEstoqueMinimo(),
                         carregarMata110(),
                         carregarMata111(),
-                        carregarMata112()
+                        carregarMata112(),
+                        carregarGerenciadorEstoqueConfig()
                     ]);
                     dashboardPanelConfig = snapshotSql.dashboardPanelConfig || {};
                     avaliadorPedidosConfig = snapshotSql.avaliadorPedidosConfig || {};
@@ -4936,11 +5026,12 @@
             const decisao = String(criterio?.decisao || "");
             const travas = Array.isArray(criterio?.travas) ? criterio.travas : [];
             const confianca = Number(criterio?.confianca || 0);
+            const limiteSugerir = numeroConfigGerenciador(configGerenciadorEstoque().confidenceToSuggest, .55, 0, 1);
             if(cfg.gerenciadorDecisao === "todos") return true;
             if(cfg.gerenciadorDecisao === "sem_criterio") return !criterio;
             if(!criterio) return false;
             if(cfg.gerenciadorDecisao === "travas") return travas.length > 0;
-            if(cfg.gerenciadorDecisao === "baixa_confianca") return confianca < .55;
+            if(cfg.gerenciadorDecisao === "baixa_confianca") return confianca < limiteSugerir;
             if(cfg.gerenciadorDecisao === "aplicar") return decisao === "aplicar_politica";
             if(cfg.gerenciadorDecisao === "sugerir") return decisao.includes("sugerir") || decisao.includes("revisar");
             if(cfg.gerenciadorDecisao === "solicitar") return decisao.includes("solicitar");
@@ -4966,6 +5057,7 @@
             return null;
         }
         function resumoGerenciador(linhas){
+            const limiteSugerir = numeroConfigGerenciador(configGerenciadorEstoque().confidenceToSuggest, .55, 0, 1);
             return linhas.reduce((acc, linha) => {
                 const criterio = criterioGerenciadorItem(linha.item);
                 const decisao = String(criterio?.decisao || "");
@@ -4977,7 +5069,7 @@
                 if(decisao.includes("solicitar")) acc.solicitar += 1;
                 if(decisao.includes("excesso")) acc.excesso += 1;
                 if(travas.length) acc.travas += 1;
-                if(Number(criterio?.confianca || 0) < .55) acc.baixaConfianca += 1;
+                if(Number(criterio?.confianca || 0) < limiteSugerir) acc.baixaConfianca += 1;
                 if(criterio?.entradaElevadaForaPadrao) acc.entradaElevada += 1;
                 if(criterio?.pedidoAberto) acc.pedidoAberto += 1;
                 return acc;
@@ -4997,9 +5089,9 @@
                                 <th class="num">Saldo</th>
                                 <th class="num">Atual</th>
                                 <th class="num">Sugerido</th>
-                                <th>Parametros manuais</th>
-                                <th>Evidencias</th>
-                                <th>Acoes</th>
+                                <th>Regra aplicada</th>
+                                <th>Travas</th>
+                                <th>Detalhes</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -5017,7 +5109,7 @@
                                 const evidencias = [
                                     criterio ? `${fmt(criterio.eventosConsumo)} evento(s)` : "sem criterio",
                                     criterio?.demandaClasse ? `demanda ${criterio.demandaClasse}` : "",
-                                    travas.length ? `${travas.length} trava(s)` : ""
+                                    criterio?.leadTimeDias ? `lead ${fmt(criterio.leadTimeDias)} d` : ""
                                 ].filter(Boolean).join(" | ");
                                 return `
                                     <tr data-gerenciador-row="${esc(codigo)}">
@@ -5033,17 +5125,11 @@
                                         <td class="num">${fmt(item.saldo)}</td>
                                         <td class="num">${fmt(item.minimo)}/${fmt(item.maximo)}/${fmt(linha.reposicao)}</td>
                                         <td class="num">${fmt(minSug)}/${fmt(maxSug)}/${fmt(repSug)}</td>
-                                        <td>
-                                            <input data-gerenciador-field="minimo" inputmode="decimal" value="${esc(item.minimo ?? "")}" title="Minimo manual">
-                                            <input data-gerenciador-field="maximo" inputmode="decimal" value="${esc(item.maximo ?? "")}" title="Maximo manual">
-                                            <input data-gerenciador-field="reposicao" inputmode="decimal" value="${esc(linha.reposicao ?? "")}" title="Reposicao manual">
-                                        </td>
                                         <td class="gerenciadorReasons" title="${esc(motivos.map(textoMotivoGerenciador).join("\n"))}">${esc(evidencias || "-")}</td>
+                                        <td class="gerenciadorReasons">${travas.length ? esc(travas.map(textoMotivoGerenciador).join(" | ")) : "-"}</td>
                                         <td>
                                             <div class="gerenciadorActions">
-                                                <button type="button" data-gerenciador-save="${esc(codigo)}">Salvar manual</button>
                                                 ${criterio ? `<button class="infoBtn" type="button" data-criterio-gerenciador="${esc(codigo)}">Detalhes</button>` : ""}
-                                                ${criterio ? `<button class="okBtn" type="button" data-gerenciador-apply="${esc(codigo)}" data-minimo="${esc(minSug ?? "")}" data-maximo="${esc(maxSug ?? "")}" data-reposicao="${esc(repSug ?? "")}">Usar sugerido</button>` : ""}
                                             </div>
                                         </td>
                                     </tr>
@@ -5052,6 +5138,89 @@
                         </tbody>
                     </table>
                 </div>
+            `;
+        }
+        function renderConfigGerenciadorEstoque(resumoBase){
+            const conf = configGerenciadorEstoque();
+            const pct = valor => Math.round(numeroConfigGerenciador(valor, 0, 0, 1) * 100);
+            const optModo = [
+                ["sombra", "Sombra"],
+                ["sugestao", "Sugestao"],
+                ["semi_auto", "Semi-auto"],
+                ["auto_controlado", "Auto controlado"]
+            ];
+            return `
+                <section class="gerenciadorHero" data-gerenciador-config>
+                    <div class="gerenciadorPanel">
+                        <h2>Regras globais do gerenciador</h2>
+                        <p>Estes parametros controlam o motor inteiro: quando ele so observa, quando manda para avaliacao, quando aplica dentro das travas e quando bloqueia por risco.</p>
+                        <div class="gerenciadorConfigGrid">
+                            <div class="gerenciadorConfigField">
+                                <label for="gModoAplicacao">Modo</label>
+                                <select id="gModoAplicacao" data-gerenciador-config-field="modoAplicacao">
+                                    ${optModo.map(([v,t]) => `<option value="${v}" ${conf.modoAplicacao === v ? "selected" : ""}>${t}</option>`).join("")}
+                                </select>
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gConfiancaAplicar">Confianca aplicar</label>
+                                <input id="gConfiancaAplicar" inputmode="decimal" value="${esc(conf.confidenceToApply)}" data-gerenciador-config-field="confidenceToApply">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gConfiancaSugerir">Confianca sugerir</label>
+                                <input id="gConfiancaSugerir" inputmode="decimal" value="${esc(conf.confidenceToSuggest)}" data-gerenciador-config-field="confidenceToSuggest">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gEventosSugerir">Eventos sugerir</label>
+                                <input id="gEventosSugerir" inputmode="numeric" value="${esc(conf.minEventsToSuggest)}" data-gerenciador-config-field="minEventsToSuggest">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gEventosAplicar">Eventos aplicar</label>
+                                <input id="gEventosAplicar" inputmode="numeric" value="${esc(conf.minEventsToApply)}" data-gerenciador-config-field="minEventsToApply">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gLeadPadrao">Lead padrao dias</label>
+                                <input id="gLeadPadrao" inputmode="numeric" value="${esc(conf.defaultLeadTimeDays)}" data-gerenciador-config-field="defaultLeadTimeDays">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gLeadMax">Lead maximo dias</label>
+                                <input id="gLeadMax" inputmode="numeric" value="${esc(conf.maxLeadTimeDays)}" data-gerenciador-config-field="maxLeadTimeDays">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gIntervaloRegular">Intervalo regular</label>
+                                <input id="gIntervaloRegular" inputmode="numeric" value="${esc(conf.regularIntervalDays)}" data-gerenciador-config-field="regularIntervalDays">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gAumentoMax">Trava aumento x</label>
+                                <input id="gAumentoMax" inputmode="decimal" value="${esc(conf.highIncreaseMultiplier)}" data-gerenciador-config-field="highIncreaseMultiplier">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gReducaoMax">Trava reducao x</label>
+                                <input id="gReducaoMax" inputmode="decimal" value="${esc(conf.highReductionMultiplier)}" data-gerenciador-config-field="highReductionMultiplier">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gEntradaElevada">Entrada elevada x</label>
+                                <input id="gEntradaElevada" inputmode="decimal" value="${esc(conf.elevatedEntryMultiplier)}" data-gerenciador-config-field="elevatedEntryMultiplier">
+                            </div>
+                            <div class="gerenciadorConfigField">
+                                <label for="gPisoMinimo">Piso minimo</label>
+                                <input id="gPisoMinimo" inputmode="numeric" value="${esc(conf.minStockFloor)}" data-gerenciador-config-field="minStockFloor">
+                            </div>
+                        </div>
+                        <div class="gerenciadorConfigChecks">
+                            <label><input type="checkbox" ${conf.bloquearComPedidoAberto ? "checked" : ""} data-gerenciador-config-field="bloquearComPedidoAberto"> Bloquear com pedido aberto</label>
+                            <label><input type="checkbox" ${conf.tratarEntradaElevadaComoPreventiva ? "checked" : ""} data-gerenciador-config-field="tratarEntradaElevadaComoPreventiva"> Tratar entrada elevada como preventiva</label>
+                        </div>
+                        <div class="gerenciadorActions">
+                            <button class="primaryBtn" type="button" data-gerenciador-config-save>Salvar regras globais</button>
+                            <button type="button" data-gerenciador-config-reset>Restaurar padrao</button>
+                        </div>
+                    </div>
+                    <div class="gerenciadorResumo">
+                        <div class="gerenciadorMetric"><span>Modo ativo</span><strong>${esc(optModo.find(([v]) => v === conf.modoAplicacao)?.[1] || conf.modoAplicacao)}</strong></div>
+                        <div class="gerenciadorMetric"><span>Aplicar/Sugerir</span><strong>${esc(pct(conf.confidenceToApply))}% / ${esc(pct(conf.confidenceToSuggest))}%</strong></div>
+                        <div class="gerenciadorMetric"><span>Afetados por travas</span><strong>${resumoBase.travas}</strong></div>
+                    </div>
+                </section>
             `;
         }
         function renderGerenciadorEstoque(banco, dadosEscopo, linhas, origens){
@@ -5071,28 +5240,15 @@
                     <article class="card green"><span>Aplicar politica</span><strong>${resumoBase.aplicar}</strong></article>
                     <article class="card"><span>Com travas</span><strong>${resumoBase.travas}</strong></article>
                 </section>
-                <section class="gerenciadorHero">
-                    <div class="gerenciadorPanel">
-                        <h2>Parametros do gerenciador</h2>
-                        <p>Use esta tela para conferir a politica calculada, enxergar travas do motor e gravar ajustes manuais por item. Ajuste manual continua tendo prioridade sobre Cooperat e calculo automatico.</p>
-                        <div class="gerenciadorParamGrid">
-                            <div class="gerenciadorParam"><span>Modo inicial</span><strong>Sombra</strong></div>
-                            <div class="gerenciadorParam"><span>Aplicar automatico</span><strong>85%</strong></div>
-                            <div class="gerenciadorParam"><span>Sugerir</span><strong>55%</strong></div>
-                        </div>
-                    </div>
-                    <div class="gerenciadorResumo">
-                        <div class="gerenciadorMetric"><span>Revisao sugerida</span><strong>${resumoBase.revisao}</strong></div>
-                        <div class="gerenciadorMetric"><span>Baixa confianca</span><strong>${resumoBase.baixaConfianca}</strong></div>
-                        <div class="gerenciadorMetric"><span>Pedido aberto</span><strong>${resumoBase.pedidoAberto}</strong></div>
-                    </div>
-                </section>
+                ${renderConfigGerenciadorEstoque(resumoBase)}
                 <div class="toolbar">
                     <span class="chip">ambiente=gerenciador</span>
                     <span class="chip">filtro decisao=${esc(cfg.gerenciadorDecisao)}</span>
                     <span class="chip">itens filtrados: ${esc(fmt(linhasGerenciador.length))}</span>
                     <span class="chip">entrada elevada: ${esc(fmt(resumoFiltro.entradaElevada))}</span>
                     <span class="chip">excesso: ${esc(fmt(resumoFiltro.excesso))}</span>
+                    <span class="chip">revisao sugerida: ${esc(fmt(resumoFiltro.revisao))}</span>
+                    <span class="chip">baixa confianca: ${esc(fmt(resumoFiltro.baixaConfianca))}</span>
                     ${cfg.armazens.length ? `<span class="chip">armazem=${esc(cfg.armazens.join(","))}</span>` : ""}
                 </div>
                 ${renderFiltros(origens, dadosEscopo.length)}
