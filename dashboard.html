@@ -558,6 +558,141 @@
         .avaliadorActions .warnBtn{background:#713f12;border-color:#f59e0b}
         .avaliadorActions .stopBtn{background:#7f1d1d;border-color:#ef4444}
         .avaliadorActions .infoBtn{background:#0f3f56;border-color:#38bdf8}
+        .gerenciadorHero{
+            display:grid;
+            grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);
+            gap:12px;
+            align-items:stretch;
+            margin-bottom:12px;
+        }
+        .gerenciadorPanel{
+            border:1px solid rgba(56,189,248,.2);
+            border-radius:8px;
+            background:rgba(15,23,42,.52);
+            padding:14px;
+            min-width:0;
+        }
+        .gerenciadorPanel h2{
+            margin:0 0 8px;
+            font-size:17px;
+            color:#f8fafc;
+        }
+        .gerenciadorPanel p{
+            margin:0;
+            color:#cbd5e1;
+            font-size:12px;
+            line-height:1.45;
+        }
+        .gerenciadorParamGrid{
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:8px;
+            margin-top:12px;
+        }
+        .gerenciadorParam{
+            border:1px solid rgba(148,163,184,.18);
+            border-radius:8px;
+            background:rgba(2,6,23,.34);
+            padding:9px;
+            min-width:0;
+        }
+        .gerenciadorParam span,
+        .gerenciadorMetric span{
+            display:block;
+            color:var(--muted);
+            font-size:10px;
+            font-weight:900;
+            text-transform:uppercase;
+        }
+        .gerenciadorParam strong,
+        .gerenciadorMetric strong{
+            display:block;
+            margin-top:4px;
+            color:#f8fafc;
+            font-size:18px;
+        }
+        .gerenciadorResumo{
+            display:grid;
+            gap:8px;
+        }
+        .gerenciadorMetric{
+            border:1px solid rgba(148,163,184,.16);
+            border-radius:8px;
+            background:rgba(26,26,37,.72);
+            padding:10px;
+        }
+        .gerenciadorTable input{
+            width:76px;
+            min-height:30px;
+            padding:5px 7px;
+            border-radius:6px;
+            text-align:right;
+        }
+        .gerenciadorTable .descricao{
+            max-width:360px;
+        }
+        .gerenciadorDecision{
+            display:inline-flex;
+            align-items:center;
+            max-width:180px;
+            border-radius:999px;
+            padding:4px 7px;
+            background:rgba(56,189,248,.14);
+            color:#bae6fd;
+            font-size:11px;
+            font-weight:900;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .gerenciadorDecision.alerta{
+            background:rgba(245,158,11,.16);
+            color:#fde68a;
+        }
+        .gerenciadorDecision.risco{
+            background:rgba(239,68,68,.16);
+            color:#fecaca;
+        }
+        .gerenciadorDecision.ok{
+            background:rgba(34,197,94,.16);
+            color:#bbf7d0;
+        }
+        .gerenciadorConfidence{
+            min-width:94px;
+        }
+        .gerenciadorConfidenceTrack{
+            height:7px;
+            border-radius:999px;
+            background:rgba(148,163,184,.18);
+            overflow:hidden;
+            margin-top:5px;
+        }
+        .gerenciadorConfidenceFill{
+            height:100%;
+            border-radius:999px;
+            background:#38bdf8;
+        }
+        .gerenciadorConfidenceFill.baixa{background:#ef4444}
+        .gerenciadorConfidenceFill.media{background:#f59e0b}
+        .gerenciadorConfidenceFill.alta{background:#22c55e}
+        .gerenciadorActions{
+            display:flex;
+            gap:6px;
+            flex-wrap:wrap;
+        }
+        .gerenciadorActions button{
+            width:auto;
+            min-height:30px;
+            padding:6px 8px;
+            border-radius:6px;
+            font-size:11px;
+        }
+        .gerenciadorReasons{
+            max-width:300px;
+            color:#cbd5e1;
+            font-size:11px;
+            line-height:1.35;
+        }
         .criterioOverlay{
             position:fixed;
             inset:0;
@@ -1177,7 +1312,8 @@
         }
         @media (max-width:900px){
             .avaliadorLayout,
-            .avaliadorMesa{grid-template-columns:1fr}
+            .avaliadorMesa,
+            .gerenciadorHero{grid-template-columns:1fr}
         }
         @media (max-width:800px){
             .topbar{display:block;padding:17px 14px 12px}
@@ -1202,6 +1338,7 @@
             <div class="headerActions">
                 <span class="sub" id="ultimaAtualizacao"></span>
                 <a class="secondaryBtn" href="dashboard.html?ambiente=avaliador&armazem=04&status=todos&limite=50">Avaliador</a>
+                <a class="secondaryBtn" href="dashboard.html?ambiente=gerenciador&armazem=04&status=todos&gerenciadorDecisao=todos">Gerenciador</a>
                 <a class="secondaryBtn" href="medidores.html">Medidores</a>
                 <a class="secondaryBtn" href="index.html">Abrir Dark</a>
                 <button class="primaryBtn" id="btnAtualizar" type="button">Atualizar</button>
@@ -1426,7 +1563,7 @@
         }
         const cfg = {
             titulo: params.get("titulo") || "Dashboard de Estoque",
-            ambiente: parametroPermitido((params.get("ambiente") || "estoque").toLowerCase(), ["estoque","movimentacao","avaliador"], "estoque"),
+            ambiente: parametroPermitido((params.get("ambiente") || "estoque").toLowerCase(), ["estoque","movimentacao","avaliador","gerenciador"], "estoque"),
             status: parametroPermitido((params.get("status") || "todos").toLowerCase(), ["todos","all","fora","abaixo","acima","ok","sem","sem-faixa"], "todos"),
             semSolicitacao: boolParam("semSolicitacao", "semPedido"),
             suposicao: parametroPermitido((params.get("suposicao") || "todos").toLowerCase(), ["todos","com","sem"], "todos"),
@@ -1451,6 +1588,7 @@
             embed: boolParam("embed", "embutido"),
             painel: params.get("painel") || "",
             avaliadorItem: normalizarCodigo(params.get("avaliadorItem") || ""),
+            gerenciadorDecisao: parametroPermitido((params.get("gerenciadorDecisao") || "todos").toLowerCase(), ["todos","aplicar","sugerir","solicitar","monitorar","aguardar","excesso","travas","baixa_confianca","sem_criterio"], "todos"),
             filaCor: parametroPermitido((params.get("filaCor") || "todas").toLowerCase(), ["todas","critico","alto","baixo","ok"], "todas")
         };
         if(cfg.embed) document.body.classList.add("embed");
@@ -1470,6 +1608,9 @@
         }
         if(cfg.ambiente === "avaliador" && !params.get("status")){
             cfg.status = "abaixo";
+        }
+        if(cfg.ambiente === "gerenciador" && !params.get("titulo")){
+            cfg.titulo = "Gerenciador de Estoque";
         }
         let bancoAtual = null;
         let extrasAtual = {};
@@ -2266,6 +2407,41 @@
             }
             return [];
         }
+        function mapaSolicitacoesMata110PorItem(mata110, dados){
+            const codigosPermitidos = new Set();
+            dados.forEach(item => {
+                [item?.protheus, item?.cooperat, item?.protheusKey].forEach(c => {
+                    const codigo = normalizarCodigo(c);
+                    if(codigo) codigosPermitidos.add(codigo);
+                });
+            });
+            const mapa = new Map();
+            (Array.isArray(mata110) ? mata110.slice(2) : []).forEach((row, idx) => {
+                const codigo = normalizarCodigo(row?.[3]);
+                if(!codigo || (codigosPermitidos.size && !codigosPermitidos.has(codigo))) return;
+                const solicitacao = {
+                    codigo,
+                    quantidadeSolicitada: num(row?.[5]) || 0,
+                    quantidadeEmPedido: num(row?.[8]) || 0,
+                    solicitante: String(row?.[7] ?? "").trim(),
+                    aceitoPor: String(row?.[17] ?? "").trim(),
+                    timestamp: Date.now() - (idx * 1000),
+                    rowIndex: idx
+                };
+                if(!mapa.has(codigo)) mapa.set(codigo, []);
+                mapa.get(codigo).push(solicitacao);
+            });
+            mapa.forEach(lista => lista.sort((a,b) => (b.quantidadeEmPedido - a.quantidadeEmPedido) || String(b.aceitoPor).localeCompare(String(a.aceitoPor)) || (b.rowIndex - a.rowIndex)));
+            return mapa;
+        }
+        function solicitacoesMata110Item(item, mapaSolicitacoes){
+            const candidatos = [item?.protheus, item?.cooperat, item?.protheusKey, key(item)].map(normalizarCodigo).filter(Boolean);
+            for(const codigo of candidatos){
+                const solicitacoes = mapaSolicitacoes?.get(codigo);
+                if(solicitacoes?.length) return solicitacoes;
+            }
+            return [];
+        }
         function historicoPedidosItem(item, mapaHistorico){
             const candidatos = [item?.protheus, item?.cooperat, item?.protheusKey, key(item)].map(normalizarCodigo).filter(Boolean);
             for(const codigo of candidatos){
@@ -2273,6 +2449,67 @@
                 if(historico?.length) return historico;
             }
             return [];
+        }
+        function pedidoKanbanSintetico(pedidoPublicado, historico, entradasMata112, solicitacoes){
+            if(pedidoAtivo(pedidoPublicado)) return pedidoPublicado;
+            const ultimoPedido = Array.isArray(historico) && historico.length ? historico[0] : null;
+            if(ultimoPedido){
+                const entradaVinculada = (Array.isArray(entradasMata112) ? entradasMata112 : [])
+                    .find(e => !ultimoPedido.timestampPedido || !e.timestamp || e.timestamp >= ultimoPedido.timestampPedido) || null;
+                const entradaPendente = entradaVinculada && Number(entradaVinculada.saldoAEnderecar || 0) > 0;
+                const recebido = !!ultimoPedido.timestampEntrada || !!entradaVinculada;
+                return {
+                    status: recebido ? (entradaPendente ? "aguardando_enderecamento" : "finalizado") : "aguardando_recebimento",
+                    titulo: recebido ? (entradaPendente ? "Aguardando enderecamento" : "Entrada recebida") : "MATA111: aguardando recebimento",
+                    detalhe: recebido ? `Entrada: ${entradaVinculada?.dataEntrada || ultimoPedido.dataEntrada || "-"}` : `Pedido feito em: ${ultimoPedido.dataPedido || "-"}`,
+                    pedido: {
+                        timestamp: ultimoPedido.timestampPedido,
+                        dataPedido: ultimoPedido.dataPedido,
+                        quantidadePedida: ultimoPedido.quantidadePedida,
+                        quantidadeRecebida: ultimoPedido.quantidadeRecebida
+                    },
+                    ultimoPedido: {
+                        timestamp: ultimoPedido.timestampPedido,
+                        dataPedido: ultimoPedido.dataPedido,
+                        quantidadePedida: ultimoPedido.quantidadePedida,
+                        quantidadeRecebida: ultimoPedido.quantidadeRecebida
+                    },
+                    entradaEndereco: entradaPendente ? {
+                        timestamp: entradaVinculada.timestamp,
+                        dataEntrada: entradaVinculada.dataEntrada,
+                        quantidadeEntrada: entradaVinculada.quantidadeEntrada,
+                        saldoAEnderecar: entradaVinculada.saldoAEnderecar
+                    } : null,
+                    entradaConfirmada: recebido ? {
+                        timestamp: entradaVinculada?.timestamp || ultimoPedido.timestampEntrada,
+                        dataEntrada: entradaVinculada?.dataEntrada || ultimoPedido.dataEntrada,
+                        quantidadeEntrada: entradaVinculada?.quantidadeEntrada || ultimoPedido.quantidadeRecebida
+                    } : null,
+                    recebidoSemEntrada: recebido && !entradaVinculada && Number(ultimoPedido.quantidadeRecebida || 0) > 0 ? Number(ultimoPedido.quantidadeRecebida || 0) : 0
+                };
+            }
+            const entradaSolta = Array.isArray(entradasMata112) && entradasMata112.length ? entradasMata112[0] : null;
+            if(entradaSolta){
+                const entradaPendente = Number(entradaSolta.saldoAEnderecar || 0) > 0;
+                return {
+                    status: entradaPendente ? "aguardando_enderecamento" : "finalizado",
+                    titulo: entradaPendente ? "Aguardando enderecamento" : "Entrada recebida",
+                    entradaEndereco: entradaPendente ? entradaSolta : null,
+                    entradaConfirmada: entradaSolta,
+                    recebidoSemEntrada: 0
+                };
+            }
+            const solicitacao = Array.isArray(solicitacoes) && solicitacoes.length ? solicitacoes[0] : null;
+            if(solicitacao){
+                const aprovada = solicitacao.aceitoPor || Number(solicitacao.quantidadeEmPedido || 0) > 0;
+                return {
+                    status: aprovada ? "aguardando_pedido" : "aguardando_liberacao",
+                    titulo: aprovada ? "MATA110 liberada: aguardando pedido MATA111" : "MATA110: aguardando liberacao da solicitacao",
+                    detalhe: aprovada ? `Aceito por: ${solicitacao.aceitoPor || "-"}` : `Solicitado por: ${solicitacao.solicitante || "-"}`,
+                    solicitacao
+                };
+            }
+            return pedidoPublicado || null;
         }
         function estatisticasHistoricoPedidos(historico){
             const recebidos = historico.filter(h => h.timestampEntrada);
@@ -3225,21 +3462,23 @@
                 </article>
             `;
         }
-        function renderAvaliadorPedidos(banco, dados, mata111, mata112, historicoCooperat){
+        function renderAvaliadorPedidos(banco, dados, mata110, mata111, mata112, historicoCooperat){
             const pedidos = banco?.pedidosCompra || {};
+            const mapaSolicitacoes = mapaSolicitacoesMata110PorItem(mata110, dados);
             const mapaHistorico = mapaHistoricoPedidosPorItem(mata111, mata112, dados);
             const mapaEntradasMata112 = mapaEntradasMata112PorItem(mata112);
             const linhasBase = dados
                 .filter(item => passaFiltroArmazem(item))
                 .map(item => {
+                    const solicitacoes = solicitacoesMata110Item(item, mapaSolicitacoes);
                     const historico = historicoPedidosItem(item, mapaHistorico);
                     const entradasMata112 = entradasMata112Item(item, mapaEntradasMata112);
                     const histCooperat = historicoCooperatItem(item, historicoCooperat);
                     const stats = estatisticasHistoricoPedidos(historico);
                     const statsCooperat = estatisticasHistoricoCooperat(histCooperat);
-                    const pedido = pedidoItem(item, pedidos);
+                    const pedido = pedidoKanbanSintetico(pedidoItem(item, pedidos), historico, entradasMata112, solicitacoes);
                     const historicoSaldo = historicoSaldoItemDashboard(item, banco);
-                    return { item, historico, entradasMata112, historicoSaldo, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
+                    return { item, solicitacoes, historico, entradasMata112, historicoSaldo, historicoCooperat:histCooperat, stats, statsCooperat, pedido, status:statusEstoque(item), reposicao:reposicao(item), registro:registroAvaliadorItem(item) };
                 })
                 .filter(linha => {
                     if(cfg.suposicao === "com" && !itemTemSuposicao(linha.item)) return false;
@@ -4054,6 +4293,63 @@
                     }
                 });
             });
+            root.querySelectorAll("[data-gerenciador-save]").forEach(btn => {
+                if(btn.dataset.boundGerenciadorSave === "1") return;
+                btn.dataset.boundGerenciadorSave = "1";
+                btn.addEventListener("click", async () => {
+                    const codigo = normalizarCodigo(btn.dataset.gerenciadorSave);
+                    const row = btn.closest("[data-gerenciador-row]");
+                    if(!codigo || !row) return;
+                    const valores = {};
+                    row.querySelectorAll("[data-gerenciador-field]").forEach(input => {
+                        const valor = parseNumeroPrompt(input.value);
+                        if(valor !== null) valores[input.dataset.gerenciadorField] = valor;
+                    });
+                    if(!Object.keys(valores).length){
+                        alert("Informe ao menos um parametro manual valido.");
+                        return;
+                    }
+                    btn.disabled = true;
+                    try{
+                        for(const [campo, valor] of Object.entries(valores)){
+                            await salvarAjusteLimiteItem(codigo, campo, valor);
+                        }
+                        renderDashboardAtualLogo();
+                    }catch(err){
+                        alert("Nao foi possivel salvar os parametros manuais.");
+                        console.warn("Falha ao salvar parametros do gerenciador:", err);
+                        btn.disabled = false;
+                    }
+                });
+            });
+            root.querySelectorAll("[data-gerenciador-apply]").forEach(btn => {
+                if(btn.dataset.boundGerenciadorApply === "1") return;
+                btn.dataset.boundGerenciadorApply = "1";
+                btn.addEventListener("click", async () => {
+                    const codigo = normalizarCodigo(btn.dataset.gerenciadorApply);
+                    if(!codigo) return;
+                    const valores = {};
+                    ["minimo","maximo","reposicao"].forEach(campo => {
+                        const valor = parseNumeroPrompt(btn.dataset[campo]);
+                        if(valor !== null) valores[campo] = valor;
+                    });
+                    if(!Object.keys(valores).length){
+                        alert("O gerenciador nao trouxe politica sugerida para este item.");
+                        return;
+                    }
+                    btn.disabled = true;
+                    try{
+                        for(const [campo, valor] of Object.entries(valores)){
+                            await salvarAjusteLimiteItem(codigo, campo, valor);
+                        }
+                        renderDashboardAtualLogo();
+                    }catch(err){
+                        alert("Nao foi possivel aplicar a politica sugerida.");
+                        console.warn("Falha ao aplicar sugestao do gerenciador:", err);
+                        btn.disabled = false;
+                    }
+                });
+            });
             bindHistoricoComprasLazy();
             bindKanbanAvaliadorLazy();
             bindAvaliadorNavegacaoLocal();
@@ -4445,6 +4741,7 @@
                             <option value="estoque" ${cfg.ambiente === "estoque" ? "selected" : ""}>Estoque</option>
                             <option value="movimentacao" ${cfg.ambiente === "movimentacao" ? "selected" : ""}>Movimentacao</option>
                             <option value="avaliador" ${cfg.ambiente === "avaliador" ? "selected" : ""}>Avaliador</option>
+                            <option value="gerenciador" ${cfg.ambiente === "gerenciador" ? "selected" : ""}>Gerenciador</option>
                         </select>
                     </div>
                     ${cfg.ambiente === "movimentacao" ? `
@@ -4510,6 +4807,25 @@
                             <option value="sem" ${cfg.suposicao === "sem" ? "selected" : ""}>Sem suposicao</option>
                         </select>
                     </div>
+                    ${cfg.ambiente === "gerenciador" ? `
+                    <div class="filter">
+                        <label for="fGerenciadorDecisao">Decisao gerenc.</label>
+                        <select id="fGerenciadorDecisao" data-filter="gerenciadorDecisao">
+                            ${[
+                                ["todos","Todas"],
+                                ["aplicar","Aplicar politica"],
+                                ["sugerir","Sugerir/revisar"],
+                                ["solicitar","Solicitar agora"],
+                                ["monitorar","Monitorar"],
+                                ["aguardar","Aguardar pedido"],
+                                ["excesso","Excesso"],
+                                ["travas","Com travas"],
+                                ["baixa_confianca","Baixa confianca"],
+                                ["sem_criterio","Sem criterio"]
+                            ].map(([v,t]) => `<option value="${v}" ${cfg.gerenciadorDecisao === v ? "selected" : ""}>${t}</option>`).join("")}
+                        </select>
+                    </div>
+                    ` : ""}
                     <div class="filter">
                         <label for="fOrigem">Origem</label>
                         <select id="fOrigem" data-filter="origem">
@@ -4579,6 +4895,182 @@
                     </table>
                 </div>
             `;
+        }
+        function classeConfiancaGerenciador(valor){
+            const n = Number(valor || 0);
+            if(n >= .85) return "alta";
+            if(n >= .55) return "media";
+            return "baixa";
+        }
+        function passaFiltroDecisaoGerenciador(linha){
+            const criterio = criterioGerenciadorItem(linha.item);
+            const decisao = String(criterio?.decisao || "");
+            const travas = Array.isArray(criterio?.travas) ? criterio.travas : [];
+            const confianca = Number(criterio?.confianca || 0);
+            if(cfg.gerenciadorDecisao === "todos") return true;
+            if(cfg.gerenciadorDecisao === "sem_criterio") return !criterio;
+            if(!criterio) return false;
+            if(cfg.gerenciadorDecisao === "travas") return travas.length > 0;
+            if(cfg.gerenciadorDecisao === "baixa_confianca") return confianca < .55;
+            if(cfg.gerenciadorDecisao === "aplicar") return decisao === "aplicar_politica";
+            if(cfg.gerenciadorDecisao === "sugerir") return decisao.includes("sugerir") || decisao.includes("revisar");
+            if(cfg.gerenciadorDecisao === "solicitar") return decisao.includes("solicitar");
+            if(cfg.gerenciadorDecisao === "monitorar") return decisao === "monitorar";
+            if(cfg.gerenciadorDecisao === "aguardar") return decisao.includes("aguardar");
+            if(cfg.gerenciadorDecisao === "excesso") return decisao.includes("excesso");
+            return true;
+        }
+        function classeDecisaoGerenciador(criterio){
+            const decisao = String(criterio?.decisao || "");
+            const travas = Array.isArray(criterio?.travas) ? criterio.travas : [];
+            if(!criterio) return "";
+            if(travas.length || decisao.includes("revisar") || decisao.includes("aguardar")) return "alerta";
+            if(decisao.includes("solicitar") || decisao.includes("excesso")) return "risco";
+            if(decisao.includes("monitorar") || decisao.includes("aplicar")) return "ok";
+            return "";
+        }
+        function sugestaoPoliticaGerenciador(criterio, campo){
+            if(!criterio) return null;
+            if(campo === "minimo") return criterio.minimoSugerido ?? criterio.pontoReposicao ?? null;
+            if(campo === "maximo") return criterio.maximoSugerido ?? null;
+            if(campo === "reposicao") return criterio.reposicaoSugerida ?? null;
+            return null;
+        }
+        function resumoGerenciador(linhas){
+            return linhas.reduce((acc, linha) => {
+                const criterio = criterioGerenciadorItem(linha.item);
+                const decisao = String(criterio?.decisao || "");
+                const travas = Array.isArray(criterio?.travas) ? criterio.travas : [];
+                acc.total += 1;
+                if(criterio) acc.comCriterio += 1;
+                if(decisao === "aplicar_politica") acc.aplicar += 1;
+                if(decisao.includes("sugerir") || decisao.includes("revisar")) acc.revisao += 1;
+                if(decisao.includes("solicitar")) acc.solicitar += 1;
+                if(decisao.includes("excesso")) acc.excesso += 1;
+                if(travas.length) acc.travas += 1;
+                if(Number(criterio?.confianca || 0) < .55) acc.baixaConfianca += 1;
+                if(criterio?.entradaElevadaForaPadrao) acc.entradaElevada += 1;
+                if(criterio?.pedidoAberto) acc.pedidoAberto += 1;
+                return acc;
+            }, { total:0, comCriterio:0, aplicar:0, revisao:0, solicitar:0, excesso:0, travas:0, baixaConfianca:0, entradaElevada:0, pedidoAberto:0 });
+        }
+        function renderTabelaGerenciador(linhas){
+            if(!linhas.length) return `<section class="empty">Nenhum item encontrado com estes parametros do gerenciador.</section>`;
+            return `
+                <div class="tableWrap">
+                    <table class="gerenciadorTable">
+                        <thead>
+                            <tr>
+                                <th>Codigo</th>
+                                <th>Descricao</th>
+                                <th>Decisao</th>
+                                <th>Confianca</th>
+                                <th class="num">Saldo</th>
+                                <th class="num">Atual</th>
+                                <th class="num">Sugerido</th>
+                                <th>Parametros manuais</th>
+                                <th>Evidencias</th>
+                                <th>Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${linhas.map(linha => {
+                                const item = linha.item;
+                                const codigo = key(item);
+                                const criterio = criterioGerenciadorItem(item);
+                                const confianca = Number(criterio?.confianca || 0);
+                                const confClasse = classeConfiancaGerenciador(confianca);
+                                const minSug = sugestaoPoliticaGerenciador(criterio, "minimo");
+                                const maxSug = sugestaoPoliticaGerenciador(criterio, "maximo");
+                                const repSug = sugestaoPoliticaGerenciador(criterio, "reposicao");
+                                const motivos = Array.isArray(criterio?.reasonCodes) ? criterio.reasonCodes.slice(0, 3) : [];
+                                const travas = Array.isArray(criterio?.travas) ? criterio.travas : [];
+                                const evidencias = [
+                                    criterio ? `${fmt(criterio.eventosConsumo)} evento(s)` : "sem criterio",
+                                    criterio?.demandaClasse ? `demanda ${criterio.demandaClasse}` : "",
+                                    travas.length ? `${travas.length} trava(s)` : ""
+                                ].filter(Boolean).join(" | ");
+                                return `
+                                    <tr data-gerenciador-row="${esc(codigo)}">
+                                        <td class="codigo">${esc(item.protheus || item.cooperat || "-")}</td>
+                                        <td class="descricao">${esc(item.descricao || "-")}</td>
+                                        <td><span class="gerenciadorDecision ${esc(classeDecisaoGerenciador(criterio))}">${esc(rotuloDecisaoGerenciador(criterio?.decisao))}</span></td>
+                                        <td>
+                                            <div class="gerenciadorConfidence">
+                                                <strong>${esc(fmt(Math.round(confianca * 100)))}%</strong>
+                                                <div class="gerenciadorConfidenceTrack"><div class="gerenciadorConfidenceFill ${esc(confClasse)}" style="width:${Math.max(0, Math.min(100, confianca * 100))}%"></div></div>
+                                            </div>
+                                        </td>
+                                        <td class="num">${fmt(item.saldo)}</td>
+                                        <td class="num">${fmt(item.minimo)}/${fmt(item.maximo)}/${fmt(linha.reposicao)}</td>
+                                        <td class="num">${fmt(minSug)}/${fmt(maxSug)}/${fmt(repSug)}</td>
+                                        <td>
+                                            <input data-gerenciador-field="minimo" inputmode="decimal" value="${esc(item.minimo ?? "")}" title="Minimo manual">
+                                            <input data-gerenciador-field="maximo" inputmode="decimal" value="${esc(item.maximo ?? "")}" title="Maximo manual">
+                                            <input data-gerenciador-field="reposicao" inputmode="decimal" value="${esc(linha.reposicao ?? "")}" title="Reposicao manual">
+                                        </td>
+                                        <td class="gerenciadorReasons" title="${esc(motivos.map(textoMotivoGerenciador).join("\n"))}">${esc(evidencias || "-")}</td>
+                                        <td>
+                                            <div class="gerenciadorActions">
+                                                <button type="button" data-gerenciador-save="${esc(codigo)}">Salvar manual</button>
+                                                ${criterio ? `<button class="infoBtn" type="button" data-criterio-gerenciador="${esc(codigo)}">Detalhes</button>` : ""}
+                                                ${criterio ? `<button class="okBtn" type="button" data-gerenciador-apply="${esc(codigo)}" data-minimo="${esc(minSug ?? "")}" data-maximo="${esc(maxSug ?? "")}" data-reposicao="${esc(repSug ?? "")}">Usar sugerido</button>` : ""}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        function renderGerenciadorEstoque(banco, dadosEscopo, linhas, origens){
+            criterioGerenciadorStore = {};
+            linhas.forEach(linha => {
+                const codigo = key(linha.item);
+                if(codigo) criterioGerenciadorStore[normalizarCodigo(codigo)] = linha;
+            });
+            const resumoBase = resumoGerenciador(linhas);
+            const linhasGerenciador = linhas.filter(passaFiltroDecisaoGerenciador);
+            const resumoFiltro = resumoGerenciador(linhasGerenciador);
+            document.getElementById("subtitulo").textContent = `${linhasGerenciador.length} item(ns) na analise do gerenciador`;
+            root.innerHTML = `
+                <section class="cards">
+                    <article class="card blue"><span>Com criterio</span><strong>${resumoBase.comCriterio}</strong></article>
+                    <article class="card red"><span>Solicitar agora</span><strong>${resumoBase.solicitar}</strong></article>
+                    <article class="card green"><span>Aplicar politica</span><strong>${resumoBase.aplicar}</strong></article>
+                    <article class="card"><span>Com travas</span><strong>${resumoBase.travas}</strong></article>
+                </section>
+                <section class="gerenciadorHero">
+                    <div class="gerenciadorPanel">
+                        <h2>Parametros do gerenciador</h2>
+                        <p>Use esta tela para conferir a politica calculada, enxergar travas do motor e gravar ajustes manuais por item. Ajuste manual continua tendo prioridade sobre Cooperat e calculo automatico.</p>
+                        <div class="gerenciadorParamGrid">
+                            <div class="gerenciadorParam"><span>Modo inicial</span><strong>Sombra</strong></div>
+                            <div class="gerenciadorParam"><span>Aplicar automatico</span><strong>85%</strong></div>
+                            <div class="gerenciadorParam"><span>Sugerir</span><strong>55%</strong></div>
+                        </div>
+                    </div>
+                    <div class="gerenciadorResumo">
+                        <div class="gerenciadorMetric"><span>Revisao sugerida</span><strong>${resumoBase.revisao}</strong></div>
+                        <div class="gerenciadorMetric"><span>Baixa confianca</span><strong>${resumoBase.baixaConfianca}</strong></div>
+                        <div class="gerenciadorMetric"><span>Pedido aberto</span><strong>${resumoBase.pedidoAberto}</strong></div>
+                    </div>
+                </section>
+                <div class="toolbar">
+                    <span class="chip">ambiente=gerenciador</span>
+                    <span class="chip">filtro decisao=${esc(cfg.gerenciadorDecisao)}</span>
+                    <span class="chip">itens filtrados: ${esc(fmt(linhasGerenciador.length))}</span>
+                    <span class="chip">entrada elevada: ${esc(fmt(resumoFiltro.entradaElevada))}</span>
+                    <span class="chip">excesso: ${esc(fmt(resumoFiltro.excesso))}</span>
+                    ${cfg.armazens.length ? `<span class="chip">armazem=${esc(cfg.armazens.join(","))}</span>` : ""}
+                </div>
+                ${renderFiltros(origens, dadosEscopo.length)}
+                ${renderTabelaGerenciador(linhasGerenciador)}
+            `;
+            bindFiltros();
+            aplicarModoEmbed();
         }
         function renderDashboard(banco, mapaMinimo = estoqueMinimoCache || new Map(), mata111 = mata111Cache || [], mata112 = mata112Cache || [], extras = {}){
             resetLazyDashboard();
@@ -4650,7 +5142,11 @@
                 return;
             }
             if(cfg.ambiente === "avaliador"){
-                renderAvaliadorPedidos(banco, dados, mata111, mata112, extras.historicoCooperat || null);
+                renderAvaliadorPedidos(banco, dados, extras.mata110 || [], mata111, mata112, extras.historicoCooperat || null);
+                return;
+            }
+            if(cfg.ambiente === "gerenciador"){
+                renderGerenciadorEstoque(banco, dadosEscopo, linhas, origens);
                 return;
             }
 
