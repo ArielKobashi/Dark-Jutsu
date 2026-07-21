@@ -225,6 +225,7 @@ foreach ($runtimeName in @(
   "servidores_config.json",
   "monitor_reserva_python_darkjutsu.py",
   "iniciar_automus_com_guardiao_darkjutsu.ps1",
+  "iniciar_tunel_celular_darkjutsu.ps1",
   "watchdog_usuario_darkjutsu.ps1"
 )) {
   if (-not (Copy-ToRuntime $runtimeName $runtimeDir)) { $runtimeOk = $false }

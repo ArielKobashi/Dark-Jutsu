@@ -620,19 +620,20 @@ class Handler(BaseHTTPRequestHandler):
         if "/" in filename or "\\" in filename or filename not in APP_PUBLIC_FILES:
             raise ApiError(HTTPStatus.NOT_FOUND, "Arquivo do app nao encontrado.")
         roots = [
-            APP_WEB_ROOT,
             ROOT,
             ROOT.parent / "app",
+            APP_WEB_ROOT,
         ]
         for root in roots:
-            path = (root / filename).resolve()
             try:
+                path = (root / filename).resolve()
                 base = root.resolve()
+                is_allowed = path == base / filename or base in path.parents
+                if path.is_file() and is_allowed:
+                    self._send_file(path)
+                    return
             except Exception:
-                base = root
-            if path.is_file() and (path == base / filename or base in path.parents):
-                self._send_file(path)
-                return
+                continue
         raise ApiError(HTTPStatus.NOT_FOUND, "Arquivo do app nao encontrado.")
 
     def do_OPTIONS(self) -> None:

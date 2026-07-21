@@ -113,7 +113,7 @@ LOCK_HANDLE = None
 ERROR_ALREADY_EXISTS = 183
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-20.04"
+GUARDIAN_VERSION = "2026-07-21.01"
 MAINTENANCE_DIR = STATUS_DIR / "maintenance"
 STARTUP_VBS_SOURCE = SCRIPTS / "iniciar_cluster_usuario_darkjutsu.vbs"
 WATCHDOG_SOURCE = SCRIPTS / "watchdog_usuario_darkjutsu.ps1"
@@ -121,6 +121,11 @@ SHARED_LOG = SHARE_ROOT / "logs" / "guardiao_python_eventos.txt"
 TEST_ACTIVE_FILE = SHARE_ROOT / "status" / "teste_inicializacao_ativo.txt"
 TEST_LOG = SHARE_ROOT / "logs" / "teste_inicializacao_manual_darkjutsu.txt"
 GITHUB_UPDATE_INTERVAL_SECONDS = 300
+MOBILE_TUNNEL_SCRIPT_NAME = "iniciar_tunel_celular_darkjutsu.ps1"
+MOBILE_TUNNEL_SOURCE = SCRIPTS / MOBILE_TUNNEL_SCRIPT_NAME
+MOBILE_TUNNEL_LOCAL = LOCAL_MONITOR_DIR / MOBILE_TUNNEL_SCRIPT_NAME
+MOBILE_TUNNEL_LOG = LOG_DIR / "mobile_tunnel_guardiao.log"
+MOBILE_TUNNEL_URL = f"http://127.0.0.1:{API_PORT}"
 
 
 def select_api_runtime_root():
@@ -364,8 +369,215 @@ def stop_local_api(reason):
             log(f"API local parada. Motivo={reason}")
         else:
             log(f"Nenhum processo de API local encontrado para parar. Motivo={reason}")
+        stop_mobile_tunnel(reason)
     except Exception as exc:
         log(f"AVISO: falha ao parar API local: {type(exc).__name__}: {exc}")
+
+
+def mobile_tunnel_root() -> Path:
+    return LOCAL_API.parent.parent
+
+
+def mobile_state_file() -> Path:
+    return mobile_tunnel_root() / "data" / "mobile_tunnel_url.json"
+
+
+def read_mobile_state() -> dict:
+    try:
+        path = mobile_state_file()
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
+
+
+def write_mobile_state(status: str, url: str = "", message: str = ""):
+    try:
+        path = mobile_state_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        previous = read_mobile_state()
+        if (
+            previous.get("status") == status
+            and (previous.get("url") or "") == url
+            and (previous.get("message") or "") == message
+        ):
+            return
+        payload = {
+            "ok": status == "online",
+            "status": status,
+            "url": url,
+            "message": message,
+            "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as exc:
+        log(f"AVISO: nao consegui gravar estado do tunnel celular: {type(exc).__name__}: {exc}")
+
+
+def sync_mobile_tunnel_script() -> bool:
+    if MOBILE_TUNNEL_LOCAL.exists():
+        return True
+    if not MOBILE_TUNNEL_SOURCE.exists():
+        write_mobile_state("ready", "", "Script do tunnel do celular ainda nao esta instalado neste PC.")
+        log(f"AVISO: script do tunnel celular ausente: {MOBILE_TUNNEL_SOURCE}")
+        return False
+    try:
+        LOCAL_MONITOR_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(MOBILE_TUNNEL_SOURCE, MOBILE_TUNNEL_LOCAL)
+        log(f"Script do tunnel celular copiado para runtime local: {MOBILE_TUNNEL_LOCAL}")
+        return True
+    except Exception as exc:
+        write_mobile_state("ready", "", f"Nao consegui preparar script do tunnel celular: {type(exc).__name__}.")
+        log(f"AVISO: falha ao copiar script do tunnel celular: {type(exc).__name__}: {exc}")
+        return False
+
+
+def cloudflared_candidates() -> list[Path]:
+    candidates = []
+    override = os.environ.get("DARK_JUTSU_CLOUDFLARED_PATH")
+    if override:
+        candidates.append(Path(override))
+    local_app = Path(os.environ.get("LOCALAPPDATA", str(USER_RUNTIME_ROOT)))
+    candidates.extend(
+        [
+            USER_RUNTIME_ROOT / "cloudflared" / "cloudflared.exe",
+            local_app / "DarkJutsu" / "cloudflared" / "cloudflared.exe",
+            RUNTIME_ROOT / "cloudflared" / "cloudflared.exe",
+            SHARE_ROOT / "tools" / "cloudflared.exe",
+            SHARE_ROOT / "instaladores" / "cloudflared.exe",
+        ]
+    )
+    seen = set()
+    unique = []
+    for candidate in candidates:
+        key = str(candidate).lower()
+        if key not in seen:
+            unique.append(candidate)
+            seen.add(key)
+    return unique
+
+
+def cloudflared_path() -> Path | None:
+    for candidate in cloudflared_candidates():
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def mobile_tunnel_processes():
+    try:
+        ps = (
+            "Get-CimInstance Win32_Process | "
+            "Where-Object { $_.CommandLine -and ("
+            "$_.CommandLine -match 'iniciar_tunel_celular_darkjutsu.ps1' -or "
+            "($_.Name -like 'cloudflared*' -and $_.CommandLine -match '--url' -and $_.CommandLine -match '127\\.0\\.0\\.1:8765')"
+            ") -and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
+            "Select-Object ProcessId,Name,CommandLine"
+        )
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+            capture_output=True,
+            text=True,
+            errors="ignore",
+            timeout=10,
+            creationflags=CREATE_NO_WINDOW,
+        ).stdout
+        return out
+    except Exception:
+        return ""
+
+
+def mobile_tunnel_running() -> bool:
+    return any(ch.isdigit() for ch in mobile_tunnel_processes())
+
+
+def stop_mobile_tunnel(reason: str):
+    try:
+        running = mobile_tunnel_running()
+        if not running:
+            current = read_mobile_state()
+            if current.get("status") in {"online", "starting"}:
+                write_mobile_state("offline", "", f"Tunnel parado: {reason}")
+                log(f"Tunnel celular marcado offline. Motivo={reason}")
+            return
+        ps = (
+            "Get-CimInstance Win32_Process | "
+            "Where-Object { $_.CommandLine -and ("
+            "$_.CommandLine -match 'iniciar_tunel_celular_darkjutsu.ps1' -or "
+            "($_.Name -like 'cloudflared*' -and $_.CommandLine -match '--url' -and $_.CommandLine -match '127\\.0\\.0\\.1:8765')"
+            ") -and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
+            "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+        )
+        subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=12,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        write_mobile_state("offline", "", f"Tunnel parado: {reason}")
+        log(f"Tunnel celular parado. Motivo={reason}")
+    except Exception as exc:
+        log(f"AVISO: falha ao parar tunnel celular: {type(exc).__name__}: {exc}")
+
+
+def ensure_mobile_tunnel(reason: str):
+    if not health("127.0.0.1", timeout=2):
+        stop_mobile_tunnel("API local nao esta saudavel")
+        return
+    if mobile_tunnel_running():
+        return
+    if not sync_mobile_tunnel_script():
+        return
+    cloudflared = cloudflared_path()
+    if not cloudflared:
+        current = read_mobile_state()
+        write_mobile_state(
+            "ready",
+            "",
+            "API pronta para celular, aguardando cloudflared.exe em %LOCALAPPDATA%\\DarkJutsu\\cloudflared.",
+        )
+        if current.get("status") != "ready":
+            log("Tunnel celular pronto para ligar, mas cloudflared.exe nao foi encontrado.")
+        return
+    root = mobile_tunnel_root()
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        write_mobile_state("starting", "", "API ativa neste PC; iniciando tunnel do celular.")
+        with MOBILE_TUNNEL_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S") + f" | Inicio tunnel celular pelo guardiao. Motivo={reason}\n")
+            fh.flush()
+            subprocess.Popen(
+                [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-WindowStyle",
+                    "Hidden",
+                    "-File",
+                    str(MOBILE_TUNNEL_LOCAL),
+                    "-Cloudflared",
+                    str(cloudflared),
+                    "-Root",
+                    str(root),
+                    "-Url",
+                    MOBILE_TUNNEL_URL,
+                    "-KeepAlive",
+                ],
+                cwd=str(root),
+                stdout=fh,
+                stderr=subprocess.STDOUT,
+                creationflags=CREATE_NO_WINDOW,
+            )
+        log(f"Tunnel celular solicitado pelo guardiao. Cloudflared={cloudflared} Root={root} Motivo={reason}")
+    except Exception as exc:
+        write_mobile_state("offline", "", f"Falha ao iniciar tunnel celular: {type(exc).__name__}.")
+        log(f"ERRO ao iniciar tunnel celular: {type(exc).__name__}: {exc}")
 
 
 def start_local_api(reason):
@@ -808,6 +1020,8 @@ def main():
                 )
                 if local_ok or api_process_running():
                     stop_local_api("teste de queda controlado")
+                else:
+                    stop_mobile_tunnel("teste de queda controlado")
                 log(f"manutencao controlada ativa ate epoch={maintenance.get('untilEpoch')}")
                 time.sleep(5)
                 continue
@@ -828,8 +1042,15 @@ def main():
                     last_github_update_check = time.time()
                 if not local_ok:
                     start_local_api(f"eleito lider dinamico epoch={decision.get('epoch')}")
+                    local_ok = health("127.0.0.1", timeout=2)
+                if local_ok:
+                    ensure_mobile_tunnel(f"lider dinamico epoch={decision.get('epoch')}")
+                else:
+                    stop_mobile_tunnel("lider ainda sem API local saudavel")
             elif local_ok or api_process_running():
                 stop_local_api(f"lease pertence a {leader or 'nenhum'}")
+            else:
+                stop_mobile_tunnel(f"lease pertence a {leader or 'nenhum'}")
             if time.time() - last_full_cycle >= 15:
                 log(
                     f"ciclo dinamico lider={leader or 'nenhum'} self_leader={decision.get('isLeader')} "

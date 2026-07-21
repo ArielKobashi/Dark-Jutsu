@@ -2394,8 +2394,8 @@ body:not(.app-ready) .historicoContagemPanel{
 
 .mobileAccessPanel{
     position:fixed;
-    top:max(12px, calc(50vh - 300px + 12px));
-    left:max(12px, calc(50vw - 400px - 122px));
+    left:max(12px, calc(50vw - 400px + 12px));
+    bottom:max(12px, calc(50vh - 300px + 12px));
     width:min(300px, calc(100% - 18px));
     margin:0;
     border:1px solid rgba(147,197,253,0.16);
@@ -2414,10 +2414,10 @@ body:not(.app-ready) .mobileAccessPanel{
 }
 
 .mobileAccessPanel:not(.aberto){
-    width:112px;
-    background:rgba(17,24,39,0.08);
-    border-color:rgba(147,197,253,0.08);
-    box-shadow:0 0 6px rgba(59,130,246,0.03);
+    width:86px;
+    background:rgba(11,17,32,0.72);
+    border-color:rgba(147,197,253,0.18);
+    box-shadow:0 8px 18px rgba(0,0,0,0.22), 0 0 10px rgba(59,130,246,0.08);
     transform:none;
 }
 
@@ -2432,7 +2432,7 @@ body:not(.app-ready) .mobileAccessPanel{
     background:rgba(15,23,42,0.18);
     color:rgba(219,234,254,0.86);
     min-height:28px;
-    padding:4px 8px;
+    padding:5px 9px;
     display:flex;
     align-items:center;
     justify-content:space-between;
@@ -2443,8 +2443,8 @@ body:not(.app-ready) .mobileAccessPanel{
 }
 
 .mobileAccessPanel:not(.aberto) #mobileAccessToggle{
-    background:rgba(15,23,42,0.08);
-    color:rgba(219,234,254,0.7);
+    background:rgba(15,23,42,0.56);
+    color:rgba(219,234,254,0.92);
 }
 
 .mobileAccessPanel:not(.aberto) #mobileAccessToggle span{
@@ -2471,7 +2471,7 @@ body:not(.app-ready) .mobileAccessPanel{
 }
 
 .mobileAccessPanel.aberto{
-    left:max(12px, calc(50vw - 400px - 308px));
+    left:max(12px, calc(50vw - 400px + 12px));
     width:min(300px, calc(100vw - 24px));
     background:rgba(11,17,32,0.96);
     border-color:rgba(147,197,253,0.28);

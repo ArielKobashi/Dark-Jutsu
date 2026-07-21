@@ -154,6 +154,7 @@ function New-RuntimeDir {
     "abrir_status_darkjutsu.py",
     "monitor_reserva_python_darkjutsu.py",
     "iniciar_automus_com_guardiao_darkjutsu.ps1",
+    "iniciar_tunel_celular_darkjutsu.ps1",
     "watchdog_usuario_darkjutsu.ps1"
   )) {
     $source = Join-Path $shareScripts $name
@@ -201,7 +202,8 @@ try {
       "servidor_eleicao_darkjutsu.py",
       "servidores_config.json",
       "monitor_reserva_python_darkjutsu.py",
-      "iniciar_automus_com_guardiao_darkjutsu.ps1"
+      "iniciar_automus_com_guardiao_darkjutsu.ps1",
+      "iniciar_tunel_celular_darkjutsu.ps1"
     )) {
       if (Sync-File $name $runtimeDir) { $updatedFiles[$name] = $true }
     }

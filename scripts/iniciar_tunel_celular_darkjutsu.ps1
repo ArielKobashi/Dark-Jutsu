@@ -33,9 +33,12 @@ do {
   Write-MobileState "starting" "" "Iniciando tunnel para celular."
   Set-Content -LiteralPath $logFile -Value "" -Encoding UTF8
 
-  Get-Process -Name cloudflared -ErrorAction SilentlyContinue | ForEach-Object {
-    try { Stop-Process -Id $_.Id -Force -ErrorAction Stop } catch {}
-  }
+  $urlPattern = [regex]::Escape($Url)
+  Get-CimInstance Win32_Process -Filter "Name = 'cloudflared.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -and $_.CommandLine -match "--url" -and $_.CommandLine -match $urlPattern } |
+    ForEach-Object {
+      try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {}
+    }
 
   $process = Start-Process -FilePath $Cloudflared -ArgumentList @(
     "tunnel",
