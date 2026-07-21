@@ -7,6 +7,7 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 - `index.html` - aplicacao principal SQL-first, tabela de estoque, chat, painel admin, relatorios, contagem, editor de limites e gerador de etiquetas.
 - `dashboard.html` - dashboard de estoque com filtros por parametros de URL.
 - `label-editor.html` - mini editor visual para simular e ajustar a formatacao das etiquetas.
+- `dark-jutsu-config.js` - configuracao unica dos enderecos da API principal/reserva usados pelo app.
 - `dashboard-nav.js` - atalhos e comandos para abrir o dashboard, por padrao no armazem 04.
 - `style.css` - estilos desktop da aplicacao.
 - `mobile.css` - ajustes responsivos/mobile.
@@ -26,6 +27,11 @@ Sistema web local para consulta de estoque, chat interno, administracao de usuar
 - `assets/screenshots/` - capturas de tela de apoio e diagnostico.
 - `scripts/` - automacao Python, macros e atualizador Automus.
 - `tools/planilhas/` - motores e utilitarios antigos de tratamento de planilhas, mantidos fora da raiz.
+
+## Endereco da API
+
+Quando mudar a API principal do Dark-Jutsu, edite `dark-jutsu-config.js`.
+Os HTMLs (`index.html`, `dashboard.html` e `label-editor.html`) usam esse arquivo para montar a lista de tentativas da API, evitando trocar IP em varios pontos do sistema.
 
 ## Funcionalidades principais
 

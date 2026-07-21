@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Dark-Jutsu">
 <link rel="stylesheet" href="style.css?v=12">
-<link rel="stylesheet" href="mobile.css?v=11">
+<link rel="stylesheet" href="mobile.css?v=12">
 <script src="dashboard-nav.js" defer></script>
 <!-- /SPLIT: head.html -->
 
@@ -925,6 +925,7 @@ AtualizaÃ§Ã£o do Sistema
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="critical-stock-manager.js"></script>
+<script src="dark-jutsu-config.js"></script>
 <!-- /SPLIT: vendor-xlsx.html -->
 
 <!-- SPLIT: app-core.js (ui + estoque + admin logic) -->
@@ -12286,10 +12287,11 @@ function pararChecagemAutomaticaSistemaGithub(){
 const db = null;
 const SQL_API_HOST_IS_LOCAL = ["127.0.0.1", "localhost"].includes(location.hostname);
 const SQL_API_IS_PUBLIC_ORIGIN = location.protocol === "https:" && !SQL_API_HOST_IS_LOCAL;
+const SQL_API_CONFIG = window.DARK_JUTSU_CONFIG || {};
 const DEFAULT_SQL_API_BASE = (
     location.protocol.startsWith("http") && location.hostname
         ? location.origin
-        : "http://127.0.0.1:8765"
+        : (SQL_API_CONFIG.apiPrincipalBaseUrl || "http://127.0.0.1:8765")
 );
 const SQL_API_BASE = (
     new URLSearchParams(location.search).get("apiBase") ||
@@ -12301,9 +12303,7 @@ const SQL_API_FALLBACK_BASES = [
     SQL_API_BASE,
     ...(SQL_API_IS_PUBLIC_ORIGIN ? [] : [
         ...(SQL_API_HOST_IS_LOCAL ? ["http://127.0.0.1:8765", "http://localhost:8765"] : []),
-        "http://192.168.5.44:8765",
-        "http://192.168.5.41:8765",
-        "http://192.168.5.38:8765"
+        ...(SQL_API_CONFIG.apiFallbackBaseUrls || [])
     ])
 ].filter((base, index, bases) => base && bases.indexOf(base) === index);
 let sqlApiPreferredBase = localStorage.getItem("darkJutsuApiPreferredBase") || "";
@@ -12316,10 +12316,6 @@ if(!SQL_API_IS_PUBLIC_ORIGIN && location.protocol.startsWith("http") && location
     try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
 }
 if(!SQL_API_HOST_IS_LOCAL && /^http:\/\/(127\.0\.0\.1|localhost):8765/i.test(sqlApiPreferredBase)){
-    sqlApiPreferredBase = "";
-    try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
-}
-if(!SQL_API_HOST_IS_LOCAL && /^http:\/\/192\.168\.5\.38:8765/i.test(sqlApiPreferredBase)){
     sqlApiPreferredBase = "";
     try{ localStorage.removeItem("darkJutsuApiPreferredBase"); }catch(e){}
 }

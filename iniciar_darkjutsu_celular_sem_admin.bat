@@ -53,9 +53,12 @@ if not "%errorlevel%"=="0" (
 )
 
 curl.exe -fsS --max-time 2 "http://127.0.0.1:%MOBILE_API_PORT%/style.css" 2>nul | findstr /C:"body" >nul 2>&1
+if "%errorlevel%"=="0" (
+  curl.exe -fsS --max-time 2 "http://127.0.0.1:%MOBILE_API_PORT%/mobile.css" 2>nul | findstr /C:"Mobile overrides" >nul 2>&1
+)
 if not "%errorlevel%"=="0" (
   echo.
-  echo A API do celular esta ativa, mas os arquivos visuais ainda nao estao saindo corretamente.
+  echo A API do celular esta ativa, mas os arquivos visuais/mobile ainda nao estao saindo corretamente.
   echo Vou tentar reiniciar somente a API do celular.
   for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /R /C:":%MOBILE_API_PORT% .*LISTENING"') do taskkill /PID %%P /F >nul 2>&1
   set "DARK_JUTSU_API_HOST=127.0.0.1"
@@ -63,7 +66,7 @@ if not "%errorlevel%"=="0" (
   set "DARK_JUTSU_ALLOWED_ORIGINS=*"
   set "DARK_JUTSU_APP_WEB_ROOT=%ROOT_DIR%"
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' -ArgumentList '/c','\"%ROOT%api\iniciar_api_servidor.bat\"'"
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(25); do { try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%MOBILE_API_PORT%/style.css' -TimeoutSec 2 | Out-Null; exit 0 } catch { Start-Sleep -Seconds 1 } } while ((Get-Date) -lt $deadline); exit 1"
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(25); do { try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%MOBILE_API_PORT%/style.css' -TimeoutSec 2 | Out-Null; Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%MOBILE_API_PORT%/mobile.css' -TimeoutSec 2 | Out-Null; exit 0 } catch { Start-Sleep -Seconds 1 } } while ((Get-Date) -lt $deadline); exit 1"
 )
 
 curl.exe -fsS --max-time 2 "http://127.0.0.1:%MOBILE_API_PORT%/api/mobile-link" >nul 2>&1

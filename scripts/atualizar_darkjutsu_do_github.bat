@@ -175,7 +175,7 @@ exit /b 0
 
 :publish
 call :log "Publicando app web."
-robocopy "%REPO_DIR%" "%SHARE_ROOT%\app" critical-stock-manager.js dashboard-nav.js dashboard.html index.html label-editor.html logo-tab.png logo.png medidores.html mobile.css style.css sw.js site.webmanifest /R:2 /W:2 /NFL /NDL /NP >> "%LOGFILE%" 2>&1
+robocopy "%REPO_DIR%" "%SHARE_ROOT%\app" critical-stock-manager.js dark-jutsu-config.js dashboard-nav.js dashboard.html index.html label-editor.html logo-tab.png logo.png medidores.html mobile.css style.css sw.js site.webmanifest /R:2 /W:2 /NFL /NDL /NP >> "%LOGFILE%" 2>&1
 if %errorlevel% GEQ 8 exit /b %errorlevel%
 if exist "%REPO_DIR%\assets" robocopy "%REPO_DIR%\assets" "%SHARE_ROOT%\app\assets" /E /R:2 /W:2 /NFL /NDL /NP >> "%LOGFILE%" 2>&1
 if %errorlevel% GEQ 8 exit /b %errorlevel%

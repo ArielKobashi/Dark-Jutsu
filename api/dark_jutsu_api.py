@@ -57,6 +57,7 @@ APP_PUBLIC_FILES = {
     "medidores.html",
     "style.css",
     "mobile.css",
+    "dark-jutsu-config.js",
     "dashboard-nav.js",
     "critical-stock-manager.js",
     "sw.js",

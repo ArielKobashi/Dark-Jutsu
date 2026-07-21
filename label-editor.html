@@ -380,6 +380,7 @@
     </style>
 </head>
 <body>
+    <script src="dark-jutsu-config.js"></script>
     <header>
         <h1>Editor de formato das etiquetas</h1>
         <div class="miniPreview" aria-hidden="true">
@@ -990,7 +991,7 @@
         const DEFAULT_SQL_API_BASE = (
             location.protocol.startsWith("http") && location.hostname
                 ? location.origin
-                : "http://127.0.0.1:8765"
+                : ((window.DARK_JUTSU_CONFIG || {}).apiPrincipalBaseUrl || "http://127.0.0.1:8765")
         );
         const SQL_API_BASE = (
             new URLSearchParams(location.search).get("apiBase") ||
@@ -1008,7 +1009,7 @@
             SQL_API_BASE,
             "http://127.0.0.1:8765",
             "http://localhost:8765",
-            "http://192.168.5.38:8765"
+            ...((window.DARK_JUTSU_CONFIG || {}).apiFallbackBaseUrls || [])
         ].filter((base, index, bases) => base && bases.indexOf(base) === index);
         const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
         let timerSalvarCompartilhado = null;
