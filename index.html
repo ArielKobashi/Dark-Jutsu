@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Dark-Jutsu">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 <link rel="stylesheet" href="mobile.css?v=11">
 <script src="dashboard-nav.js" defer></script>
 <!-- /SPLIT: head.html -->
@@ -14472,14 +14472,48 @@ function normalizarSnapshotDashboardSql(data){
     };
 }
 
+function normalizarInventoryListaSql(data){
+    const items = Array.isArray(data?.items) ? data.items : [];
+    if(!items.length) return null;
+    return {
+        dados: items.map(item => {
+            const endereco = item.primary_address || item.enderecoPrincipal || item.endereco || "";
+            const armazem = item.primary_warehouse || item.armazemPrincipal || item.armazem || "";
+            const saldo = item.balance ?? item.saldo ?? "";
+            return {
+                ...item,
+                protheusKey: item.legacy_key || item.protheusKey || item.protheus_code || item.protheus || item.cooperat_code || "",
+                protheus: item.protheus || item.protheus_code || "",
+                cooperat: item.cooperat || item.cooperat_code || "",
+                descricao: item.descricao || item.description || "",
+                enderecoPrincipal: endereco,
+                armazemPrincipal: armazem,
+                saldo,
+                minimo: item.minimo ?? item.min_qty ?? "",
+                maximo: item.maximo ?? item.max_qty ?? "",
+                reposicao: item.reposicao ?? item.reorder_qty ?? "",
+                enderecos: Array.isArray(item.enderecos) ? item.enderecos : (
+                    endereco || armazem || saldo !== "" ? [{ endereco, armazem, saldo }] : []
+                )
+            };
+        }),
+        dadosMortos: [],
+        atualizadoPor: "Sistema"
+    };
+}
+
 // --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
 async function carregarEstoqueInicial() {
 
     if (typeof iniciarProgresso === "function") iniciarProgresso(); 
     if (typeof window.sqlApi === "function") {
         try {
-            const data = await window.sqlApi("/api/inventory", { timeoutMs: 5000 });
-            const banco = data?.inventory || normalizarSnapshotDashboardSql(data);
+            const data = await window.sqlApi("/api/inventory?limit=500", { timeoutMs: 5000 });
+            let banco = normalizarInventoryListaSql(data) || data?.inventory || normalizarSnapshotDashboardSql(data);
+            if(!banco || (!Array.isArray(banco.dados) && !Array.isArray(banco.dadosMortos))){
+                const snapshot = await window.sqlApi("/api/dashboard/snapshot?limit=1000", { timeoutMs: 8000 });
+                banco = normalizarSnapshotDashboardSql(snapshot);
+            }
             if (banco && (Array.isArray(banco.dados) || Array.isArray(banco.dadosMortos))) {
                 aplicarSnapshotEstoqueFirebase(banco, { forcarFiltros:true });
                 console.log("Dados de estoque carregados do SQL.");
