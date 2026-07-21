@@ -65,6 +65,18 @@ APP_PUBLIC_FILES = {
     "logo.png",
     "logo-tab.png",
 }
+APP_PUBLIC_SUFFIXES = {
+    ".html",
+    ".css",
+    ".js",
+    ".json",
+    ".png",
+    ".ico",
+    ".webmanifest",
+    ".woff",
+    ".woff2",
+    ".ttf",
+}
 COUNTING_PING_SHARED_DIR = Path(_env("DARK_JUTSU_COUNTING_PING_SHARED_DIR", r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\data\contagem-pings"))
 COUNTING_PING_LOCAL_DIR = Path(_env("DARK_JUTSU_COUNTING_PING_LOCAL_DIR", str(ROOT / "data" / "contagem-pings")))
 COUNTING_PING_FIELDS = [
@@ -588,7 +600,7 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
-    def _send_file(self, path: Path) -> None:
+    def _send_file(self, path: Path, send_body: bool = True) -> None:
         origin = self.headers.get("Origin", "").rstrip("/")
         allow_origin = ""
         if ALLOWED_ORIGINS and ALLOWED_ORIGINS != ["*"]:
@@ -626,6 +638,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Headers", "authorization, content-type, x-api-token")
             self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE, OPTIONS")
             self.end_headers()
+            if not send_body:
+                return
             with path.open("rb") as handle:
                 while True:
                     chunk = handle.read(1024 * 1024)
@@ -649,7 +663,9 @@ class Handler(BaseHTTPRequestHandler):
             filename = parts[-1] or "index.html"
         if filename in {"", ".", ".."}:
             filename = "index.html"
-        if "/" in filename or "\\" in filename or filename not in APP_PUBLIC_FILES:
+        is_public_name = filename in APP_PUBLIC_FILES
+        is_public_suffix = Path(filename).suffix.lower() in APP_PUBLIC_SUFFIXES
+        if "/" in filename or "\\" in filename or not (is_public_name or is_public_suffix):
             raise ApiError(HTTPStatus.NOT_FOUND, "Arquivo do app nao encontrado.")
         roots = [
             ROOT,
@@ -662,11 +678,14 @@ class Handler(BaseHTTPRequestHandler):
                 base = root.resolve()
                 is_allowed = path == base / filename or base in path.parents
                 if path.is_file() and is_allowed:
-                    self._send_file(path)
+                    self._send_file(path, send_body=self.command != "HEAD")
                     return
             except Exception:
                 continue
         raise ApiError(HTTPStatus.NOT_FOUND, "Arquivo do app nao encontrado.")
+
+    def do_HEAD(self) -> None:
+        self.do_GET()
 
     def do_OPTIONS(self) -> None:
         if not self._request_origin_allowed():
@@ -682,7 +701,17 @@ class Handler(BaseHTTPRequestHandler):
             parsed = urlparse(self.path)
             query = parse_qs(parsed.query)
             parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
-            if not parts or parts[:1] == ["app"] or (len(parts) == 1 and parts[0] in APP_PUBLIC_FILES):
+            if (
+                not parts
+                or parts[:1] == ["app"]
+                or (
+                    len(parts) == 1
+                    and (
+                        parts[0] in APP_PUBLIC_FILES
+                        or Path(parts[0]).suffix.lower() in APP_PUBLIC_SUFFIXES
+                    )
+                )
+            ):
                 self._send_app_file(parts)
                 self._request_log_context(started, HTTPStatus.OK)
                 return

@@ -40,7 +40,7 @@ if not "%errorlevel%"=="0" (
   set "DARK_JUTSU_API_PORT=%MOBILE_API_PORT%"
   set "DARK_JUTSU_ALLOWED_ORIGINS=*"
   set "DARK_JUTSU_APP_WEB_ROOT=%ROOT_DIR%"
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' -ArgumentList '/c','\"%ROOT%api\iniciar_api_servidor.bat\"'"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\iniciar_api_celular_8766_direta.ps1" -Root "%ROOT_DIR%" -Port %MOBILE_API_PORT%
   echo Aguardando a API subir...
   powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(25); do { try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%MOBILE_API_PORT%/health' -TimeoutSec 2 | Out-Null; exit 0 } catch { Start-Sleep -Seconds 1 } } while ((Get-Date) -lt $deadline); exit 1"
   if not "%errorlevel%"=="0" (
@@ -65,7 +65,7 @@ if not "%errorlevel%"=="0" (
   set "DARK_JUTSU_API_PORT=%MOBILE_API_PORT%"
   set "DARK_JUTSU_ALLOWED_ORIGINS=*"
   set "DARK_JUTSU_APP_WEB_ROOT=%ROOT_DIR%"
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' -ArgumentList '/c','\"%ROOT%api\iniciar_api_servidor.bat\"'"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\iniciar_api_celular_8766_direta.ps1" -Root "%ROOT_DIR%" -Port %MOBILE_API_PORT%
   powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(25); do { try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%MOBILE_API_PORT%/style.css' -TimeoutSec 2 | Out-Null; Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%MOBILE_API_PORT%/mobile.css' -TimeoutSec 2 | Out-Null; exit 0 } catch { Start-Sleep -Seconds 1 } } while ((Get-Date) -lt $deadline); exit 1"
 )
 
@@ -79,7 +79,7 @@ if not "%errorlevel%"=="0" (
   set "DARK_JUTSU_API_PORT=%MOBILE_API_PORT%"
   set "DARK_JUTSU_ALLOWED_ORIGINS=*"
   set "DARK_JUTSU_APP_WEB_ROOT=%ROOT_DIR%"
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' -ArgumentList '/c','\"%ROOT%api\iniciar_api_servidor.bat\"'"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\iniciar_api_celular_8766_direta.ps1" -Root "%ROOT_DIR%" -Port %MOBILE_API_PORT%
   powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(25); do { try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%MOBILE_API_PORT%/api/mobile-link' -TimeoutSec 2 | Out-Null; exit 0 } catch { Start-Sleep -Seconds 1 } } while ((Get-Date) -lt $deadline); exit 1"
 )
 
