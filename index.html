@@ -910,6 +910,34 @@ AtualizaÃ§Ã£o do Sistema
 <!-- SPLIT: app-core.js (ui + estoque + admin logic) -->
 <script>
 
+async function copiarTextoSimples(texto){
+    const valor = String(texto || "").trim();
+    if(!valor) return false;
+    try{
+        await navigator.clipboard.writeText(valor);
+        if(typeof mostrarNotificacao === "function") mostrarNotificacao("Copiado: " + valor);
+        return true;
+    }catch(e){
+        const temp = document.createElement("textarea");
+        temp.value = valor;
+        temp.style.position = "fixed";
+        temp.style.opacity = "0";
+        document.body.appendChild(temp);
+        temp.focus();
+        temp.select();
+        try{
+            document.execCommand("copy");
+            if(typeof mostrarNotificacao === "function") mostrarNotificacao("Copiado: " + valor);
+            return true;
+        }catch(err){
+            console.warn("Falha ao copiar texto:", err);
+            return false;
+        }finally{
+            document.body.removeChild(temp);
+        }
+    }
+}
+window.copiarTextoSimples = copiarTextoSimples;
 
 
 let selecionados = new Set();
@@ -5044,33 +5072,6 @@ function gerarRelatorio(){
                 document.body.removeChild(temp);
             }
         }
-        async function copiarTextoSimples(texto){
-            const valor = String(texto || "").trim();
-            if(!valor) return false;
-            try{
-                await navigator.clipboard.writeText(valor);
-                if(typeof mostrarNotificacao === "function") mostrarNotificacao("Copiado: " + valor);
-                return true;
-            }catch(e){
-                const temp = document.createElement("textarea");
-                temp.value = valor;
-                temp.style.position = "fixed";
-                temp.style.opacity = "0";
-                document.body.appendChild(temp);
-                temp.select();
-                try{
-                    document.execCommand("copy");
-                    if(typeof mostrarNotificacao === "function") mostrarNotificacao("Copiado: " + valor);
-                    return true;
-                }catch(err){
-                    console.warn("Falha ao copiar texto:", err);
-                    return false;
-                }finally{
-                    document.body.removeChild(temp);
-                }
-            }
-        }
-
         function exportarXlsx(){
             const XLSXLib = window.opener && window.opener.XLSX;
             if(!XLSXLib){
@@ -11792,9 +11793,11 @@ window.instalarDarkJutsuApp = async function(){
 
 if("serviceWorker" in navigator && location.protocol !== "file:"){
     window.addEventListener("load", () => {
-        navigator.serviceWorker.register("sw.js").catch(err => {
-            console.warn("Falha ao registrar app web:", err);
-        });
+        navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+            .then(registration => registration.update().catch(() => null))
+            .catch(err => {
+                console.warn("Falha ao registrar app web:", err);
+            });
         atualizarBotaoInstalarApp();
     });
 }else{
@@ -11924,9 +11927,14 @@ window.atualizarSistemaGithubAgora = async function(botao){
 
 function iniciarChecagemAutomaticaSistemaGithub(){
     if(sistemaGithubUpdateTimer || window.nivelUsuario !== "admin") return;
-    window.sqlApi?.("/api/system/update-status", { timeoutMs: 8000 })
-        .then(formatarStatusAtualizacaoSistema)
-        .catch(() => {});
+    if(typeof window.sqlApi === "function"){
+        window.sqlApi("/api/system/update-status", { timeoutMs: 8000 })
+            .then(formatarStatusAtualizacaoSistema)
+            .catch(() => {});
+    }else{
+        const status = document.getElementById("sistemaUpdateStatus");
+        if(status) status.textContent = "API SQL ainda nao inicializada para checar atualizacao.";
+    }
     sistemaGithubUpdateTimer = setInterval(() => checarAtualizacaoSistemaGithub(false), 5 * 60 * 1000);
 }
 
@@ -15306,13 +15314,18 @@ senhaInput.addEventListener("keydown", e=>{
         login();
     }
 });
-window.addEventListener("DOMContentLoaded", () => {
+function focarLoginInicial(){
     const loginBoxVisivel = document.getElementById("authBox");
     const nick = document.getElementById("authNickname");
-    if(loginBoxVisivel && nick && !nick.value){
-        setTimeout(() => nick.focus(), 0);
+    if(loginBoxVisivel && nick){
+        setTimeout(() => {
+            nick.focus();
+            try{ nick.select(); }catch(e){}
+        }, 0);
     }
-});
+}
+focarLoginInicial();
+window.addEventListener("DOMContentLoaded", focarLoginInicial);
 
 const cadastroNickInput = document.getElementById("cadastroNickname");
 const cadastroCrachaInput = document.getElementById("cadastroCracha");

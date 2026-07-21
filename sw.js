@@ -1,4 +1,4 @@
-const CACHE_NAME = "dark-jutsu-app-v2";
+const CACHE_NAME = "dark-jutsu-app-v3";
 const APP_SHELL = [
   "./style.css",
   "./mobile.css",
@@ -27,11 +27,10 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
-  if(request.method !== "GET" || url.port === "8765"){
+  if(request.method !== "GET"){
     return;
   }
-  if(request.mode === "navigate" || url.pathname.endsWith(".html") || url.pathname.endsWith("/")){
-    event.respondWith(fetch(request).catch(() => caches.match("./index.html")));
+  if(url.port === "8765" || request.mode === "navigate" || url.pathname.endsWith(".html") || url.pathname.endsWith("/")){
     return;
   }
   event.respondWith(
