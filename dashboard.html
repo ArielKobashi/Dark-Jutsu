@@ -2151,9 +2151,10 @@
                     const maximo = normalizarLimiteCooperat(row[7], codigo);
                     const reposicaoPlanilha = normalizarLimiteCooperat(row[8], codigo);
                     const saldoAnterior = num(row[5]);
+                    const enderecoHistorico = String(row?.[4] || "").trim();
                     const repos = reposicaoPlanilha !== null ? reposicaoPlanilha : calcularReposicaoMedia(minimo, maximo);
-                    if(minimo === null && maximo === null && repos === null && saldoAnterior === null) return;
-                    mapa.set(codigo, { minimo, maximo, reposicao: repos, saldoAnterior });
+                    if(minimo === null && maximo === null && repos === null && saldoAnterior === null && !enderecoValidoItem(enderecoHistorico)) return;
+                    mapa.set(codigo, { minimo, maximo, reposicao: repos, saldoAnterior, enderecoHistorico });
                 });
             }catch(err){
                 console.warn("Nao foi possivel carregar estoque_minimo.xlsx no dashboard:", err);
@@ -2230,6 +2231,21 @@
             const codigoCooperat = normalizarCodigo(novo.cooperat);
             const extra = mapaMinimo.get(codigoCooperat);
             if(extra){
+                if(enderecoValidoItem(extra.enderecoHistorico) && !enderecoValidoItem(novo.enderecoPrincipal)){
+                    novo.enderecoPrincipal = extra.enderecoHistorico;
+                    novo.armazemPrincipal = novo.armazemPrincipal || "ND";
+                    novo.enderecos = Array.isArray(novo.enderecos) ? [...novo.enderecos] : [];
+                    const chaveEnderecoHistorico = normalizarEnderecoProgresso(extra.enderecoHistorico);
+                    const jaTemEnderecoHistorico = novo.enderecos.some(end => normalizarEnderecoProgresso(end?.endereco) === chaveEnderecoHistorico);
+                    if(!jaTemEnderecoHistorico){
+                        novo.enderecos.push({
+                            endereco: extra.enderecoHistorico,
+                            armazem: novo.armazemPrincipal || "ND",
+                            saldo: 0,
+                            origem: "Estoque minimo antigo"
+                        });
+                    }
+                }
                 novo.limitesCooperat = {
                     minimo: extra.minimo,
                     maximo: extra.maximo,

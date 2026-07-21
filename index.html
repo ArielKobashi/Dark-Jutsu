@@ -1090,6 +1090,19 @@ function indexarEnderecosDadosMortosPlanilha(planilha){
     return mapa;
 }
 
+function indexarEnderecosEstoqueMinimoPlanilha(planilha){
+    const mapa = new Map();
+    (Array.isArray(planilha) ? planilha : []).forEach(row => {
+        const cooperat = normalizarChaveCodigoPlanilha(row?.[1]);
+        if(!cooperat || cooperat.includes("cooperat") || cooperat.includes("codigo") || cooperat.includes("cÃ³digo") || cooperat.includes("item")) return;
+        const endereco = extrairEnderecoAntigoLinha(row);
+        if(endereco && !mapa.has(cooperat)){
+            mapa.set(cooperat, endereco);
+        }
+    });
+    return mapa;
+}
+
 function isDescricaoDadoMorto(valor){
     const texto = (valor ?? "").toString()
         .normalize("NFD")
@@ -10894,6 +10907,7 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
     let novos = [];
     const colunasIncluir = detectarColunasIncluir(basePlanilha);
     const enderecosDadosMortosPlanilha = indexarEnderecosDadosMortosPlanilha(dadosMortosPlanilha);
+    const enderecosEstoqueMinimoPlanilha = indexarEnderecosEstoqueMinimoPlanilha(cooperat);
 
     for (let i = colunasIncluir.inicio; i < basePlanilha.length; i++) {
 
@@ -10996,6 +11010,15 @@ function gerarItensPlanilha(basePlanilha, cooperat, saldoAtual, saldoEndereco, m
         }
 
         // FALLBACK: mantém endereço anterior se dados.mortos.xlsx não trouxe endereço.
+        if(!encontrouEnderecoComSaldo && !isEnderecoValido(item.enderecoPrincipal)){
+            const enderecoEstoqueMinimo = enderecosEstoqueMinimoPlanilha.get(normalizarChaveCodigoPlanilha(item.cooperat));
+            if(enderecoEstoqueMinimo){
+                item.enderecoPrincipal = enderecoEstoqueMinimo;
+                item.armazemPrincipal = "ND";
+                adicionarEnderecoHistoricoItem(enderecoEstoqueMinimo, "ND", "Estoque minimo antigo");
+            }
+        }
+
         if(!encontrouEnderecoComSaldo && !isEnderecoValido(item.enderecoPrincipal)){
             const anterior = getBaseDadosTodos().find(d =>
                 (d?.protheus && normalizarChaveCodigoPlanilha(d.protheus) === normalizarChaveCodigoPlanilha(item.protheus)) ||
