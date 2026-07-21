@@ -624,6 +624,11 @@ class Tray:
         leader_ips = leader_node.get("ips") or []
         active_ip = next((ip for ip in leader_ips if ip and not ip.startswith("127.")), "")
         leader_ok = bool(active_ip and health(active_ip))
+        local_api_ok = health("127.0.0.1")
+        if not leader_ok and local_api_ok:
+            leader_name = computer_name()
+            active_ip = self.local_ip or "127.0.0.1"
+            leader_ok = True
         if leader_name and leader_ok:
             self.offline_since = None
             self.this_active = leader_name == computer_name()

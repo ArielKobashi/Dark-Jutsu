@@ -11990,7 +11990,7 @@ const SQL_API_IS_PUBLIC_ORIGIN = location.protocol === "https:" && !SQL_API_HOST
 const DEFAULT_SQL_API_BASE = (
     location.protocol.startsWith("http") && location.hostname
         ? location.origin
-        : "http://192.168.5.44:8765"
+        : "http://127.0.0.1:8765"
 );
 const SQL_API_BASE = (
     new URLSearchParams(location.search).get("apiBase") ||

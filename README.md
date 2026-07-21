@@ -226,6 +226,8 @@ iniciar_darkjutsu_celular_sem_admin.bat
 
 Quando aparecer uma URL `https://...trycloudflare.com`, abra essa URL no celular. Esse modo nao abre porta no roteador e nao altera o Firewall, mas depende de internet no PC e o link muda a cada execucao. O proprio Dark-Jutsu mostra o link atual e um QR Code na tela de login e no botao `Celular`.
 
+O modo celular usa uma API separada em `127.0.0.1:8766`, deixando a API normal do servidor em `8765` livre para o monitor e para a rede interna.
+
 Para iniciar o modo celular automaticamente ao entrar neste usuario do Windows, execute uma vez:
 
 ```bat

@@ -8,6 +8,11 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$Root = $Root.Trim().Trim('"')
+if ($Root -match '^(.*)"\s+-KeepAlive$') {
+  $Root = $Matches[1].Trim().Trim('"')
+  $KeepAlive = $true
+}
 $stateDir = Join-Path $Root "data"
 $stateFile = Join-Path $stateDir "mobile_tunnel_url.json"
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null

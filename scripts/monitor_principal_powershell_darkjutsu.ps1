@@ -308,30 +308,30 @@ $infinityTimer.Interval = 150000
 
 function Update-Status {
   $localIp = Get-LocalServerIp
-  $primaryOk = Test-Health $PrimaryIp
-  $reserveOk = Test-Health $ReserveIp
   $localTunnelOk = Test-Health $LocalTunnelIp
-
-  if (-not $localIp) {
-    if ($localTunnelOk) {
-      $assumeItem.Text = "Servidor local via tunel"
-      $assumeItem.Enabled = $false
-    } else {
-      $assumeItem.Text = "Este PC nao e servidor"
-      $assumeItem.Enabled = $false
-    }
-  } else {
-    $assumeItem.Enabled = $true
-  }
-
-  if ($localTunnelOk -and -not ($primaryOk -or $reserveOk)) {
+  if ($localTunnelOk) {
     $script:ServerOfflineSince = $null
     $script:thisPcIsActiveServer = $true
     $notify.Icon = $iconGreen
     $text = "Dark-Jutsu: servidor local ativo para celular/tunel ($LocalTunnelIp)"
     $assumeItem.Text = "Servidor local via tunel"
     $assumeItem.Enabled = $false
-  } elseif ($primaryOk -or $reserveOk) {
+    $statusItem.Text = "Status: celular/tunel ativo"
+    $notify.Text = $text.Substring(0, [Math]::Min(63, $text.Length))
+    return
+  }
+
+  $primaryOk = Test-Health $PrimaryIp
+  $reserveOk = Test-Health $ReserveIp
+
+  if (-not $localIp) {
+    $assumeItem.Text = "Este PC nao e servidor"
+    $assumeItem.Enabled = $false
+  } else {
+    $assumeItem.Enabled = $true
+  }
+
+  if ($primaryOk -or $reserveOk) {
     $script:ServerOfflineSince = $null
     $activeIp = if ($primaryOk) { $PrimaryIp } else { $ReserveIp }
     $activeName = if ($primaryOk) { "principal" } else { "reserva" }

@@ -990,7 +990,7 @@
         const DEFAULT_SQL_API_BASE = (
             location.protocol.startsWith("http") && location.hostname
                 ? location.origin
-                : "http://192.168.5.44:8765"
+                : "http://127.0.0.1:8765"
         );
         const SQL_API_BASE = (
             new URLSearchParams(location.search).get("apiBase") ||
@@ -1000,6 +1000,8 @@
         ).replace(/\/+$/, "");
         const SQL_API_FALLBACK_BASES = [
             SQL_API_BASE,
+            "http://127.0.0.1:8765",
+            "http://localhost:8765",
             "http://192.168.5.38:8765"
         ].filter((base, index, bases) => base && bases.indexOf(base) === index);
         const SQL_API_TOKEN = localStorage.getItem("darkJutsuApiToken") || "";
