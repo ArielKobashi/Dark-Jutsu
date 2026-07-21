@@ -14502,14 +14502,32 @@ function normalizarInventoryListaSql(data){
     };
 }
 
+async function carregarInventoryListaSqlCompleta(){
+    const limit = 500;
+    let offset = 0;
+    let todos = [];
+    let ultimoPayload = null;
+    while(true){
+        const sep = `/api/inventory?limit=${limit}&offset=${offset}`;
+        const data = await window.sqlApi(sep, { timeoutMs: offset === 0 ? 5000 : 8000 });
+        const items = Array.isArray(data?.items) ? data.items : [];
+        ultimoPayload = data;
+        todos = todos.concat(items);
+        const limiteResposta = Number(data?.limit || limit);
+        if(items.length < limiteResposta || items.length === 0) break;
+        offset += items.length;
+        if(offset > 20000) break;
+    }
+    return normalizarInventoryListaSql({ ...(ultimoPayload || {}), items: todos });
+}
+
 // --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
 async function carregarEstoqueInicial() {
 
     if (typeof iniciarProgresso === "function") iniciarProgresso(); 
     if (typeof window.sqlApi === "function") {
         try {
-            const data = await window.sqlApi("/api/inventory?limit=500", { timeoutMs: 5000 });
-            let banco = normalizarInventoryListaSql(data) || data?.inventory || normalizarSnapshotDashboardSql(data);
+            let banco = await carregarInventoryListaSqlCompleta();
             if(!banco || (!Array.isArray(banco.dados) && !Array.isArray(banco.dadosMortos))){
                 const snapshot = await window.sqlApi("/api/dashboard/snapshot?limit=1000", { timeoutMs: 8000 });
                 banco = normalizarSnapshotDashboardSql(snapshot);
