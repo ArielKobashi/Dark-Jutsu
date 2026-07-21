@@ -20,7 +20,11 @@ MAINTENANCE_DIR = STATUS_DIR / "maintenance"
 LOCAL_MONITOR = Path(os.environ.get("LOCALAPPDATA", "")) / "DarkJutsu" / "monitor"
 PYTHONW = Path(os.environ.get("USERPROFILE", "")) / "Desktop" / "aplicacoes code" / "WPy64-3.13.12.0" / "python" / "pythonw.exe"
 GUARDIAN_LOCAL = LOCAL_MONITOR / "guardiao_loop_python_darkjutsu.py"
-API_LOCAL = Path(r"C:\DarkJutsu\Dark-Jutsu\api\dark_jutsu_api.py")
+API_CANDIDATES = (
+    Path(r"C:\DarkJutsu\Dark-Jutsu\api\dark_jutsu_api.py"),
+    Path(os.environ.get("LOCALAPPDATA", "")) / "DarkJutsu" / "Dark-Jutsu" / "api" / "dark_jutsu_api.py",
+)
+API_LOCAL = next((path for path in API_CANDIDATES if path.exists()), API_CANDIDATES[-1])
 LOG_FILE = Path(r"C:\DarkJutsu\logs\teste_failover_controlado.log")
 
 
@@ -45,13 +49,25 @@ def log(message):
         fh.write(line + "\n")
 
 
-def health(ip, timeout=4):
+def health_data(ip, timeout=4):
     try:
         with urllib.request.urlopen(f"http://{ip}:{API_PORT}/health", timeout=timeout) as resp:
-            body = resp.read(2000).replace(b" ", b"").lower()
-            return resp.status == 200 and b'"ok":true' in body
+            body = json.loads(resp.read(60000).decode("utf-8", errors="replace"))
+            return body if resp.status == 200 and body.get("ok") is True else None
     except Exception:
-        return False
+        return None
+
+
+def health(ip, timeout=4):
+    return health_data(ip, timeout=timeout) is not None
+
+
+def snapshot_signature(payload):
+    snapshot = (payload or {}).get("latest_inventory_snapshot") or {}
+    return {
+        "saved_at": str(snapshot.get("saved_at") or ""),
+        "updated_by": str(snapshot.get("updated_by") or ""),
+    }
 
 
 def node_ip(node):
@@ -184,11 +200,18 @@ def set_maintenance(name, seconds, reason):
 
 
 def clear_maintenance(name):
-    try:
-        (MAINTENANCE_DIR / f"{name}.json").unlink(missing_ok=True)
-        log(f"Manutencao controlada removida para {name}.")
-    except Exception as exc:
-        log(f"AVISO: nao consegui remover manutencao de {name}: {type(exc).__name__}: {exc}")
+    path = MAINTENANCE_DIR / f"{name}.json"
+    last_error = None
+    for _ in range(30):
+        try:
+            path.unlink(missing_ok=True)
+            log(f"Manutencao controlada removida para {name}.")
+            return True
+        except (PermissionError, OSError) as exc:
+            last_error = exc
+            time.sleep(0.5)
+    log(f"AVISO: nao consegui remover manutencao de {name} apos 15s: {type(last_error).__name__}: {last_error}")
+    return False
 
 
 def int_arg(name, default=0):
@@ -213,6 +236,8 @@ def main():
     if not health("127.0.0.1"):
         log("ABORTADO: API local do lider nao esta saudavel antes do teste.")
         return 1
+    baseline_signature = snapshot_signature(health_data("127.0.0.1"))
+    log(f"Assinatura SQL antes da queda: {baseline_signature}.")
     config = load_config()
     nodes = read_nodes(config)
     followers = sorted(
@@ -252,6 +277,14 @@ def main():
         lambda: health(successor_ip, timeout=3) and str(read_lease().get("leader") or "").upper() == successor_name,
         150,
     )
+    data_compatible = False
+    if successor_assumed:
+        successor_signature = snapshot_signature(health_data(successor_ip, timeout=5))
+        data_compatible = bool(baseline_signature.get("saved_at") and successor_signature == baseline_signature)
+        if data_compatible:
+            log(f"OK: assinatura SQL preservada no sucessor: {successor_signature}.")
+        else:
+            log(f"FALHOU: sucessor respondeu com dados diferentes. Antes={baseline_signature} Sucessor={successor_signature}.")
     if successor_assumed and hold_seconds:
         log(f"Segurando {successor_name} como lider por {hold_seconds}s para o monitor exibir a troca.")
         hold_deadline = time.time() + hold_seconds
@@ -263,15 +296,16 @@ def main():
     log("Retornando candidato preferencial original.")
     if maintenance_mode:
         clear_maintenance(me)
-    start_api()
-    start_guardian()
+    else:
+        start_guardian()
+        start_api()
     preferred_back = wait_until(
         "preferencial reassumiu com API/SQL",
         lambda: health("127.0.0.1", timeout=3) and str(read_lease().get("leader") or "").upper() == me,
         210,
     )
     successor_stopped = wait_until(f"{successor_name} voltou para espera", lambda: not health(successor_ip, timeout=2), 120)
-    if successor_assumed and preferred_back and successor_stopped:
+    if successor_assumed and data_compatible and preferred_back and successor_stopped:
         log("RESULTADO: OK failover dinamico e retorno por prioridade confirmados.")
         return 0
     log("RESULTADO: ATENCAO. Verifique tabela de status e logs.")

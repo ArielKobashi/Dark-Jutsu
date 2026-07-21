@@ -8,3 +8,7 @@ alter table signup_requests
   add column if not exists password_hash text;
 
 create index if not exists users_password_reset_idx on users (password_reset_required) where password_reset_required;
+
+insert into schema_migrations (version)
+values ('003_sql_auth')
+on conflict (version) do nothing;

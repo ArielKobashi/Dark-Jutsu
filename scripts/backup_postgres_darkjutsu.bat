@@ -1,7 +1,11 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-set "PG_BIN=C:\DarkJutsu\PostgreSQL\pgsql\bin"
+set "PG_BIN=%DARK_JUTSU_PG_BIN%"
+if not exist "%PG_BIN%\pg_dump.exe" set "PG_BIN=C:\DarkJutsu\PostgreSQL\pgsql\bin"
+if not exist "%PG_BIN%\pg_dump.exe" set "PG_BIN=%LOCALAPPDATA%\DarkJutsu\PostgreSQL\pgsql\bin"
+if not exist "%PG_BIN%\pg_dump.exe" set "PG_BIN=%USERPROFILE%\Desktop\aplicacoes code\pgsql\bin"
+if not exist "%PG_BIN%\pg_dump.exe" set "PG_BIN=%USERPROFILE%\Desktop\pgsql\bin"
 if not exist "%PG_BIN%\pg_dump.exe" set "PG_BIN=%USERPROFILE%\Desktop\postgresql-18.4-2-windows-x64-binaries\pgsql\bin"
 set "PGHOST=127.0.0.1"
 set "PGPORT=5433"

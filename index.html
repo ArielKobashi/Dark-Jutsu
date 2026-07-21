@@ -5177,6 +5177,8 @@ let contagemMicStream = null;
 let contagemRascunhoFirebaseTimer = null;
 let contagemRascunhoFirebaseAvisoErro = false;
 let contagemRegistrosDesdeUltimoBackup = 0;
+let contagemSyncPendenteTimer = null;
+let contagemSyncPendenteRodando = false;
 let contagemPresencaUnsub = null;
 let contagemStatusMaquinas = {};
 let contagemHistoricoProgressoGrupos = {};
@@ -5358,6 +5360,125 @@ function chaveSessaoContagem(){
 function chaveResetGlobalContagemAplicado(){
     const uid = window.auth?.currentUser?.uid || window.meuNickname || "local";
     return `contagemResetGlobalAplicado:${uid}`;
+}
+
+function chaveBackupSeguroContagem(){
+    const uid = window.auth?.currentUser?.uid || window.meuNickname || "local";
+    return `contagemBackupSeguro:${uid}`;
+}
+
+function chaveBackupSeguroContagemEspelho(){
+    const uid = window.auth?.currentUser?.uid || window.meuNickname || "local";
+    return `contagemBackupSeguroMirror:${uid}`;
+}
+
+function chaveSessoesPendentesContagem(){
+    const uid = window.auth?.currentUser?.uid || window.meuNickname || "local";
+    return `contagemSessoesPendentes:${uid}`;
+}
+
+function lerJsonLocalContagem(chave, fallback){
+    try{
+        const valor = JSON.parse(localStorage.getItem(chave) || "null");
+        return valor === null || valor === undefined ? fallback : valor;
+    }catch(e){
+        return fallback;
+    }
+}
+
+function salvarJsonLocalContagem(chave, valor){
+    try{
+        localStorage.setItem(chave, JSON.stringify(valor));
+        return true;
+    }catch(e){
+        console.warn("Falha ao salvar backup local da contagem:", e);
+        return false;
+    }
+}
+
+function carregarBackupSeguroContagemLocal(){
+    const backups = [
+        lerJsonLocalContagem(chaveBackupSeguroContagem(), null),
+        lerJsonLocalContagem(chaveBackupSeguroContagemEspelho(), null)
+    ].filter(item => item && typeof item === "object");
+    if(!backups.length) return null;
+    return backups.sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))[0];
+}
+
+function totalRegistrosPayloadContagem(payload){
+    return Object.keys(payload?.itens || {}).length + Object.keys(payload?.verificacoesVazio || {}).length;
+}
+
+function salvarBackupSeguroContagemLocal(motivo = "alteracao", dirty = true){
+    try{
+        const payload = typeof payloadRascunhoContagemFirebase === "function" ? payloadRascunhoContagemFirebase() : null;
+        const pacote = {
+            schema: 2,
+            savedAt: Date.now(),
+            dirty: !!dirty,
+            motivo,
+            usuario: window.meuNickname || "",
+            uid: uidRascunhoContagemFirebase(),
+            valores: contagemValores || {},
+            verificacoesVazio: contagemVerificacoesVazio || {},
+            saldosSistema: contagemSaldosCongelados || {},
+            sessao: carregarSessaoContagem(),
+            payload,
+            totalRegistros: totalRegistrosPayloadContagem(payload)
+        };
+        salvarJsonLocalContagem(chaveBackupSeguroContagem(), pacote);
+        salvarJsonLocalContagem(chaveBackupSeguroContagemEspelho(), pacote);
+        return pacote;
+    }catch(e){
+        console.warn("Falha ao montar backup seguro da contagem:", e);
+        return null;
+    }
+}
+
+function marcarBackupSeguroContagemSincronizado(){
+    const backup = carregarBackupSeguroContagemLocal();
+    if(!backup) return;
+    const atualizado = { ...backup, dirty:false, syncedAt:Date.now(), motivo:"sincronizado" };
+    salvarJsonLocalContagem(chaveBackupSeguroContagem(), atualizado);
+    salvarJsonLocalContagem(chaveBackupSeguroContagemEspelho(), atualizado);
+}
+
+function restaurarBackupSeguroContagemLocal(){
+    const backup = carregarBackupSeguroContagemLocal();
+    if(!backup || !backup.savedAt) return false;
+    const sessaoAtual = carregarSessaoContagem();
+    const backupSessao = backup.sessao && typeof backup.sessao === "object" ? backup.sessao : {};
+    const backupMaisNovo = Number(backup.savedAt || backupSessao.updatedAt || 0) >= Number(sessaoAtual.updatedAt || 0);
+    const valores = backup.valores && typeof backup.valores === "object" ? backup.valores : {};
+    const verificacoes = backup.verificacoesVazio && typeof backup.verificacoesVazio === "object" ? backup.verificacoesVazio : {};
+    const saldos = backup.saldosSistema && typeof backup.saldosSistema === "object" ? backup.saldosSistema : {};
+    const totalBackup = Object.keys(valores).length + Object.keys(verificacoes).length;
+    const totalAtual = Object.keys(contagemValores || {}).length + Object.keys(contagemVerificacoesVazio || {}).length;
+    if(!totalBackup || (!backupMaisNovo && totalAtual >= totalBackup)) return false;
+    contagemValores = backupMaisNovo ? { ...(contagemValores || {}), ...valores } : { ...valores, ...(contagemValores || {}) };
+    contagemVerificacoesVazio = backupMaisNovo ? { ...(contagemVerificacoesVazio || {}), ...verificacoes } : { ...verificacoes, ...(contagemVerificacoesVazio || {}) };
+    contagemSaldosCongelados = backupMaisNovo ? { ...(contagemSaldosCongelados || {}), ...saldos } : { ...saldos, ...(contagemSaldosCongelados || {}) };
+    try{
+        localStorage.setItem(chaveRascunhoContagem(), JSON.stringify(contagemValores));
+        localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
+        localStorage.setItem(chaveSaldosCongeladosContagem(), JSON.stringify(contagemSaldosCongelados));
+        if(backupMaisNovo && backupSessao && Object.keys(backupSessao).length){
+            localStorage.setItem(chaveSessaoContagem(), JSON.stringify(backupSessao));
+        }
+    }catch(e){}
+    return true;
+}
+
+async function solicitarArmazenamentoPersistenteContagem(){
+    try{
+        if(!navigator.storage?.persist) return false;
+        if(await navigator.storage.persisted?.()) return true;
+        const ok = await navigator.storage.persist();
+        if(ok) console.info("Armazenamento persistente concedido para rascunho de contagem.");
+        return !!ok;
+    }catch(e){
+        return false;
+    }
 }
 
 function dataContagemSessaoAtual(){
@@ -5807,20 +5928,24 @@ async function salvarRascunhoContagemFirebaseAgora(){
     const paths = pathsRascunhoContagemFirebase();
     if(!paths.length) return false;
     const payload = payloadRascunhoContagemFirebase();
+    salvarBackupSeguroContagemLocal("backup antes do envio remoto", true);
     if(typeof window.sqlApi === "function"){
         try{
             await window.sqlApi("/api/counting/drafts", {
                 method: "PUT",
-                body: JSON.stringify({ ...payload, ciclo: chaveCicloContagemAtual() })
+                body: JSON.stringify({ ...payload, ciclo: chaveCicloContagemAtual() }),
+                timeoutMs: 5000
             });
             await salvarStatusMaquinasContagemFirebase(payload, true);
+            marcarBackupSeguroContagemSincronizado();
             contagemRascunhoFirebaseAvisoErro = false;
             return true;
         }catch(sqlErr){
             console.warn("Falha ao salvar rascunho da contagem no SQL:", sqlErr);
+            agendarSincronizacaoPendenciasContagemLocal(3000);
             if(!contagemRascunhoFirebaseAvisoErro){
                 contagemRascunhoFirebaseAvisoErro = true;
-                mostrarNotificacao("Rascunho salvo localmente, mas o SQL/API nao aceitou o backup.");
+                mostrarNotificacao("Contagem protegida neste celular. Vou reenviar quando a API voltar.");
             }
             return false;
         }
@@ -5895,10 +6020,117 @@ async function salvarPresencaContagemFirebase(aberta = true){
 }
 
 function agendarSalvarRascunhoContagemFirebase(delay = 450){
-    if(!uidRascunhoContagemFirebase() || !window.set || !window.ref || !window.db) return;
+    if(!uidRascunhoContagemFirebase()) return;
+    if(typeof window.sqlApi !== "function" && (!window.set || !window.ref || !window.db)) return;
     if(contagemRascunhoFirebaseTimer) clearTimeout(contagemRascunhoFirebaseTimer);
     contagemRascunhoFirebaseTimer = setTimeout(() => {
         salvarRascunhoContagemFirebaseAgora();
+    }, delay);
+}
+
+function lerSessoesPendentesContagem(){
+    const lista = lerJsonLocalContagem(chaveSessoesPendentesContagem(), []);
+    return Array.isArray(lista) ? lista.filter(item => item && typeof item === "object") : [];
+}
+
+function salvarSessoesPendentesContagem(lista){
+    salvarJsonLocalContagem(chaveSessoesPendentesContagem(), Array.isArray(lista) ? lista : []);
+}
+
+function prepararPayloadSessaoPendenteContagem(payload){
+    const base = JSON.parse(JSON.stringify(payload || {}));
+    const usuario = chaveFirebaseContagem(base.usuario || window.meuNickname || "desconhecido");
+    const maquina = chaveFirebaseContagem(base.maquina || "geral");
+    const stamp = Number(base.timestamp || Date.now());
+    const clientSaveId = base.clientSaveId || `mobile_${usuario}_${maquina}_${stamp}`;
+    base.clientSaveId = clientSaveId;
+    base.legacy_key = base.legacy_key || clientSaveId;
+    base.legacy_path = base.legacy_path || `api:contagens/${base.data || dataContagemHoje()}/${usuario}/${clientSaveId}`;
+    return base;
+}
+
+function enfileirarSessaoPendenteContagem(payload, motivo = "api_indisponivel"){
+    const preparado = prepararPayloadSessaoPendenteContagem(payload);
+    const lista = lerSessoesPendentesContagem();
+    const idx = lista.findIndex(item => item.payload?.clientSaveId === preparado.clientSaveId);
+    const registro = {
+        id: preparado.clientSaveId,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        motivo,
+        tentativas: idx >= 0 ? Number(lista[idx].tentativas || 0) : 0,
+        payload: preparado
+    };
+    if(idx >= 0) lista[idx] = { ...lista[idx], ...registro };
+    else lista.push(registro);
+    salvarSessoesPendentesContagem(lista);
+    salvarBackupSeguroContagemLocal("sessao final pendente", true);
+    agendarSincronizacaoPendenciasContagemLocal(2500);
+    return preparado.clientSaveId;
+}
+
+async function sincronizarSessoesPendentesContagem(){
+    if(typeof window.sqlApi !== "function") return false;
+    let lista = lerSessoesPendentesContagem();
+    if(!lista.length) return true;
+    const restantes = [];
+    let salvou = 0;
+    for(const item of lista){
+        try{
+            await window.sqlApi("/api/counting/sessions", {
+                method: "POST",
+                body: JSON.stringify(prepararPayloadSessaoPendenteContagem(item.payload)),
+                timeoutMs: 7000
+            });
+            salvou += 1;
+        }catch(e){
+            restantes.push({ ...item, tentativas:Number(item.tentativas || 0) + 1, updatedAt:Date.now(), ultimoErro:e?.message || String(e) });
+        }
+    }
+    salvarSessoesPendentesContagem(restantes);
+    if(salvou && typeof mostrarNotificacao === "function"){
+        mostrarNotificacao(`${salvou} contagem(ns) pendente(s) sincronizada(s).`);
+    }
+    return restantes.length === 0;
+}
+
+async function sincronizarBackupSeguroContagemLocal(){
+    if(typeof window.sqlApi !== "function") return false;
+    const backup = carregarBackupSeguroContagemLocal();
+    if(!backup?.dirty || !backup.payload) return true;
+    try{
+        await window.sqlApi("/api/counting/drafts", {
+            method: "PUT",
+            body: JSON.stringify({ ...backup.payload, ciclo: chaveCicloContagemAtual() }),
+            timeoutMs: 5000
+        });
+        marcarBackupSeguroContagemSincronizado();
+        contagemRascunhoFirebaseAvisoErro = false;
+        return true;
+    }catch(e){
+        console.warn("Falha ao sincronizar backup seguro da contagem:", e);
+        return false;
+    }
+}
+
+async function sincronizarPendenciasContagemLocalAgora(){
+    if(contagemSyncPendenteRodando) return false;
+    if(typeof window.sqlApi !== "function" || servidorSqlOnline === false) return false;
+    contagemSyncPendenteRodando = true;
+    try{
+        await sincronizarBackupSeguroContagemLocal();
+        await sincronizarSessoesPendentesContagem();
+        return true;
+    }finally{
+        contagemSyncPendenteRodando = false;
+    }
+}
+
+function agendarSincronizacaoPendenciasContagemLocal(delay = 5000){
+    if(contagemSyncPendenteTimer) clearTimeout(contagemSyncPendenteTimer);
+    contagemSyncPendenteTimer = setTimeout(() => {
+        contagemSyncPendenteTimer = null;
+        sincronizarPendenciasContagemLocalAgora();
     }, delay);
 }
 
@@ -6172,6 +6404,7 @@ function salvarRascunhoContagem(opcoes = {}){
         localStorage.setItem(chaveVerificacoesContagem(), JSON.stringify(contagemVerificacoesVazio));
         localStorage.setItem(chaveSaldosCongeladosContagem(), JSON.stringify(contagemSaldosCongelados));
     }catch(e){}
+    salvarBackupSeguroContagemLocal(opcoes.contagemAlterada ? "alteracao de contagem" : "rascunho", true);
     if(opcoes.contagemAlterada) contagemRegistrosDesdeUltimoBackup += 1;
     const forcarBackup = opcoes.forcarFirebase || opcoes.contagemAlterada || contagemRegistrosDesdeUltimoBackup >= 5;
     if(forcarBackup){
@@ -6801,6 +7034,7 @@ function inserirVerificacoesSequenciaContagem(linhas){
 }
 
 async function abrirContagem(){
+    solicitarArmazenamentoPersistenteContagem();
     await checarResetGlobalContagem();
     const itens = Array.isArray(window.dados) ? window.dados : [];
     contagemItens = inserirVerificacoesSequenciaContagem(criarLinhasContagemPermitidas(itens))
@@ -6814,6 +7048,9 @@ async function abrirContagem(){
     contagemValores = carregarRascunhoContagem();
     contagemVerificacoesVazio = carregarVerificacoesContagem();
     contagemSaldosCongelados = carregarSaldosCongeladosContagem();
+    if(restaurarBackupSeguroContagemLocal()){
+        mostrarNotificacao("Rascunho seguro recuperado neste celular.");
+    }
     await carregarRascunhoContagemFirebase();
     await carregarContagensSalvasUsuarioAtual();
     await carregarPresencaContagemFirebaseAgora();
@@ -8327,6 +8564,51 @@ function salvarAtualContagem(){
     atualizarProgressoContagem();
 }
 
+function criarPayloadPingTxtContagemAtual(evento){
+    const item = contagemItensMaquina[contagemIndice];
+    if(!item) return null;
+    const key = itemKeyContagem(item);
+    if(!key) return null;
+    const ehVazio = isVerificacaoVazioContagem(item);
+    const status = ehVazio ? contagemVerificacoesVazio[key] : "";
+    const valor = ehVazio ? "" : contagemValores[key];
+    if((valor === undefined || valor === null || valor === "") && !status) return null;
+    return {
+        evento: evento || "troca_item",
+        timestamp: Date.now(),
+        usuario: window.meuNickname || "desconhecido",
+        uid: uidRascunhoContagemFirebase(),
+        maquina: contagemMaquinaAtual || carregarSessaoContagem().maquina || "",
+        indice: Number.isFinite(contagemIndice) ? contagemIndice : 0,
+        itemKey: key,
+        tipo: ehVazio ? "verificacao_vazio" : "quantidade",
+        protheus: item.protheus || "",
+        cooperat: item.cooperat || "",
+        armazem: item.armazemPrincipal || "",
+        endereco: item.enderecoPrincipal || "",
+        descricao: item.descricao || "",
+        valor,
+        status,
+        clientPingId: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        origem: location.origin || "local"
+    };
+}
+
+function enviarPingTxtContagemAtual(evento){
+    if(typeof window.sqlApi !== "function") return;
+    if(typeof servidorSqlOnline !== "undefined" && servidorSqlOnline === false) return;
+    const payload = criarPayloadPingTxtContagemAtual(evento);
+    if(!payload) return;
+    window.sqlApi("/api/counting/ping-txt", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        keepalive: true,
+        timeoutMs: 1800
+    }).catch(err => {
+        console.warn("Falha ao gravar ping TXT da contagem:", err);
+    });
+}
+
 function animarContagem(direcao, callback){
     const card = document.getElementById("contagemCard");
     card.classList.add(direcao === "left" ? "swipe-left" : "swipe-right");
@@ -8338,6 +8620,7 @@ function animarContagem(direcao, callback){
 
 function contagemProximo(){
     salvarAtualContagem();
+    enviarPingTxtContagemAtual("proximo");
     animarContagem("left", () => {
         const proximoPendente = indicePendenteCircularContagem(contagemIndice, 1);
         if(proximoPendente >= 0){
@@ -8357,6 +8640,7 @@ function contagemProximo(){
 
 function contagemAnterior(){
     salvarAtualContagem();
+    enviarPingTxtContagemAtual("anterior");
     animarContagem("right", () => {
         const anteriorPendente = indicePendenteCircularContagem(contagemIndice, -1);
         if(anteriorPendente >= 0){
@@ -8417,7 +8701,8 @@ async function finalizarContagem(){
         }
     }catch(e){
         console.error("Erro ao salvar contagem:", e);
-        mostrarNotificacao("Erro ao salvar contagem no SQL.");
+        enfileirarSessaoPendenteContagem(payload, "falha ao finalizar");
+        mostrarNotificacao("API caiu, mas a contagem ficou salva neste celular para reenviar.");
     }
 }
 
@@ -8841,7 +9126,8 @@ async function salvarContagemPeloRelatorio(){
         }
     }catch(e){
         console.error("Erro ao salvar contagem:", e);
-        mostrarNotificacao("Erro ao salvar contagem no SQL.");
+        enfileirarSessaoPendenteContagem(payload, "falha ao salvar pelo relatorio");
+        mostrarNotificacao("API caiu, mas a contagem ficou salva neste celular para reenviar.");
     }
 }
 
@@ -9403,14 +9689,26 @@ window.toggleNarradorContagem = toggleNarradorContagem;
 window.toggleLocutorContagem = toggleLocutorContagem;
 window.addEventListener("pagehide", () => {
     if(document.getElementById("contagemScreen")?.style.display !== "none"){
+        salvarBackupSeguroContagemLocal("pagehide", true);
         salvarRascunhoContagemFirebaseAgora();
     }
 });
 window.addEventListener("beforeunload", () => {
     if(document.getElementById("contagemScreen")?.style.display !== "none"){
+        salvarBackupSeguroContagemLocal("beforeunload", true);
         salvarRascunhoContagemFirebaseAgora();
     }
 });
+window.addEventListener("online", () => agendarSincronizacaoPendenciasContagemLocal(1000));
+document.addEventListener("visibilitychange", () => {
+    if(!document.hidden) agendarSincronizacaoPendenciasContagemLocal(1200);
+});
+setInterval(() => {
+    const backup = carregarBackupSeguroContagemLocal();
+    if(backup?.dirty || lerSessoesPendentesContagem().length){
+        agendarSincronizacaoPendenciasContagemLocal(100);
+    }
+}, 20000);
 window.finalizarContagem = finalizarContagem;
 window.abrirRelatorioContagem = abrirRelatorioContagem;
 window.fecharRelatorioContagem = fecharRelatorioContagem;
@@ -12314,6 +12612,7 @@ function setServidorSqlOffline(offline){
     if(!offline){
         servidorSqlOfflineDesde = 0;
         servidorSqlFalhasConsecutivas = 0;
+        agendarSincronizacaoPendenciasContagemLocal(500);
         return;
     }
     if(!servidorSqlOfflineDesde) servidorSqlOfflineDesde = Date.now();

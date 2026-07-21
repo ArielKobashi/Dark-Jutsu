@@ -22,7 +22,7 @@ PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
 API_PORT = 8765
 PG_PORT = 5433
-STATUS_VERSION = "2026-07-20.01"
+STATUS_VERSION = "2026-07-21.02"
 SYSTEM_RUNTIME_ROOT = Path(r"C:\DarkJutsu")
 USER_RUNTIME_ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "DarkJutsu"
 RUNTIME_ROOT = Path(os.environ.get("DARK_JUTSU_RUNTIME_ROOT") or (SYSTEM_RUNTIME_ROOT if SYSTEM_RUNTIME_ROOT.exists() else USER_RUNTIME_ROOT))
@@ -32,6 +32,7 @@ PG_PSQL = PG_ISREADY.with_name("psql.exe")
 ANTI_SLEEP_STATUS_FILE = RUNTIME_ROOT / "logs" / "anti_sleep_darkjutsu.status"
 LOCAL_MONITOR_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "DarkJutsu" / "monitor"
 LOCAL_GUARDIAN = LOCAL_MONITOR_DIR / "guardiao_loop_python_darkjutsu.py"
+RUNTIME_GUARDIAN = Path(__file__).resolve().with_name("guardiao_loop_python_darkjutsu.py")
 SHARE_GUARDIAN = SHARE_ROOT / "scripts" / "guardiao_loop_python_darkjutsu.py"
 SHARE_ELECTION = SHARE_ROOT / "scripts" / "servidor_eleicao_darkjutsu.py"
 LOCAL_ELECTION = LOCAL_MONITOR_DIR / "servidor_eleicao_darkjutsu.py"
@@ -267,14 +268,16 @@ def collect_local_status():
 
 def read_guardian_version():
     marker = 'GUARDIAN_VERSION = "'
-    path = LOCAL_GUARDIAN
-    try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        if marker in text:
-            return text.split(marker, 1)[1].split('"', 1)[0]
-        return "sem-versao-local"
-    except Exception:
-        return "sem-arquivo-local"
+    found_file = False
+    for path in (RUNTIME_GUARDIAN, LOCAL_GUARDIAN):
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            found_file = True
+            if marker in text:
+                return text.split(marker, 1)[1].split('"', 1)[0]
+        except Exception:
+            pass
+    return "sem-versao-local" if found_file else "sem-arquivo-local"
 
 
 def guardian_version_from(path):

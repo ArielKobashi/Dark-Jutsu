@@ -139,7 +139,7 @@ function Stop-OldProcesses {
   }
 }
 
-function Write-StartupVbs($Name, $CommandLine) {
+function Write-StartupVbs($Name, $CommandLine, [bool]$AllowVersionedFallback = $true) {
   $startup = [Environment]::GetFolderPath("Startup")
   if (-not $startup) {
     Log "AVISO: pasta Inicializar nao encontrada."
@@ -154,6 +154,9 @@ function Write-StartupVbs($Name, $CommandLine) {
     return $true
   } catch {
     Log "AVISO: nao consegui criar inicializacao fixa $path - $($_.Exception.Message)"
+    if (-not $AllowVersionedFallback) {
+      return $false
+    }
     $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $versioned = Join-Path $startup ($Name.Replace(".vbs", "_$stamp.vbs"))
     try {
@@ -249,11 +252,6 @@ $statusLauncher = Join-Path $runtimeDir "abrir_status_darkjutsu.py"
 $automusLauncher = Join-Path $runtimeDir "iniciar_automus_com_guardiao_darkjutsu.ps1"
 $watchdogLocal = Join-Path $runtimeDir "watchdog_usuario_darkjutsu.ps1"
 
-$startupMonitorOk = Write-StartupVbs "Monitor Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$monitorLocal`""
-$startupGuardianOk = Write-StartupVbs "Guardiao Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$guardianLocal`""
-$startupAutomusOk = Write-StartupVbs "Automus com Guardiao Dark-Jutsu.vbs" "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$automusLauncher`""
-$startupWatchdogOk = Write-StartupVbs "Watchdog Usuario Dark-Jutsu.vbs" "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$watchdogLocal`""
-
 try {
   New-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Force -ErrorAction Stop | Out-Null
   Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Dark-Jutsu Monitor Servidor" -Value "`"$PythonW`" `"$monitorLocal`"" -ErrorAction Stop
@@ -265,6 +263,27 @@ try {
 } catch {
   Log "AVISO: Registro HKCU Run bloqueado; usando pasta Inicializar. $($_.Exception.Message)"
   $registryOk = $false
+}
+
+$allowVersionedFallback = -not $registryOk
+$startupMonitorOk = Write-StartupVbs "Monitor Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$monitorLocal`"" $allowVersionedFallback
+$startupGuardianOk = Write-StartupVbs "Guardiao Servidor Dark-Jutsu.vbs" "`"$PythonW`" `"$guardianLocal`"" $allowVersionedFallback
+$startupAutomusOk = Write-StartupVbs "Automus com Guardiao Dark-Jutsu.vbs" "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$automusLauncher`"" $allowVersionedFallback
+$startupWatchdogOk = Write-StartupVbs "Watchdog Usuario Dark-Jutsu.vbs" "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$watchdogLocal`"" $allowVersionedFallback
+
+if ($registryOk) {
+  foreach ($pattern in @(
+    "Monitor Servidor Dark-Jutsu_*.vbs",
+    "Guardiao Servidor Dark-Jutsu_*.vbs",
+    "Automus com Guardiao Dark-Jutsu_*.vbs",
+    "Watchdog Usuario Dark-Jutsu_*.vbs"
+  )) {
+    Get-ChildItem -LiteralPath $startupDir -Filter $pattern -ErrorAction SilentlyContinue |
+      ForEach-Object {
+        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+      }
+  }
+  Log "OK: atalhos versionados antigos removidos; HKCU Run e o caminho principal."
 }
 
 $monitorProcess = Start-Process -FilePath $PythonW -ArgumentList "`"$monitorLocal`"" -PassThru

@@ -9,12 +9,13 @@ import time
 import urllib.request
 from pathlib import Path
 
-from servidor_eleicao_darkjutsu import election_tick, publish_heartbeat
+from servidor_eleicao_darkjutsu import computer_name, election_tick, publish_heartbeat, read_lease
 
 
 PRIMARY_IP = "192.168.5.44"
 RESERVE_IP = "192.168.5.38"
 API_PORT = 8765
+MOBILE_API_PORT = 8766
 FAILOVER_BLACKOUT_SECONDS = 180
 API_STARTUP_WAIT_SECONDS = 45
 SHARE_ROOT = Path(r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu")
@@ -23,6 +24,7 @@ STATUS_DIR = SHARE_ROOT / "status"
 REQUEST_DIR = STATUS_DIR / "requests"
 STATUS_SCRIPT = SCRIPTS / "status_compartilhado_servidores_darkjutsu.py"
 GITHUB_UPDATE_SCRIPT = SCRIPTS / "atualizar_darkjutsu_do_github.bat"
+BACKUP_SCRIPT = SCRIPTS / "backup_postgres_darkjutsu.bat"
 SYSTEM_RUNTIME_ROOT = Path(r"C:\DarkJutsu")
 USER_RUNTIME_ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "DarkJutsu"
 SYSTEM_PG_HOME = SYSTEM_RUNTIME_ROOT / "PostgreSQL" / "pgsql"
@@ -109,11 +111,12 @@ LOG_FILE = LOG_DIR / "guardiao_loop_python.log"
 API_LOG = LOG_DIR / "api_runtime_python_guardiao.log"
 LOCK_FILE = LOG_DIR / "guardiao_loop_python.lock"
 SCHEMA_RESTORE_MARKER = LOG_DIR / "schema_restore_darkjutsu_v2.marker"
+STANDBY_BACKUP_MARKER = LOG_DIR / "standby_backup_applied.json"
 LOCK_HANDLE = None
 ERROR_ALREADY_EXISTS = 183
 DB_URL = "postgresql://dark_jutsu:dark_jutsu_dev@127.0.0.1:5433/dark_jutsu"
 CREATE_NO_WINDOW = 0x08000000
-GUARDIAN_VERSION = "2026-07-21.01"
+GUARDIAN_VERSION = "2026-07-21.02"
 MAINTENANCE_DIR = STATUS_DIR / "maintenance"
 STARTUP_VBS_SOURCE = SCRIPTS / "iniciar_cluster_usuario_darkjutsu.vbs"
 WATCHDOG_SOURCE = SCRIPTS / "watchdog_usuario_darkjutsu.ps1"
@@ -121,11 +124,14 @@ SHARED_LOG = SHARE_ROOT / "logs" / "guardiao_python_eventos.txt"
 TEST_ACTIVE_FILE = SHARE_ROOT / "status" / "teste_inicializacao_ativo.txt"
 TEST_LOG = SHARE_ROOT / "logs" / "teste_inicializacao_manual_darkjutsu.txt"
 GITHUB_UPDATE_INTERVAL_SECONDS = 300
+BACKUP_INTERVAL_SECONDS = 300
+STANDBY_SYNC_INTERVAL_SECONDS = 30
 MOBILE_TUNNEL_SCRIPT_NAME = "iniciar_tunel_celular_darkjutsu.ps1"
 MOBILE_TUNNEL_SOURCE = SCRIPTS / MOBILE_TUNNEL_SCRIPT_NAME
 MOBILE_TUNNEL_LOCAL = LOCAL_MONITOR_DIR / MOBILE_TUNNEL_SCRIPT_NAME
 MOBILE_TUNNEL_LOG = LOG_DIR / "mobile_tunnel_guardiao.log"
-MOBILE_TUNNEL_URL = f"http://127.0.0.1:{API_PORT}"
+MOBILE_TUNNEL_URL = f"http://127.0.0.1:{MOBILE_API_PORT}"
+BACKUP_PROCESS = None
 
 
 def select_api_runtime_root():
@@ -182,6 +188,22 @@ def log(message):
             fh.write(line + "\n")
     except Exception:
         pass
+    try:
+        SHARED_LOG.parent.mkdir(parents=True, exist_ok=True)
+        actor = f"{os.environ.get('COMPUTERNAME', '?')}\\{os.environ.get('USERNAME', '?')}"
+        with SHARED_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(line + f" | {actor}\n")
+    except Exception:
+        pass
+    try:
+        if TEST_ACTIVE_FILE.exists():
+            actor = f"{os.environ.get('COMPUTERNAME', '?')}\\{os.environ.get('USERNAME', '?')}"
+            session = TEST_ACTIVE_FILE.read_text(encoding="utf-8", errors="ignore").strip().replace("\n", " | ")
+            TEST_LOG.parent.mkdir(parents=True, exist_ok=True)
+            with TEST_LOG.open("a", encoding="utf-8") as fh:
+                fh.write(line + f" | {actor} | TESTE_ATIVO={session}\n")
+    except Exception:
+        pass
 
 
 def trigger_github_update_check(reason: str = "intervalo"):
@@ -201,22 +223,31 @@ def trigger_github_update_check(reason: str = "intervalo"):
     except Exception as exc:
         log(f"ERRO: falha ao disparar checagem GitHub: {type(exc).__name__}: {exc}")
         return False
+
+
+def trigger_postgres_backup(reason: str = "intervalo"):
+    global BACKUP_PROCESS
+    if BACKUP_PROCESS is not None and BACKUP_PROCESS.poll() is None:
+        return False
+    if not BACKUP_SCRIPT.exists():
+        log(f"AVISO: script de backup PostgreSQL nao encontrado: {BACKUP_SCRIPT}")
+        return False
     try:
-        SHARED_LOG.parent.mkdir(parents=True, exist_ok=True)
-        actor = f"{os.environ.get('COMPUTERNAME', '?')}\\{os.environ.get('USERNAME', '?')}"
-        with SHARED_LOG.open("a", encoding="utf-8") as fh:
-            fh.write(line + f" | {actor}\n")
-    except Exception:
-        pass
-    try:
-        if TEST_ACTIVE_FILE.exists():
-            actor = f"{os.environ.get('COMPUTERNAME', '?')}\\{os.environ.get('USERNAME', '?')}"
-            session = TEST_ACTIVE_FILE.read_text(encoding="utf-8", errors="ignore").strip().replace("\n", " | ")
-            TEST_LOG.parent.mkdir(parents=True, exist_ok=True)
-            with TEST_LOG.open("a", encoding="utf-8") as fh:
-                fh.write(line + f" | {actor} | TESTE_ATIVO={session}\n")
-    except Exception:
-        pass
+        env = os.environ.copy()
+        env["DARK_JUTSU_PG_BIN"] = str(PG_BIN)
+        BACKUP_PROCESS = subprocess.Popen(
+            ["cmd.exe", "/d", "/c", str(BACKUP_SCRIPT)],
+            cwd=str(BACKUP_SCRIPT.parent),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=env,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        log(f"Backup PostgreSQL disparado pelo guardiao. Motivo={reason}")
+        return True
+    except Exception as exc:
+        log(f"ERRO: falha ao disparar backup PostgreSQL: {type(exc).__name__}: {exc}")
+        return False
 
 
 def boot_hint():
@@ -280,8 +311,12 @@ def role():
 
 
 def health(ip, timeout=4):
+    return health_port(ip, API_PORT, timeout=timeout)
+
+
+def health_port(ip, port, timeout=4):
     try:
-        with urllib.request.urlopen(f"http://{ip}:{API_PORT}/health", timeout=timeout) as resp:
+        with urllib.request.urlopen(f"http://{ip}:{port}/health", timeout=timeout) as resp:
             body = resp.read(2000).replace(b" ", b"").lower()
             return resp.status == 200 and b'"ok":true' in body
     except Exception:
@@ -289,8 +324,12 @@ def health(ip, timeout=4):
 
 
 def live(ip, timeout=2):
+    return live_port(ip, API_PORT, timeout=timeout)
+
+
+def live_port(ip, port, timeout=2):
     try:
-        with urllib.request.urlopen(f"http://{ip}:{API_PORT}/live", timeout=timeout) as resp:
+        with urllib.request.urlopen(f"http://{ip}:{port}/live", timeout=timeout) as resp:
             body = resp.read(2000).replace(b" ", b"").lower()
             return resp.status == 200 and b'"ok":true' in body
     except Exception:
@@ -329,12 +368,61 @@ def handle_status_request(current_role):
         return False
 
 
+def port_processes(port: int) -> str:
+    try:
+        ps = (
+            f"Get-NetTCPConnection -LocalPort {int(port)} -State Listen -ErrorAction SilentlyContinue | "
+            "ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; "
+            "[pscustomobject]@{ProcessId=$_.OwningProcess;Name=$p.ProcessName;Path=$p.Path} } | "
+            "Format-List"
+        )
+        return subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+            capture_output=True,
+            text=True,
+            errors="ignore",
+            timeout=8,
+            creationflags=CREATE_NO_WINDOW,
+        ).stdout
+    except Exception:
+        return ""
+
+
+def port_process_running(port: int) -> bool:
+    return any(ch.isdigit() for ch in port_processes(port))
+
+
+def stop_port_processes(port: int, reason: str) -> bool:
+    try:
+        ps = (
+            f"Get-NetTCPConnection -LocalPort {int(port)} -State Listen -ErrorAction SilentlyContinue | "
+            "ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+        )
+        subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=8,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        log(f"Processos na porta {port} parados. Motivo={reason}")
+        return True
+    except Exception as exc:
+        log(f"AVISO: falha ao parar processos da porta {port}: {type(exc).__name__}: {exc}")
+        return False
+
+
 def api_processes():
+    by_port = port_processes(API_PORT)
+    if by_port.strip():
+        return by_port
     try:
         ps = (
             "Get-CimInstance Win32_Process | "
             "Where-Object { $_.CommandLine -and "
             "($_.CommandLine -match 'dark_jutsu_api.py' -or $_.CommandLine -match 'iniciar_api_servidor.bat') "
+            f"-and $_.CommandLine -notmatch ':{MOBILE_API_PORT}' "
+            "-and $_.CommandLine -notmatch 'iniciar_api_celular_8766_oculta' "
             "-and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
             "Select-Object ProcessId,Name,CommandLine | Format-List"
         )
@@ -345,31 +433,17 @@ def api_processes():
 
 
 def api_process_running():
-    return any(ch.isdigit() for ch in api_processes())
+    return port_process_running(API_PORT)
 
 
 def stop_local_api(reason):
     try:
-        ps = (
-            "Get-CimInstance Win32_Process | "
-            "Where-Object { $_.CommandLine -and "
-            "($_.CommandLine -match 'dark_jutsu_api.py' -or $_.CommandLine -match 'iniciar_api_servidor.bat') "
-            "-and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
-            "Select-Object ProcessId,Name,CommandLine"
-        )
-        out = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], capture_output=True, text=True, errors="ignore", timeout=10, creationflags=CREATE_NO_WINDOW).stdout
-        stopped = False
-        for line in out.splitlines():
-            line = line.strip()
-            if line and line[0].isdigit():
-                pid = line.split()[0]
-                subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", f"Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, creationflags=CREATE_NO_WINDOW)
-                stopped = True
-        if stopped:
+        if port_process_running(API_PORT):
+            stop_port_processes(API_PORT, reason)
             log(f"API local parada. Motivo={reason}")
         else:
-            log(f"Nenhum processo de API local encontrado para parar. Motivo={reason}")
-        stop_mobile_tunnel(reason)
+            log(f"Nenhuma API local na porta {API_PORT} encontrada para parar. Motivo={reason}")
+        stop_mobile_services(reason)
     except Exception as exc:
         log(f"AVISO: falha ao parar API local: {type(exc).__name__}: {exc}")
 
@@ -418,16 +492,20 @@ def write_mobile_state(status: str, url: str = "", message: str = ""):
 
 
 def sync_mobile_tunnel_script() -> bool:
-    if MOBILE_TUNNEL_LOCAL.exists():
-        return True
     if not MOBILE_TUNNEL_SOURCE.exists():
         write_mobile_state("ready", "", "Script do tunnel do celular ainda nao esta instalado neste PC.")
         log(f"AVISO: script do tunnel celular ausente: {MOBILE_TUNNEL_SOURCE}")
         return False
     try:
         LOCAL_MONITOR_DIR.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(MOBILE_TUNNEL_SOURCE, MOBILE_TUNNEL_LOCAL)
-        log(f"Script do tunnel celular copiado para runtime local: {MOBILE_TUNNEL_LOCAL}")
+        needs_copy = (
+            not MOBILE_TUNNEL_LOCAL.exists()
+            or MOBILE_TUNNEL_SOURCE.stat().st_size != MOBILE_TUNNEL_LOCAL.stat().st_size
+            or int(MOBILE_TUNNEL_SOURCE.stat().st_mtime) > int(MOBILE_TUNNEL_LOCAL.stat().st_mtime)
+        )
+        if needs_copy:
+            shutil.copy2(MOBILE_TUNNEL_SOURCE, MOBILE_TUNNEL_LOCAL)
+            log(f"Script do tunnel celular copiado para runtime local: {MOBILE_TUNNEL_LOCAL}")
         return True
     except Exception as exc:
         write_mobile_state("ready", "", f"Nao consegui preparar script do tunnel celular: {type(exc).__name__}.")
@@ -473,7 +551,7 @@ def mobile_tunnel_processes():
             "Get-CimInstance Win32_Process | "
             "Where-Object { $_.CommandLine -and ("
             "$_.CommandLine -match 'iniciar_tunel_celular_darkjutsu.ps1' -or "
-            "($_.Name -like 'cloudflared*' -and $_.CommandLine -match '--url' -and $_.CommandLine -match '127\\.0\\.0\\.1:8765')"
+            f"($_.Name -like 'cloudflared*' -and $_.CommandLine -match '--url' -and $_.CommandLine -match '127\\.0\\.0\\.1:({API_PORT}|{MOBILE_API_PORT})')"
             ") -and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
             "Select-Object ProcessId,Name,CommandLine"
         )
@@ -507,7 +585,7 @@ def stop_mobile_tunnel(reason: str):
             "Get-CimInstance Win32_Process | "
             "Where-Object { $_.CommandLine -and ("
             "$_.CommandLine -match 'iniciar_tunel_celular_darkjutsu.ps1' -or "
-            "($_.Name -like 'cloudflared*' -and $_.CommandLine -match '--url' -and $_.CommandLine -match '127\\.0\\.0\\.1:8765')"
+            f"($_.Name -like 'cloudflared*' -and $_.CommandLine -match '--url' -and $_.CommandLine -match '127\\.0\\.0\\.1:({API_PORT}|{MOBILE_API_PORT})')"
             ") -and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
             "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
         )
@@ -524,9 +602,83 @@ def stop_mobile_tunnel(reason: str):
         log(f"AVISO: falha ao parar tunnel celular: {type(exc).__name__}: {exc}")
 
 
-def ensure_mobile_tunnel(reason: str):
+def mobile_api_running() -> bool:
+    return health_port("127.0.0.1", MOBILE_API_PORT, timeout=2)
+
+
+def stop_mobile_api(reason: str):
+    if port_process_running(MOBILE_API_PORT):
+        stop_port_processes(MOBILE_API_PORT, reason)
+        log(f"API celular parada. Motivo={reason}")
+
+
+def stop_mobile_services(reason: str):
+    stop_mobile_tunnel(reason)
+    stop_mobile_api(reason)
+
+
+def start_mobile_api(reason: str) -> bool:
+    if mobile_api_running():
+        return True
+    if port_process_running(MOBILE_API_PORT):
+        log(f"API celular tem processo, mas nao responde; vou limpar processo travado. Motivo={reason}")
+        stop_mobile_api("processo de API celular travado antes de assumir")
+        time.sleep(1)
+        if mobile_api_running():
+            return True
     if not health("127.0.0.1", timeout=2):
-        stop_mobile_tunnel("API local nao esta saudavel")
+        log("API celular nao sera iniciada porque a API principal ainda nao esta saudavel.")
+        return False
+    sync_local_api()
+    if not LOCAL_API.exists():
+        log(f"ERRO: API celular nao encontrou codigo local em {LOCAL_API}")
+        return False
+    if not ensure_postgres_ready():
+        log(f"ERRO: PostgreSQL local nao ficou pronto; API celular nao sera iniciada. Motivo={reason}")
+        return False
+    py = Path(sys.executable)
+    if py.name.lower() == "pythonw.exe":
+        py = py.with_name("python.exe")
+    env = os.environ.copy()
+    env["DARK_JUTSU_API_HOST"] = "127.0.0.1"
+    env["DARK_JUTSU_API_PORT"] = str(MOBILE_API_PORT)
+    env["DARK_JUTSU_DATABASE_URL"] = DB_URL
+    env["DATABASE_URL"] = DB_URL
+    env["DARK_JUTSU_ALLOWED_ORIGINS"] = "*"
+    env["DARK_JUTSU_APP_WEB_ROOT"] = str(mobile_tunnel_root())
+    env["PYTHONUNBUFFERED"] = "1"
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        computer = os.environ.get("COMPUTERNAME", "desconhecido")
+        mobile_api_log = SHARE_ROOT / "logs" / f"api_mobile_8766_{computer}.log"
+        mobile_detail_log = SHARE_ROOT / "logs" / f"api_mobile_detalhado_{computer}.log"
+        env["DARK_JUTSU_API_DETAIL_LOG"] = str(mobile_detail_log)
+        mobile_api_log.parent.mkdir(parents=True, exist_ok=True)
+        fh = mobile_api_log.open("a", encoding="utf-8")
+        fh.write("\n" + "=" * 60 + "\n")
+        fh.write(time.strftime("%Y-%m-%d %H:%M:%S") + f" | Inicio API celular por guardiao. Motivo={reason}\n")
+        fh.flush()
+        proc = subprocess.Popen([str(py), "-u", str(LOCAL_API)], cwd=str(LOCAL_API.parent), stdout=fh, stderr=subprocess.STDOUT, env=env, creationflags=CREATE_NO_WINDOW)
+        log(f"Solicitei inicio da API celular. Motivo={reason}. Python={py} API={LOCAL_API} Porta={MOBILE_API_PORT}")
+        for attempt in range(1, 16):
+            time.sleep(1)
+            if mobile_api_running():
+                log("OK: API celular iniciou e respondeu /health.")
+                return True
+            code = proc.poll()
+            if code is not None:
+                log(f"ERRO: API celular encerrou antes de responder /health. Codigo={code}. Log={mobile_api_log}")
+                return False
+        log(f"ERRO: API celular nao respondeu /health em 15s. Log={mobile_api_log}")
+        return False
+    except Exception as exc:
+        log(f"ERRO ao iniciar API celular: {type(exc).__name__}: {exc}")
+        return False
+
+
+def ensure_mobile_tunnel(reason: str):
+    if not mobile_api_running():
+        stop_mobile_tunnel("API celular nao esta saudavel")
         return
     if mobile_tunnel_running():
         return
@@ -782,8 +934,8 @@ def schema_restore_recent(cooldown_seconds=3600):
         return False
 
 
-def restore_schema_from_backup():
-    if schema_restore_recent():
+def restore_schema_from_backup(*, backup=None, force=False, reason="schema local incompleto"):
+    if not force and schema_restore_recent():
         log("Restore de schema ignorado: tentativa recente ainda em cooldown.")
         return False
     if not PG_RESTORE.exists() or not PG_PSQL.exists() or not PG_DROPDB.exists() or not PG_CREATEDB.exists():
@@ -792,7 +944,7 @@ def restore_schema_from_backup():
             f"pg_restore={PG_RESTORE.exists()} psql={PG_PSQL.exists()} dropdb={PG_DROPDB.exists()} createdb={PG_CREATEDB.exists()}"
         )
         return False
-    backup = latest_valid_backup()
+    backup = backup or latest_valid_backup()
     if not backup:
         log("ERRO: nenhum backup valido encontrado para restaurar schema local.")
         return False
@@ -803,7 +955,7 @@ def restore_schema_from_backup():
         pass
     env = os.environ.copy()
     env.setdefault("PGPASSWORD", "dark_jutsu_dev")
-    log(f"Restaurando banco local incompleto a partir do backup valido: {backup}")
+    log(f"Restaurando banco local a partir do backup valido: {backup}. Motivo={reason}")
     try:
         terminate = subprocess.run(
             [
@@ -889,13 +1041,85 @@ def restore_schema_from_backup():
                 log(f"ERRO: grant apos restore falhou codigo={proc.returncode} erro={proc.stderr[-700:]}")
                 return False
         ok = schema_ready()
-        log(f"Restore de schema concluido. schema_ok={ok} backup={backup.name}")
+        log(f"Restore do banco concluido. schema_ok={ok} backup={backup.name} motivo={reason}")
         return ok
     except subprocess.TimeoutExpired:
         log("ERRO: restore do backup excedeu 300s.")
         return False
     except Exception as exc:
         log(f"ERRO: restore automatico falhou: {type(exc).__name__}: {exc}")
+        return False
+
+
+def backup_identity(backup: Path) -> dict:
+    try:
+        stat = backup.stat()
+        return {"name": backup.name, "size": int(stat.st_size), "mtimeNs": int(stat.st_mtime_ns)}
+    except Exception:
+        return {"name": backup.name, "size": 0, "mtimeNs": 0}
+
+
+def read_standby_backup_marker() -> dict:
+    try:
+        data = json.loads(STANDBY_BACKUP_MARKER.read_text(encoding="utf-8-sig"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def standby_backup_is_current(backup: Path) -> bool:
+    current = read_standby_backup_marker()
+    expected = backup_identity(backup)
+    return all(current.get(key) == value for key, value in expected.items())
+
+
+def mark_standby_backup_applied(backup: Path):
+    payload = {
+        **backup_identity(backup),
+        "computer": computer_name(),
+        "appliedAtEpoch": time.time(),
+        "appliedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    STANDBY_BACKUP_MARKER.parent.mkdir(parents=True, exist_ok=True)
+    temp = STANDBY_BACKUP_MARKER.with_suffix(".tmp")
+    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.replace(STANDBY_BACKUP_MARKER)
+
+
+def sync_standby_from_latest_backup() -> bool:
+    backup = latest_valid_backup()
+    if not backup:
+        log("ERRO: candidato nao pode ficar pronto sem backup central valido.")
+        return False
+    if standby_backup_is_current(backup):
+        return True
+    identity = backup_identity(backup)
+    publish_heartbeat(
+        ready=False,
+        api_healthy=False,
+        ips=sorted(local_ips()),
+        details={
+            "guardianVersion": GUARDIAN_VERSION,
+            "pid": os.getpid(),
+            "schemaReady": schema_ready(),
+            "backupSync": "restoring",
+            "backupName": identity.get("name"),
+        },
+    )
+    stop_local_api(f"sincronizacao do candidato com {backup.name}")
+    ok = restore_schema_from_backup(
+        backup=backup,
+        force=True,
+        reason="sincronizacao automatica do candidato",
+    )
+    if not ok:
+        return False
+    try:
+        mark_standby_backup_applied(backup)
+        log(f"Candidato sincronizado com backup central: {backup.name}")
+        return True
+    except Exception as exc:
+        log(f"ERRO: restore concluiu, mas marcador do candidato falhou: {type(exc).__name__}: {exc}")
         return False
 
 
@@ -948,29 +1172,80 @@ def maintenance_active():
     return False, {}
 
 
+def registry_startup_ready():
+    try:
+        import winreg
+
+        names = (
+            "Dark-Jutsu Monitor Servidor",
+            "Dark-Jutsu Guardiao Servidor",
+            "Dark-Jutsu Automus",
+            "Dark-Jutsu Watchdog",
+        )
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run") as key:
+            return all(str(winreg.QueryValueEx(key, name)[0]).strip() for name in names)
+    except Exception:
+        return False
+
+
+def command_process_running(pattern: str) -> bool:
+    try:
+        escaped = pattern.replace("'", "''")
+        ps = (
+            "Get-CimInstance Win32_Process | "
+            f"Where-Object {{ $_.CommandLine -and $_.CommandLine -match '{escaped}' "
+            "-and $_.CommandLine -notmatch 'Get-CimInstance Win32_Process' } | "
+            "Select-Object -First 1 -ExpandProperty ProcessId"
+        )
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+            capture_output=True,
+            text=True,
+            errors="ignore",
+            timeout=8,
+            creationflags=CREATE_NO_WINDOW,
+        ).stdout
+        return any(ch.isdigit() for ch in out)
+    except Exception:
+        return False
+
+
 def ensure_hidden_user_startup():
     startup = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-    if not os.environ.get("APPDATA") or not STARTUP_VBS_SOURCE.exists():
+    if not os.environ.get("APPDATA"):
         return False
+    registry_ok = registry_startup_ready()
+    startup_ok = registry_ok
     try:
         startup.mkdir(parents=True, exist_ok=True)
-        target = startup / "Dark-Jutsu Cluster Usuario.vbs"
-        source_bytes = STARTUP_VBS_SOURCE.read_bytes()
-        if not target.exists() or target.read_bytes() != source_bytes:
-            target.write_bytes(source_bytes)
-            log(f"Inicializacao oculta do usuario atualizada: {target}")
+        if not registry_ok and STARTUP_VBS_SOURCE.exists():
+            target = startup / "Dark-Jutsu Cluster Usuario.vbs"
+            source_bytes = STARTUP_VBS_SOURCE.read_bytes()
+            if not target.exists() or target.read_bytes() != source_bytes:
+                target.write_bytes(source_bytes)
+                log(f"Inicializacao oculta do usuario atualizada: {target}")
+            startup_ok = True
+    except Exception as exc:
+        log(f"AVISO: falha ao ajustar inicializacao oculta do usuario: {type(exc).__name__}: {exc}")
+    watchdog_ok = False
+    try:
         local_watchdog = LOCAL_MONITOR_DIR / "watchdog_usuario_darkjutsu.ps1"
         if WATCHDOG_SOURCE.exists():
             watchdog_bytes = WATCHDOG_SOURCE.read_bytes()
             if not local_watchdog.exists() or local_watchdog.read_bytes() != watchdog_bytes:
                 local_watchdog.write_bytes(watchdog_bytes)
                 log(f"Watchdog do usuario atualizado: {local_watchdog}")
-            subprocess.Popen(
-                ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", str(local_watchdog)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=CREATE_NO_WINDOW,
-            )
+            if not command_process_running("watchdog_usuario_darkjutsu"):
+                subprocess.Popen(
+                    ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", str(local_watchdog)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+            watchdog_ok = True
+    except Exception as exc:
+        log(f"AVISO: falha ao sincronizar watchdog do usuario: {type(exc).__name__}: {exc}")
+    try:
         for name in (
             "Automus_Controlador_Atualizacoes.bat",
             "Automus_Atualizacoes.bat",
@@ -981,10 +1256,9 @@ def ensure_hidden_user_startup():
             if legacy.exists():
                 legacy.unlink()
                 log(f"Inicializacao direta antiga removida: {legacy.name}")
-        return True
     except Exception as exc:
-        log(f"AVISO: falha ao ajustar inicializacao oculta do usuario: {type(exc).__name__}: {exc}")
-        return False
+        log(f"AVISO: falha ao limpar inicializacao antiga: {type(exc).__name__}: {exc}")
+    return startup_ok and watchdog_ok
 
 
 def main():
@@ -993,6 +1267,9 @@ def main():
     last_full_cycle = 0
     last_startup_check = 0
     last_github_update_check = 0
+    last_backup_check = 0
+    last_standby_sync_check = 0
+    standby_data_ready = False
     last_leader = None
     log(f"Guardiao Python dinamico iniciado. Versao={GUARDIAN_VERSION} Usuario={os.environ.get('USERNAME')} Maquina={os.environ.get('COMPUTERNAME')} IPs={sorted(local_ips())} BootWindows={boot_hint()} PID={os.getpid()}")
     while True:
@@ -1001,27 +1278,48 @@ def main():
                 ensure_hidden_user_startup()
                 last_startup_check = time.time()
             local_ok = health("127.0.0.1", timeout=2)
+            mobile_ok = mobile_api_running()
             sql_ok = pg_ready()
             if not sql_ok:
                 sql_ok = ensure_postgres_ready()
             schema_ok = schema_ready() if sql_ok else False
             if sql_ok and not schema_ok:
                 schema_ok = restore_schema_from_backup()
+            lease_snapshot = read_lease()
+            lease_leader = str(lease_snapshot.get("leader") or "").strip().upper()
+            is_standby = bool(lease_leader and lease_leader != computer_name())
+            if is_standby and sql_ok and time.time() - last_standby_sync_check >= STANDBY_SYNC_INTERVAL_SECONDS:
+                standby_data_ready = sync_standby_from_latest_backup()
+                last_standby_sync_check = time.time()
+                schema_ok = schema_ready() if standby_data_ready else False
+            elif not is_standby:
+                standby_data_ready = True
             if sql_ok and not LOCAL_API.exists():
                 sync_local_api()
-            can_serve_api = bool(sql_ok and schema_ok and LOCAL_API.exists())
+            can_serve_api = bool(sql_ok and schema_ok and standby_data_ready and LOCAL_API.exists())
+            standby_marker = read_standby_backup_marker()
+            heartbeat_details = {
+                "guardianVersion": GUARDIAN_VERSION,
+                "pid": os.getpid(),
+                "schemaReady": schema_ok,
+                "mobileApiHealthy": mobile_ok,
+                "backupSync": "current" if standby_data_ready else "pending",
+                "backupName": standby_marker.get("name") if is_standby else "leader-live",
+            }
             in_maintenance, maintenance = maintenance_active()
             if in_maintenance:
+                maintenance_details = dict(heartbeat_details)
+                maintenance_details["maintenance"] = maintenance
                 publish_heartbeat(
                     ready=False,
                     api_healthy=False,
                     ips=sorted(local_ips()),
-                    details={"guardianVersion": GUARDIAN_VERSION, "pid": os.getpid(), "maintenance": maintenance, "schemaReady": schema_ok},
+                    details=maintenance_details,
                 )
                 if local_ok or api_process_running():
                     stop_local_api("teste de queda controlado")
                 else:
-                    stop_mobile_tunnel("teste de queda controlado")
+                    stop_mobile_services("teste de queda controlado")
                 log(f"manutencao controlada ativa ate epoch={maintenance.get('untilEpoch')}")
                 time.sleep(5)
                 continue
@@ -1029,7 +1327,7 @@ def main():
                 ready=can_serve_api,
                 api_healthy=local_ok,
                 ips=sorted(local_ips()),
-                details={"guardianVersion": GUARDIAN_VERSION, "pid": os.getpid(), "schemaReady": schema_ok},
+                details=heartbeat_details,
             )
             decision = election_tick()
             leader = decision.get("leader")
@@ -1044,17 +1342,25 @@ def main():
                     start_local_api(f"eleito lider dinamico epoch={decision.get('epoch')}")
                     local_ok = health("127.0.0.1", timeout=2)
                 if local_ok:
-                    ensure_mobile_tunnel(f"lider dinamico epoch={decision.get('epoch')}")
+                    if time.time() - last_backup_check >= BACKUP_INTERVAL_SECONDS:
+                        trigger_postgres_backup("lider ativo / intervalo de 5 minutos")
+                        last_backup_check = time.time()
+                    mobile_ok = start_mobile_api(f"lider dinamico epoch={decision.get('epoch')}")
+                    if mobile_ok:
+                        ensure_mobile_tunnel(f"lider dinamico epoch={decision.get('epoch')}")
+                    else:
+                        stop_mobile_tunnel("API celular ainda sem health")
                 else:
-                    stop_mobile_tunnel("lider ainda sem API local saudavel")
+                    stop_mobile_services("lider ainda sem API local saudavel")
             elif local_ok or api_process_running():
                 stop_local_api(f"lease pertence a {leader or 'nenhum'}")
             else:
-                stop_mobile_tunnel(f"lease pertence a {leader or 'nenhum'}")
+                stop_mobile_services(f"lease pertence a {leader or 'nenhum'}")
             if time.time() - last_full_cycle >= 15:
                 log(
                     f"ciclo dinamico lider={leader or 'nenhum'} self_leader={decision.get('isLeader')} "
-                    f"epoch={decision.get('epoch')} sql={sql_ok} schema={schema_ok} api_preparada={can_serve_api} api_local={local_ok} prioridade={heartbeat.get('priority')}"
+                    f"epoch={decision.get('epoch')} sql={sql_ok} schema={schema_ok} backup_sync={standby_data_ready} "
+                    f"api_preparada={can_serve_api} api_local={local_ok} api_celular={mobile_ok} prioridade={heartbeat.get('priority')}"
                 )
                 publish_status()
                 last_full_cycle = time.time()

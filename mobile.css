@@ -184,6 +184,7 @@
 
     #contagemHomePopup {
         top: 96px;
+        left: auto;
         right: 8px;
         width: 18px;
         padding: 0;

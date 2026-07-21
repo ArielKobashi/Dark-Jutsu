@@ -64,7 +64,30 @@ APP_PUBLIC_FILES = {
     "logo.png",
     "logo-tab.png",
 }
+COUNTING_PING_SHARED_DIR = Path(_env("DARK_JUTSU_COUNTING_PING_SHARED_DIR", r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\data\contagem-pings"))
+COUNTING_PING_LOCAL_DIR = Path(_env("DARK_JUTSU_COUNTING_PING_LOCAL_DIR", str(ROOT / "data" / "contagem-pings")))
+COUNTING_PING_FIELDS = [
+    "recebido_em",
+    "evento_em",
+    "evento",
+    "usuario",
+    "uid",
+    "maquina",
+    "indice",
+    "item_key",
+    "tipo",
+    "protheus",
+    "cooperat",
+    "armazem",
+    "endereco",
+    "descricao",
+    "valor",
+    "status",
+    "client_ping_id",
+    "origem",
+]
 SYSTEM_UPDATE_LOCK = threading.Lock()
+COUNTING_PING_LOCK = threading.Lock()
 SYSTEM_UPDATE_RUNNING = False
 SYSTEM_UPDATE_LAST: dict[str, Any] = {}
 _RATE_LIMIT_LOCK = threading.Lock()
@@ -122,6 +145,14 @@ def _clean_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _txt_cell(value: Any, limit: int = 180) -> str:
+    text = _clean_text(value)
+    if not text:
+        return ""
+    text = re.sub(r"[\t\r\n]+", " ", text)
+    return text[:limit]
 
 
 def _int_value(value: Any, default: int = 0) -> int:
@@ -934,6 +965,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._post_label_job(payload)
         if method == "POST" and parts == ["api", "counting", "sessions"]:
             return self._post_counting_session(payload)
+        if method == "POST" and parts == ["api", "counting", "ping-txt"]:
+            return self._post_counting_ping_txt(payload)
         if method == "PATCH" and len(parts) == 5 and parts[:3] == ["api", "counting", "sessions"] and parts[4] == "user":
             self._require_admin()
             return self._patch_counting_session_user(parts[3], payload)
@@ -2479,6 +2512,78 @@ class Handler(BaseHTTPRequestHandler):
             (limit,),
         )
         return {"machine_status": rows, "limit": limit}
+
+    def _counting_ping_dirs(self) -> list[Path]:
+        raw_dirs = [COUNTING_PING_LOCAL_DIR, COUNTING_PING_SHARED_DIR]
+        paths: list[Path] = []
+        seen: set[str] = set()
+        for path in raw_dirs:
+            key = str(path).rstrip("\\/").lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            paths.append(path)
+        return paths
+
+    def _append_counting_ping_line(self, folder: Path, filename: str, line: str) -> Path:
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / filename
+        needs_header = not path.exists() or path.stat().st_size == 0
+        with path.open("a", encoding="utf-8", newline="") as handle:
+            if needs_header:
+                handle.write("\t".join(COUNTING_PING_FIELDS) + "\n")
+            handle.write(line + "\n")
+        return path
+
+    def _post_counting_ping_txt(self, payload: dict[str, Any]) -> dict[str, Any]:
+        auth = getattr(self, "auth_context", AuthContext())
+        received_at = datetime.now(timezone.utc)
+        event_at = _timestamp(payload.get("timestamp") or payload.get("eventoEm") or payload.get("event_at")) or received_at
+        event_name = _txt_cell(payload.get("evento") or payload.get("event") or "troca_item", 40)
+        user_name = _txt_cell(payload.get("usuario") or payload.get("user_name") or auth.user_id or "desconhecido", 80)
+        uid = _txt_cell(payload.get("uid") or payload.get("user_id") or auth.user_id, 120)
+        item_key = _txt_cell(payload.get("itemKey") or payload.get("item_key"), 180)
+        value = payload.get("valor") if "valor" in payload else payload.get("contado")
+        status = payload.get("status")
+        if not item_key:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "`itemKey` e obrigatorio para salvar ping de contagem.")
+        if value in (None, "") and status in (None, ""):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "`valor` ou `status` e obrigatorio para salvar ping de contagem.")
+
+        values = {
+            "recebido_em": received_at.isoformat(),
+            "evento_em": event_at.isoformat(),
+            "evento": event_name,
+            "usuario": user_name,
+            "uid": uid,
+            "maquina": _txt_cell(payload.get("maquina") or payload.get("machine"), 120),
+            "indice": _txt_cell(payload.get("indice") or payload.get("index"), 30),
+            "item_key": item_key,
+            "tipo": _txt_cell(payload.get("tipo") or payload.get("type"), 40),
+            "protheus": _txt_cell(payload.get("protheus"), 80),
+            "cooperat": _txt_cell(payload.get("cooperat"), 80),
+            "armazem": _txt_cell(payload.get("armazem") or payload.get("warehouse"), 80),
+            "endereco": _txt_cell(payload.get("endereco") or payload.get("address"), 120),
+            "descricao": _txt_cell(payload.get("descricao") or payload.get("description"), 260),
+            "valor": _txt_cell(value, 80),
+            "status": _txt_cell(status, 80),
+            "client_ping_id": _txt_cell(payload.get("clientPingId") or payload.get("client_ping_id"), 120),
+            "origem": _txt_cell(payload.get("origem") or payload.get("source") or self.headers.get("Origin") or "api", 180),
+        }
+        line = "\t".join(values[field] for field in COUNTING_PING_FIELDS)
+        filename = f"contagem_ping_{received_at.astimezone().date().isoformat()}.txt"
+        written: list[str] = []
+        errors: list[str] = []
+        with COUNTING_PING_LOCK:
+            for folder in self._counting_ping_dirs():
+                try:
+                    path = self._append_counting_ping_line(folder, filename, line)
+                    written.append(str(path))
+                except Exception as exc:
+                    errors.append(f"{folder}: {exc}")
+        if not written:
+            raise ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "Nao foi possivel gravar o ping TXT da contagem.")
+        return {"ok": True, "file": filename, "copies": len(written), "fallback": bool(errors)}
 
     def _post_counting_session(self, payload: dict[str, Any]) -> dict[str, Any]:
         user_name = _clean_text(payload.get("usuario") or payload.get("user_name")) or "desconhecido"

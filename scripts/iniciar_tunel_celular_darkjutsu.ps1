@@ -31,14 +31,17 @@ function Write-MobileState([string]$status, [string]$publicUrl = "", [string]$me
 
 do {
   Write-MobileState "starting" "" "Iniciando tunnel para celular."
-  Set-Content -LiteralPath $logFile -Value "" -Encoding UTF8
 
-  $urlPattern = [regex]::Escape($Url)
   Get-CimInstance Win32_Process -Filter "Name = 'cloudflared.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -and $_.CommandLine -match "--url" -and $_.CommandLine -match $urlPattern } |
+    Where-Object {
+      $_.CommandLine -and
+      $_.CommandLine -match "--url" -and
+      $_.CommandLine -match "127\.0\.0\.1:(8765|8766)"
+    } |
     ForEach-Object {
       try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {}
     }
+  Set-Content -LiteralPath $logFile -Value "" -Encoding UTF8
 
   $process = Start-Process -FilePath $Cloudflared -ArgumentList @(
     "tunnel",
@@ -52,9 +55,12 @@ do {
   while (-not $process.HasExited) {
     if (Test-Path -LiteralPath $logFile) {
       $text = Get-Content -LiteralPath $logFile -Raw -ErrorAction SilentlyContinue
-      $match = [regex]::Match($text, "https://[a-z0-9-]+\.trycloudflare\.com")
-      if ($match.Success) {
-        $currentUrl = $match.Value
+      $matches = [regex]::Matches(
+        $text,
+        '"message":"\|\s+(https://[a-z0-9-]+\.trycloudflare\.com)\s+\|"'
+      )
+      if ($matches.Count -gt 0) {
+        $currentUrl = $matches[$matches.Count - 1].Groups[1].Value
         Write-MobileState "online" $currentUrl "Tunnel ativo."
         Write-Host ""
         Write-Host "QR/Link atualizado no Dark-Jutsu: $currentUrl"
