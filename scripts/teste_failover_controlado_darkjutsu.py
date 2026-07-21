@@ -222,8 +222,104 @@ def int_arg(name, default=0):
         return default
 
 
+def latest_backup_name():
+    try:
+        backups = sorted(
+            (path for path in (SHARE_ROOT / "backups").glob("darkjutsu_backup_*.backup") if path.is_file()),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        return backups[0].name if backups else ""
+    except Exception:
+        return ""
+
+
+def node_backup_name(name, config):
+    node = read_nodes(config).get(str(name).upper()) or {}
+    return str((node.get("details") or {}).get("backupName") or "")
+
+
+def run_candidate_test(me, target, followers, baseline_signature, expected_backup, hold_seconds, config):
+    target_name = str(target.get("computer") or "").upper()
+    target_ip = node_ip(target)
+    target_priority = int(target.get("priority") or 1000)
+    better_followers = [
+        node for node in followers
+        if str(node.get("computer") or "").upper() != target_name
+        and int(node.get("priority") or 1000) < target_priority
+    ]
+    blockers = [str(node.get("computer") or "").upper() for node in better_followers] + [me]
+    maintenance_seconds = max(180, hold_seconds + 240)
+    log(f"ETAPA {target_name}: bloqueios temporarios={blockers} backup={expected_backup}.")
+    for name in blockers:
+        set_maintenance(name, maintenance_seconds, f"teste de failover para {target_name}")
+
+    target_assumed = False
+    data_compatible = False
+    backup_compatible = False
+    try:
+        local_stopped = wait_until(
+            f"lider local pausou API para testar {target_name}",
+            lambda: not health("127.0.0.1", timeout=2),
+            60,
+        )
+        if not local_stopped:
+            log(f"FALHOU: API local nao pausou para testar {target_name}.")
+            return False
+        for node in better_followers:
+            ip = node_ip(node)
+            if ip and not wait_until(
+                f"{node.get('computer')} permaneceu em manutencao",
+                lambda ip=ip: not health(ip, timeout=2),
+                45,
+            ):
+                return False
+        target_assumed = wait_until(
+            f"{target_name} assumiu API/SQL",
+            lambda: health(target_ip, timeout=3) and str(read_lease().get("leader") or "").upper() == target_name,
+            180,
+        )
+        if target_assumed:
+            successor_signature = snapshot_signature(health_data(target_ip, timeout=5))
+            data_compatible = bool(baseline_signature.get("saved_at") and successor_signature == baseline_signature)
+            current_backup = node_backup_name(target_name, config)
+            backup_compatible = bool(expected_backup and current_backup == expected_backup)
+            if data_compatible:
+                log(f"OK: assinatura SQL preservada em {target_name}: {successor_signature}.")
+            else:
+                log(f"FALHOU: assinatura SQL diferente em {target_name}. Antes={baseline_signature} Sucessor={successor_signature}.")
+            if backup_compatible:
+                log(f"OK: {target_name} confirmou backup aplicado {current_backup}.")
+            else:
+                log(f"FALHOU: {target_name} anuncia backup={current_backup or 'nenhum'}, esperado={expected_backup}.")
+        if target_assumed and hold_seconds:
+            log(f"Segurando {target_name} como lider por {hold_seconds}s.")
+            hold_deadline = time.time() + hold_seconds
+            while time.time() < hold_deadline:
+                if not health(target_ip, timeout=3) or str(read_lease().get("leader") or "").upper() != target_name:
+                    log(f"AVISO: {target_name} deixou de liderar antes do tempo previsto.")
+                    break
+                time.sleep(5)
+    finally:
+        for name in reversed(blockers):
+            clear_maintenance(name)
+
+    preferred_back = wait_until(
+        f"{me} reassumiu apos testar {target_name}",
+        lambda: health("127.0.0.1", timeout=3) and str(read_lease().get("leader") or "").upper() == me,
+        240,
+    )
+    target_stopped = wait_until(
+        f"{target_name} voltou para espera",
+        lambda: not health(target_ip, timeout=2),
+        120,
+    )
+    return bool(target_assumed and data_compatible and backup_compatible and preferred_back and target_stopped)
+
+
 def main():
     execute = "--execute" in sys.argv
+    all_candidates = "--all-candidates" in sys.argv
     hold_seconds = int_arg("--hold-seconds", 0)
     log("==================================================")
     log("Teste de failover dinamico controlado iniciado.")
@@ -247,66 +343,38 @@ def main():
     if not followers:
         log("ABORTADO: nenhum outro candidato elegivel publicou heartbeat recente.")
         return 1
-    successor = followers[0]
-    successor_name = str(successor.get("computer"))
-    successor_ip = node_ip(successor)
-    log(f"Sucessor previsto: {successor_name} prioridade={successor.get('priority')} ip={successor_ip}.")
+    targets = followers if all_candidates else followers[:1]
+    expected_backup = latest_backup_name()
+    for target in targets:
+        target_name = str(target.get("computer") or "").upper()
+        log(
+            f"Candidato previsto: {target_name} prioridade={target.get('priority')} ip={node_ip(target)} "
+            f"backup={node_backup_name(target_name, config) or 'nenhum'} esperado={expected_backup or 'nenhum'}."
+        )
+        if node_backup_name(target_name, config) != expected_backup:
+            log(f"ABORTADO: {target_name} ainda nao confirmou o backup mais recente.")
+            return 1
     if not execute:
-        log("PRE-FLIGHT OK. Rode com --execute para derrubar API/guardiao do lider e testar a eleicao real.")
+        log(f"PRE-FLIGHT OK para {len(targets)} candidato(s). Rode com --execute para testar a eleicao real.")
         return 0
 
-    maintenance_mode = hold_seconds > 0
-    if maintenance_mode:
-        set_maintenance(me, hold_seconds + 120, "teste visual de failover")
-        local_stopped = wait_until("lider local pausou API por manutencao", lambda: not health("127.0.0.1", timeout=2), 60)
-        if not local_stopped:
-            log("ABORTADO: API local continuou respondendo mesmo com manutencao controlada.")
-            clear_maintenance(me)
-            return 1
-    else:
-        log("DERRUBANDO lider atual: pausando guardiao e API local.")
-        stop_processes(["guardiao_loop_python_darkjutsu", "dark_jutsu_api.py"])
-        time.sleep(8)
-        if health("127.0.0.1", timeout=2):
-            log("ABORTADO: API local continuou respondendo; nao vou prosseguir.")
-            start_guardian()
-            return 1
-    log(f"Lider saiu do ar. Aguardando {successor_name} assumir.")
-    successor_assumed = wait_until(
-        f"{successor_name} assumiu API/SQL",
-        lambda: health(successor_ip, timeout=3) and str(read_lease().get("leader") or "").upper() == successor_name,
-        150,
-    )
-    data_compatible = False
-    if successor_assumed:
-        successor_signature = snapshot_signature(health_data(successor_ip, timeout=5))
-        data_compatible = bool(baseline_signature.get("saved_at") and successor_signature == baseline_signature)
-        if data_compatible:
-            log(f"OK: assinatura SQL preservada no sucessor: {successor_signature}.")
-        else:
-            log(f"FALHOU: sucessor respondeu com dados diferentes. Antes={baseline_signature} Sucessor={successor_signature}.")
-    if successor_assumed and hold_seconds:
-        log(f"Segurando {successor_name} como lider por {hold_seconds}s para o monitor exibir a troca.")
-        hold_deadline = time.time() + hold_seconds
-        while time.time() < hold_deadline:
-            if not health(successor_ip, timeout=3) or str(read_lease().get("leader") or "").upper() != successor_name:
-                log(f"AVISO: {successor_name} deixou de liderar antes do tempo de exibicao acabar.")
-                break
-            time.sleep(5)
-    log("Retornando candidato preferencial original.")
-    if maintenance_mode:
-        clear_maintenance(me)
-    else:
-        start_guardian()
-        start_api()
-    preferred_back = wait_until(
-        "preferencial reassumiu com API/SQL",
-        lambda: health("127.0.0.1", timeout=3) and str(read_lease().get("leader") or "").upper() == me,
-        210,
-    )
-    successor_stopped = wait_until(f"{successor_name} voltou para espera", lambda: not health(successor_ip, timeout=2), 120)
-    if successor_assumed and data_compatible and preferred_back and successor_stopped:
-        log("RESULTADO: OK failover dinamico e retorno por prioridade confirmados.")
+    results = []
+    for target in targets:
+        results.append(
+            run_candidate_test(
+                me,
+                target,
+                followers,
+                baseline_signature,
+                expected_backup,
+                hold_seconds,
+                config,
+            )
+        )
+        if not results[-1]:
+            break
+    if len(results) == len(targets) and all(results):
+        log(f"RESULTADO: OK failover dinamico confirmado em {len(targets)} candidato(s).")
         return 0
     log("RESULTADO: ATENCAO. Verifique tabela de status e logs.")
     return 2
