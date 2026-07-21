@@ -48,6 +48,7 @@ do {
     "--no-autoupdate",
     "--logfile", $logFile,
     "--loglevel", "info",
+    "--protocol", "http2",
     "--url", $Url
   ) -WorkingDirectory $Root -WindowStyle Hidden -PassThru
   $currentUrl = ""

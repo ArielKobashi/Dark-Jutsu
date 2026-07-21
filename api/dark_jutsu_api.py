@@ -1207,7 +1207,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 last_error = str(exc)
                 continue
-            if isinstance(current, dict) and _clean_text(current.get("url")).startswith("https://"):
+            if isinstance(current, dict) and _clean_text(current.get("url")).startswith(("http://", "https://")):
                 payload = current
                 break
             if isinstance(current, dict) and payload is None:
@@ -1215,7 +1215,7 @@ class Handler(BaseHTTPRequestHandler):
         if payload is None:
             return {"ok": False, "status": "offline", "url": "", "message": last_error or "Tunnel de celular ainda nao iniciado."}
         url = _clean_text(payload.get("url")) or ""
-        if not url.startswith("https://"):
+        if not url.startswith(("http://", "https://")):
             return {"ok": False, "status": _clean_text(payload.get("status")) or "offline", "url": "", "message": _clean_text(payload.get("message")) or "Tunnel publico ainda nao gerou link."}
         return {
             "ok": bool(payload.get("ok")),
