@@ -66,7 +66,7 @@ if not defined REMOTE_COMMIT (
   exit /b 1
 )
 if exist "%VERSION_FILE%" set /p OLD_COMMIT=<"%VERSION_FILE%"
-if /I "%REMOTE_COMMIT%"=="%OLD_COMMIT%" (
+if "%FORCE_UPDATE%"=="0" if /I "%REMOTE_COMMIT%"=="%OLD_COMMIT%" (
   call :log "Sem mudanca no GitHub. Versao atual: %REMOTE_COMMIT%"
   call :unlock
   exit /b 0
@@ -109,7 +109,7 @@ if not defined NEW_COMMIT (
   exit /b 1
 )
 
-if /I "%NEW_COMMIT%"=="%OLD_COMMIT%" (
+if "%FORCE_UPDATE%"=="0" if /I "%NEW_COMMIT%"=="%OLD_COMMIT%" (
   call :log "Sem mudanca. Versao ja aplicada: %NEW_COMMIT%"
   call :unlock
   exit /b 0
@@ -128,27 +128,26 @@ if not "%RC%"=="0" (
   exit /b %RC%
 )
 
->"%VERSION_FILE%" echo %NEW_COMMIT%
+if not defined NEW_COMMIT (
+  call :log "FALHOU: commit novo ficou vazio antes de gravar versao."
+  call :event ERRO ATUALIZACAO "Atualizacao abortada porque o commit novo ficou vazio antes de gravar a versao."
+  call :unlock
+  exit /b 1
+)
+>"%VERSION_FILE%" echo(%NEW_COMMIT%
 call :log "Versao publicada no servidor de arquivos: %NEW_COMMIT%"
 call :event OK ATUALIZACAO "Servidor atualizado pelo GitHub. Commit=%NEW_COMMIT%."
+call :unlock
 
-if exist "%SHARE_SCRIPTS%\instalar_atualizar_guardiao_monitor_darkjutsu.bat" (
-  call :log "Reinstalando guardiao/monitor nesta maquina para pegar scripts novos."
-  call "%SHARE_SCRIPTS%\instalar_atualizar_guardiao_monitor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
+if exist "%SHARE_SCRIPTS%\atualizar_usuario_guardiao_monitor_darkjutsu.ps1" (
+  call :log "Atualizando guardiao/monitor em segundo plano, sem prender a resposta do navegador."
+  start "" /B powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%SHARE_SCRIPTS%\atualizar_usuario_guardiao_monitor_darkjutsu.ps1" -NoStatus >> "%LOGFILE%" 2>&1
 )
 if "%LOCAL_API_WAS_ON%"=="1" (
-  call :log "API local estava ativa; reiniciando para carregar versao nova."
-  call "%SHARE_SCRIPTS%\parar_api_darkjutsu.bat" "atualizar_github" >> "%LOGFILE%" 2>&1
-  call "%SHARE_SCRIPTS%\assumir_servidor_darkjutsu.bat" >> "%LOGFILE%" 2>&1
-  if errorlevel 1 (
-    call :log "ERRO: API nao reiniciou corretamente apos atualizacao."
-    call :event ERRO ATUALIZACAO "API local nao reiniciou corretamente apos atualizacao GitHub."
-  ) else (
-    call :event OK ATUALIZACAO "API local reiniciada apos atualizacao GitHub."
-  )
+  call :log "API local estava ativa; reinicio nao sera feito dentro da chamada HTTP para nao deixar o botao preso."
+  call :event AVISO ATUALIZACAO "Arquivos publicados. A API ativa sera recarregada pelo guardiao ou no proximo reinicio controlado."
 )
 
-call :unlock
 exit /b 0
 
 :prepare_local_paths
