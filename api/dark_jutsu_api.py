@@ -1236,7 +1236,8 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 last_error = str(exc)
                 continue
-            if isinstance(current, dict) and _clean_text(current.get("url")).startswith(("http://", "https://")):
+            current_url = _clean_text(current.get("url")) if isinstance(current, dict) else None
+            if isinstance(current, dict) and (current_url or "").startswith(("http://", "https://")):
                 payload = current
                 break
             if isinstance(current, dict) and payload is None:
@@ -1380,7 +1381,17 @@ class Handler(BaseHTTPRequestHandler):
             """,
             (*params, limit, offset),
         )
-        return {"items": rows, "limit": limit, "offset": offset}
+        settings = self._query(
+            """
+            select key, value
+            from app_settings
+            where key in ('inventory.countingConfig', 'counting.config')
+            order by case when key = 'inventory.countingConfig' then 0 else 1 end
+            limit 1
+            """
+        )
+        config_contagem = settings[0].get("value") if settings and isinstance(settings[0].get("value"), dict) else {}
+        return {"items": rows, "limit": limit, "offset": offset, "configContagem": config_contagem}
 
     def _inventory_item(self, code: str) -> dict[str, Any]:
         rows = self._query(
@@ -1474,6 +1485,17 @@ class Handler(BaseHTTPRequestHandler):
             }
         if ajustes_map:
             payload = {**payload, "ajustesItens": ajustes_map}
+        settings = self._query(
+            """
+            select key, value
+            from app_settings
+            where key in ('inventory.countingConfig', 'counting.config')
+            order by case when key = 'inventory.countingConfig' then 0 else 1 end
+            limit 1
+            """
+        )
+        if settings and isinstance(settings[0].get("value"), dict):
+            payload = {**payload, "configContagem": settings[0]["value"]}
         historico_atual = payload.get("historicoSaldo")
         if not isinstance(historico_atual, dict) or not historico_atual:
             historico_rows = self._query(

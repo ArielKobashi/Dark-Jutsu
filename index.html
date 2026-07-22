@@ -5227,6 +5227,24 @@ function aplicarConfigContagemCompartilhada(config){
 }
 window.aplicarConfigContagemCompartilhada = aplicarConfigContagemCompartilhada;
 
+async function carregarConfigContagemCompartilhadaSql(){
+    if(typeof window.sqlApi !== "function") return false;
+    try{
+        const data = await window.sqlApi("/api/settings/inventory.countingConfig", { timeoutMs: 4000 });
+        return aplicarConfigContagemCompartilhada(data?.setting?.value);
+    }catch(err){
+        if(String(err?.message || err).includes("404")){
+            try{
+                const legado = await window.sqlApi("/api/settings/counting.config", { timeoutMs: 4000 });
+                return aplicarConfigContagemCompartilhada(legado?.setting?.value);
+            }catch(legacyErr){}
+        }else{
+            console.warn("Falha ao carregar unificacao de maquinas no SQL:", err);
+        }
+        return false;
+    }
+}
+
 function parsearEnderecoContagem(endereco){
     const raw = (endereco || "").toString().trim().toUpperCase();
     if(!raw || raw === "SEM ENDERECO" || raw === "SEM ENDEREÇO"){
@@ -7037,6 +7055,7 @@ function inserirVerificacoesSequenciaContagem(linhas){
 async function abrirContagem(){
     solicitarArmazenamentoPersistenteContagem();
     await checarResetGlobalContagem();
+    await carregarConfigContagemCompartilhadaSql();
     const itens = Array.isArray(window.dados) ? window.dados : [];
     contagemItens = inserirVerificacoesSequenciaContagem(criarLinhasContagemPermitidas(itens))
         .sort(compararItensContagem);
@@ -14797,7 +14816,8 @@ function normalizarInventoryListaSql(data){
             };
         }),
         dadosMortos: [],
-        atualizadoPor: "Sistema"
+        atualizadoPor: "Sistema",
+        configContagem: data?.configContagem && typeof data.configContagem === "object" ? data.configContagem : undefined
     };
 }
 
@@ -14806,18 +14826,22 @@ async function carregarInventoryListaSqlCompleta(){
     let offset = 0;
     let todos = [];
     let ultimoPayload = null;
+    let configContagem = null;
     while(true){
         const sep = `/api/inventory?limit=${limit}&offset=${offset}`;
         const data = await window.sqlApi(sep, { timeoutMs: offset === 0 ? 5000 : 8000 });
         const items = Array.isArray(data?.items) ? data.items : [];
         ultimoPayload = data;
+        if(data?.configContagem && typeof data.configContagem === "object"){
+            configContagem = data.configContagem;
+        }
         todos = todos.concat(items);
         const limiteResposta = Number(data?.limit || limit);
         if(items.length < limiteResposta || items.length === 0) break;
         offset += items.length;
         if(offset > 20000) break;
     }
-    return normalizarInventoryListaSql({ ...(ultimoPayload || {}), items: todos });
+    return normalizarInventoryListaSql({ ...(ultimoPayload || {}), items: todos, configContagem: configContagem || ultimoPayload?.configContagem });
 }
 
 // --- CARREGAMENTO INICIAL DO ESTOQUE (Roda ao abrir a página) ---
