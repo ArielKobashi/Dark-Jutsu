@@ -76,6 +76,7 @@ APP_PUBLIC_SUFFIXES = {
     ".woff",
     ".woff2",
     ".ttf",
+    ".xlsx",
 }
 COUNTING_PING_SHARED_DIR = Path(_env("DARK_JUTSU_COUNTING_PING_SHARED_DIR", r"\\fileserver\Almoxarifado\0800\servidor\dark-jutsu\data\contagem-pings"))
 COUNTING_PING_LOCAL_DIR = Path(_env("DARK_JUTSU_COUNTING_PING_LOCAL_DIR", str(ROOT / "data" / "contagem-pings")))

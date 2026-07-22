@@ -179,6 +179,12 @@ robocopy "%REPO_DIR%" "%SHARE_ROOT%\app" critical-stock-manager.js dark-jutsu-co
 if %errorlevel% GEQ 8 exit /b %errorlevel%
 if exist "%REPO_DIR%\assets" robocopy "%REPO_DIR%\assets" "%SHARE_ROOT%\app\assets" /E /R:2 /W:2 /NFL /NDL /NP >> "%LOGFILE%" 2>&1
 if %errorlevel% GEQ 8 exit /b %errorlevel%
+if exist "%REPO_DIR%\downloads" robocopy "%REPO_DIR%\downloads" "%SHARE_ROOT%\app\downloads" /E /R:2 /W:2 /NFL /NDL /NP >> "%LOGFILE%" 2>&1
+if %errorlevel% GEQ 8 exit /b %errorlevel%
+if exist "%REPO_DIR%\data" robocopy "%REPO_DIR%\data" "%SHARE_ROOT%\app\data" *.xlsx *.json /R:2 /W:2 /NFL /NDL /NP >> "%LOGFILE%" 2>&1
+if %errorlevel% GEQ 8 exit /b %errorlevel%
+robocopy "%REPO_DIR%" "%SHARE_ROOT%\app" dados.mortos.xlsx mata185.xlsx /R:2 /W:2 /NFL /NDL /NP >> "%LOGFILE%" 2>&1
+if %errorlevel% GEQ 8 exit /b %errorlevel%
 
 call :log "Publicando scripts."
 robocopy "%REPO_DIR%\scripts" "%SHARE_ROOT%\scripts" /E /XD __pycache__ /XF *.pyc /R:2 /W:2 /NFL /NDL /NP >> "%LOGFILE%" 2>&1

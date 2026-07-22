@@ -12424,10 +12424,10 @@ window.sqlApi = async function(path, options = {}){
     throw lastError || new Error("API SQL indisponivel.");
 };
 
-let servidorSqlOnline = true;
-let servidorSqlOfflineDesde = 0;
-let servidorSqlCheckInFlight = false;
-let servidorSqlFalhasConsecutivas = 0;
+var servidorSqlOnline = true;
+var servidorSqlOfflineDesde = 0;
+var servidorSqlCheckInFlight = false;
+var servidorSqlFalhasConsecutivas = 0;
 const SERVIDOR_SQL_OFFLINE_MIN_FALHAS = 2;
 const SERVIDOR_SQL_OFFLINE_GRACE_MS = 7000;
 const SERVIDOR_SQL_ULTIMA_ATUALIZACAO_KEY = "darkJutsuUltimaAtualizacaoSistema";
