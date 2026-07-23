@@ -7,6 +7,7 @@ quando solicitado, reposiciona a janela do TOTVS para a geometria de teste.
 from __future__ import annotations
 
 import ctypes
+import os
 from ctypes import wintypes
 from dataclasses import dataclass, field
 
@@ -16,10 +17,10 @@ TOTVS_TITLE_TOKENS = ("totvs", "smartclient", "manufatura")
 
 @dataclass(frozen=True)
 class WindowTarget:
-    x: int = 0
-    y: int = 0
-    width: int = 1366
-    height: int = 768
+    x: int
+    y: int
+    width: int
+    height: int
 
 
 @dataclass
@@ -43,6 +44,23 @@ def enable_per_monitor_dpi_awareness() -> None:
             ctypes.windll.user32.SetProcessDPIAware()
         except Exception:
             pass
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        value = int(str(os.environ.get(name, "")).strip())
+        return value if value > 0 else default
+    except Exception:
+        return default
+
+
+def default_window_target() -> WindowTarget:
+    return WindowTarget(
+        x=_env_int("AUTOMUS_WINDOW_X", 0),
+        y=_env_int("AUTOMUS_WINDOW_Y", 0),
+        width=_env_int("AUTOMUS_WINDOW_WIDTH", 1366),
+        height=_env_int("AUTOMUS_WINDOW_HEIGHT", 728),
+    )
 
 
 def _window_text(hwnd: int) -> str:
@@ -91,8 +109,10 @@ def _dpi_percent(hwnd: int | None) -> int:
         return 100
 
 
-def run_preflight(target: WindowTarget = WindowTarget(), autocorrect: bool = True) -> PreflightResult:
+def run_preflight(target: WindowTarget | None = None, autocorrect: bool = True) -> PreflightResult:
     """Inspeciona resolucao, DPI e janela TOTVS sem gerar entrada do usuario."""
+    if target is None:
+        target = default_window_target()
     enable_per_monitor_dpi_awareness()
     user32 = ctypes.windll.user32
     screen = (user32.GetSystemMetrics(0), user32.GetSystemMetrics(1))

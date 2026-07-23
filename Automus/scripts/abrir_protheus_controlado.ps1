@@ -24,11 +24,13 @@ try {
 } catch {
     $chrome = Get-ChromePath
     $profileDir = Join-Path $env:LOCALAPPDATA "Automus\ChromeProtheusDebug"
+    $windowWidth = if ($env:AUTOMUS_WINDOW_WIDTH) { [int]$env:AUTOMUS_WINDOW_WIDTH } else { 1366 }
+    $windowHeight = if ($env:AUTOMUS_WINDOW_HEIGHT) { [int]$env:AUTOMUS_WINDOW_HEIGHT } else { 728 }
     New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
     Start-Process -FilePath $chrome -ArgumentList @(
         "--remote-debugging-port=$Port",
         "--user-data-dir=$profileDir",
-        "--window-size=1366,768",
+        "--window-size=$windowWidth,$windowHeight",
         "--window-position=0,0",
         "--force-device-scale-factor=1",
         "--disable-session-crashed-bubble",

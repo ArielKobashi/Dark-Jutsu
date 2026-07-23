@@ -7182,6 +7182,32 @@ function itemPendenteParaContagem(item, keysRegistradas = null){
     return true;
 }
 
+function itemRevisitavelParaContagem(item){
+    if(!item) return false;
+    const key = itemKeyContagem(item);
+    if(!key) return false;
+    const tipo = isVerificacaoVazioContagem(item) ? "verificacao" : "valor";
+    return !itemContagemBloqueadoPorOutro(key, tipo);
+}
+
+function indiceRevisitavelDirecaoContagem(inicio, passo){
+    if(!Array.isArray(contagemItensMaquina) || !contagemItensMaquina.length) return -1;
+    for(let idx = inicio; idx >= 0 && idx < contagemItensMaquina.length; idx += passo){
+        if(itemRevisitavelParaContagem(contagemItensMaquina[idx])) return idx;
+    }
+    return -1;
+}
+
+function indiceRevisitavelCircularContagem(indiceAtual, passo = 1){
+    if(!Array.isArray(contagemItensMaquina) || !contagemItensMaquina.length) return -1;
+    const direcao = passo < 0 ? -1 : 1;
+    const proximo = indiceRevisitavelDirecaoContagem(Number(indiceAtual || 0) + direcao, direcao);
+    if(proximo >= 0) return proximo;
+    return direcao > 0
+        ? indiceRevisitavelDirecaoContagem(0, 1)
+        : indiceRevisitavelDirecaoContagem(contagemItensMaquina.length - 1, -1);
+}
+
 function indicePendenteDirecaoContagem(inicio, passo){
     if(!Array.isArray(contagemItensMaquina) || !contagemItensMaquina.length) return -1;
     const keysRegistradas = keysRegistradasGrupoContagem(contagemMaquinaAtual);
@@ -7203,6 +7229,7 @@ function indicePendenteCircularContagem(indiceAtual, passo = 1){
 
 function ajustarIndiceParaPendenteContagem(){
     if(!Array.isArray(contagemItensMaquina) || !contagemItensMaquina.length) return false;
+    if(itemRevisitavelParaContagem(contagemItensMaquina[contagemIndice])) return false;
     const keysRegistradas = keysRegistradasGrupoContagem(contagemMaquinaAtual);
     if(itemPendenteParaContagem(contagemItensMaquina[contagemIndice], keysRegistradas)) return false;
     const proximoPendente = indicePendenteCircularContagem(contagemIndice, 1);
@@ -8662,17 +8689,17 @@ function contagemAnterior(){
     salvarAtualContagem();
     enviarPingTxtContagemAtual("anterior");
     animarContagem("right", () => {
-        const anteriorPendente = indicePendenteCircularContagem(contagemIndice, -1);
-        if(anteriorPendente >= 0){
-            contagemIndice = anteriorPendente;
+        const anteriorRevisitavel = indiceRevisitavelCircularContagem(contagemIndice, -1);
+        if(anteriorRevisitavel >= 0){
+            contagemIndice = anteriorRevisitavel;
         }else{
             const idx = contagemMaquinas.indexOf(contagemMaquinaAtual);
             if(idx > 0){
                 contagemMaquinaAtual = contagemMaquinas[idx - 1];
                 contagemItensMaquina = itensGrupoContagem(contagemMaquinaAtual);
-                const ultimoPendente = indicePendenteDirecaoContagem(contagemItensMaquina.length - 1, -1);
-                contagemIndice = ultimoPendente >= 0
-                    ? ultimoPendente
+                const ultimoRevisitavel = indiceRevisitavelDirecaoContagem(contagemItensMaquina.length - 1, -1);
+                contagemIndice = ultimoRevisitavel >= 0
+                    ? ultimoRevisitavel
                     : indiceObrigatorioMaisProximoContagem(contagemItensMaquina, contagemItensMaquina.length - 1);
             }
         }
