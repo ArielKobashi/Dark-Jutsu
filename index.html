@@ -18,6 +18,21 @@
 
 </head>
 <body>
+<script>
+var servidorSqlOnline = window.servidorSqlOnline !== false;
+var servidorSqlOfflineDesde = Number(window.servidorSqlOfflineDesde || 0);
+var servidorSqlCheckInFlight = !!window.servidorSqlCheckInFlight;
+var servidorSqlFalhasConsecutivas = Number(window.servidorSqlFalhasConsecutivas || 0);
+window.login = window.login || function loginCarregandoDarkJutsu(){
+    setTimeout(() => {
+        if(typeof window.login === "function" && window.login !== loginCarregandoDarkJutsu){
+            window.login();
+        }else{
+            alert("Sistema ainda carregando. Tente novamente em alguns segundos.");
+        }
+    }, 100);
+};
+</script>
 
 <div id="edgeHandle" style="display:none;"></div>
 <div id="app">

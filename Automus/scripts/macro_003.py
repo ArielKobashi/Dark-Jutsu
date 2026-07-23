@@ -207,7 +207,7 @@ events = [
     (6.392011880874634, 'click', {'x': 160, 'y': 379, 'button': 'left', 'pressed': True}),  # 0200
     (6.503679513931274, 'click', {'x': 160, 'y': 379, 'button': 'left', 'pressed': False}),  # 0201
     # ===== CONDICAO PIXEL (859,494) -> SE DIFERENTE, FAZ SEQUENCIA E REPETE #0199-#0201 =====
-    (6.510000000000001, 'pixel_branch_sequence', {
+    (6.510000000000001, 'skip_pixel_branch_sequence', {
         'wait_before_check': 2,
         'x': 859,
         'y': 494,
@@ -232,7 +232,7 @@ events = [
     (11.935701608657837, 'move', {'x': 160, 'y': 378}),  # 0205
     (11.943460702896118, 'move', {'x': 160, 'y': 377}),  # 0206
     # ===== GATILHO PIXEL (AGUARDA COR #F74949) =====
-    (20.919968605041504, 'wait_pixel', {'x': 20, 'y': 224, 'rgb': (247, 73, 73), 'tolerance': 0, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_003 #0207'}),  # 0207
+    (20.919968605041504, 'skip_wait_pixel', {'x': 20, 'y': 224, 'rgb': (247, 73, 73), 'tolerance': 0, 'timeout': 120, 'interval': 0.2, 'error_on_timeout': True, 'label': 'macro_003 #0207'}),  # 0207
     # ===== FIM GATILHO =====
     (20.919968605041504, 'key_down', {'key': 'Key.enter'}),  # 0208
     (20.99184560775757, 'key_up', {'key': 'Key.enter'}),  # 0209
@@ -1185,7 +1185,6 @@ def play():
 
 if __name__ == '__main__':
     play()
-
 
 
 
