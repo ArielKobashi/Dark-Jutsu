@@ -2954,7 +2954,9 @@ class Handler(BaseHTTPRequestHandler):
                 "stdout": (completed.stdout or "")[-4000:],
                 "stderr": (completed.stderr or "")[-4000:],
             }
-            return {**self._system_update_status(), "ok": completed.returncode == 0}
+            output = f"{completed.stdout or ''}\n{completed.stderr or ''}"
+            published_ok = "Versao publicada no servidor de arquivos:" in output or "RESULTADO: OK" in output
+            return {**self._system_update_status(), "ok": completed.returncode == 0 or published_ok}
         except subprocess.TimeoutExpired as exc:
             SYSTEM_UPDATE_LAST = {
                 "started_at": started.isoformat(),

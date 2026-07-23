@@ -3004,7 +3004,7 @@ function carregarPlanilha(tipo){
 async function carregarEstoqueMinimoPadrao(){
     if(location.protocol === "file:") return false;
     try{
-        const response = await fetch("downloads/estoque_minimo.xlsx", { cache: "no-store" });
+        const response = await fetch("/downloads/estoque_minimo.xlsx", { cache: "no-store" });
         if(!response.ok) return false;
         const data = await response.arrayBuffer();
         const workbook = XLSX.read(data, { type: "array" });
