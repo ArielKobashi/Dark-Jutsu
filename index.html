@@ -12437,10 +12437,15 @@ window.sqlApi = async function(path, options = {}){
             const response = await fetch(`${base}${path}`, { ...fetchOptions, headers, signal: options.signal || controller?.signal });
             const data = await response.json().catch(() => ({}));
             if(!response.ok || data?.ok === false){
-                const error = new Error(data?.error || `Falha HTTP ${response.status}`);
+                const retorno = data?.last?.stderr || data?.last?.stdout || data?.message || "";
+                const fallback = response.ok
+                    ? "Operacao retornou alerta, mas a API respondeu."
+                    : `Falha HTTP ${response.status}`;
+                const error = new Error(data?.error || retorno || fallback);
                 error.status = response.status;
                 error.base = base;
                 error.sqlResponse = true;
+                error.data = data;
                 throw error;
             }
             if(sqlApiPreferredBase !== base){
