@@ -3697,16 +3697,25 @@ def handle_custom_event(kind: str, data: dict, controller: ExecutionController) 
         x = int(data["x"])
         y = int(data["y"])
         blocked = {tuple(rgb) for rgb in data.get("blocked_rgb", [])}
+        tolerance = int(data.get("tolerance", 0))
+        search_radius = int(data.get("search_radius", 0))
         emit_status(
             f"{context}: iniciando checagem do pixel em ({x},{y}).",
             level="INFO",
         )
-        current = _get_pixel_color(x, y)
+        match_pos = None
+        if search_radius > 0 and blocked:
+            current, match_pos = _find_any_pixel_within_radius(x, y, list(blocked), tolerance, search_radius)
+        else:
+            current = _get_pixel_color(x, y)
+            match_pos = (x, y) if current in blocked else None
+        if current is None:
+            current = _get_pixel_color(x, y)
         emit_status(
             f"{context}: pixel em ({x},{y}) = RGB{current} HEX:#{current[0]:02X}{current[1]:02X}{current[2]:02X}.",
             level="INFO",
         )
-        if current in blocked:
+        if match_pos is not None:
             emit_status(
                 f"{context}: pixel igual a uma das cores informadas, pulando a sequência.",
                 level="INFO",
